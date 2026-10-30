@@ -9,6 +9,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | ID | Feature | Status | Owner | Branch | Holding | Verified by |
 |---|---|---|---|---|---|---|
 | F-001 | Choose the game concept | In progress | Team | – | – | – |
+| F-002 | Add injection, advanced tools and fundamentals guides | In progress | EldadStyleZ | `feature/F-002-engineering-guides` | – | – |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
 - **Holding:** the scenes and prefabs the owner is changing. Nobody else edits them until this cell is cleared, because Unity scenes merge badly.
