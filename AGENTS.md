@@ -7,6 +7,7 @@ Rules for everyone working in this repo: people, Claude Code and Gemini CLI. `CL
 - A course game built with Unity 6000.6.7f1 and C#. The concept is not final, so check `FEATURES.md` and keep shared code free of assumptions about it.
 - The repo is public. Anyone can read everything we commit.
 - `docs/CODING_STANDARDS.md` holds the code rules. Read it before writing C#.
+- `docs/FUNDAMENTALS.md` explains OOP, game programming and Unity basics.
 - `FEATURES.md` holds who is doing what. Read it before starting work.
 
 ## How we work
@@ -76,6 +77,8 @@ Create a folder when the first file needs it, because Git does not keep empty fo
 - **Logic:** plain C# classes for game rules, tested without a scene.
 - **View:** thin MonoBehaviours for input, physics, animation, audio and UI.
 
+Classes receive what they need through constructors, the Inspector or an `Initialize` method. Each scene has one composition root that connects them.
+
 ## Verification
 
 Compiling is not verifying. Before calling work done:
@@ -103,7 +106,7 @@ npx unity-mcp-cli@1.5.0 setup-mcp gemini . --transport stdio --no-pin
 - Local only: never run `unity-mcp-cli login`, and never use `--token`, `--oauth` or `--regenerate-key`.
 - Always run the CLI as `npx unity-mcp-cli@1.5.0`.
 - Keep the plugin's transport on stdio, and leave its skill generation off.
-- Run one AI session per project at a time, because the stdio server owns the port.
+- Run one AI session per project at a time, because the stdio server owns the port. GitHub Copilot in Rider also reads `.mcp.json`, so it can take the port first.
 - Take a screenshot only when the visual result is what you are checking.
 - After code changes, check the console for compile errors, then run tests.
 - If the project path has a space, `unity-mcp-cli close` and `status` can report Unity as not running, and the plugin logs an error on each reload. Quit Unity by hand.
