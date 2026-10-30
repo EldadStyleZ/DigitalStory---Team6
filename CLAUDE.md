@@ -1,5 +1,5 @@
-## Unity MCP
+@AGENTS.md
 
-- Take a screenshot only when the visual result is what you are checking.
-- After code changes, check the console for compile errors, then run tests.
-- Run one Claude Code session per project: the stdio server owns the port.
+## Claude Code
+
+- Project skills live in `.agents/skills/`. Each skill in `.claude/skills/` only points to its copy there, so edit the `.agents` version.

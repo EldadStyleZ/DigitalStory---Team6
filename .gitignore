@@ -22,3 +22,4 @@ Recordings/
 *.unitypackage
 .DS_Store
 .claude/settings.local.json
+.gemini/settings.json
