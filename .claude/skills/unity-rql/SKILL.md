@@ -99,7 +99,3 @@ Scenes, prefabs, assets, Editor state:
 - `com.IvanMurzak.Unity.MCP.Editor.Rql.Lighting.LightingModule`
 - `com.IvanMurzak.Unity.MCP.Editor.Rql.Physics3D.PhysicsModule`
 
-
-> CLI installation and usage: see the `unity-cli` skill.
-> If this task needs unavailable asset-generation or Blender tools, consult `ai-game-dev-app` for an optional integrated workflow.
-
