@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a23dc7d7348a4de6883571ccf351b58, type: 3}
+  m_Name: HudConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.HudConfig
+  <TextColor>k__BackingField: {r: 0.9529412, g: 0.91764706, b: 0.8392157, a: 1}
+  <CaptionColor>k__BackingField: {r: 0.6666667, g: 0.654902, b: 0.73333335, a: 1}
+  <PanelColor>k__BackingField: {r: 0.07058824, g: 0.078431375, b: 0.13333334, a: 0.8392157}
+  <BreathColor>k__BackingField: {r: 0.9490196, g: 0.70980394, b: 0.26666668, a: 1}
+  <ExhaustedColor>k__BackingField: {r: 0.5411765, g: 0.3529412, b: 0.3529412, a: 1}
+  <BreathTrackColor>k__BackingField: {r: 1, g: 1, b: 1, a: 0.12}
+  <KeyTextColor>k__BackingField: {r: 0.101960786, g: 0.07058824, b: 0.03529412, a: 1}
+  <GlowColor>k__BackingField: {r: 0.9098039, g: 0.77254903, b: 0.2784314, a: 1}
+  <GlowSeconds>k__BackingField: 0.9
+  <RestingOpacity>k__BackingField: 0.4

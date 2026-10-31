@@ -18,3 +18,4 @@ MonoBehaviour:
     _quota: 115
     _timeLimit: 150
     _nestCount: 5
+    _catCount: 1

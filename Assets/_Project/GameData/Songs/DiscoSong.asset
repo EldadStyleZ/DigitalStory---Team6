@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 56e40888e1c3449eab3f0a169ca84123, type: 3}
+  m_Name: DiscoSong
+  m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.DiscoEffect
+  _song:
+    _title: Disco
+    _description: Breakdancing in the street
+    _cooldownSeconds: 10
+    _keys: 050000000000000005000000i
+  <Radius>k__BackingField: 360
+  <Seconds>k__BackingField: 7
+  <SpinRate>k__BackingField: 16
+  <SpinSpeed>k__BackingField: 25
+  <SpinTravel>k__BackingField: 0.3

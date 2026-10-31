@@ -1,5 +1,5 @@
 // Prints PrototypeValues.cs, the answers the C# tests check against.
-// Holds the HTML prototype's own rules, copied with drawing, audio and cats removed.
+// Holds the HTML prototype's own rules, copied with drawing and audio removed.
 // Run from the repo root:
 //   node Tools/prototype-capture/capture.mjs > Assets/_Project/Tests/EditMode/Prototype/PrototypeValues.cs
 const W=2000,H=1300,TAU=Math.PI*2,RX=W-250,SHALLOW=70;
@@ -7,10 +7,10 @@ const edge=y=>RX+18*Math.sin(y/90)+9*Math.sin(y/31+2);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 const LEVELS=[{rats:70,quota:45,cats:0,time:130},{rats:170,quota:115,cats:1,time:150},{rats:290,quota:210,cats:3,time:180},{rats:430,quota:330,cats:5,time:210}];
-let houses=[],lamps=[],rats=[],inters=[],cw=230,ch=190,cols=0,rows=0,L=null;
+let houses=[],lamps=[],rats=[],cats=[],inters=[],cw=230,ch=190,cols=0,rows=0,L=null;
 const P={x:0,y:0,face:Math.PI,moving:false};
 let random=Math.random;
-let timeLeft=0,drowned=0,alive=0,breath=100,exhausted=false,playing=false,curHole=-1,mode='',musicR=210;
+let timeLeft=0,drowned=0,lost=0,alive=0,breath=100,exhausted=false,playing=false,curHole=-1,mode='',musicR=210;
 
 function collide(e,rad){
  for(const h of houses){
@@ -24,9 +24,9 @@ function collide(e,rad){
  }
 }
 
-function genLevel(i){
+function genLevel(i,withCats=true){
  L=LEVELS[i];const rng=mulberry(1234+i*977);
- houses=[];lamps=[];inters=[];rats=[];
+ houses=[];lamps=[];inters=[];rats=[];cats=[];lost=0;
  const st=64;
  cols=Math.floor((RX-170)/cw);rows=Math.ceil(H/ch);
  const H_=(x,y,w,h)=>({x,y,w,h,c:Math.floor(rng()*6),chim:rng()<.6,cx:rng(),cy:rng()});
@@ -52,6 +52,10 @@ function genLevel(i){
   const r={x:ne.x+Math.cos(a)*d,y:ne.y+Math.sin(a)*d,vx:0,vy:0,wa:rng()*TAU,charm:0,alive:true,hx:ne.x,hy:ne.y,ph:rng()*TAU};
   collide(r,5);r.x=clamp(r.x,6,W);r.y=clamp(r.y,6,H-6);rats.push(r);
  }
+ if(withCats)for(let k=0;k<L.cats;k++){
+  let p;do{p=inters[Math.floor(rng()*inters.length)]}while(p.gx>=cols||Math.hypot(p.x-P.x,p.y-P.y)<450);
+  cats.push({x:p.x,y:p.y,vx:0,vy:0,gx:p.gx,gy:p.gy,tx:p.x,ty:p.y,flee:0,eat:0,ph:rng()*TAU});
+ }
  alive=L.rats;drowned=0;timeLeft=L.time;breath=100;exhausted=false;playing=false;curHole=-1;mode='';
  return {rng,nests};
 }
@@ -74,6 +78,7 @@ function update(dt,input){
  if(playing){breath-=dt*11;if(breath<=0){breath=0;exhausted=true;playing=false}}
  else breath=Math.min(100,breath+dt*(want?9:22));
  curHole=playing?ch_:-1;mode=curHole<0?'':curHole<2?'call':curHole<4?'march':'scare';musicR=mode==='call'?240:mode==='march'?190:200;
+ if(mode==='scare')for(const c of cats)if(!(c.sleep>0)&&Math.hypot(c.x-P.x,c.y-P.y)<musicR+60)c.flee=Math.max(c.flee,1.5);
 
  gHead.fill(-1);if(gNext.length<rats.length)gNext=new Int32Array(rats.length);
  for(let i=0;i<rats.length;i++){const r=rats[i];if(!r.alive)continue;const c=cell(r.x,r.y);gNext[i]=gHead[c];gHead[c]=i}
@@ -105,12 +110,36 @@ function update(dt,input){
    ax+=(dx/d*sp-r.vx)*3*r.charm;ay+=(dy/d*sp-r.vy)*3*r.charm}
   else{const hx=r.hx-r.x,hy=r.hy-r.y,hd=Math.hypot(hx,hy);if(hd>90){ax+=hx/hd*35;ay+=hy/hd*35}}
   const ed=edge(r.y);if(r.charm<.4&&r.x>ed-90)ax-=(r.x-(ed-90))*7;
+  for(const c of cats){if(c.sleep>0)continue;const dx=r.x-c.x,dy=r.y-c.y,d=Math.hypot(dx,dy)||1;if(d<130){ax+=dx/d*520*(1-d/130);ay+=dy/d*520*(1-d/130);r.charm=Math.max(0,r.charm-dt*1.3)}}
 
   r.vx+=ax*dt;r.vy+=ay*dt;
   const max=80+110*r.charm,s=Math.hypot(r.vx,r.vy);if(s>max){r.vx*=max/s;r.vy*=max/s}
   r.x+=r.vx*dt;r.y+=r.vy*dt;collide(r,5);
   if(r.x<5){r.x=5;r.vx=Math.abs(r.vx)}if(r.y<5){r.y=5;r.vy=Math.abs(r.vy)}if(r.y>H-5){r.y=H-5;r.vy=-Math.abs(r.vy)}
   if(r.x>ed+4)drown(r);
+ }
+
+ for(const c of cats){
+  if(c.sleep>0){c.sleep-=dt;c.vx*=.9;c.vy*=.9;continue}
+  let dvx=0,dvy=0,sp=0;c.eat=Math.max(0,c.eat-dt);c.flee=Math.max(0,c.flee-dt);
+  if(c.flee>0){const dx=c.x-P.x,dy=c.y-P.y,d=Math.hypot(dx,dy)||1;dvx=dx/d;dvy=dy/d;sp=175;c.hunt=false}
+  else{
+   let best=null,bd=220;
+   if(c.eat<=0)for(const r of rats){if(!r.alive)continue;const d=Math.abs(r.x-c.x)+Math.abs(r.y-c.y);if(d<bd){bd=d;best=r}}
+   if(best){const dx=best.x-c.x,dy=best.y-c.y,d=Math.hypot(dx,dy)||1;dvx=dx/d;dvy=dy/d;sp=140;c.hunt=true;
+    if(d<11){best.alive=false;alive--;lost++;c.eat=1.6}}
+   else{
+    if(c.hunt){c.hunt=false;c.gx=clamp(Math.round(c.x/cw),0,cols-1);c.gy=clamp(Math.round(c.y/ch),0,rows);c.tx=c.gx*cw;c.ty=Math.min(c.gy*ch,H-24)}
+    const dx=c.tx-c.x,dy=c.ty-c.y,d=Math.hypot(dx,dy);
+    if(d<16){const opts=[[1,0],[-1,0],[0,1],[0,-1]].map(([a,b])=>[c.gx+a,c.gy+b]).filter(([a,b])=>a>=0&&a<cols&&b>=0&&b<=rows);
+     const o=opts[Math.floor(random()*opts.length)];c.gx=o[0];c.gy=o[1];c.tx=c.gx*cw;c.ty=Math.min(c.gy*ch,H-24)}
+    else{dvx=dx/d;dvy=dy/d;sp=70}
+   }
+  }
+  c.vx+=(dvx*sp-c.vx)*Math.min(1,dt*4);c.vy+=(dvy*sp-c.vy)*Math.min(1,dt*4);
+  c.x+=c.vx*dt;c.y+=c.vy*dt;collide(c,9);
+  const ed=edge(c.y);if(c.x>ed-40){c.x=ed-40;c.vx=-Math.abs(c.vx)}
+  c.x=clamp(c.x,8,W);c.y=clamp(c.y,8,H-8);
  }
 }
 
@@ -138,7 +167,7 @@ for(const f of fields){const n=f.split(' ')[1];line(`                ${n} = ${n[
 line('            }');line('        }');line('');
 line('        public static readonly Night[] Nights =');line('        {');
 for(let i=0;i<4;i++){
- const {rng,nests}=genLevel(i);
+ const {rng,nests}=genLevel(i,false);
  const sum=(a,f)=>a.reduce((s,v)=>s+f(v),0);
  const v=[cols,rows,houses.length,inters.length,lamps.length,
   num(sum(houses,h=>h.x+h.y*3+h.w*5+h.h*7)),num(sum(houses,h=>h.c)),houses.filter(h=>h.chim).length,num(sum(houses,h=>h.cx+h.cy)),
@@ -183,5 +212,34 @@ line(`        public const int AverageRunCount = ${RUNS};`);line('        public
 arr('AverageMeanRatX',xs,mean);arr('AverageMeanRatXError',xs,err);
 arr('AverageMeanCharm',cs,mean);arr('AverageMeanCharmError',cs,err);
 arr('AverageDrowned',ds,mean);arr('AverageDrownedError',ds,err);
+line('');
+
+line('        // Where each night\'s cats start, as a sum that changes if any value or random call differs.');
+{const sums=[],after=[];
+ for(let i=0;i<4;i++){const {rng}=genLevel(i);sums.push(cats.reduce((s,c)=>s+c.x+c.y*3+c.ph,0));after.push(rng())}
+ line(`        public static readonly double[] CatStartSum = { ${sums.map(num).join(', ')} };`);
+ line(`        public static readonly double[] RandomAfterCats = { ${after.map(num).join(', ')} };`);}
+line('');
+
+line('        // One cat alone in the second night\'s town, as x and y after each phase.');
+{const ticks=120,phases=6,seen=[];
+ genLevel(1);rats=[];random=mulberry(99);
+ for(let s=0;s<phases;s++){for(let k=0;k<ticks;k++)update(1/60,{mx:0,my:0,hole:-1});seen.push(cats[0].x,cats[0].y)}
+ line(`        public const int CatPatrolTicks = ${ticks};`);
+ line(`        public static readonly double[] CatPatrol = { ${seen.map(num).join(', ')} };`);}
+line('');
+
+line('        // The same scripted walk on the second night, where a cat hunts, averaged over many runs.');
+{const lostRuns=script.map(()=>[]),charmRuns=script.map(()=>[]);
+ for(let run=0;run<RUNS;run++){
+  genLevel(1);random=mulberry(1000+run);
+  script.forEach(([t,mx,my,hole],i)=>{
+   for(let k=0;k<t;k++)update(1/60,{mx,my,hole});
+   const live=rats.filter(r=>r.alive);
+   lostRuns[i].push(lost);charmRuns[i].push(live.reduce((a,r)=>a+r.charm,0)/live.length);
+  });
+ }
+ arr('CatNightAverageLost',lostRuns,mean);arr('CatNightAverageLostError',lostRuns,err);
+ arr('CatNightAverageMeanCharm',charmRuns,mean);arr('CatNightAverageMeanCharmError',charmRuns,err);}
 line('    }');line('}');
 console.log(out.join('\n'));

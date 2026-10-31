@@ -27,15 +27,9 @@ namespace DigitalStory.View
         private const string DrownedCaption = "drowned";
         private const string UntilDawnCaption = "Until dawn";
 
-        private static readonly Color TextColor = new Color32(0xF3, 0xEA, 0xD6, 0xFF);
-        private static readonly Color CaptionColor = new Color32(0xAA, 0xA7, 0xBB, 0xFF);
-        private static readonly Color SignColor = new Color32(0x12, 0x14, 0x22, 0xD6);
-        private static readonly Color BreathColor = new Color32(0xF2, 0xB5, 0x44, 0xFF);
-        private static readonly Color ExhaustedColor = new Color32(0x8A, 0x5A, 0x5A, 0xFF);
-        private static readonly Color BarBackground = new Color(1f, 1f, 1f, 0.12f);
-
         private NightSession _session;
         private EndingTextConfig _texts;
+        private HudConfig _hud;
         private Label _goal;
         private Label _time;
         private Label _rats;
@@ -55,10 +49,11 @@ namespace DigitalStory.View
         public string RatsText => _rats?.text;
 
         /// <summary>Supplies what to show. Call once, before this object is enabled.</summary>
-        public void Initialize(NightSession session, EndingTextConfig texts)
+        public void Initialize(NightSession session, EndingTextConfig texts, HudConfig hud)
         {
             _session = session;
             _texts = texts;
+            _hud = hud;
         }
 
         private void OnEnable()
@@ -112,12 +107,12 @@ namespace DigitalStory.View
 
         private VisualElement BuildGoalSign()
         {
-            _goal = NewLabel(BigFontSize, TextColor);
+            _goal = NewLabel(BigFontSize, _hud.TextColor);
 
             var breathBar = new VisualElement();
             breathBar.style.height = BreathBarHeight;
             breathBar.style.marginTop = BreathBarGap;
-            breathBar.style.backgroundColor = BarBackground;
+            breathBar.style.backgroundColor = _hud.BreathTrackColor;
 
             _breathFill = new VisualElement();
             _breathFill.style.height = BreathBarHeight;
@@ -132,8 +127,8 @@ namespace DigitalStory.View
 
         private VisualElement BuildTimeSign()
         {
-            _time = NewLabel(BigFontSize, TextColor);
-            _rats = NewLabel(SmallFontSize, CaptionColor);
+            _time = NewLabel(BigFontSize, _hud.TextColor);
+            _rats = NewLabel(SmallFontSize, _hud.CaptionColor);
 
             VisualElement sign = NewSign();
             sign.style.marginLeft = SignGap;
@@ -145,7 +140,7 @@ namespace DigitalStory.View
 
         private Label BuildEnding()
         {
-            _ending = NewLabel(EndingFontSize, TextColor);
+            _ending = NewLabel(EndingFontSize, _hud.TextColor);
             _ending.style.position = Position.Absolute;
             _ending.style.left = 0f;
             _ending.style.right = 0f;
@@ -155,7 +150,7 @@ namespace DigitalStory.View
             return _ending;
         }
 
-        private static VisualElement NewSign()
+        private VisualElement NewSign()
         {
             var sign = new VisualElement();
             sign.style.minWidth = SignMinWidth;
@@ -167,13 +162,13 @@ namespace DigitalStory.View
             sign.style.borderTopRightRadius = SignRadius;
             sign.style.borderBottomLeftRadius = SignRadius;
             sign.style.borderBottomRightRadius = SignRadius;
-            sign.style.backgroundColor = SignColor;
+            sign.style.backgroundColor = _hud.PanelColor;
             return sign;
         }
 
-        private static Label NewCaption(string text)
+        private Label NewCaption(string text)
         {
-            Label caption = NewLabel(SmallFontSize, CaptionColor);
+            Label caption = NewLabel(SmallFontSize, _hud.CaptionColor);
             caption.text = text;
             return caption;
         }
@@ -210,12 +205,12 @@ namespace DigitalStory.View
         {
             Breath breath = _session.Breath;
             _breathFill.style.width = Length.Percent(breath.Current / breath.Max * 100f);
-            _breathFill.style.backgroundColor = breath.IsExhausted ? ExhaustedColor : BreathColor;
+            _breathFill.style.backgroundColor = breath.IsExhausted ? _hud.ExhaustedColor : _hud.BreathColor;
         }
 
         private void HandleEnded(NightOutcome outcome)
         {
-            _ending.style.backgroundColor = SignColor;
+            _ending.style.backgroundColor = _hud.PanelColor;
             _ending.style.paddingTop = EndingPadding;
             _ending.style.paddingBottom = EndingPadding;
             _ending.text = outcome switch

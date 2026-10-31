@@ -1,3 +1,4 @@
+using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
 
@@ -9,9 +10,16 @@ namespace DigitalStory.View
     public sealed class PiperView : MonoBehaviour
     {
         private Piper _piper;
+        private SongStage _stage;
+        private TownArtConfig _art;
 
         /// <summary>Supplies the Piper to show. Call once, before this object updates.</summary>
-        public void Initialize(Piper piper) => _piper = piper;
+        public void Initialize(Piper piper, SongStage stage, TownArtConfig art)
+        {
+            _piper = piper;
+            _stage = stage;
+            _art = art;
+        }
 
         private void LateUpdate()
         {
@@ -21,8 +29,13 @@ namespace DigitalStory.View
             }
 
             transform.SetPositionAndRotation(
-                TownSpace.ToScene(_piper.Position),
+                TownSpace.ToScene(_piper.Position + (Vector2.down * Lift())),
                 TownSpace.ToSceneRotation(_piper.Facing));
+        }
+
+        private float Lift()
+        {
+            return _stage.IsSurfing ? _art.SurfLift + (Mathf.Sin(Time.time * _art.SurfBobRate) * _art.SurfBob) : 0f;
         }
     }
 }

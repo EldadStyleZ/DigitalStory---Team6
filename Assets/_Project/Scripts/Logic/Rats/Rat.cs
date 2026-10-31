@@ -17,6 +17,17 @@ namespace DigitalStory.Logic
         public float Phase;
         public bool IsAlive;
 
+        /// <summary>The song holding this rat, or null.</summary>
+        public RatTrance Trance;
+
+        public float TranceLeft;
+
+        /// <summary>This rat's place in a formation.</summary>
+        public int TranceSlot;
+
+        /// <summary>This rat's own random drift while floating.</summary>
+        public Vector2 TranceDrift;
+
         /// <param name="position">Where the rat starts.</param>
         /// <param name="home">The nest it returns to.</param>
         /// <param name="wanderAngle">Its first wandering direction, in radians.</param>
@@ -30,6 +41,13 @@ namespace DigitalStory.Logic
             Charm = 0f;
             Phase = phase;
             IsAlive = true;
+            Trance = null;
+            TranceLeft = 0f;
+            TranceSlot = 0;
+            TranceDrift = Vector2.zero;
         }
+
+        /// <summary>True when cats ignore this rat and crowd songs leave it out.</summary>
+        public readonly bool IsOutOfReach => Trance != null && Trance.IsOutOfReach;
     }
 }

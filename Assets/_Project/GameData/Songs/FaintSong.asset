@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3f8a06b76f9e4d4698c4a844913c0e7, type: 3}
+  m_Name: FaintSong
+  m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.FaintEffect
+  _song:
+    _title: Faint
+    _description: Everyone plays dead
+    _cooldownSeconds: 10
+    _keys: 050000000300000001000000i
+  <Radius>k__BackingField: 360
+  <ShortestSeconds>k__BackingField: 4
+  <ExtraSeconds>k__BackingField: 1.5
+  <Slowdown>k__BackingField: 0.8

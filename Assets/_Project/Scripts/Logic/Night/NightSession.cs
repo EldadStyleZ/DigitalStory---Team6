@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using DigitalStory.Data;
 
 namespace DigitalStory.Logic
@@ -7,6 +8,7 @@ namespace DigitalStory.Logic
     public sealed class NightSession
     {
         private readonly GameRules _rules;
+        private readonly IRandomSource _simulationRandom;
 
         /// <param name="rules">The configs a night runs on.</param>
         /// <param name="night">The numbers for this night.</param>
@@ -33,13 +35,22 @@ namespace DigitalStory.Logic
             var houses = new HouseCollider(Town.Houses);
             Rat[] rats = new RatSpawner(rules, houses, townRandom).Spawn(night, Town, rules.PiperStart);
 
+            Cat[] cats = new CatSpawner(rules, townRandom).Spawn(night.CatCount, Town, rules.PiperStart);
+
             Swarm = new RatSwarm(rats, rules, Bank, houses, simulationRandom);
+            Cats = new CatPack(cats, rules, Town, Bank, houses, simulationRandom);
             Piper = new Piper(rules.Piper, rules.Town, Bank, houses, rules.PiperStart);
             Breath = new Breath(rules.Breath);
             Flute = new Flute(rules.Flute);
+            Songs = new SongBook(rules.Songs.Select(song => song.Song).ToArray(), rules.SongConfig, rules.Flute.HoleCount);
+            Stage = new SongStage();
+            _simulationRandom = simulationRandom;
         }
 
         public event Action<NightOutcome> Ended;
+
+        /// <summary>Raised with a song's index in <see cref="Songs"/> when it is cast.</summary>
+        public event Action<int> SongCast;
 
         public TownLayout Town { get; }
         public RiverBank Bank { get; }
@@ -47,6 +58,9 @@ namespace DigitalStory.Logic
         public Breath Breath { get; }
         public Flute Flute { get; }
         public RatSwarm Swarm { get; }
+        public CatPack Cats { get; }
+        public SongBook Songs { get; }
+        public SongStage Stage { get; }
         public int Quota { get; }
         public float TimeLimit { get; }
         public float TimeLeft { get; private set; }
@@ -63,7 +77,13 @@ namespace DigitalStory.Logic
             TimeLeft -= deltaTime;
             Piper.Tick(intent.Move, deltaTime);
             PlayFlute(in intent, deltaTime);
-            Swarm.Tick(new SwarmInfluence(Piper.Position, Piper.Facing, Flute.Mode, Flute.MusicRadius), deltaTime);
+            Songs.Tick(deltaTime);
+            Stage.Tick(deltaTime);
+            ScareCats();
+            Swarm.Tick(
+                new SwarmInfluence(Piper.Position, Piper.Facing, Flute.Mode, Flute.MusicRadius, Cats, Stage.CharmZoneRadius),
+                deltaTime);
+            Cats.Tick(Piper.Position, Swarm, deltaTime);
             CheckOutcome();
         }
 
@@ -76,6 +96,14 @@ namespace DigitalStory.Logic
             Flute.Sound(isPlaying ? wantedHole : Flute.NoHole);
         }
 
+        private void ScareCats()
+        {
+            if (Flute.Mode == FluteMode.Scare)
+            {
+                Cats.HearScare(Piper.Position, Flute.MusicRadius);
+            }
+        }
+
         private void RememberPressedHoles(int pressedHoles)
         {
             for (int hole = 0; hole < _rules.Flute.HoleCount; hole++)
@@ -83,7 +111,24 @@ namespace DigitalStory.Logic
                 if ((pressedHoles & (1 << hole)) != 0)
                 {
                     Flute.Press(hole);
+                    PlayNote(hole);
                 }
+            }
+        }
+
+        private void PlayNote(int hole)
+        {
+            if (Breath.IsExhausted || Breath.Current <= 0f)
+            {
+                return;
+            }
+
+            int song = Songs.Press(hole);
+
+            if (song != SongBook.NoSong)
+            {
+                _rules.Songs[song].Cast(new SongContext(Piper.Position, Swarm, Cats, Stage, _simulationRandom));
+                SongCast?.Invoke(song);
             }
         }
 
@@ -93,6 +138,7 @@ namespace DigitalStory.Logic
 
             if (Outcome != NightOutcome.InProgress)
             {
+                Stage.Stop();
                 Ended?.Invoke(Outcome);
             }
         }

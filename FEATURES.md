@@ -11,7 +11,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | F-001 | Choose the game concept | Done | Team | – | – | Team chose its HTML prototype, The Piper |
 | F-002 | Add injection, advanced tools and fundamentals guides | Done | EldadStyleZ | `feature/F-002-engineering-guides` | – | 49 EditMode and 21 PlayMode tests in Unity batch mode on a scratch project |
 | F-003 | Lead the rats to the river | Done | EldadStyleZ | `feature/F-003-rats-to-river` | – | 94 EditMode and 10 PlayMode tests in the Editor; Play Mode check with real keyboard and mouse (walking, charming, drowning, status); layout and ending seen in Play Mode captures |
-| F-004 | Cats and songs | In progress | EldadStyleZ | `feature/F-004-cats-and-songs` | `Assets/_Project/Scenes/Town.unity` | – |
+| F-004 | Cats and songs | Done | EldadStyleZ | `feature/F-004-cats-and-songs` | – | 207 EditMode and 17 PlayMode tests in the Editor; the owner played it with real keys and the nine songs, combos row and cat all worked |
 | F-005 | Menus and HUD | Planned | EldadStyleZ | – | – | – |
 | F-006 | Night, effects and sound | Planned | EldadStyleZ | – | – | – |
 
@@ -67,7 +67,8 @@ flowchart LR
 **Fixed while porting:**
 
 - The song note window used wall-clock time, so pausing expired notes. It uses game time.
-- The balloon song left conga and heart timers frozen, so rats went back to an old formation after popping. The song clears them.
+- The balloon song left conga and heart timers frozen, so rats went back to an old formation after popping. A rat now holds one song at a time, so a new song replaces the old one.
+- Fainting rats and sleeping cats slowed once per frame, so frame rate changed them. They now slow by time, and the tuned numbers keep their meaning at 60 frames a second.
 
 **Shared decisions:**
 
@@ -91,9 +92,9 @@ flowchart LR
 
 - **Goal:** cats hunt rats, and note sequences cast the nine songs.
 - **Done when:** in Play Mode, a cat eats rats, holes 5 and 6 drive it off, and every song casts from its keys.
-- **Layers:** Data holds cat config and song definitions. Logic holds cat behaviour, the song matcher and one `SongEffect` strategy per song. View holds the cat view, song effect visuals and the combos row, which lists each song's keys.
+- **Layers:** Data holds cat config, song definitions and HUD config. Logic holds cat behaviour, the song matcher, one `SongEffect` strategy per song and one `RatTrance` per kind of hold on a rat. View holds the cat view, song effect visuals and the combos row, which lists each song's keys.
 - **Tests:** cat patrol, hunt, eat pause, flee and sleep; longest sequence matches first; the three-second note window in game time; cooldowns; each song's effect.
-- **Notes:** the combos row ships here, with the rules, so every combo it shows really casts. The on-screen flute stays in F-005.
+- **Notes:** the combos row ships here, with the rules, so every combo it shows really casts. The on-screen flute stays in F-005. Holes pressed in the same frame are read lowest first, so a very fast descending roll can miss its combo at a low frame rate.
 
 ### F-005: Menus and HUD
 

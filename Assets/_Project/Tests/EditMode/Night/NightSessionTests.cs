@@ -174,12 +174,79 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Tick_ManyScriptedRunsWithACat_AveragesMatchThePrototype()
+        {
+            int phases = PrototypeValues.ScriptedRun.Length;
+            var lost = new double[phases];
+            var charm = new double[phases];
+
+            for (int run = 0; run < PrototypeValues.AverageRunCount; run++)
+            {
+                NightSession session = NewSession(TestRules.PrototypeNight(1), (uint)(PrototypeValues.AverageFirstSeed + run));
+
+                for (int phase = 0; phase < phases; phase++)
+                {
+                    RunPhase(session, PrototypeValues.ScriptedRun[phase]);
+                    lost[phase] += session.Swarm.LostCount;
+                    charm[phase] += MeanCharm(session);
+                }
+            }
+
+            for (int phase = 0; phase < phases; phase++)
+            {
+                double averageLost = lost[phase] / PrototypeValues.AverageRunCount;
+                double averageCharm = charm[phase] / PrototypeValues.AverageRunCount;
+                AssertAverage(averageLost, PrototypeValues.CatNightAverageLost[phase], PrototypeValues.CatNightAverageLostError[phase], phase);
+                AssertAverage(averageCharm, PrototypeValues.CatNightAverageMeanCharm[phase], PrototypeValues.CatNightAverageMeanCharmError[phase], phase);
+            }
+        }
+
+        [Test]
+        public void Tick_PlayingScareWithinReachOfACat_SendsItRunning()
+        {
+            NightSession session = SessionWhereScaresReachEverywhere();
+            int scareHole = 1 << 4;
+
+            session.Tick(new PiperIntent(Vector2.zero, scareHole, scareHole), Step);
+
+            Assert.That(session.Cats[0].FleeLeft, Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void Tick_CallingWithinReachOfACat_DoesNotScareIt()
+        {
+            NightSession session = SessionWhereScaresReachEverywhere();
+            int callHole = 1 << 0;
+
+            session.Tick(new PiperIntent(Vector2.zero, callHole, callHole), Step);
+
+            Assert.That(session.Cats[0].FleeLeft, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Constructor_NightWithCats_SpawnsThem()
+        {
+            NightSession session = NewSession(TestRules.PrototypeNight(2));
+
+            Assert.That(session.Cats.Count, Is.EqualTo(TestRules.PrototypeNight(2).CatCount));
+        }
+
+        [Test]
         public void Tick_FullNight_AllocatesNothing()
         {
             NightSession session = NewSession(TestRules.PrototypeNight(3));
             var intent = new PiperIntent(Vector2.left, 1, 1);
 
             Assert.That(() => session.Tick(intent, Step), Is.Not.AllocatingGCMemory());
+        }
+
+        private static NightSession SessionWhereScaresReachEverywhere()
+        {
+            var catConfig = ScriptableObject.CreateInstance<CatConfig>();
+            JsonUtility.FromJsonOverwrite("{\"<ScareExtraRange>k__BackingField\":100000}", catConfig);
+            GameRules rules = TestRules.With(cats: catConfig);
+            NightRules night = TestRules.PrototypeNight(1);
+            return new NightSession(rules, night, new Mulberry32Random((uint)night.Seed), new FixedRandomSource());
         }
 
         private static NightSession NewSession(NightRules night, uint simulationSeed = PrototypeValues.ScriptedRandomSeed)

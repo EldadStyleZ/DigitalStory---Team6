@@ -12,14 +12,16 @@ namespace DigitalStory.View
         private const int RatOrder = 3;
 
         private RatSwarm _swarm;
+        private SongStage _stage;
         private TownArtConfig _art;
         private SpriteRenderer[] _renderers;
         private Transform[] _transforms;
 
         /// <summary>Supplies the rats to show. Call once, before this object starts.</summary>
-        public void Initialize(RatSwarm swarm, TownArtConfig art)
+        public void Initialize(RatSwarm swarm, SongStage stage, TownArtConfig art)
         {
             _swarm = swarm;
+            _stage = stage;
             _art = art;
         }
 
@@ -77,13 +79,29 @@ namespace DigitalStory.View
                 return;
             }
 
-            ratRenderer.color = _swarm.IsCharmed(index) ? _art.CharmedRatColor : _art.CalmRatColor;
-            _transforms[index].position = TownSpace.ToScene(rat.Position);
+            bool isCharmed = _swarm.IsCharmed(index);
+            RatLook look = rat.Trance != null ? rat.Trance.Look : RatLook.Normal;
+            RatLookStyle style = _art.StyleOf(look);
+            Color normalColor = isCharmed ? _art.CharmedRatColor : _art.CalmRatColor;
+
+            ratRenderer.color = look == RatLook.Normal ? normalColor : style.Tint;
+            _transforms[index].localScale = Vector3.one * style.Scale;
+            _transforms[index].position = TownSpace.ToScene(rat.Position + (Vector2.down * HopOf(in rat, isCharmed)));
 
             if (rat.Velocity != Vector2.zero)
             {
                 _transforms[index].rotation = TownSpace.ToSceneRotation(Mathf.Atan2(rat.Velocity.y, rat.Velocity.x));
             }
+        }
+
+        private float HopOf(in Rat rat, bool isCharmed)
+        {
+            if (!_stage.IsSinging || !isCharmed || rat.IsOutOfReach)
+            {
+                return 0f;
+            }
+
+            return Mathf.Abs(Mathf.Sin((Time.time * _art.ChoirHopRate) + rat.Phase)) * _art.ChoirHopHeight;
         }
     }
 }
