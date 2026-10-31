@@ -253,15 +253,15 @@ namespace DigitalStory.Tests.EditMode
             return new RatSwarm(rats, TestRules.Default, TestRules.Bank(), TestRules.NoHouses(), new FixedRandomSource());
         }
 
-        private static SwarmInfluence Silence() => new SwarmInfluence(PiperPosition, 0f, FluteMode.None, 0f);
+        private static SwarmInfluence Silence() => new SwarmInfluence(PiperPosition, 0f, FluteMode.None, 0f, TestRules.NoCats());
 
-        private static SwarmInfluence Call() => new SwarmInfluence(PiperPosition, 0f, FluteMode.Call, MusicRadius);
+        private static SwarmInfluence Call() => new SwarmInfluence(PiperPosition, 0f, FluteMode.Call, MusicRadius, TestRules.NoCats());
 
-        private static SwarmInfluence Scare() => new SwarmInfluence(PiperPosition, 0f, FluteMode.Scare, 200f);
+        private static SwarmInfluence Scare() => new SwarmInfluence(PiperPosition, 0f, FluteMode.Scare, 200f, TestRules.NoCats());
 
         private static SwarmInfluence March(float facing)
         {
-            return new SwarmInfluence(PiperPosition, facing, FluteMode.March, 190f);
+            return new SwarmInfluence(PiperPosition, facing, FluteMode.March, 190f, TestRules.NoCats());
         }
     }
 }

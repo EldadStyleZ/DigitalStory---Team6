@@ -397,11 +397,6 @@ namespace DigitalStory.Logic
         {
             Vector2 force = Vector2.zero;
 
-            if (cats == null)
-            {
-                return force;
-            }
-
             for (int index = 0; index < cats.Count; index++)
             {
                 ref readonly Cat cat = ref cats[index];

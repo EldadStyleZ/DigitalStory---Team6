@@ -50,5 +50,11 @@ namespace DigitalStory.Tests.EditMode
         public static HouseCollider NoHouses() => new HouseCollider(Array.Empty<House>());
 
         public static RiverBank Bank() => new RiverBank(Default.Town);
+
+        public static CatPack NoCats()
+        {
+            var town = new TownLayout(1, 1, Array.Empty<House>(), Array.Empty<Junction>(), Array.Empty<Vector2>());
+            return new CatPack(Array.Empty<Cat>(), Default, town, Bank(), NoHouses(), new FixedRandomSource());
+        }
     }
 }

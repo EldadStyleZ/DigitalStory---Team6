@@ -11,7 +11,7 @@ namespace DigitalStory.Logic
             float piperFacing,
             FluteMode mode,
             float musicRadius,
-            CatPack cats = null,
+            CatPack cats,
             float charmZoneRadius = 0f)
         {
             PiperPosition = piperPosition;
@@ -27,7 +27,7 @@ namespace DigitalStory.Logic
         public FluteMode Mode { get; }
         public float MusicRadius { get; }
 
-        /// <summary>The cats rats should fear, or null when there are none.</summary>
+        /// <summary>The cats rats should fear.</summary>
         public CatPack Cats { get; }
 
         /// <summary>How close to the Piper a rat stays fully charmed, or 0 when no song does this.</summary>
