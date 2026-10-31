@@ -138,6 +138,52 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator Town_Paused_TheMenuIsDrawnOverTheHud()
+        {
+            yield return StartTheNight();
+
+            _root.Flow.TogglePause();
+            yield return null;
+
+            VisualElement overlay = _menus.Card.parent;
+            VisualElement root = overlay.parent;
+
+            Assert.That(root.IndexOf(overlay), Is.GreaterThan(root.IndexOf(_hud.Layer)));
+        }
+
+        [UnityTest]
+        public IEnumerator Town_OnLoad_StartHasKeyboardFocus()
+        {
+            yield return null;
+
+            Assert.That(FocusedElement(), Is.SameAs(_menus.Card.Q<Button>(TitleScreen.StartButtonName)));
+        }
+
+        [UnityTest]
+        public IEnumerator Town_Paused_ResumeHasKeyboardFocus()
+        {
+            yield return StartTheNight();
+
+            _root.Flow.TogglePause();
+            yield return null;
+            yield return null;
+
+            Assert.That(FocusedElement(), Is.SameAs(_menus.Card.Q<Button>(PauseScreen.ResumeButtonName)));
+        }
+
+        [UnityTest]
+        public IEnumerator Town_NightEnded_TheButtonHasKeyboardFocus()
+        {
+            yield return StartTheNight();
+
+            EndTheNightAtDawn();
+            yield return null;
+            yield return null;
+
+            Assert.That(FocusedElement(), Is.SameAs(_menus.Card.Q<Button>(ResultScreen.AgainButtonName)));
+        }
+
+        [UnityTest]
         public IEnumerator Town_LosingFocusWhilePlaying_Pauses()
         {
             yield return StartTheNight();
@@ -239,6 +285,8 @@ namespace DigitalStory.Tests.PlayMode
 
             FindTheGame();
         }
+
+        private Focusable FocusedElement() => _menus.Card.panel.focusController.focusedElement;
 
         private void EndTheNightAtDawn()
         {

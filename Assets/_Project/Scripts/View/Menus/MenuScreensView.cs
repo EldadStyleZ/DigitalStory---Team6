@@ -102,6 +102,8 @@ namespace DigitalStory.View
                 return;
             }
 
+            // The HUD builds itself in other views' Start, so its place among the children is not fixed.
+            _overlay.BringToFront();
             _overlay.style.display = DisplayStyle.Flex;
             screen.Fill(_card);
         }
