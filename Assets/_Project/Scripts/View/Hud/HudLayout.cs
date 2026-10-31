@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using DigitalStory.Logic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -11,6 +12,8 @@ namespace DigitalStory.View
     public sealed class HudLayout : MonoBehaviour
     {
         private const float BottomMargin = 8f;
+
+        private readonly List<VisualElement> _controls = new List<VisualElement>();
 
         private GameFlow _flow;
         private VisualElement _layer;
@@ -52,6 +55,28 @@ namespace DigitalStory.View
 
         /// <summary>Supplies the flow that decides when to show the HUD. Call once, before this object is enabled.</summary>
         public void Initialize(GameFlow flow) => _flow = flow;
+
+        /// <summary>Marks something the mouse can press, so pressing it does not also walk the Piper.</summary>
+        public void AddControl(VisualElement control) => _controls.Add(control);
+
+        /// <summary>True when a screen position is over a control.</summary>
+        /// <remarks>Pointer events arrive after Update, so this also works on the frame of a press.</remarks>
+        public bool IsOverControl(Vector2 screenPosition)
+        {
+            // Screen positions start at the bottom of the window, but panels start at the top.
+            var fromTheTop = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
+
+            foreach (VisualElement control in _controls)
+            {
+                if (control.panel != null
+                    && control.worldBound.Contains(RuntimePanelUtils.ScreenToPanel(control.panel, fromTheTop)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         private void OnEnable()
         {

@@ -72,6 +72,18 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Cast_AnyTime_StartsTheBeatUntilTheSongEnds()
+        {
+            var world = new SongWorld(new Rat[0]);
+
+            world.Cast<CongaEffect>();
+            Assert.That(world.Stage.IsDancingConga, Is.True);
+
+            world.Run(Song.Seconds + 0.1f);
+            Assert.That(world.Stage.IsDancingConga, Is.False);
+        }
+
+        [Test]
         public void Tick_SongRunsOut_LineBreaksUp()
         {
             var world = new SongWorld(new[] { SongWorld.RatBeside(50f) });

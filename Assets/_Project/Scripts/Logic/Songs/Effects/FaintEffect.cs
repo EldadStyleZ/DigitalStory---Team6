@@ -8,7 +8,13 @@ namespace DigitalStory.Logic
     public sealed class FaintEffect : CrowdSongEffect
     {
         public FaintEffect()
-            : base(new SongDefinition("Faint", "Everyone plays dead", 10f, 5, 3, 1))
+            : base(
+                new SongDefinition("Faint", "Everyone plays dead", 10f, 5, 3, 1),
+                new SoundCue(
+                    new Tone(ToneShape.Sawtooth, 392f, 380f, .3f, .06f),
+                    new Tone(ToneShape.Sawtooth, 370f, 359f, .3f, .06f, .32f),
+                    new Tone(ToneShape.Sawtooth, 349f, 339f, .3f, .06f, .64f),
+                    new Tone(ToneShape.Sawtooth, 311f, 302f, .9f, .06f, .96f)))
         {
         }
 

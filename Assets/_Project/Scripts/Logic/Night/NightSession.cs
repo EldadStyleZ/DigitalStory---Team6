@@ -70,6 +70,9 @@ namespace DigitalStory.Logic
         /// <summary>What the player sees when a song is cast.</summary>
         public SongFlourish FlourishOf(int song) => _rules.Songs[song].Flourish;
 
+        /// <summary>The song's own tune.</summary>
+        public SoundCue JingleOf(int song) => _rules.Songs[song].Jingle;
+
         /// <summary>How much of the night has gone, from 0 at dusk to 1 at dawn.</summary>
         public float NightProgress => Mathf.Clamp01(1f - (TimeLeft / TimeLimit));
 

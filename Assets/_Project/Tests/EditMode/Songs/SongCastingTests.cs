@@ -105,6 +105,17 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Stage.IsSinging, Is.False);
         }
 
+        [TestCase(typeof(BalloonsEffect))]
+        [TestCase(typeof(FaintEffect))]
+        [TestCase(typeof(CrowdSurfEffect))]
+        [TestCase(typeof(ChoirEffect))]
+        public void Jingle_SongsWithATune_HaveOne(System.Type song)
+        {
+            var effect = (SongEffect)ScriptableObject.CreateInstance(song);
+
+            Assert.That(effect.Jingle.Tones.Count, Is.GreaterThan(0));
+        }
+
         [Test]
         public void Tick_EverySongRunningAtOnce_AllocatesNothing()
         {

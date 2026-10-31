@@ -27,3 +27,114 @@ MonoBehaviour:
   <NoteStartSeconds>k__BackingField: 0.035
   <SwellSeconds>k__BackingField: 0.03
   <FadeSeconds>k__BackingField: 0.05
+  <Squeak>k__BackingField:
+    _tones:
+    - _shape: 0
+      _startHertz: 3350
+      _endHertz: 2300
+      _seconds: 0.07
+      _volume: 0.03
+      _delay: 0
+  <Splash>k__BackingField:
+    _tones:
+    - _shape: 4
+      _startHertz: 950
+      _endHertz: 950
+      _seconds: 0.28
+      _volume: 0.14
+      _delay: 0
+    - _shape: 0
+      _startHertz: 420
+      _endHertz: 180
+      _seconds: 0.12
+      _volume: 0.04
+      _delay: 0
+  <Eaten>k__BackingField:
+    _tones:
+    - _shape: 0
+      _startHertz: 1800
+      _endHertz: 700
+      _seconds: 0.12
+      _volume: 0.04
+      _delay: 0
+  <Pop>k__BackingField:
+    _tones:
+    - _shape: 2
+      _startHertz: 320
+      _endHertz: 90
+      _seconds: 0.07
+      _volume: 0.05
+      _delay: 0
+  <SongChime>k__BackingField:
+    _tones:
+    - _shape: 1
+      _startHertz: 880
+      _endHertz: 1320
+      _seconds: 0.25
+      _volume: 0.06
+      _delay: 0
+    - _shape: 1
+      _startHertz: 1175
+      _endHertz: 1760
+      _seconds: 0.3
+      _volume: 0.05
+      _delay: 0.12
+  <Won>k__BackingField:
+    _tones:
+    - _shape: 1
+      _startHertz: 587
+      _endHertz: 880
+      _seconds: 0.25
+      _volume: 0.08
+      _delay: 0
+    - _shape: 1
+      _startHertz: 880
+      _endHertz: 1175
+      _seconds: 0.35
+      _volume: 0.08
+      _delay: 0.18
+  <Lost>k__BackingField:
+    _tones:
+    - _shape: 1
+      _startHertz: 440
+      _endHertz: 220
+      _seconds: 0.5
+      _volume: 0.07
+      _delay: 0
+  <DiscoKick>k__BackingField:
+    _tones:
+    - _shape: 0
+      _startHertz: 150
+      _endHertz: 45
+      _seconds: 0.16
+      _volume: 0.14
+      _delay: 0
+  <DiscoTick>k__BackingField:
+    _tones:
+    - _shape: 2
+      _startHertz: 5200
+      _endHertz: 3800
+      _seconds: 0.03
+      _volume: 0.012
+      _delay: 0
+  <DiscoBeatSeconds>k__BackingField: 0.25
+  <CongaBeat>k__BackingField:
+    _tones:
+    - _shape: 1
+      _startHertz: 220
+      _endHertz: 190
+      _seconds: 0.09
+      _volume: 0.05
+      _delay: 0
+  <CongaAccent>k__BackingField:
+    _tones:
+    - _shape: 1
+      _startHertz: 330
+      _endHertz: 260
+      _seconds: 0.09
+      _volume: 0.09
+      _delay: 0
+  <CongaBeatSeconds>k__BackingField: 0.28
+  <CongaBeatsPerBar>k__BackingField: 4
+  <SqueakGapSeconds>k__BackingField: 0.07
+  <SplashGapSeconds>k__BackingField: 0.045

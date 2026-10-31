@@ -36,7 +36,7 @@ namespace DigitalStory.Data
             new HowToLine("March", "Holes 3 and 4: charmed rats run ahead, the way you are facing", 2),
             new HowToLine("Scare", "Holes 5 and 6: scatters rats and drives cats off", 4),
             new HowToLine("Songs", "The right run of notes casts a spell. The songs are listed above the flute"),
-            new HowToLine("Pause", "P or Esc"),
+            new HowToLine("Pause", "P or Esc. M mutes the sound"),
         };
 
         [field: Header("Pause screen")]
@@ -83,6 +83,12 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("The rats alive once cats have eaten some. {0} is alive and {1} is eaten.")]
         public string RatsLeftAndEatenFormat { get; private set; } = "{0} rats left · {1} eaten";
+
+        [field: SerializeField, Tooltip("The button while the sound is on.")]
+        public string MuteButton { get; private set; } = "Mute";
+
+        [field: SerializeField, Tooltip("The button while the sound is off.")]
+        public string UnmuteButton { get; private set; } = "Unmute";
 
         [field: Header("Flute")]
         [field: SerializeField, Tooltip("The word over holes 1 and 2.")]

@@ -16,14 +16,19 @@ namespace DigitalStory.Logic
         [SerializeField, Tooltip("What the player sees when the song is cast.")]
         private SongFlourish _flourish;
 
-        protected SongEffect(SongDefinition song, SongFlourish flourish)
+        [SerializeField, Tooltip("The song's own tune, played over the chime that every song shares.")]
+        private SoundCue _jingle;
+
+        protected SongEffect(SongDefinition song, SongFlourish flourish, SoundCue jingle = null)
         {
             _song = song;
             _flourish = flourish;
+            _jingle = jingle ?? new SoundCue();
         }
 
         public SongDefinition Song => _song;
         public SongFlourish Flourish => _flourish;
+        public SoundCue Jingle => _jingle;
 
         /// <summary>Applies the song. Keep runtime state in the rules, never on this asset.</summary>
         public abstract void Cast(in SongContext context);

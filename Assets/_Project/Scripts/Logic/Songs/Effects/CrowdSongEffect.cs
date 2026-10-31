@@ -11,8 +11,8 @@ namespace DigitalStory.Logic
 
         private static readonly Color RingColor = new Color32(0xFF, 0x78, 0xDC, 0xFF);
 
-        protected CrowdSongEffect(SongDefinition song)
-            : base(song, new SongFlourish(RingColor, RingReach, RingSpeed))
+        protected CrowdSongEffect(SongDefinition song, SoundCue jingle = null)
+            : base(song, new SongFlourish(RingColor, RingReach, RingSpeed), jingle)
         {
         }
 

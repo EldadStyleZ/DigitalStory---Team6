@@ -24,6 +24,7 @@ namespace DigitalStory.Logic
         protected override void Affect(int[] rats, in SongContext context)
         {
             var trance = new CongaTrance(context.Swarm, rats, LookAhead, StopDistance);
+            context.Stage.StartConga(Seconds);
 
             for (int slot = 0; slot < rats.Length; slot++)
             {

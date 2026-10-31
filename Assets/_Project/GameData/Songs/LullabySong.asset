@@ -21,5 +21,7 @@ MonoBehaviour:
     _ringColor: {r: 0.78431374, g: 0.78431374, b: 1, a: 1}
     _ringReach: 520
     _ringSpeed: 600
+  _jingle:
+    _tones: []
   <Radius>k__BackingField: 520
   <SleepSeconds>k__BackingField: 9

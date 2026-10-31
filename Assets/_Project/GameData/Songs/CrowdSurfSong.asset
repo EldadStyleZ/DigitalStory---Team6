@@ -21,6 +21,14 @@ MonoBehaviour:
     _ringColor: {r: 1, g: 0.47058824, b: 0.8627451, a: 1}
     _ringReach: 340
     _ringSpeed: 520
+  _jingle:
+    _tones:
+    - _shape: 0
+      _startHertz: 400
+      _endHertz: 1300
+      _seconds: 0.6
+      _volume: 0.06
+      _delay: 0
   <Radius>k__BackingField: 360
   <Seconds>k__BackingField: 6
   <CharmZoneRadius>k__BackingField: 220

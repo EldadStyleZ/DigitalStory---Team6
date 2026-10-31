@@ -57,6 +57,63 @@ namespace DigitalStory.Data
 
         public int HoleCount => _fluteSemitones.Length;
 
+        [field: Header("Sound effects")]
+        [field: SerializeField, Tooltip("A rat falling under the spell, or waking up.")]
+        public SoundCue Squeak { get; private set; } = new SoundCue(new Tone(ToneShape.Sine, 3350f, 2300f, .07f, .03f));
+
+        [field: SerializeField, Tooltip("A rat falling in the river.")]
+        public SoundCue Splash { get; private set; } = new SoundCue(
+            new Tone(ToneShape.Noise, 950f, 950f, .28f, .14f),
+            new Tone(ToneShape.Sine, 420f, 180f, .12f, .04f));
+
+        [field: SerializeField, Tooltip("A cat catching a rat.")]
+        public SoundCue Eaten { get; private set; } = new SoundCue(new Tone(ToneShape.Sine, 1800f, 700f, .12f, .04f));
+
+        [field: SerializeField, Tooltip("A balloon popping.")]
+        public SoundCue Pop { get; private set; } = new SoundCue(new Tone(ToneShape.Square, 320f, 90f, .07f, .05f));
+
+        [field: SerializeField, Tooltip("Any song being cast.")]
+        public SoundCue SongChime { get; private set; } = new SoundCue(
+            new Tone(ToneShape.Triangle, 880f, 1320f, .25f, .06f),
+            new Tone(ToneShape.Triangle, 1175f, 1760f, .3f, .05f, .12f));
+
+        [field: SerializeField, Tooltip("Winning the night.")]
+        public SoundCue Won { get; private set; } = new SoundCue(
+            new Tone(ToneShape.Triangle, 587f, 880f, .25f, .08f),
+            new Tone(ToneShape.Triangle, 880f, 1175f, .35f, .08f, .18f));
+
+        [field: SerializeField, Tooltip("Losing the night.")]
+        public SoundCue Lost { get; private set; } = new SoundCue(new Tone(ToneShape.Triangle, 440f, 220f, .5f, .07f));
+
+        [field: Header("Beats")]
+        [field: SerializeField, Tooltip("The kick during Disco.")]
+        public SoundCue DiscoKick { get; private set; } = new SoundCue(new Tone(ToneShape.Sine, 150f, 45f, .16f, .14f));
+
+        [field: SerializeField, Tooltip("The tick on every other Disco beat.")]
+        public SoundCue DiscoTick { get; private set; } = new SoundCue(new Tone(ToneShape.Square, 5200f, 3800f, .03f, .012f));
+
+        [field: SerializeField, Min(0.01f), Tooltip("Seconds between Disco beats.")]
+        public float DiscoBeatSeconds { get; private set; } = .25f;
+
+        [field: SerializeField, Tooltip("A normal beat during Conga.")]
+        public SoundCue CongaBeat { get; private set; } = new SoundCue(new Tone(ToneShape.Triangle, 220f, 190f, .09f, .05f));
+
+        [field: SerializeField, Tooltip("The last beat of each Conga bar.")]
+        public SoundCue CongaAccent { get; private set; } = new SoundCue(new Tone(ToneShape.Triangle, 330f, 260f, .09f, .09f));
+
+        [field: SerializeField, Min(0.01f), Tooltip("Seconds between Conga beats.")]
+        public float CongaBeatSeconds { get; private set; } = .28f;
+
+        [field: SerializeField, Min(1), Tooltip("How many beats are in a Conga bar.")]
+        public int CongaBeatsPerBar { get; private set; } = 4;
+
+        [field: Header("Crowding")]
+        [field: SerializeField, Min(0f), Tooltip("Shortest gap between squeaks, so a swarm does not buzz.")]
+        public float SqueakGapSeconds { get; private set; } = .07f;
+
+        [field: SerializeField, Min(0f), Tooltip("Shortest gap between splashes, so a swarm does not buzz.")]
+        public float SplashGapSeconds { get; private set; } = .045f;
+
         /// <summary>The pitch of a hole, in hertz.</summary>
         public float HertzOfHole(int hole) => FluteBaseHertz * Mathf.Pow(2f, _fluteSemitones[hole] / 12f);
     }

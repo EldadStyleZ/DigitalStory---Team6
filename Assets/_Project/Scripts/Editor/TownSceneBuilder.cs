@@ -392,7 +392,8 @@ namespace DigitalStory.Editor
             var catsObject = new GameObject("Cats", typeof(CatView));
 
             var effectsObject = new GameObject("Effects", typeof(EffectsView));
-            var soundObject = new GameObject("Sound", typeof(AudioSource), typeof(FluteVoice));
+            var fluteVoiceObject = new GameObject("Flute Voice", typeof(AudioSource), typeof(FluteVoice));
+            var soundObject = new GameObject("Sound Effects", typeof(AudioSource), typeof(SoundView));
 
             var darknessObject = new GameObject("Darkness", typeof(SpriteRenderer), typeof(DarknessView));
             var darknessRenderer = darknessObject.GetComponent<SpriteRenderer>();
@@ -408,6 +409,7 @@ namespace DigitalStory.Editor
                 typeof(ComboRowView),
                 typeof(FluteView),
                 typeof(MinimapView),
+                typeof(MuteView),
                 typeof(MenuScreensView));
             hud.GetComponent<UIDocument>().panelSettings = assets.Panel;
 
@@ -439,7 +441,9 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_catView", catsObject.GetComponent<CatView>());
             SetObject(serialized, "_darknessView", darknessObject.GetComponent<DarknessView>());
             SetObject(serialized, "_effectsView", effectsObject.GetComponent<EffectsView>());
-            SetObject(serialized, "_fluteVoice", soundObject.GetComponent<FluteVoice>());
+            SetObject(serialized, "_fluteVoice", fluteVoiceObject.GetComponent<FluteVoice>());
+            SetObject(serialized, "_soundView", soundObject.GetComponent<SoundView>());
+            SetObject(serialized, "_muteView", hud.GetComponent<MuteView>());
             SetObject(serialized, "_townCamera", camera.GetComponent<TownCamera>());
             SetObject(serialized, "_statusView", hud.GetComponent<NightStatusView>());
             SetObject(serialized, "_comboRow", hud.GetComponent<ComboRowView>());

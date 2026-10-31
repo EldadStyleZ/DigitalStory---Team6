@@ -69,20 +69,6 @@ namespace DigitalStory.View
             _hud = hud;
         }
 
-        /// <summary>True when a screen position is over the flute.</summary>
-        /// <remarks>Pointer events arrive after Update, so this also works on the frame of a press.</remarks>
-        public bool IsUnderPointer(Vector2 screenPosition)
-        {
-            if (_tube?.panel == null)
-            {
-                return false;
-            }
-
-            // Screen positions start at the bottom of the window, but panels start at the top.
-            var fromTheTop = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
-            return _tube.worldBound.Contains(RuntimePanelUtils.ScreenToPanel(_tube.panel, fromTheTop));
-        }
-
         /// <summary>True while a hole is lit, for tests and debugging.</summary>
         public bool IsLit(int hole) => hole == _litHole;
 
@@ -173,6 +159,7 @@ namespace DigitalStory.View
             _tube.RegisterCallback<PointerUpEvent>(HandlePointerUp);
             _tube.RegisterCallback<PointerCaptureOutEvent>(HandlePointerCaptureOut);
             parent.Add(_tube);
+            _layout.AddControl(_tube);
         }
 
         // Holes next to each other with the same mode share a label. Returns the first hole after them.

@@ -21,6 +21,38 @@ MonoBehaviour:
     _ringColor: {r: 1, g: 0.47058824, b: 0.8627451, a: 1}
     _ringReach: 340
     _ringSpeed: 520
+  _jingle:
+    _tones:
+    - _shape: 0
+      _startHertz: 300
+      _endHertz: 600
+      _seconds: 0.12
+      _volume: 0.04
+      _delay: 0
+    - _shape: 0
+      _startHertz: 420
+      _endHertz: 760
+      _seconds: 0.12
+      _volume: 0.04
+      _delay: 0.07
+    - _shape: 0
+      _startHertz: 540
+      _endHertz: 920
+      _seconds: 0.12
+      _volume: 0.04
+      _delay: 0.14
+    - _shape: 0
+      _startHertz: 660
+      _endHertz: 1080
+      _seconds: 0.12
+      _volume: 0.04
+      _delay: 0.21000001
+    - _shape: 0
+      _startHertz: 780
+      _endHertz: 1240
+      _seconds: 0.12
+      _volume: 0.04
+      _delay: 0.28
   <Radius>k__BackingField: 360
   <ShortestSeconds>k__BackingField: 6
   <ExtraSeconds>k__BackingField: 2.5
