@@ -2,14 +2,18 @@
 
 The team's shared tracker. Read it before starting work, and keep your row current while you work.
 
-**Concept:** not decided yet. Keep shared code general until F-001 is done.
+**Concept:** The Piper (החלילן). Lead the rats of Hamelin to the river with a six-hole flute before dawn.
 
 ## Board
 
 | ID | Feature | Status | Owner | Branch | Holding | Verified by |
 |---|---|---|---|---|---|---|
-| F-001 | Choose the game concept | In progress | Team | – | – | – |
+| F-001 | Choose the game concept | Done | Team | – | – | Team chose its HTML prototype, The Piper |
 | F-002 | Add injection, advanced tools and fundamentals guides | Done | EldadStyleZ | `feature/F-002-engineering-guides` | – | 49 EditMode and 21 PlayMode tests in Unity batch mode on a scratch project |
+| F-003 | Lead the rats to the river | In progress | EldadStyleZ | `feature/F-003-rats-to-river` | `Assets/_Project/Scenes/Town.unity` | – |
+| F-004 | Cats and songs | Planned | EldadStyleZ | – | – | – |
+| F-005 | Menus, HUD and progress | Planned | EldadStyleZ | – | – | – |
+| F-006 | Night, effects and sound | Planned | EldadStyleZ | – | – | – |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
 - **Holding:** the scenes and prefabs the owner is changing. Nobody else edits them until this cell is cleared, because Unity scenes merge badly.
@@ -31,11 +35,82 @@ Copy this block for each feature once it is planned.
 - **Notes:** anything the next person should know.
 ```
 
+### Porting The Piper
+
+F-003 to F-006 rebuild the team's HTML prototype (`hamelin mechanics.html`, kept outside the repo) one playable slice at a time. We keep its rules and numbers, not its structure.
+
+```mermaid
+flowchart LR
+    Config["Config assets<br/>Data"] --> Session["LevelSession<br/>Logic"]
+    Input["PiperInput<br/>View"] -->|"move and held holes"| Session
+    Session --> Piper["Piper, Breath, Flute<br/>Logic"]
+    Session --> Swarm["RatSwarm, Cats<br/>Logic"]
+    Session -->|"events"| Views["Town, Piper, rat and HUD views<br/>View"]
+```
+
+| Prototype | Our version |
+|---|---|
+| One file with global state | `View → Logic → Data` assemblies |
+| Numbers in code | Config assets |
+| `Math.random()` and `performance.now()` | Injected `IRandomSource`, with game time passed in |
+| `if (id === 'conga')` chain | One strategy asset per song |
+| Text states such as `'play'` | State machine |
+| `localStorage` | `IProgressStore`, validated on load |
+| Effects created inside the rules | Logic raises events and View shows them |
+| `setTimeout` for sounds | Coroutines in View |
+| HTML and CSS | UI Toolkit |
+
+**Left out on purpose:** `doShriek`, rat `fear`, `shriekReq` and `fluteHeld`, because nothing in the prototype reaches them.
+
+**Fixed while porting:**
+
+- The song note window used wall-clock time, so pausing expired notes. It uses game time.
+- A bad saved value could unlock every level. It is clamped on load.
+- The balloon song left conga and heart timers frozen, so rats went back to an old formation after popping. The song clears them.
+
+**Shared decisions:**
+
+- Logic keeps the prototype's coordinates and units, so its tuning numbers carry over unchanged. One View function maps them to the scene.
+- Rats use our own rules, not `Rigidbody2D`, so tests run without a scene.
+- The simulation ticks in `Update` with `deltaTime` capped at 0.033, as the prototype does.
+- Input stays on the Input Manager behind `PiperInput`. Moving to the Input System package is a team decision, and only that class would change.
+- The prototype has no image or audio files. We generate replaceable placeholder sprites, so art can be swapped without code changes.
+
+### F-003: Lead the rats to the river
+
+- **Goal:** the player walks the Piper through a generated town, charms rats with the flute and leads them into the river before dawn.
+- **Done when:** on level 1 in Play Mode, holding hole 1 near rats makes them follow, rats that cross the bank drown, and the level is won at the quota and lost at dawn.
+- **Layers:** Data holds town, level, Piper, breath, flute and rat configs. Logic holds the seeded town generator, river bank, house collision, breath, flute modes, Piper movement, rat swarm and level session. View holds the composition root, input, camera and the town, Piper and rat views.
+- **Tests:** town generator and river curve match values captured from the prototype; house collision; breath drain, exhaustion and recovery; which held hole wins; flute mode radii; Piper speed and river limit; rat charm rise, decay and spread; rat speed cap; drowning; win, unreachable quota and dawn endings; a level tick allocates nothing.
+- **Notes:** also replaces the `AGENTS.md` line that says the concept is not final.
+
+### F-004: Cats and songs
+
+- **Goal:** cats hunt rats, and note sequences cast the nine songs.
+- **Done when:** on level 2 in Play Mode, a cat eats rats, holes 5 and 6 drive it off, and every song casts from its keys.
+- **Layers:** Data holds cat config and song definitions. Logic holds cat behaviour, the song matcher and one `SongEffect` strategy per song. View holds the cat view and song effect visuals.
+- **Tests:** cat patrol, hunt, eat pause, flee and sleep; longest sequence matches first; the three-second note window in game time; cooldowns; each song's effect.
+
+### F-005: Menus, HUD and progress
+
+- **Goal:** the full game flow in Hebrew, from level select to the result screen.
+- **Done when:** a player can pick an unlocked level, read its tip, play, pause, retry and unlock the next level, with progress kept after a restart.
+- **Layers:** Data holds text assets. Logic holds the game flow state machine and level unlocks. View holds the UI Toolkit screens, on-screen flute, HUD, minimap and `PlayerPrefs` progress store.
+- **Tests:** flow transitions, unlock rules and rejected save values, plus a PlayMode test that the screens load.
+- **Notes:** `UIDocument` is built in, so no package is needed. Check right-to-left Hebrew in UI Toolkit first, before building screens.
+
+### F-006: Night, effects and sound
+
+- **Goal:** the game's night mood and sound.
+- **Done when:** lamps light a dark town, the sky warms towards dawn, and notes, ripples, rings, the flute and sound effects all play.
+- **Layers:** Data holds effect and audio configs. Logic only exposes the dawn value. View holds the darkness overlay, pooled effects and generated flute sound.
+- **Tests:** the dawn value, plus a Profiler check on level 4 with 430 rats.
+
 ## Ideas
 
 Not approved work. Do not build on these until they move to the board.
 
-- A flute that attracts mice when you play keyboard combos.
+- None right now.
 
 ## Decisions
 
@@ -48,3 +123,4 @@ Add a row when the team decides something that future work must follow.
 | 2026-10-30 | Merge code through reviewed pull requests. Only `FEATURES.md` claims go straight to `main`. | Keeps `main` working while making claims visible at once. |
 | 2026-10-30 | Add new packages only by team decision. | Each package adds build size, risk and upkeep. |
 | 2026-10-30 | Inject dependencies by hand, with one composition root per scene. No DI container for now. | Keeps Logic testable without adding a package. |
+| 2026-10-31 | The game is The Piper, rebuilt from the team's HTML prototype to our standards. | The prototype already defines the rules, so we keep them and replace the structure. |
