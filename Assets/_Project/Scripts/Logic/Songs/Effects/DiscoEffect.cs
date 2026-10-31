@@ -27,6 +27,7 @@ namespace DigitalStory.Logic
         protected override void Affect(int[] rats, in SongContext context)
         {
             var trance = new SpinTrance(this);
+            context.Stage.StartDisco(Seconds);
 
             foreach (int rat in rats)
             {

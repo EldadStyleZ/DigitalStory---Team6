@@ -15,6 +15,9 @@ namespace DigitalStory.Logic
 
         public virtual RatLook Look => RatLook.Normal;
 
+        /// <summary>How a trance that moves the rat ends.</summary>
+        public virtual TranceEnding Ending => TranceEnding.Quiet;
+
         /// <summary>How close to its target a rat in formation starts to slow down.</summary>
         public virtual float StopDistance => 0f;
 

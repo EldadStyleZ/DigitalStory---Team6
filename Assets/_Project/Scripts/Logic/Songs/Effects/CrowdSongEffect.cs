@@ -6,8 +6,13 @@ namespace DigitalStory.Logic
     /// <summary>A song that does something to the rats around the Piper, nearest first.</summary>
     public abstract class CrowdSongEffect : SongEffect
     {
-        protected CrowdSongEffect(SongDefinition song)
-            : base(song)
+        private const float RingReach = 340f;
+        private const float RingSpeed = 520f;
+
+        private static readonly Color RingColor = new Color32(0xFF, 0x78, 0xDC, 0xFF);
+
+        protected CrowdSongEffect(SongDefinition song, SoundCue jingle = null)
+            : base(song, new SongFlourish(RingColor, RingReach, RingSpeed), jingle)
         {
         }
 

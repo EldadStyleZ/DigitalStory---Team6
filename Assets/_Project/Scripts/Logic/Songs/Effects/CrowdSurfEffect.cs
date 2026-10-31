@@ -8,7 +8,9 @@ namespace DigitalStory.Logic
     public sealed class CrowdSurfEffect : CrowdSongEffect
     {
         public CrowdSurfEffect()
-            : base(new SongDefinition("Crowd Surf", "The swarm lifts you up", 10f, 2, 2, 5))
+            : base(
+                new SongDefinition("Crowd Surf", "The swarm lifts you up", 10f, 2, 2, 5),
+                new SoundCue(new Tone(ToneShape.Sine, 400f, 1300f, .6f, .06f)))
         {
         }
 

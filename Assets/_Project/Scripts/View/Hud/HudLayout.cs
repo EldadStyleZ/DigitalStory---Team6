@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using DigitalStory.Logic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -11,11 +12,17 @@ namespace DigitalStory.View
     public sealed class HudLayout : MonoBehaviour
     {
         private const float BottomMargin = 8f;
+        private const float TopRightMargin = 12f;
+        private const float TopRightGap = 8f;
+
+        private readonly List<VisualElement> _controls = new List<VisualElement>();
 
         private GameFlow _flow;
         private VisualElement _layer;
         private VisualElement _comboSlot;
         private VisualElement _fluteSlot;
+        private VisualElement _muteSlot;
+        private VisualElement _mapSlot;
 
         /// <summary>The whole HUD. Children place themselves in it.</summary>
         public VisualElement Layer
@@ -47,11 +54,53 @@ namespace DigitalStory.View
             }
         }
 
+        /// <summary>The place for the mute button, beside the minimap.</summary>
+        public VisualElement MuteSlot
+        {
+            get
+            {
+                Build();
+                return _muteSlot;
+            }
+        }
+
+        /// <summary>The place for the minimap, in the corner of the screen.</summary>
+        public VisualElement MapSlot
+        {
+            get
+            {
+                Build();
+                return _mapSlot;
+            }
+        }
+
         /// <summary>True while the HUD is on screen, for tests and debugging.</summary>
         public bool IsShowing => _layer != null && _layer.style.display == DisplayStyle.Flex;
 
         /// <summary>Supplies the flow that decides when to show the HUD. Call once, before this object is enabled.</summary>
         public void Initialize(GameFlow flow) => _flow = flow;
+
+        /// <summary>Marks something the mouse can press, so pressing it does not also walk the Piper.</summary>
+        public void AddControl(VisualElement control) => _controls.Add(control);
+
+        /// <summary>True when a screen position is over a control.</summary>
+        /// <remarks>Pointer events arrive after Update, so this also works on the frame of a press.</remarks>
+        public bool IsOverControl(Vector2 screenPosition)
+        {
+            // Screen positions start at the bottom of the window, but panels start at the top.
+            var fromTheTop = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
+
+            foreach (VisualElement control in _controls)
+            {
+                if (control.panel != null
+                    && control.worldBound.Contains(RuntimePanelUtils.ScreenToPanel(control.panel, fromTheTop)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         private void OnEnable()
         {
@@ -109,8 +158,30 @@ namespace DigitalStory.View
             bottom.Add(_comboSlot);
             bottom.Add(_fluteSlot);
             _layer.Add(bottom);
+            _layer.Add(BuildTopRight());
 
             GetComponent<UIDocument>().rootVisualElement.Add(_layer);
+        }
+
+        private VisualElement BuildTopRight()
+        {
+            var topRight = new VisualElement();
+            topRight.pickingMode = PickingMode.Ignore;
+            topRight.style.position = Position.Absolute;
+            topRight.style.top = TopRightMargin;
+            topRight.style.right = TopRightMargin;
+            topRight.style.flexDirection = FlexDirection.Row;
+
+            _muteSlot = new VisualElement();
+            _muteSlot.pickingMode = PickingMode.Ignore;
+            _muteSlot.style.marginRight = TopRightGap;
+
+            _mapSlot = new VisualElement();
+            _mapSlot.pickingMode = PickingMode.Ignore;
+
+            topRight.Add(_muteSlot);
+            topRight.Add(_mapSlot);
+            return topRight;
         }
 
         private static VisualElement NewSlot()

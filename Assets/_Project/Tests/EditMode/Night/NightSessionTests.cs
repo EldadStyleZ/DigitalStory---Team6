@@ -38,6 +38,37 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Outcome, Is.EqualTo(NightOutcome.InProgress));
         }
 
+        [TestCase(0f, 0f, 0f)]
+        [TestCase(30f, 0.3f, 0f)]
+        [TestCase(60f, 0.6f, 0f)]
+        [TestCase(70f, 0.7f, 0.25f)]
+        [TestCase(80f, 0.8f, 0.5f)]
+        [TestCase(100f, 1f, 1f)]
+        [TestCase(120f, 1f, 1f)]
+        public void Dawn_AsTheNightPasses_FollowsThePrototypesCurve(float secondsGone, float progress, float dawn)
+        {
+            NightSession session = NewSession(new NightRules(1234, 70, 45, 100f, 3));
+
+            if (secondsGone > 0f)
+            {
+                session.Tick(Idle, secondsGone);
+            }
+
+            Assert.That(session.NightProgress, Is.EqualTo(progress).Within(CharmTolerance));
+            Assert.That(session.Dawn, Is.EqualTo(dawn).Within(CharmTolerance));
+        }
+
+        [TestCase(81f, false)]
+        [TestCase(83f, true)]
+        public void IsNearDawn_LateInTheNight_TurnsOn(float secondsGone, bool expected)
+        {
+            NightSession session = NewSession(new NightRules(1234, 70, 45, 100f, 3));
+
+            session.Tick(Idle, secondsGone);
+
+            Assert.That(session.IsNearDawn, Is.EqualTo(expected));
+        }
+
         [Test]
         public void Constructor_QuotaAboveRatCount_FailsWithAClearError()
         {

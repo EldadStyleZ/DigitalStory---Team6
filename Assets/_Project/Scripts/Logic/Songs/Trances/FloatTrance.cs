@@ -13,6 +13,7 @@ namespace DigitalStory.Logic
         public override bool IsOutOfReach => true;
         public override bool MovesTheRat => true;
         public override RatLook Look => RatLook.Floating;
+        public override TranceEnding Ending => TranceEnding.Popped;
 
         public override void Move(ref Rat rat, in TranceStep step)
         {

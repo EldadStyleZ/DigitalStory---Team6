@@ -53,6 +53,18 @@ namespace DigitalStory.Logic
             }
         }
 
+        /// <summary>Raised with the place a rat drowned.</summary>
+        public event Action<Vector2> RatDrowned;
+
+        /// <summary>Raised with the place a rat was eaten.</summary>
+        public event Action<Vector2> RatEaten;
+
+        /// <summary>Raised with the place a rat fell under the flute's spell.</summary>
+        public event Action<Vector2> RatCharmed;
+
+        /// <summary>Raised with the place a trance that moved a rat ended, and how it ended.</summary>
+        public event Action<Vector2, TranceEnding> TranceEnded;
+
         public int Count => _rats.Length;
         public int AliveCount { get; private set; }
         public int DrownedCount { get; private set; }
@@ -112,6 +124,7 @@ namespace DigitalStory.Logic
             _rats[index].IsAlive = false;
             AliveCount--;
             LostCount++;
+            RatEaten?.Invoke(_rats[index].Position);
         }
 
         /// <summary>Advances every living rat by one step.</summary>
@@ -160,7 +173,14 @@ namespace DigitalStory.Logic
             NeighbourSurvey neighbours = SurveyNeighbours(index);
 
             Vector2 force = FlockingForce(in rat, in neighbours) + WanderForce(ref rat, deltaTime);
+            float charmBefore = rat.Charm;
             force += UpdateCharm(ref rat, in influence, neighbours.HighestCharm, deltaTime);
+
+            if (charmBefore < _config.CharmedAt && rat.Charm >= _config.CharmedAt)
+            {
+                RatCharmed?.Invoke(rat.Position);
+            }
+
             force += rat.Charm > _config.MinimumFollowCharm ? FollowForce(in rat, in influence) : HomeForce(in rat);
             CountDownFormation(ref rat, deltaTime);
 
@@ -189,6 +209,7 @@ namespace DigitalStory.Logic
             }
 
             rat.Trance.Finish(ref rat, in step);
+            TranceEnded?.Invoke(rat.Position, rat.Trance.Ending);
             rat.Trance = null;
 
             if (rat.Position.x > _bank.EdgeAt(rat.Position.y) + _config.DrownMargin)
@@ -454,6 +475,7 @@ namespace DigitalStory.Logic
             rat.IsAlive = false;
             AliveCount--;
             DrownedCount++;
+            RatDrowned?.Invoke(rat.Position);
         }
 
         private struct NeighbourSurvey

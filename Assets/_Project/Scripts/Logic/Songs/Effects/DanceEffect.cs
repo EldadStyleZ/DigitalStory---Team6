@@ -8,7 +8,9 @@ namespace DigitalStory.Logic
     public sealed class DanceEffect : SongEffect
     {
         public DanceEffect()
-            : base(new SongDefinition("Dance", "Charms everything nearby", 12f, 0, 2, 4))
+            : base(
+                new SongDefinition("Dance", "Charms everything nearby", 12f, 0, 2, 4),
+                new SongFlourish(new Color32(0xF2, 0xB5, 0x44, 0xFF), 380f, 520f))
         {
         }
 

@@ -8,7 +8,9 @@ namespace DigitalStory.Logic
     public sealed class LullabyEffect : SongEffect
     {
         public LullabyEffect()
-            : base(new SongDefinition("Lullaby", "Puts cats to sleep", 12f, 2, 1, 0))
+            : base(
+                new SongDefinition("Lullaby", "Puts cats to sleep", 12f, 2, 1, 0),
+                new SongFlourish(new Color32(0xC8, 0xC8, 0xFF, 0xFF), 520f, 600f))
         {
         }
 

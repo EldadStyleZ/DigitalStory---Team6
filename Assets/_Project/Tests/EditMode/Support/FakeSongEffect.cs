@@ -10,7 +10,7 @@ namespace DigitalStory.Tests.EditMode
         public const float CooldownSeconds = 10f;
 
         public FakeSongEffect()
-            : base(new SongDefinition("Fake", string.Empty, CooldownSeconds, 2, 1, 0))
+            : base(new SongDefinition("Fake", string.Empty, CooldownSeconds, 2, 1, 0), new SongFlourish(Color.white, 100f, 100f))
         {
         }
 

@@ -227,6 +227,97 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Eat_LivingRat_ReportsWhere()
+        {
+            RatSwarm swarm = SwarmOf(RatAt(FarAway));
+            Vector2? reported = null;
+            swarm.RatEaten += position => reported = position;
+
+            swarm.Eat(0);
+
+            Assert.That(reported, Is.EqualTo(FarAway));
+        }
+
+        [Test]
+        public void Tick_RatCrossesTheBank_ReportsWhereItDrowned()
+        {
+            var inTheRiver = new Vector2(TestRules.Bank().EdgeAt(600f) + 20f, 600f);
+            Rat rat = RatAt(inTheRiver);
+            rat.Charm = 1f;
+            RatSwarm swarm = SwarmOf(rat);
+            var reports = 0;
+            Vector2 reported = Vector2.zero;
+            swarm.RatDrowned += position =>
+            {
+                reports++;
+                reported = position;
+            };
+
+            swarm.Tick(Silence(), Step);
+            swarm.Tick(Silence(), Step);
+
+            Assert.That(reports, Is.EqualTo(1));
+            Assert.That(Vector2.Distance(reported, inTheRiver), Is.LessThan(30f));
+        }
+
+        [Test]
+        public void Tick_CharmCrossesTheLine_ReportsItOnce()
+        {
+            Rat rat = RatAt(PiperPosition + (Vector2.left * 20f));
+            rat.Charm = Config.CharmedAt - 0.01f;
+            RatSwarm swarm = SwarmOf(rat);
+            var reports = 0;
+            swarm.RatCharmed += _ => reports++;
+
+            swarm.Tick(Call(), Step);
+            swarm.Tick(Call(), Step);
+
+            Assert.That(reports, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Tick_AlreadyCharmed_ReportsNothing()
+        {
+            Rat rat = RatAt(PiperPosition + (Vector2.left * 20f));
+            rat.Charm = 1f;
+            RatSwarm swarm = SwarmOf(rat);
+            var reports = 0;
+            swarm.RatCharmed += _ => reports++;
+
+            swarm.Tick(Call(), Step);
+
+            Assert.That(reports, Is.EqualTo(0));
+        }
+
+        [TestCase(TranceEnding.Woke)]
+        [TestCase(TranceEnding.Popped)]
+        [TestCase(TranceEnding.Quiet)]
+        public void Tick_TranceRunsOut_ReportsHowItEnded(TranceEnding expected)
+        {
+            RatSwarm swarm = SwarmOf(RatAt(FarAway));
+            swarm.Enchant(0, TranceEndingIn(expected), Step / 2f);
+            TranceEnding? reported = null;
+            swarm.TranceEnded += (_, ending) => reported = ending;
+
+            swarm.Tick(Silence(), Step);
+
+            Assert.That(reported, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void Tick_TranceStillRunning_ReportsNothing()
+        {
+            RatSwarm swarm = SwarmOf(RatAt(FarAway));
+            swarm.Enchant(0, new FaintTrance(1f), 60f);
+            var reports = 0;
+            swarm.TranceEnded += (_, _) => reports++;
+
+            swarm.Tick(Silence(), Step);
+
+            Assert.That(reports, Is.EqualTo(0));
+        }
+
+        [Test]
         public void Eat_LivingRat_CountsItAsLostNotDrowned()
         {
             RatSwarm swarm = SwarmOf(RatAt(FarAway), RatAt(FarAway));
@@ -238,6 +329,13 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(swarm.LostCount, Is.EqualTo(1));
             Assert.That(swarm.DrownedCount, Is.EqualTo(0));
         }
+
+        private static RatTrance TranceEndingIn(TranceEnding ending) => ending switch
+        {
+            TranceEnding.Woke => new FaintTrance(1f),
+            TranceEnding.Popped => new FloatTrance(ScriptableObject.CreateInstance<BalloonsEffect>()),
+            _ => new SpinTrance(ScriptableObject.CreateInstance<DiscoEffect>()),
+        };
 
         private static CatPack PackWithCatAt(Vector2 position, float sleepSeconds)
         {

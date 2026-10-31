@@ -39,6 +39,22 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("Behind the breath left.")]
         public Color BreathTrackColor { get; private set; } = new Color(1f, 1f, 1f, 0.12f);
 
+        [field: Header("Sky bar")]
+        [field: SerializeField, Tooltip("The sky from dusk on the left to sunrise on the right.")]
+        public Gradient SkyGradient { get; private set; } = NewSkyGradient();
+
+        [field: SerializeField, Tooltip("The moon on the sky bar.")]
+        public Color MoonColor { get; private set; } = new Color32(0xFF, 0xF3, 0xC8, 0xFF);
+
+        [field: SerializeField, Tooltip("The sun on the sky bar.")]
+        public Color SunColor { get; private set; } = new Color32(0xFF, 0x9F, 0x3A, 0xFF);
+
+        [field: SerializeField, Tooltip("The pulse around the sky bar when dawn is close.")]
+        public Color DawnPulseColor { get; private set; } = new Color32(0xFF, 0x7A, 0x4A, 0xFF);
+
+        [field: SerializeField, Min(0f), Tooltip("How quickly the sky bar pulses when dawn is close.")]
+        public float DawnPulseRate { get; private set; } = 6f;
+
         [field: Header("Flute")]
         [field: SerializeField, Tooltip("The body of the flute.")]
         public Color FluteColor { get; private set; } = new Color32(0xBD, 0x84, 0x43, 0xFF);
@@ -74,5 +90,20 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Range(0f, 1f), Tooltip("How visible a song is while it rests.")]
         public float RestingOpacity { get; private set; } = .4f;
+
+        private static Gradient NewSkyGradient()
+        {
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color32(0x1C, 0x21, 0x40, 0xFF), 0f),
+                    new GradientColorKey(new Color32(0x2F, 0x2A, 0x55, 0xFF), .5f),
+                    new GradientColorKey(new Color32(0xB8, 0x60, 0x4A, 0xFF), .82f),
+                    new GradientColorKey(new Color32(0xF6, 0xC2, 0x5A, 0xFF), 1f),
+                },
+                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) });
+            return gradient;
+        }
     }
 }

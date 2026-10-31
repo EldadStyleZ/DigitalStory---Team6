@@ -18,6 +18,12 @@ namespace DigitalStory.View
         private const float SignMinWidth = 130f;
         private const float BigFontSize = 34f;
         private const float SmallFontSize = 15f;
+        private const float SkyBarHeight = 14f;
+        private const float SkyBarGap = 3f;
+        private const float SkyBarBorder = 1f;
+        private const float SkyOrbSize = 10f;
+        private const float SkyStepsShown = 300f;
+        private const int SkyTextureWidth = 64;
         private const float BreathBarHeight = 6f;
         private const float BreathBarGap = 6f;
 
@@ -29,6 +35,9 @@ namespace DigitalStory.View
         private Label _time;
         private Label _rats;
         private VisualElement _breathFill;
+        private VisualElement _skyBar;
+        private VisualElement _skyOrb;
+        private Texture2D _skyTexture;
         private int _shownDrowned = -1;
         private int _shownSeconds = -1;
         private int _shownRats = -1;
@@ -39,6 +48,12 @@ namespace DigitalStory.View
 
         /// <summary>The time until dawn on screen, for tests and debugging.</summary>
         public string TimeText => _time?.text;
+
+        /// <summary>How far along the sky bar the moon or sun is, from 0 to 1, for tests and debugging.</summary>
+        public float SkyShown { get; private set; }
+
+        /// <summary>True while the sky bar shows the sun, for tests and debugging.</summary>
+        public bool IsSunShown { get; private set; }
 
         /// <summary>The rats still alive on screen, for tests and debugging.</summary>
         public string RatsText => _rats?.text;
@@ -67,6 +82,16 @@ namespace DigitalStory.View
             {
                 ShowCounts();
                 ShowBreath();
+                ShowSky();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            // Textures made in code are not freed with the scene.
+            if (_skyTexture != null)
+            {
+                Destroy(_skyTexture);
             }
         }
 
@@ -111,9 +136,54 @@ namespace DigitalStory.View
             VisualElement sign = NewSign();
             sign.style.marginLeft = SignGap;
             sign.Add(NewCaption(_texts.UntilDawnCaption));
+            sign.Add(BuildSkyBar());
             sign.Add(_time);
             sign.Add(_rats);
             return sign;
+        }
+
+        private VisualElement BuildSkyBar()
+        {
+            _skyTexture = NewSkyTexture();
+
+            _skyBar = new VisualElement();
+            _skyBar.style.height = SkyBarHeight;
+            _skyBar.style.marginTop = SkyBarGap;
+            _skyBar.style.backgroundImage = new StyleBackground(_skyTexture);
+            _skyBar.style.borderTopWidth = SkyBarBorder;
+            _skyBar.style.borderBottomWidth = SkyBarBorder;
+            _skyBar.style.borderLeftWidth = SkyBarBorder;
+            _skyBar.style.borderRightWidth = SkyBarBorder;
+            SetSkyBorder(Color.clear);
+
+            _skyOrb = new VisualElement();
+            _skyOrb.style.position = Position.Absolute;
+            _skyOrb.style.top = (SkyBarHeight - (2f * SkyBarBorder) - SkyOrbSize) / 2f;
+            _skyOrb.style.width = SkyOrbSize;
+            _skyOrb.style.height = SkyOrbSize;
+            _skyOrb.style.borderTopLeftRadius = SkyOrbSize / 2f;
+            _skyOrb.style.borderTopRightRadius = SkyOrbSize / 2f;
+            _skyOrb.style.borderBottomLeftRadius = SkyOrbSize / 2f;
+            _skyOrb.style.borderBottomRightRadius = SkyOrbSize / 2f;
+            _skyOrb.style.backgroundColor = _hud.MoonColor;
+            _skyBar.Add(_skyOrb);
+            return _skyBar;
+        }
+
+        private Texture2D NewSkyTexture()
+        {
+            var texture = new Texture2D(SkyTextureWidth, 1, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+            };
+
+            for (int x = 0; x < SkyTextureWidth; x++)
+            {
+                texture.SetPixel(x, 0, _hud.SkyGradient.Evaluate(x / (SkyTextureWidth - 1f)));
+            }
+
+            texture.Apply(false);
+            return texture;
         }
 
         private VisualElement NewSign()
@@ -169,6 +239,39 @@ namespace DigitalStory.View
             _rats.text = eaten == 0
                 ? string.Format(_texts.RatsLeftFormat, rats)
                 : string.Format(_texts.RatsLeftAndEatenFormat, rats, eaten);
+        }
+
+        private void ShowSky()
+        {
+            float progress = Mathf.Round(_session.NightProgress * SkyStepsShown) / SkyStepsShown;
+
+            if (!Mathf.Approximately(progress, SkyShown))
+            {
+                SkyShown = progress;
+                _skyOrb.style.left = Length.Percent(progress * 100f);
+                _skyOrb.style.marginLeft = -progress * SkyOrbSize;
+            }
+
+            if (_session.IsNearDawn != IsSunShown)
+            {
+                IsSunShown = _session.IsNearDawn;
+                _skyOrb.style.backgroundColor = IsSunShown ? _hud.SunColor : _hud.MoonColor;
+            }
+
+            if (IsSunShown)
+            {
+                Color pulse = _hud.DawnPulseColor;
+                pulse.a = (Mathf.Sin(Time.time * _hud.DawnPulseRate) + 1f) / 2f;
+                SetSkyBorder(pulse);
+            }
+        }
+
+        private void SetSkyBorder(Color color)
+        {
+            _skyBar.style.borderTopColor = color;
+            _skyBar.style.borderBottomColor = color;
+            _skyBar.style.borderLeftColor = color;
+            _skyBar.style.borderRightColor = color;
         }
 
         private void ShowBreath()

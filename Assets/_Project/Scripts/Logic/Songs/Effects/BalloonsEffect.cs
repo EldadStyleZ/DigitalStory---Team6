@@ -8,7 +8,7 @@ namespace DigitalStory.Logic
     public sealed class BalloonsEffect : CrowdSongEffect
     {
         public BalloonsEffect()
-            : base(new SongDefinition("Balloons", "Rats swell up and float", 10f, 1, 3, 5))
+            : base(new SongDefinition("Balloons", "Rats swell up and float", 10f, 1, 3, 5), RisingBubbles())
         {
         }
 
@@ -46,6 +46,18 @@ namespace DigitalStory.Logic
                 var drift = new Vector2(RandomDrift(context.Random), RandomDrift(context.Random));
                 context.Swarm.Enchant(rat, trance, seconds, drift: drift);
             }
+        }
+
+        private static SoundCue RisingBubbles()
+        {
+            var tones = new Tone[5];
+
+            for (int index = 0; index < tones.Length; index++)
+            {
+                tones[index] = new Tone(ToneShape.Sine, 300f + (index * 120f), 600f + (index * 160f), .12f, .04f, index * .07f);
+            }
+
+            return new SoundCue(tones);
         }
 
         private float RandomDrift(IRandomSource random) => ((float)random.NextDouble() - 0.5f) * DriftRange;

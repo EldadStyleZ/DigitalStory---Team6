@@ -37,7 +37,7 @@ MonoBehaviour:
     _text: The right run of notes casts a spell. The songs are listed above the flute
     _colorHole: -1
   - _label: Pause
-    _text: P or Esc
+    _text: P or Esc. M mutes the sound
     _colorHole: -1
   <PauseTitle>k__BackingField: Pause
   <PauseMessage>k__BackingField: The rats are waiting patiently. More or less.
@@ -53,6 +53,8 @@ MonoBehaviour:
   <SecondsFormat>k__BackingField: '{0}s'
   <RatsLeftFormat>k__BackingField: '{0} rats left'
   <RatsLeftAndEatenFormat>k__BackingField: "{0} rats left \xB7 {1} eaten"
+  <MuteButton>k__BackingField: Mute
+  <UnmuteButton>k__BackingField: Unmute
   <CallLabel>k__BackingField: Call
   <MarchLabel>k__BackingField: March
   <ScareLabel>k__BackingField: Scare

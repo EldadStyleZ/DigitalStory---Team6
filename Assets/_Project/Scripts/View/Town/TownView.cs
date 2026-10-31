@@ -13,6 +13,9 @@ namespace DigitalStory.View
         private const int WaterOrder = 1;
         private const int HouseOrder = 2;
 
+        // Above the darkness, because a lamp is its own light.
+        private const int LampOrder = 11;
+
         private TownLayout _layout;
         private TownConfig _town;
         private RiverBank _bank;
@@ -38,6 +41,7 @@ namespace DigitalStory.View
             AddBlock("Ground", 0f, 0f, _town.Width, _town.Height, _art.GroundColor, GroundOrder);
             AddRiver();
             AddHouses();
+            AddLamps();
         }
 
         private void AddRiver()
@@ -61,6 +65,20 @@ namespace DigitalStory.View
             foreach (House house in _layout.Houses)
             {
                 AddBlock("House", house.X, house.Y, house.Width, house.Height, _art.RoofColor(house.RoofStyle), HouseOrder);
+            }
+        }
+
+        private void AddLamps()
+        {
+            foreach (Vector2 position in _layout.Lamps)
+            {
+                var lamp = new GameObject("Lamp");
+                lamp.transform.SetParent(transform, false);
+                lamp.transform.position = TownSpace.ToScene(position);
+
+                var lampRenderer = lamp.AddComponent<SpriteRenderer>();
+                lampRenderer.sprite = _art.LampSprite;
+                lampRenderer.sortingOrder = LampOrder;
             }
         }
 

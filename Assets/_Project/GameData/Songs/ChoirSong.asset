@@ -17,5 +17,155 @@ MonoBehaviour:
     _description: The rats sing
     _cooldownSeconds: 10
     _keys: 00000000010000000200000003000000i
+  _flourish:
+    _ringColor: {r: 1, g: 0.47058824, b: 0.8627451, a: 1}
+    _ringReach: 340
+    _ringSpeed: 520
+  _jingle:
+    _tones:
+    - _shape: 1
+      _startHertz: 3120
+      _endHertz: 3000
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 0
+    - _shape: 0
+      _startHertz: 4500
+      _endHertz: 4440
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 0
+    - _shape: 1
+      _startHertz: 3930.9536
+      _endHertz: 3779.7632
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 0.17
+    - _shape: 0
+      _startHertz: 5669.6445
+      _endHertz: 5594.05
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 0.17
+    - _shape: 1
+      _startHertz: 4674.7183
+      _endHertz: 4494.9214
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 0.34
+    - _shape: 0
+      _startHertz: 6742.382
+      _endHertz: 6652.484
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 0.34
+    - _shape: 1
+      _startHertz: 6240
+      _endHertz: 6000
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 0.51
+    - _shape: 0
+      _startHertz: 9000
+      _endHertz: 8880
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 0.51
+    - _shape: 1
+      _startHertz: 4674.7183
+      _endHertz: 4494.9214
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 0.68
+    - _shape: 0
+      _startHertz: 6742.382
+      _endHertz: 6652.484
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 0.68
+    - _shape: 1
+      _startHertz: 3930.9536
+      _endHertz: 3779.7632
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 0.85
+    - _shape: 0
+      _startHertz: 5669.6445
+      _endHertz: 5594.05
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 0.85
+    - _shape: 1
+      _startHertz: 5247.1934
+      _endHertz: 5045.3784
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 1.02
+    - _shape: 0
+      _startHertz: 7568.0674
+      _endHertz: 7467.16
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 1.02
+    - _shape: 1
+      _startHertz: 4674.7183
+      _endHertz: 4494.9214
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 1.19
+    - _shape: 0
+      _startHertz: 6742.382
+      _endHertz: 6652.484
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 1.19
+    - _shape: 1
+      _startHertz: 4164.7
+      _endHertz: 4004.5195
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 1.36
+    - _shape: 0
+      _startHertz: 6006.7793
+      _endHertz: 5926.689
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 1.36
+    - _shape: 1
+      _startHertz: 3930.9536
+      _endHertz: 3779.7632
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 1.53
+    - _shape: 0
+      _startHertz: 5669.6445
+      _endHertz: 5594.05
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 1.53
+    - _shape: 1
+      _startHertz: 3502.0813
+      _endHertz: 3367.386
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 1.7
+    - _shape: 0
+      _startHertz: 5051.079
+      _endHertz: 4983.7314
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 1.7
+    - _shape: 1
+      _startHertz: 3120
+      _endHertz: 3000
+      _seconds: 0.15
+      _volume: 0.03
+      _delay: 1.87
+    - _shape: 0
+      _startHertz: 4500
+      _endHertz: 4440
+      _seconds: 0.12
+      _volume: 0.012
+      _delay: 1.87
   <Radius>k__BackingField: 360
   <Seconds>k__BackingField: 4.2

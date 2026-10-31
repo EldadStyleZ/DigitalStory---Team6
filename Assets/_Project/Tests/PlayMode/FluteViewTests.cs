@@ -174,8 +174,9 @@ namespace DigitalStory.Tests.PlayMode
             Vector2 middle = tube.worldBound.center * scale;
             var overTheFlute = new Vector2(middle.x, Screen.height - middle.y);
 
-            Assert.That(_flute.IsUnderPointer(overTheFlute), Is.True);
-            Assert.That(_flute.IsUnderPointer(new Vector2(1f, Screen.height - 1f)), Is.False);
+            HudLayout hud = Object.FindAnyObjectByType<HudLayout>();
+            Assert.That(hud.IsOverControl(overTheFlute), Is.True);
+            Assert.That(hud.IsOverControl(new Vector2(1f, 1f)), Is.False);
         }
 
         [UnityTest]

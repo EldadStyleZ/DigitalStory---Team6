@@ -15,6 +15,7 @@ namespace DigitalStory.Logic
             FluteConfig flute,
             RatConfig rats,
             CatConfig cats,
+            DawnConfig dawn,
             SongConfig songConfig,
             IReadOnlyList<SongEffect> songs)
         {
@@ -24,6 +25,7 @@ namespace DigitalStory.Logic
             Flute = flute != null ? flute : throw new ArgumentNullException(nameof(flute));
             Rats = rats != null ? rats : throw new ArgumentNullException(nameof(rats));
             Cats = cats != null ? cats : throw new ArgumentNullException(nameof(cats));
+            Dawn = dawn != null ? dawn : throw new ArgumentNullException(nameof(dawn));
             SongConfig = songConfig != null ? songConfig : throw new ArgumentNullException(nameof(songConfig));
             Songs = songs ?? throw new ArgumentNullException(nameof(songs));
 
@@ -42,6 +44,7 @@ namespace DigitalStory.Logic
         public FluteConfig Flute { get; }
         public RatConfig Rats { get; }
         public CatConfig Cats { get; }
+        public DawnConfig Dawn { get; }
         public SongConfig SongConfig { get; }
         public IReadOnlyList<SongEffect> Songs { get; }
 

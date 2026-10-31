@@ -17,6 +17,36 @@ MonoBehaviour:
     _description: Everyone plays dead
     _cooldownSeconds: 10
     _keys: 050000000300000001000000i
+  _flourish:
+    _ringColor: {r: 1, g: 0.47058824, b: 0.8627451, a: 1}
+    _ringReach: 340
+    _ringSpeed: 520
+  _jingle:
+    _tones:
+    - _shape: 3
+      _startHertz: 392
+      _endHertz: 380
+      _seconds: 0.3
+      _volume: 0.06
+      _delay: 0
+    - _shape: 3
+      _startHertz: 370
+      _endHertz: 359
+      _seconds: 0.3
+      _volume: 0.06
+      _delay: 0.32
+    - _shape: 3
+      _startHertz: 349
+      _endHertz: 339
+      _seconds: 0.3
+      _volume: 0.06
+      _delay: 0.64
+    - _shape: 3
+      _startHertz: 311
+      _endHertz: 302
+      _seconds: 0.9
+      _volume: 0.06
+      _delay: 0.96
   <Radius>k__BackingField: 360
   <ShortestSeconds>k__BackingField: 4
   <ExtraSeconds>k__BackingField: 1.5

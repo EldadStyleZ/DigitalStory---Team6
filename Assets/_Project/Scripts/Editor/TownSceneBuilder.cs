@@ -23,6 +23,8 @@ namespace DigitalStory.Editor
         private const string GameData = Root + "/GameData";
         private const string SongsFolder = "Songs";
         private const string Placeholders = Root + "/Art/Placeholders";
+        private const string Materials = Root + "/Art/Materials";
+        private const string DarknessShader = "DigitalStory/Darkness";
         private const string UiFolder = Root + "/UI";
         private const string ScenePath = Root + "/Scenes/Town.unity";
 
@@ -32,7 +34,13 @@ namespace DigitalStory.Editor
         private const int PiperSize = 72;
         private const int CatWidth = 92;
         private const int CatHeight = 40;
-        private const int PiperOrder = 4;
+        private const int LampSize = 24;
+        private const int RingSize = 128;
+        private const float RingThickness = 3f;
+        private const int DotSize = 16;
+        private const int GlyphSize = 32;
+        private const int DarknessOrder = 10;
+        private const int PiperOrder = 12;
         private const int DetailedPixelsPerUnit = 200;
         private const float PanelWidthHeightBalance = 0.5f;
 
@@ -42,6 +50,8 @@ namespace DigitalStory.Editor
         private static readonly Color Cloak = new Color32(0xC8, 0x35, 0x2E, 0xFF);
         private static readonly Color Trim = new Color32(0xE8, 0xC5, 0x47, 0xFF);
         private static readonly Color Flute = new Color32(0xC9, 0x94, 0x4F, 0xFF);
+        private static readonly Color LampPost = new Color32(0x2A, 0x23, 0x20, 0xFF);
+        private static readonly Color LampFlame = new Color32(0xFF, 0xD9, 0x8A, 0xFF);
 
         /// <summary>Builds everything the Town scene needs.</summary>
         [MenuItem("DigitalStory/Build Town Scene")]
@@ -64,7 +74,11 @@ namespace DigitalStory.Editor
             var flute = LoadOrCreate<FluteConfig>("FluteConfig");
             var rats = LoadOrCreate<RatConfig>("RatConfig");
             var cats = LoadOrCreate<CatConfig>("CatConfig");
+            var dawn = LoadOrCreate<DawnConfig>("DawnConfig");
             var songConfig = LoadOrCreate<SongConfig>("SongConfig");
+            var nightLook = LoadOrCreate<NightLookConfig>("NightLookConfig");
+            var effects = LoadOrCreate<EffectsConfig>("EffectsConfig");
+            var sound = LoadOrCreate<SoundConfig>("SoundConfig");
             SongEffect[] songs = LoadOrCreateSongs();
             var endings = LoadOrCreate<EndingTextConfig>("EndingTextConfig");
             var hud = LoadOrCreate<HudConfig>("HudConfig");
@@ -72,7 +86,7 @@ namespace DigitalStory.Editor
             TownArtConfig art = LoadOrCreateArt();
             PanelSettings panel = LoadOrCreatePanelSettings();
 
-            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, songConfig, songs, art, endings, hud, menuTexts, panel));
+            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, dawn, songConfig, songs, art, nightLook, effects, sound, endings, hud, menuTexts, panel));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuild();
             AssetDatabase.SaveAssets();
@@ -82,6 +96,7 @@ namespace DigitalStory.Editor
         {
             Directory.CreateDirectory($"{GameData}/{SongsFolder}");
             Directory.CreateDirectory(Placeholders);
+            Directory.CreateDirectory(Materials);
             Directory.CreateDirectory(UiFolder);
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             AssetDatabase.Refresh();
@@ -148,8 +163,63 @@ namespace DigitalStory.Editor
                 SetObject(serialized, BackingField(nameof(TownArtConfig.CatSprite)), cat);
             }
 
+            if (art.CatEyesSprite == null)
+            {
+                Sprite eyes = SavePlaceholder("CatEyes", CatWidth, CatHeight, PaintCatEyes, DetailedPixelsPerUnit);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.CatEyesSprite)), eyes);
+            }
+
+            if (art.LampSprite == null)
+            {
+                Sprite lamp = SavePlaceholder("Lamp", LampSize, LampSize, PaintLamp, DetailedPixelsPerUnit);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.LampSprite)), lamp);
+            }
+
+            if (art.RingSprite == null)
+            {
+                Sprite ring = SavePlaceholder("Ring", RingSize, RingSize, PaintRing, RingSize);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.RingSprite)), ring);
+            }
+
+            if (art.DotSprite == null)
+            {
+                Sprite dot = SavePlaceholder("Dot", DotSize, DotSize, PaintDot, DotSize);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.DotSprite)), dot);
+            }
+
+            if (art.NoteSprite == null)
+            {
+                Sprite note = SavePlaceholder("Note", GlyphSize, GlyphSize, PaintNote, GlyphSize);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.NoteSprite)), note);
+            }
+
+            if (art.SnoozeSprite == null)
+            {
+                Sprite snooze = SavePlaceholder("Snooze", GlyphSize, GlyphSize, PaintSnooze, GlyphSize);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.SnoozeSprite)), snooze);
+            }
+
+            if (art.DarknessMaterial == null)
+            {
+                SetObject(serialized, BackingField(nameof(TownArtConfig.DarknessMaterial)), LoadOrCreateDarknessMaterial());
+            }
+
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return art;
+        }
+
+        private static Material LoadOrCreateDarknessMaterial()
+        {
+            string path = $"{Materials}/Darkness.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+
+            if (material == null)
+            {
+                material = new Material(Shader.Find(DarknessShader));
+                AssetDatabase.CreateAsset(material, path);
+            }
+
+            return material;
         }
 
         private static Sprite SavePlaceholder(
@@ -200,6 +270,57 @@ namespace DigitalStory.Editor
             bool isEar = IsInEllipse(x, y, width * 0.84f, height * 0.5f, width * 0.05f, height * 0.46f);
             bool isTail = Mathf.Abs(y - (height * 0.5f)) < 2f && x < width * 0.24f;
             return isBody || isHead || isEar || isTail ? Color.white : Color.clear;
+        }
+
+        private static Color PaintRing(int x, int y, int width, int height)
+        {
+            float centre = (width - 1) / 2f;
+            float distance = new Vector2(x - centre, y - centre).magnitude;
+            return distance <= centre && distance >= centre - RingThickness ? Color.white : Color.clear;
+        }
+
+        private static Color PaintDot(int x, int y, int width, int height)
+        {
+            return IsInEllipse(x, y, width / 2f, height / 2f, width / 2f, height / 2f) ? Color.white : Color.clear;
+        }
+
+        private static Color PaintNote(int x, int y, int width, int height)
+        {
+            bool isHead = IsInEllipse(x, y, width * 0.34f, height * 0.2f, width * 0.2f, height * 0.15f);
+            bool isStem = x >= width * 0.46f && x < width * 0.54f && y >= height * 0.2f && y < height * 0.9f;
+            bool isFlag = x >= width * 0.5f && x < width * 0.8f && y >= height * 0.72f && y < height * 0.9f;
+            return isHead || isStem || isFlag ? Color.white : Color.clear;
+        }
+
+        private static Color PaintSnooze(int x, int y, int width, int height)
+        {
+            bool isTop = y >= height * 0.72f && y < height * 0.86f;
+            bool isBottom = y >= height * 0.14f && y < height * 0.28f;
+            float slantX = width * (0.2f + (0.6f * ((y - (height * 0.14f)) / (height * 0.72f))));
+            bool isSlant = y >= height * 0.14f && y < height * 0.86f && Mathf.Abs(x - slantX) < width * 0.09f;
+            bool isWide = x >= width * 0.2f && x < width * 0.8f;
+            return ((isTop || isBottom) && isWide) || isSlant ? Color.white : Color.clear;
+        }
+
+        private static Color PaintCatEyes(int x, int y, int width, int height)
+        {
+            float radius = width * 0.035f;
+            bool isFirstEye = IsInEllipse(x, y, width * 0.86f, height * 0.36f, radius, radius);
+            bool isSecondEye = IsInEllipse(x, y, width * 0.86f, height * 0.64f, radius, radius);
+            return isFirstEye || isSecondEye ? Color.white : Color.clear;
+        }
+
+        private static Color PaintLamp(int x, int y, int width, int height)
+        {
+            bool isFlame = IsInEllipse(x, y, width * 0.5f, height * 0.5f, width * 0.26f, height * 0.26f);
+            bool isPost = IsInEllipse(x, y, width * 0.5f, height * 0.5f, width * 0.5f, height * 0.5f);
+
+            if (isFlame)
+            {
+                return LampFlame;
+            }
+
+            return isPost ? LampPost : Color.clear;
         }
 
         private static Color PaintPiper(int x, int y, int width, int height)
@@ -270,6 +391,18 @@ namespace DigitalStory.Editor
             var ratsObject = new GameObject("Rats", typeof(RatSwarmView));
             var catsObject = new GameObject("Cats", typeof(CatView));
 
+            var effectsObject = new GameObject("Effects", typeof(EffectsView));
+            var fluteVoiceObject = new GameObject("Flute Voice", typeof(AudioSource), typeof(FluteVoice));
+            var soundObject = new GameObject("Sound Effects", typeof(AudioSource), typeof(SoundView));
+            fluteVoiceObject.GetComponent<AudioSource>().playOnAwake = false;
+            soundObject.GetComponent<AudioSource>().playOnAwake = false;
+
+            var darknessObject = new GameObject("Darkness", typeof(SpriteRenderer), typeof(DarknessView));
+            var darknessRenderer = darknessObject.GetComponent<SpriteRenderer>();
+            darknessRenderer.sprite = assets.Art.BlockSprite;
+            darknessRenderer.sharedMaterial = assets.Art.DarknessMaterial;
+            darknessRenderer.sortingOrder = DarknessOrder;
+
             var hud = new GameObject(
                 "Night Status",
                 typeof(UIDocument),
@@ -278,6 +411,7 @@ namespace DigitalStory.Editor
                 typeof(ComboRowView),
                 typeof(FluteView),
                 typeof(MinimapView),
+                typeof(MuteView),
                 typeof(MenuScreensView));
             hud.GetComponent<UIDocument>().panelSettings = assets.Panel;
 
@@ -290,9 +424,13 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_flute", assets.Flute);
             SetObject(serialized, "_rats", assets.Rats);
             SetObject(serialized, "_cats", assets.Cats);
+            SetObject(serialized, "_dawn", assets.Dawn);
             SetObject(serialized, "_songConfig", assets.SongConfig);
             SetObjects(serialized, "_songs", assets.Songs);
             SetObject(serialized, "_art", assets.Art);
+            SetObject(serialized, "_nightLook", assets.NightLook);
+            SetObject(serialized, "_effects", assets.Effects);
+            SetObject(serialized, "_sound", assets.Sound);
             SetObject(serialized, "_endingTexts", assets.Endings);
             SetObject(serialized, "_hud", assets.Hud);
             SetObject(serialized, "_menuTexts", assets.MenuTexts);
@@ -303,6 +441,11 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_piperView", piperObject.GetComponent<PiperView>());
             SetObject(serialized, "_swarmView", ratsObject.GetComponent<RatSwarmView>());
             SetObject(serialized, "_catView", catsObject.GetComponent<CatView>());
+            SetObject(serialized, "_darknessView", darknessObject.GetComponent<DarknessView>());
+            SetObject(serialized, "_effectsView", effectsObject.GetComponent<EffectsView>());
+            SetObject(serialized, "_fluteVoice", fluteVoiceObject.GetComponent<FluteVoice>());
+            SetObject(serialized, "_soundView", soundObject.GetComponent<SoundView>());
+            SetObject(serialized, "_muteView", hud.GetComponent<MuteView>());
             SetObject(serialized, "_townCamera", camera.GetComponent<TownCamera>());
             SetObject(serialized, "_statusView", hud.GetComponent<NightStatusView>());
             SetObject(serialized, "_comboRow", hud.GetComponent<ComboRowView>());
@@ -367,9 +510,13 @@ namespace DigitalStory.Editor
                 FluteConfig flute,
                 RatConfig rats,
                 CatConfig cats,
+                DawnConfig dawn,
                 SongConfig songConfig,
                 SongEffect[] songs,
                 TownArtConfig art,
+                NightLookConfig nightLook,
+                EffectsConfig effects,
+                SoundConfig sound,
                 EndingTextConfig endings,
                 HudConfig hud,
                 MenuTextConfig menuTexts,
@@ -382,9 +529,13 @@ namespace DigitalStory.Editor
                 Flute = flute;
                 Rats = rats;
                 Cats = cats;
+                Dawn = dawn;
                 SongConfig = songConfig;
                 Songs = songs;
                 Art = art;
+                NightLook = nightLook;
+                Effects = effects;
+                Sound = sound;
                 Endings = endings;
                 Hud = hud;
                 MenuTexts = menuTexts;
@@ -398,9 +549,13 @@ namespace DigitalStory.Editor
             public FluteConfig Flute { get; }
             public RatConfig Rats { get; }
             public CatConfig Cats { get; }
+            public DawnConfig Dawn { get; }
             public SongConfig SongConfig { get; }
             public SongEffect[] Songs { get; }
             public TownArtConfig Art { get; }
+            public NightLookConfig NightLook { get; }
+            public EffectsConfig Effects { get; }
+            public SoundConfig Sound { get; }
             public EndingTextConfig Endings { get; }
             public HudConfig Hud { get; }
             public MenuTextConfig MenuTexts { get; }

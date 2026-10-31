@@ -29,14 +29,16 @@ namespace DigitalStory.View
         private Camera _camera;
         private PiperConfig _config;
         private FluteView _fluteView;
+        private HudLayout _layout;
 
         /// <summary>Supplies what pointer walking needs. Call once, before the first read.</summary>
-        public void Initialize(Piper piper, Camera sceneCamera, PiperConfig config, FluteView fluteView)
+        public void Initialize(Piper piper, Camera sceneCamera, PiperConfig config, FluteView fluteView, HudLayout layout)
         {
             _piper = piper;
             _camera = sceneCamera;
             _config = config;
             _fluteView = fluteView;
+            _layout = layout;
         }
 
         /// <summary>Reads this frame's input.</summary>
@@ -84,16 +86,16 @@ namespace DigitalStory.View
             return Input.GetKey(arrow) || Input.GetKey(letter) ? 1f : 0f;
         }
 
-        private bool IsMousePlayingTheFlute()
+        private bool IsMouseOnAControl()
         {
-            return _fluteView.IsBeingPlayed || _fluteView.IsUnderPointer(Input.mousePosition);
+            return _fluteView.IsBeingPlayed || _layout.IsOverControl(Input.mousePosition);
         }
 
         private Vector2 ReadMove()
         {
             Vector2 keys = ReadKeys();
 
-            if (keys != Vector2.zero || !Input.GetMouseButton(0) || IsMousePlayingTheFlute())
+            if (keys != Vector2.zero || !Input.GetMouseButton(0) || IsMouseOnAControl())
             {
                 return keys;
             }
