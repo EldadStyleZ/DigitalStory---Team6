@@ -5,6 +5,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
+using UnityEngine.UIElements;
 
 namespace DigitalStory.Tests.PlayMode
 {
@@ -126,6 +127,66 @@ namespace DigitalStory.Tests.PlayMode
             _flute.StopPlaying();
             Assert.That(_flute.IsBeingPlayed, Is.False);
             yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Flute_PausedWhilePressed_LetsGo()
+        {
+            _flute.StartPlaying(2);
+            yield return null;
+
+            _root.Flow.Pause();
+
+            Assert.That(_flute.IsBeingPlayed, Is.False);
+            Assert.That(_flute.HeldHoles, Is.EqualTo(0));
+        }
+
+        [UnityTest]
+        public IEnumerator Flute_SlidingWhilePaused_QueuesNoNotes()
+        {
+            _flute.StartPlaying(2);
+            yield return null;
+            _root.Flow.Pause();
+
+            _flute.SlideTo(3);
+
+            Assert.That(_flute.HeldHoles, Is.EqualTo(0));
+            Assert.That(_flute.TakePressedHoles(), Is.EqualTo(0));
+        }
+
+        [UnityTest]
+        public IEnumerator Flute_PressedJustBeforePausing_LeavesNoNoteBehind()
+        {
+            _flute.StartPlaying(2);
+
+            _root.Flow.Pause();
+            yield return null;
+
+            Assert.That(_flute.TakePressedHoles(), Is.EqualTo(0));
+        }
+
+        [UnityTest]
+        public IEnumerator Flute_PointerOverIt_IsTrueWithoutAnyPress()
+        {
+            yield return null;
+            VisualElement tube = _flute.Element;
+            float scale = tube.panel.scaledPixelsPerPoint;
+            Vector2 middle = tube.worldBound.center * scale;
+            var overTheFlute = new Vector2(middle.x, Screen.height - middle.y);
+
+            Assert.That(_flute.IsUnderPointer(overTheFlute), Is.True);
+            Assert.That(_flute.IsUnderPointer(new Vector2(1f, Screen.height - 1f)), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator Flute_OnLoad_NamesEachGroupOfHoles()
+        {
+            yield return null;
+            var words = new System.Collections.Generic.List<string>();
+
+            _flute.Element.Query<Label>().ForEach(label => words.Add(label.text));
+
+            Assert.That(words, Is.EqualTo(new[] { "Call", "1", "2", "March", "3", "4", "Scare", "5", "6" }));
         }
 
         [UnityTest]

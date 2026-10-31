@@ -15,6 +15,8 @@ namespace DigitalStory.Tests.PlayMode
     {
         private const string SceneName = "Town";
         private const int FramesToSettle = 3;
+        private const float TownHeight = 1300f;
+        private const float DeepWaterX = 1990f;
 
         private GameRoot _root;
         private MinimapView _map;
@@ -62,6 +64,63 @@ namespace DigitalStory.Tests.PlayMode
             var deepWater = new Vector2(1950f, 30f);
 
             AssertSameColor(_map.PixelAt(deepWater), _art.RiverColor);
+        }
+
+        [UnityTest]
+        public IEnumerator Minimap_Drawn_RiverHasNoGaps()
+        {
+            yield return null;
+            string river = ColorOf(_art.RiverColor);
+            string window = ColorOf(_hud.MinimapWindowColor);
+
+            for (float y = 1f; y < TownHeight; y += 1f)
+            {
+                string pixel = ColorOf(_map.PixelAt(new Vector2(DeepWaterX, y)));
+                Assert.That(pixel == river || pixel == window, Is.True, $"At y {y} the map shows {pixel}.");
+            }
+        }
+
+        [Test]
+        public void Painter_ThisTown_HasNoRowPastTheTown()
+        {
+            var painter = new MinimapPainter(300, 2000f, TownHeight);
+
+            Assert.That(painter.Height, Is.EqualTo(195));
+        }
+
+        [Test]
+        public void Painter_FillingTheWholeTown_LeavesNoPixelUnpainted()
+        {
+            var painter = new MinimapPainter(300, 2000f, TownHeight);
+
+            painter.PaintBackground(new Rect(0f, 0f, 2000f, TownHeight), Color.white);
+            painter.Clear();
+
+            foreach (Color32 pixel in painter.Pixels)
+            {
+                Assert.That(pixel.a, Is.EqualTo(255));
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator Minimap_WhilePaused_StopsRepainting()
+        {
+            yield return null;
+            RatSwarm swarm = _root.Session.Swarm;
+            Vector2 rat = swarm[0].Position;
+            _map.Paint();
+            string before = ColorOf(_map.PixelAt(rat));
+            _root.Flow.Pause();
+
+            for (int index = 0; index < swarm.Count; index++)
+            {
+                swarm.Eat(index);
+            }
+
+            yield return null;
+            yield return null;
+
+            Assert.That(ColorOf(_map.PixelAt(rat)), Is.EqualTo(before));
         }
 
         [UnityTest]

@@ -95,5 +95,14 @@ namespace DigitalStory.Data
         public string ScareLabel { get; private set; } = "Scare";
 
         public IReadOnlyList<HowToLine> HowTo => _howTo;
+
+        /// <summary>The word for a flute mode.</summary>
+        public string LabelOf(FluteMode mode) => mode switch
+        {
+            FluteMode.Call => CallLabel,
+            FluteMode.March => MarchLabel,
+            FluteMode.Scare => ScareLabel,
+            _ => string.Empty,
+        };
     }
 }

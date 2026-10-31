@@ -11,7 +11,6 @@ namespace DigitalStory.View
     [AddComponentMenu("DigitalStory/Flute View")]
     public sealed class FluteView : MonoBehaviour
     {
-        private const int HolesPerGroup = 2;
         private const float TubeTopMargin = 4f;
         private const float TubeSidePadding = 22f;
         private const float TubeEndPadding = 3f;
@@ -23,6 +22,7 @@ namespace DigitalStory.View
         private const float HoleFontSize = 12f;
 
         private NightSession _session;
+        private GameFlow _flow;
         private FluteConfig _flute;
         private HudLayout _layout;
         private MenuTextConfig _texts;
@@ -33,12 +33,16 @@ namespace DigitalStory.View
         private int _litHole = Flute.NoHole;
         private int _heldHole = Flute.NoHole;
         private int _pressedHoles;
+        private int _pointerOnFlute = PointerId.invalidPointerId;
 
         /// <summary>One bit per hole held with the pointer.</summary>
         public int HeldHoles => _heldHole == Flute.NoHole ? 0 : 1 << _heldHole;
 
         /// <summary>True while the pointer is down on the flute, so a press does not also walk the Piper.</summary>
         public bool IsBeingPlayed { get; private set; }
+
+        /// <summary>The flute itself, for tests and debugging.</summary>
+        public VisualElement Element => _tube;
 
         /// <summary>How many holes are on screen, for tests and debugging.</summary>
         public int HoleCount => _holes?.Length ?? 0;
@@ -49,6 +53,7 @@ namespace DigitalStory.View
         /// <summary>Supplies what to show. Call once, before this object starts.</summary>
         public void Initialize(
             NightSession session,
+            GameFlow flow,
             FluteConfig flute,
             HudLayout layout,
             MenuTextConfig texts,
@@ -56,11 +61,26 @@ namespace DigitalStory.View
             HudConfig hud)
         {
             _session = session;
+            _flow = flow;
             _flute = flute;
             _layout = layout;
             _texts = texts;
             _art = art;
             _hud = hud;
+        }
+
+        /// <summary>True when a screen position is over the flute.</summary>
+        /// <remarks>Pointer events arrive after Update, so this also works on the frame of a press.</remarks>
+        public bool IsUnderPointer(Vector2 screenPosition)
+        {
+            if (_tube?.panel == null)
+            {
+                return false;
+            }
+
+            // Screen positions start at the bottom of the window, but panels start at the top.
+            var fromTheTop = new Vector2(screenPosition.x, Screen.height - screenPosition.y);
+            return _tube.worldBound.Contains(RuntimePanelUtils.ScreenToPanel(_tube.panel, fromTheTop));
         }
 
         /// <summary>True while a hole is lit, for tests and debugging.</summary>
@@ -76,7 +96,7 @@ namespace DigitalStory.View
         /// <summary>Slides the press to another hole, or off the holes.</summary>
         public void SlideTo(int hole)
         {
-            if (hole == _heldHole)
+            if (!IsBeingPlayed || hole == _heldHole)
             {
                 return;
             }
@@ -103,6 +123,14 @@ namespace DigitalStory.View
             return pressed;
         }
 
+        private void OnEnable()
+        {
+            if (_flow != null)
+            {
+                _flow.Changed += HandleFlowChanged;
+            }
+        }
+
         private void Start()
         {
             // GameRoot has already reported the problem if nothing was supplied.
@@ -121,15 +149,23 @@ namespace DigitalStory.View
             }
         }
 
+        private void OnDisable()
+        {
+            // Unity also calls this when the scene unloads before Initialize ran, so _flow can be null.
+            if (_flow != null)
+            {
+                _flow.Changed -= HandleFlowChanged;
+            }
+        }
+
         private void BuildFlute(VisualElement parent)
         {
             _holes = new Label[_flute.HoleCount];
             _tube = NewTube();
-            string[] groupLabels = { _texts.CallLabel, _texts.MarchLabel, _texts.ScareLabel };
 
-            for (int group = 0; group < groupLabels.Length; group++)
+            for (int hole = 0; hole < _holes.Length;)
             {
-                _tube.Add(BuildGroup(group, groupLabels[group]));
+                hole = AddGroupFrom(hole);
             }
 
             _tube.RegisterCallback<PointerDownEvent>(HandlePointerDown);
@@ -137,6 +173,21 @@ namespace DigitalStory.View
             _tube.RegisterCallback<PointerUpEvent>(HandlePointerUp);
             _tube.RegisterCallback<PointerCaptureOutEvent>(HandlePointerCaptureOut);
             parent.Add(_tube);
+        }
+
+        // Holes next to each other with the same mode share a label. Returns the first hole after them.
+        private int AddGroupFrom(int firstHole)
+        {
+            FluteMode mode = _flute.ModeOfHole(firstHole);
+            int nextGroup = firstHole;
+
+            while (nextGroup < _holes.Length && _flute.ModeOfHole(nextGroup) == mode)
+            {
+                nextGroup++;
+            }
+
+            _tube.Add(BuildGroup(firstHole, nextGroup, _texts.LabelOf(mode)));
+            return nextGroup;
         }
 
         private VisualElement NewTube()
@@ -157,12 +208,10 @@ namespace DigitalStory.View
             return tube;
         }
 
-        private VisualElement BuildGroup(int group, string label)
+        private VisualElement BuildGroup(int firstHole, int nextGroup, string label)
         {
-            int firstHole = group * HolesPerGroup;
-
             var column = new VisualElement();
-            column.style.marginLeft = group == 0 ? 0f : GroupGap;
+            column.style.marginLeft = firstHole == 0 ? 0f : GroupGap;
             column.style.alignItems = Align.Center;
 
             var word = new Label(label);
@@ -176,7 +225,7 @@ namespace DigitalStory.View
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
 
-            for (int hole = firstHole; hole < firstHole + HolesPerGroup; hole++)
+            for (int hole = firstHole; hole < nextGroup; hole++)
             {
                 _holes[hole] = NewHole(hole);
                 row.Add(_holes[hole]);
@@ -257,6 +306,7 @@ namespace DigitalStory.View
 
         private void HandlePointerDown(PointerDownEvent pointer)
         {
+            _pointerOnFlute = pointer.pointerId;
             _tube.CapturePointer(pointer.pointerId);
             StartPlaying(HoleAt(pointer.position));
         }
@@ -271,6 +321,28 @@ namespace DigitalStory.View
 
         private void HandlePointerUp(PointerUpEvent pointer) => _tube.ReleasePointer(pointer.pointerId);
 
-        private void HandlePointerCaptureOut(PointerCaptureOutEvent pointer) => StopPlaying();
+        private void HandlePointerCaptureOut(PointerCaptureOutEvent pointer)
+        {
+            _pointerOnFlute = PointerId.invalidPointerId;
+            StopPlaying();
+        }
+
+        // The pointer-up may never come if focus was lost, so the flute lets go by itself.
+        private void HandleFlowChanged(GamePhase phase)
+        {
+            if (phase == GamePhase.Playing)
+            {
+                return;
+            }
+
+            if (_pointerOnFlute != PointerId.invalidPointerId)
+            {
+                _tube.ReleasePointer(_pointerOnFlute);
+                _pointerOnFlute = PointerId.invalidPointerId;
+            }
+
+            StopPlaying();
+            _pressedHoles = 0;
+        }
     }
 }

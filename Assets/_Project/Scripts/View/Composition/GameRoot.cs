@@ -127,8 +127,8 @@ namespace DigitalStory.View
             _hudLayout.Initialize(Flow);
             _statusView.Initialize(Session, _menuTexts, _hud, _hudLayout);
             _comboRow.Initialize(Session, _art, _hud, _hudLayout);
-            _fluteView.Initialize(Session, _flute, _hudLayout, _menuTexts, _art, _hud);
-            _minimap.Initialize(Session, _townCamera.GetComponent<Camera>(), _town, _hudLayout, _art, _hud);
+            _fluteView.Initialize(Session, Flow, _flute, _hudLayout, _menuTexts, _art, _hud);
+            _minimap.Initialize(Session, Flow, _townCamera.GetComponent<Camera>(), _town, _hudLayout, _art, _hud);
             _menuScreens.Initialize(Flow, Session, _menuTexts, _endingTexts, _art, _hud);
         }
 

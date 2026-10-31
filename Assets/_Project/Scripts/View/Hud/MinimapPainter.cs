@@ -18,7 +18,7 @@ namespace DigitalStory.View
         {
             _width = width;
             _pixelsPerTownUnit = width / townWidth;
-            _height = Mathf.CeilToInt(townHeight * _pixelsPerTownUnit);
+            _height = Mathf.RoundToInt(townHeight * _pixelsPerTownUnit);
             _background = new Color32[_width * _height];
             Pixels = new Color32[_width * _height];
         }
@@ -26,8 +26,8 @@ namespace DigitalStory.View
         public int Width => _width;
         public int Height => _height;
 
-        /// <summary>The height in town units of one map pixel.</summary>
-        public float TownUnitsPerRow => 1f / _pixelsPerTownUnit;
+        /// <summary>The town height at the middle of a row of the map.</summary>
+        public float TownYOfRow(int row) => (row + 0.5f) / _pixelsPerTownUnit;
 
         /// <summary>The finished picture, from the bottom row up, as textures store it.</summary>
         public Color32[] Pixels { get; }
@@ -35,14 +35,12 @@ namespace DigitalStory.View
         /// <summary>Paints an area of the unchanging background, such as a house.</summary>
         public void PaintBackground(Rect townArea, Color32 color)
         {
-            Fill(_background, ToColumn(townArea.xMin), ToColumn(townArea.xMax), ToRow(townArea.yMin), ToRow(townArea.yMax), color);
+            Fill(_background, ToColumn(townArea.xMin), ToEnd(townArea.xMax), ToRow(townArea.yMin), ToEnd(townArea.yMax), color);
         }
 
         /// <summary>Paints one row of the background, from a town position to the right edge of the map.</summary>
-        public void PaintBackgroundRow(float townY, float fromTownX, Color32 color)
+        public void PaintBackgroundRow(int row, float fromTownX, Color32 color)
         {
-            int row = ToRow(townY);
-
             for (int column = ToColumn(fromTownX); column < _width; column++)
             {
                 _background[Index(column, row)] = color;
@@ -80,6 +78,9 @@ namespace DigitalStory.View
         private int ToColumn(float townX) => Mathf.FloorToInt(townX * _pixelsPerTownUnit);
 
         private int ToRow(float townY) => Mathf.Clamp(Mathf.FloorToInt(townY * _pixelsPerTownUnit), 0, _height - 1);
+
+        // The first pixel past an area, which may be just outside the map.
+        private int ToEnd(float townPosition) => Mathf.CeilToInt(townPosition * _pixelsPerTownUnit);
 
         // Town rows run down the screen, but textures store the bottom row first.
         private int Index(int column, int row) => ((_height - 1 - row) * _width) + column;

@@ -84,11 +84,16 @@ namespace DigitalStory.View
             return Input.GetKey(arrow) || Input.GetKey(letter) ? 1f : 0f;
         }
 
+        private bool IsMousePlayingTheFlute()
+        {
+            return _fluteView.IsBeingPlayed || _fluteView.IsUnderPointer(Input.mousePosition);
+        }
+
         private Vector2 ReadMove()
         {
             Vector2 keys = ReadKeys();
 
-            if (keys != Vector2.zero || !Input.GetMouseButton(0) || _fluteView.IsBeingPlayed)
+            if (keys != Vector2.zero || !Input.GetMouseButton(0) || IsMousePlayingTheFlute())
             {
                 return keys;
             }

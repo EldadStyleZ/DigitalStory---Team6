@@ -20,6 +20,7 @@ namespace DigitalStory.View
         private const int PiperDotSize = 7;
 
         private NightSession _session;
+        private GameFlow _flow;
         private Camera _camera;
         private TownConfig _town;
         private HudLayout _layout;
@@ -35,6 +36,7 @@ namespace DigitalStory.View
         /// <summary>Supplies what to draw. Call once, before this object starts.</summary>
         public void Initialize(
             NightSession session,
+            GameFlow flow,
             Camera sceneCamera,
             TownConfig town,
             HudLayout layout,
@@ -42,6 +44,7 @@ namespace DigitalStory.View
             HudConfig hud)
         {
             _session = session;
+            _flow = flow;
             _camera = sceneCamera;
             _town = town;
             _layout = layout;
@@ -80,7 +83,7 @@ namespace DigitalStory.View
 
         private void LateUpdate()
         {
-            if (_painter != null && _layout.IsShowing)
+            if (_painter != null && _flow.IsPlaying)
             {
                 Paint();
             }
@@ -99,11 +102,11 @@ namespace DigitalStory.View
         {
             _painter.PaintBackground(new Rect(0f, 0f, _town.Width, _town.Height), _art.GroundColor);
 
-            for (float y = 0f; y < _town.Height; y += _painter.TownUnitsPerRow)
+            for (int row = 0; row < _painter.Height; row++)
             {
-                float edge = _session.Bank.EdgeAt(y);
-                _painter.PaintBackgroundRow(y, edge, _art.ShallowsColor);
-                _painter.PaintBackgroundRow(y, edge + _town.ShallowsWidth, _art.RiverColor);
+                float edge = _session.Bank.EdgeAt(_painter.TownYOfRow(row));
+                _painter.PaintBackgroundRow(row, edge, _art.ShallowsColor);
+                _painter.PaintBackgroundRow(row, edge + _town.ShallowsWidth, _art.RiverColor);
             }
 
             foreach (House house in _session.Town.Houses)
