@@ -39,6 +39,24 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Constructor_QuotaAboveRatCount_FailsWithAClearError()
+        {
+            var night = new NightRules(1234, 70, 71, 130f, 3);
+
+            Assert.That(() => NewSession(night), Throws.ArgumentException.With.Message.Contains(nameof(NightRules.Quota)));
+        }
+
+        [Test]
+        public void Constructor_QuotaEqualToRatCount_IsAllowed()
+        {
+            var night = new NightRules(1234, 70, 70, 130f, 3);
+
+            NightSession session = NewSession(night);
+
+            Assert.That(session.Outcome, Is.EqualTo(NightOutcome.InProgress));
+        }
+
+        [Test]
         public void Tick_PressedHole_IsRememberedAsLastPressed()
         {
             NightSession session = NewSession(TestRules.PrototypeNight(0));

@@ -35,6 +35,8 @@ namespace DigitalStory.Logic
 
         private Junction[] PickNests(int count, TownLayout town, Vector2 piperStart)
         {
+            RequireANestSite(town, piperStart);
+
             var nests = new Junction[count];
             var found = 0;
 
@@ -42,10 +44,8 @@ namespace DigitalStory.Logic
             {
                 int pick = (int)Math.Floor(_random.NextDouble() * town.Junctions.Count);
                 Junction candidate = town.Junctions[pick];
-                bool isInTown = candidate.Column < town.Columns;
-                float distance = Vector2.Distance(candidate.Position, piperStart);
 
-                if (isInTown && distance > _rules.Rats.MinimumNestDistance)
+                if (CanNest(candidate, town, piperStart))
                 {
                     nests[found] = candidate;
                     found++;
@@ -53,6 +53,27 @@ namespace DigitalStory.Logic
             }
 
             return nests;
+        }
+
+        // Without a site, the loop above would draw forever and freeze the Editor.
+        private void RequireANestSite(TownLayout town, Vector2 piperStart)
+        {
+            foreach (Junction junction in town.Junctions)
+            {
+                if (CanNest(junction, town, piperStart))
+                {
+                    return;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"No junction is more than {nameof(RatConfig.MinimumNestDistance)} ({_rules.Rats.MinimumNestDistance}) from the Piper.");
+        }
+
+        private bool CanNest(Junction junction, TownLayout town, Vector2 piperStart)
+        {
+            return junction.Column < town.Columns
+                && Vector2.Distance(junction.Position, piperStart) > _rules.Rats.MinimumNestDistance;
         }
 
         private Rat SpawnRat(Vector2 nest)

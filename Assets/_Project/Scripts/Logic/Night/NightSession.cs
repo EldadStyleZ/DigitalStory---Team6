@@ -16,6 +16,13 @@ namespace DigitalStory.Logic
         {
             _rules = rules ?? throw new ArgumentNullException(nameof(rules));
 
+            if (night.Quota > night.RatCount)
+            {
+                throw new ArgumentException(
+                    $"{nameof(NightRules.Quota)} ({night.Quota}) is above the rat count ({night.RatCount}), so the night cannot be won.",
+                    nameof(night));
+            }
+
             Quota = night.Quota;
             TimeLimit = night.TimeLimit;
             TimeLeft = night.TimeLimit;

@@ -12,6 +12,14 @@ namespace DigitalStory.Logic
         public Breath(BreathConfig config)
         {
             _config = config != null ? config : throw new ArgumentNullException(nameof(config));
+
+            if (config.RecoveredAt >= config.Max)
+            {
+                throw new ArgumentException(
+                    $"{nameof(BreathConfig.RecoveredAt)} ({config.RecoveredAt}) must be below {nameof(BreathConfig.Max)} ({config.Max}), or the flute never plays again.",
+                    nameof(config));
+            }
+
             Current = config.Max;
         }
 

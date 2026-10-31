@@ -1,6 +1,7 @@
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace DigitalStory.Tests.EditMode
 {
@@ -10,6 +11,18 @@ namespace DigitalStory.Tests.EditMode
         private const float ForeverSeconds = 60f;
 
         private static BreathConfig Config => TestRules.Default.Breath;
+
+        [TestCase(100)]
+        [TestCase(120)]
+        public void Constructor_RecoveredAtNotBelowMax_FailsWithAClearError(int recoveredAt)
+        {
+            var config = ScriptableObject.CreateInstance<BreathConfig>();
+            JsonUtility.FromJsonOverwrite($"{{\"<RecoveredAt>k__BackingField\":{recoveredAt}}}", config);
+
+            Assert.That(
+                () => new Breath(config),
+                Throws.ArgumentException.With.Message.Contains(nameof(BreathConfig.RecoveredAt)));
+        }
 
         [Test]
         public void Tick_Playing_DrainsAtConfiguredRate()
