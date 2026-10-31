@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bab36429c580646a6917e8c185ff9b09, type: 3}
+  m_Name: NightLookConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.NightLookConfig
+  <NightColor>k__BackingField: {r: 0.023529412, g: 0.03137255, b: 0.09411765, a: 0.64}
+  <DawnColor>k__BackingField: {r: 0.14117648, g: 0.05490196, b: 0.07058824, a: 0.34}
+  <DawnWash>k__BackingField: {r: 1, g: 0.50980395, b: 0.27450982, a: 0.2}
+  <LampReach>k__BackingField: 150
+  <LampClearing>k__BackingField: 0.85
+  <LampGlow>k__BackingField: {r: 0.9490196, g: 0.6666667, b: 0.27450982, a: 0.22}
+  <LampGlowReach>k__BackingField: 120
+  <PiperReach>k__BackingField: 170
+  <PlayingReach>k__BackingField: 260
+  <PlayingPulse>k__BackingField: 6
+  <PlayingPulseRate>k__BackingField: 6
+  <PiperClearing>k__BackingField: 0.92
+  <DiscoReach>k__BackingField: 320
+  <DiscoCircle>k__BackingField: 150
+  <DiscoLightReach>k__BackingField: 120
+  <DiscoLightStrength>k__BackingField: 0.4
+  <DiscoSpinRate>k__BackingField: 1.7
+  <DiscoHueRate>k__BackingField: 0.39

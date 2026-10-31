@@ -16,6 +16,9 @@ MonoBehaviour:
   <RatSprite>k__BackingField: {fileID: -3578019587575532720, guid: fd6a3e40fa64c4477828e29c2939aa4e, type: 3}
   <PiperSprite>k__BackingField: {fileID: 2258039910393369308, guid: b6ec563f2509b4824b18f42d62520305, type: 3}
   <CatSprite>k__BackingField: {fileID: -7232521027535748977, guid: 3bd12a2c2d8a847b9a6505289d436c88, type: 3}
+  <CatEyesSprite>k__BackingField: {fileID: 8454139252917097012, guid: 75a2684491366418592938dc53b2a2d5, type: 3}
+  <LampSprite>k__BackingField: {fileID: -3535221090349844623, guid: 3676c3fe92d4b451b8e88866d788cc22, type: 3}
+  <DarknessMaterial>k__BackingField: {fileID: 2100000, guid: 3482b87e9b71940dbb44cc36b3fe3fbb, type: 2}
   <GroundColor>k__BackingField: {r: 0.14509805, g: 0.16078432, b: 0.21568628, a: 1}
   <BankColor>k__BackingField: {r: 0.18039216, g: 0.22745098, b: 0.17254902, a: 1}
   <ShallowsColor>k__BackingField: {r: 0.18431373, g: 0.44313726, b: 0.5176471, a: 1}
@@ -31,6 +34,8 @@ MonoBehaviour:
   <CharmedRatColor>k__BackingField: {r: 1, g: 0.77254903, b: 0.32156864, a: 1}
   <CatColor>k__BackingField: {r: 0.078431375, g: 0.07450981, b: 0.101960786, a: 1}
   <SleepingCatColor>k__BackingField: {r: 0.41960785, g: 0.43529412, b: 0.6039216, a: 1}
+  <CatEyeColor>k__BackingField: {r: 0.6509804, g: 0.9411765, b: 0.3529412, a: 1}
+  <FleeingCatEyeColor>k__BackingField: {r: 1, g: 1, b: 1, a: 1}
   _ratLooks:
   - _tint: {r: 1, g: 1, b: 1, a: 1}
     _scale: 1

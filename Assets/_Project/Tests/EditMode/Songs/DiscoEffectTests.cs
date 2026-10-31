@@ -36,6 +36,18 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Cast_AnyTime_LightsTheDiscoUntilTheSongEnds()
+        {
+            var world = new SongWorld(new Rat[0]);
+
+            world.Cast<DiscoEffect>();
+            Assert.That(world.Stage.IsDiscoing, Is.True);
+
+            world.Run(Song.Seconds + 0.1f);
+            Assert.That(world.Stage.IsDiscoing, Is.False);
+        }
+
+        [Test]
         public void CatPack_DancingRatWithinReach_CanStillBeEaten()
         {
             var world = new SongWorld(new[] { SongWorld.RatBeside(5f) }, SongWorld.CatBeside(0f));

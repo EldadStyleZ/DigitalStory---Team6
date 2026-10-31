@@ -9,9 +9,11 @@ namespace DigitalStory.Logic
 
         public float SurfLeft { get; private set; }
         public float ChoirLeft { get; private set; }
+        public float DiscoLeft { get; private set; }
 
         public bool IsSurfing => SurfLeft > 0f;
         public bool IsSinging => ChoirLeft > 0f;
+        public bool IsDiscoing => DiscoLeft > 0f;
 
         /// <summary>How close to the Piper a rat stays fully charmed, or 0 when no song does this.</summary>
         public float CharmZoneRadius => IsSurfing ? _surfRadius : 0f;
@@ -24,17 +26,21 @@ namespace DigitalStory.Logic
 
         public void StartChoir(float seconds) => ChoirLeft = seconds;
 
+        public void StartDisco(float seconds) => DiscoLeft = seconds;
+
         /// <summary>Ends every song at once.</summary>
         public void Stop()
         {
             SurfLeft = 0f;
             ChoirLeft = 0f;
+            DiscoLeft = 0f;
         }
 
         public void Tick(float deltaTime)
         {
             SurfLeft = Mathf.Max(0f, SurfLeft - deltaTime);
             ChoirLeft = Mathf.Max(0f, ChoirLeft - deltaTime);
+            DiscoLeft = Mathf.Max(0f, DiscoLeft - deltaTime);
         }
     }
 }

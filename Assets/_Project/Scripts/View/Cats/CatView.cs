@@ -11,9 +11,13 @@ namespace DigitalStory.View
     {
         private const int CatOrder = 3;
 
+        // Above the darkness, so a black cat still shows at night.
+        private const int EyesOrder = 11;
+
         private CatPack _cats;
         private TownArtConfig _art;
         private SpriteRenderer[] _renderers;
+        private SpriteRenderer[] _eyes;
 
         /// <summary>Supplies the cats to show. Call once, before this object starts.</summary>
         public void Initialize(CatPack cats, TownArtConfig art)
@@ -31,10 +35,12 @@ namespace DigitalStory.View
             }
 
             _renderers = new SpriteRenderer[_cats.Count];
+            _eyes = new SpriteRenderer[_cats.Count];
 
             for (int index = 0; index < _cats.Count; index++)
             {
                 _renderers[index] = AddCat();
+                _eyes[index] = AddEyes(_renderers[index].transform);
             }
         }
 
@@ -48,6 +54,7 @@ namespace DigitalStory.View
             for (int index = 0; index < _renderers.Length; index++)
             {
                 ShowCat(in _cats[index], _renderers[index]);
+                ShowEyes(in _cats[index], _eyes[index]);
             }
         }
 
@@ -60,6 +67,23 @@ namespace DigitalStory.View
             catRenderer.sprite = _art.CatSprite;
             catRenderer.sortingOrder = CatOrder;
             return catRenderer;
+        }
+
+        private SpriteRenderer AddEyes(Transform cat)
+        {
+            var eyes = new GameObject("Eyes");
+            eyes.transform.SetParent(cat, false);
+
+            var eyesRenderer = eyes.AddComponent<SpriteRenderer>();
+            eyesRenderer.sprite = _art.CatEyesSprite;
+            eyesRenderer.sortingOrder = EyesOrder;
+            return eyesRenderer;
+        }
+
+        private void ShowEyes(in Cat cat, SpriteRenderer eyes)
+        {
+            eyes.enabled = !cat.IsAsleep;
+            eyes.color = cat.FleeLeft > 0f ? _art.FleeingCatEyeColor : _art.CatEyeColor;
         }
 
         private void ShowCat(in Cat cat, SpriteRenderer catRenderer)
