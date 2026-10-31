@@ -9,7 +9,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | ID | Feature | Status | Owner | Branch | Holding | Verified by |
 |---|---|---|---|---|---|---|
 | F-001 | Choose the game concept | In progress | Team | – | – | – |
-| F-002 | Add injection, advanced tools and fundamentals guides | In progress | EldadStyleZ | `feature/F-002-engineering-guides` | – | – |
+| F-002 | Add injection, advanced tools and fundamentals guides | Done | EldadStyleZ | `feature/F-002-engineering-guides` | – | 49 EditMode and 21 PlayMode tests in Unity batch mode on a scratch project |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
 - **Holding:** the scenes and prefabs the owner is changing. Nobody else edits them until this cell is cleared, because Unity scenes merge badly.
@@ -47,3 +47,4 @@ Add a row when the team decides something that future work must follow.
 | 2026-10-30 | Keep tunable values in ScriptableObjects. | Lets anyone change the game's feel without touching code. |
 | 2026-10-30 | Merge code through reviewed pull requests. Only `FEATURES.md` claims go straight to `main`. | Keeps `main` working while making claims visible at once. |
 | 2026-10-30 | Add new packages only by team decision. | Each package adds build size, risk and upkeep. |
+| 2026-10-30 | Inject dependencies by hand, with one composition root per scene. No DI container for now. | Keeps Logic testable without adding a package. |
