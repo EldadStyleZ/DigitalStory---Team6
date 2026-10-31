@@ -12,7 +12,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | F-002 | Add injection, advanced tools and fundamentals guides | Done | EldadStyleZ | `feature/F-002-engineering-guides` | – | 49 EditMode and 21 PlayMode tests in Unity batch mode on a scratch project |
 | F-003 | Lead the rats to the river | Done | EldadStyleZ | `feature/F-003-rats-to-river` | – | 94 EditMode and 10 PlayMode tests in the Editor; Play Mode check with real keyboard and mouse (walking, charming, drowning, status); layout and ending seen in Play Mode captures |
 | F-004 | Cats and songs | Done | EldadStyleZ | `feature/F-004-cats-and-songs` | – | 207 EditMode and 17 PlayMode tests in the Editor; the owner played it with real keys and the nine songs, combos row and cat all worked |
-| F-005 | Menus and HUD | In progress | EldadStyleZ | `feature/F-005-menus-and-hud` | `Assets/_Project/Scenes/Town.unity` | – |
+| F-005 | Menus and HUD | Done | EldadStyleZ | `feature/F-005-menus-and-hud` | – | 224 EditMode and 61 PlayMode tests in the Editor; the owner played it with real keys and mouse and the screens, pause, retry, flute and minimap all worked |
 | F-006 | Night, effects and sound | Planned | EldadStyleZ | – | – | – |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
@@ -102,7 +102,7 @@ flowchart LR
 - **Done when:** a player can read how to play, start the night, pause, see the result and retry.
 - **Layers:** Data holds text assets. Logic holds the game flow state machine. View holds the UI Toolkit screens, on-screen flute, HUD and minimap.
 - **Tests:** flow transitions, plus a PlayMode test that the screens load.
-- **Notes:** `UIDocument` is built in, so no package is needed. The prototype's Hebrew text is translated to English and kept in text assets.
+- **Notes:** `UIDocument` is built in, so no package is needed. The prototype's Hebrew text is translated to English and kept in text assets. Retry and quitting reload the scene, so every night starts clean, and both go through the title. The game also pauses when it loses focus, because it stops then anyway. Touch is not tested.
 
 ### F-006: Night, effects and sound
 
@@ -110,6 +110,7 @@ flowchart LR
 - **Done when:** lamps light a dark town, the sky warms towards dawn, and notes, ripples, rings, the flute and sound effects all play.
 - **Layers:** Data holds effect and audio configs. Logic only exposes the dawn value. View holds the darkness overlay, pooled effects and generated flute sound.
 - **Tests:** the dawn value, plus a Profiler check at the full rat count.
+- **Notes:** the prototype's mute button and its moving moon-and-sun bar wait for this feature, because they need sound and the dawn value.
 
 ## Ideas
 
