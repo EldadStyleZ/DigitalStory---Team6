@@ -104,7 +104,7 @@ namespace DigitalStory.View
         private bool HasEverything()
         {
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
-                && _flute != null && _rats != null && _cats != null && _songConfig != null && _art != null && _endingTexts != null
+                && _flute != null && _rats != null && _cats != null && _songConfig != null && _songs.Length > 0 && _art != null && _endingTexts != null
                 && _input != null && _runner != null && _townView != null && _piperView != null
                 && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null;
 

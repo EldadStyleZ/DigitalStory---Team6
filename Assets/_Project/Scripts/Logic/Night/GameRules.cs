@@ -26,6 +26,14 @@ namespace DigitalStory.Logic
             Cats = cats != null ? cats : throw new ArgumentNullException(nameof(cats));
             SongConfig = songConfig != null ? songConfig : throw new ArgumentNullException(nameof(songConfig));
             Songs = songs ?? throw new ArgumentNullException(nameof(songs));
+
+            foreach (SongEffect song in songs)
+            {
+                if (song == null)
+                {
+                    throw new ArgumentException("A song is missing from the list of songs.", nameof(songs));
+                }
+            }
         }
 
         public TownConfig Town { get; }
