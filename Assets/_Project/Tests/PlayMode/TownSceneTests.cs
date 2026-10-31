@@ -91,6 +91,32 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator Town_NightGoesOn_MovesTheMoonAlongTheSky()
+        {
+            NightStatusView status = Object.FindAnyObjectByType<NightStatusView>();
+            yield return null;
+            float early = status.SkyShown;
+
+            _root.Session.Tick(new PiperIntent(Vector2.zero, 0, 0), _root.Session.TimeLimit / 2f);
+            yield return null;
+
+            Assert.That(status.SkyShown, Is.GreaterThan(early));
+            Assert.That(status.SkyShown, Is.EqualTo(_root.Session.NightProgress).Within(0.01f));
+            Assert.That(status.IsSunShown, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator Town_NearDawn_ShowsTheSun()
+        {
+            NightStatusView status = Object.FindAnyObjectByType<NightStatusView>();
+
+            _root.Session.Tick(new PiperIntent(Vector2.zero, 0, 0), _root.Session.TimeLimit * 0.9f);
+            yield return null;
+
+            Assert.That(status.IsSunShown, Is.True);
+        }
+
+        [UnityTest]
         public IEnumerator Town_ACatAteARat_ShowsItOnTheSign()
         {
             NightStatusView status = Object.FindAnyObjectByType<NightStatusView>();

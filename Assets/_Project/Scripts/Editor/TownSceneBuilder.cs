@@ -64,6 +64,7 @@ namespace DigitalStory.Editor
             var flute = LoadOrCreate<FluteConfig>("FluteConfig");
             var rats = LoadOrCreate<RatConfig>("RatConfig");
             var cats = LoadOrCreate<CatConfig>("CatConfig");
+            var dawn = LoadOrCreate<DawnConfig>("DawnConfig");
             var songConfig = LoadOrCreate<SongConfig>("SongConfig");
             SongEffect[] songs = LoadOrCreateSongs();
             var endings = LoadOrCreate<EndingTextConfig>("EndingTextConfig");
@@ -72,7 +73,7 @@ namespace DigitalStory.Editor
             TownArtConfig art = LoadOrCreateArt();
             PanelSettings panel = LoadOrCreatePanelSettings();
 
-            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, songConfig, songs, art, endings, hud, menuTexts, panel));
+            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, dawn, songConfig, songs, art, endings, hud, menuTexts, panel));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuild();
             AssetDatabase.SaveAssets();
@@ -290,6 +291,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_flute", assets.Flute);
             SetObject(serialized, "_rats", assets.Rats);
             SetObject(serialized, "_cats", assets.Cats);
+            SetObject(serialized, "_dawn", assets.Dawn);
             SetObject(serialized, "_songConfig", assets.SongConfig);
             SetObjects(serialized, "_songs", assets.Songs);
             SetObject(serialized, "_art", assets.Art);
@@ -367,6 +369,7 @@ namespace DigitalStory.Editor
                 FluteConfig flute,
                 RatConfig rats,
                 CatConfig cats,
+                DawnConfig dawn,
                 SongConfig songConfig,
                 SongEffect[] songs,
                 TownArtConfig art,
@@ -382,6 +385,7 @@ namespace DigitalStory.Editor
                 Flute = flute;
                 Rats = rats;
                 Cats = cats;
+                Dawn = dawn;
                 SongConfig = songConfig;
                 Songs = songs;
                 Art = art;
@@ -398,6 +402,7 @@ namespace DigitalStory.Editor
             public FluteConfig Flute { get; }
             public RatConfig Rats { get; }
             public CatConfig Cats { get; }
+            public DawnConfig Dawn { get; }
             public SongConfig SongConfig { get; }
             public SongEffect[] Songs { get; }
             public TownArtConfig Art { get; }

@@ -18,6 +18,7 @@ namespace DigitalStory.Tests.EditMode
             ScriptableObject.CreateInstance<FluteConfig>(),
             ScriptableObject.CreateInstance<RatConfig>(),
             ScriptableObject.CreateInstance<CatConfig>(),
+            ScriptableObject.CreateInstance<DawnConfig>(),
             ScriptableObject.CreateInstance<SongConfig>(),
             Array.Empty<SongEffect>());
 
@@ -32,6 +33,7 @@ namespace DigitalStory.Tests.EditMode
                 rules.Flute,
                 rats != null ? rats : rules.Rats,
                 cats != null ? cats : rules.Cats,
+                rules.Dawn,
                 rules.SongConfig,
                 songs ?? rules.Songs);
         }

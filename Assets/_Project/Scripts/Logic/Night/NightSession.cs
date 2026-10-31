@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using DigitalStory.Data;
+using UnityEngine;
 
 namespace DigitalStory.Logic
 {
@@ -65,6 +66,22 @@ namespace DigitalStory.Logic
         public float TimeLimit { get; }
         public float TimeLeft { get; private set; }
         public NightOutcome Outcome { get; private set; } = NightOutcome.InProgress;
+
+        /// <summary>How much of the night has gone, from 0 at dusk to 1 at dawn.</summary>
+        public float NightProgress => Mathf.Clamp01(1f - (TimeLeft / TimeLimit));
+
+        /// <summary>How far the sky has turned, from 0 for most of the night to 1 at sunrise.</summary>
+        public float Dawn
+        {
+            get
+            {
+                float startsAt = _rules.Dawn.StartsAt;
+                return Mathf.Clamp01((NightProgress - startsAt) / (1f - startsAt));
+            }
+        }
+
+        /// <summary>True when the sun is about to rise.</summary>
+        public bool IsNearDawn => NightProgress > _rules.Dawn.NearAt;
 
         /// <summary>Advances the night by one step. Does nothing once it has ended.</summary>
         public void Tick(in PiperIntent intent, float deltaTime)
