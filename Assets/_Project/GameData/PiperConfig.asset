@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 80a1150719db9449daea1feff0ca5203, type: 3}
+  m_Name: PiperConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.PiperConfig
+  <Radius>k__BackingField: 11
+  <TownMargin>k__BackingField: 12
+  <StartRiverSetback>k__BackingField: 120
+  <StartFacing>k__BackingField: 3.1415927
+  <WalkSpeed>k__BackingField: 150
+  <WadeSpeed>k__BackingField: 85
+  <TurnRate>k__BackingField: 12
+  <PointerDeadZone>k__BackingField: 12

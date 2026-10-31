@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b6ff141cd3c646de9f52e4e658658f3, type: 3}
+  m_Name: RatConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.RatConfig
+  <Radius>k__BackingField: 5
+  <NestScatter>k__BackingField: 55
+  <MinimumNestDistance>k__BackingField: 380
+  <SpawnMargin>k__BackingField: 6
+  <NeighbourRadius>k__BackingField: 36
+  <SeparationDistance>k__BackingField: 13
+  <SeparationStrength>k__BackingField: 30
+  <AlignmentStrength>k__BackingField: 0.8
+  <CohesionStrength>k__BackingField: 0.9
+  <LooseFlockCharm>k__BackingField: 0.3
+  <LooseFlockShare>k__BackingField: 0.4
+  <WanderTurnRate>k__BackingField: 5
+  <WanderStrength>k__BackingField: 45
+  <HomeRange>k__BackingField: 90
+  <HomeStrength>k__BackingField: 35
+  <CharmRiseNearPerSecond>k__BackingField: 2.2
+  <CharmRiseBasePerSecond>k__BackingField: 0.6
+  <CharmSpreadPerSecond>k__BackingField: 0.55
+  <CharmSpreadThreshold>k__BackingField: 0.6
+  <CharmFadePerSecond>k__BackingField: 0.22
+  <CharmedAt>k__BackingField: 0.5
+  <MinimumFollowCharm>k__BackingField: 0.02
+  <BaseSpeed>k__BackingField: 80
+  <CharmSpeedBonus>k__BackingField: 110
+  <FollowStopDistance>k__BackingField: 48
+  <SteeringStrength>k__BackingField: 3
+  <BankFearCharm>k__BackingField: 0.4
+  <BankFearDistance>k__BackingField: 90
+  <BankFearStrength>k__BackingField: 7
+  <DrownMargin>k__BackingField: 4

@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5c16b3d6c2ee4bf3b2ec18ce3ddfb67, type: 3}
+  m_Name: EndingTextConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.EndingTextConfig
+  <WonTitle>k__BackingField: Hamelin is saved
+  <WonMessage>k__BackingField: The town is quiet. Now you only have to collect the payment the mayor promised you. What could possibly go wrong?
+  <QuotaOutOfReachTitle>k__BackingField: The rats won tonight
+  <QuotaOutOfReachMessage>k__BackingField: Too many rats are gone. There are not enough left to reach the goal.
+  <DawnTitle>k__BackingField: The sun rose. You died.
+  <DawnMessage>k__BackingField: The Piper is a creature of the night. All that is left is a colorful hat and a flute. The rats ate the hat.

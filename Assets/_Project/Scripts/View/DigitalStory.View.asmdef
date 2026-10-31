@@ -1,0 +1,9 @@
+{
+    "name": "DigitalStory.View",
+    "rootNamespace": "DigitalStory.View",
+    "references": [
+        "DigitalStory.Data",
+        "DigitalStory.Logic"
+    ],
+    "autoReferenced": false
+}

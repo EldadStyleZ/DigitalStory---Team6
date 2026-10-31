@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2f3b2591bbe345679386b67495012d7, type: 3}
+  m_Name: TownArtConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.TownArtConfig
+  <BlockSprite>k__BackingField: {fileID: 2537882373423050008, guid: 18e9566f9476946e98dd6fda1fc2e49a, type: 3}
+  <RatSprite>k__BackingField: {fileID: -3578019587575532720, guid: fd6a3e40fa64c4477828e29c2939aa4e, type: 3}
+  <PiperSprite>k__BackingField: {fileID: 2258039910393369308, guid: b6ec563f2509b4824b18f42d62520305, type: 3}
+  <GroundColor>k__BackingField: {r: 0.14509805, g: 0.16078432, b: 0.21568628, a: 1}
+  <BankColor>k__BackingField: {r: 0.18039216, g: 0.22745098, b: 0.17254902, a: 1}
+  <ShallowsColor>k__BackingField: {r: 0.18431373, g: 0.44313726, b: 0.5176471, a: 1}
+  <RiverColor>k__BackingField: {r: 0.12156863, g: 0.30980393, b: 0.3882353, a: 1}
+  _roofColors:
+  - {r: 0.29411766, g: 0.33333334, b: 0.40784314, a: 1}
+  - {r: 0.3372549, g: 0.3764706, b: 0.2901961, a: 1}
+  - {r: 0.41568628, g: 0.27058825, b: 0.21960784, a: 1}
+  - {r: 0.35686275, g: 0.32156864, b: 0.4, a: 1}
+  - {r: 0.27450982, g: 0.3529412, b: 0.36862746, a: 1}
+  - {r: 0.36862746, g: 0.32941177, b: 0.27450982, a: 1}
+  <CalmRatColor>k__BackingField: {r: 0.64705884, g: 0.56078434, b: 0.5019608, a: 1}
+  <CharmedRatColor>k__BackingField: {r: 1, g: 0.77254903, b: 0.32156864, a: 1}
+  <VisibleTownHeight>k__BackingField: 700
+  <RiverStripHeight>k__BackingField: 8
+  <BankWidth>k__BackingField: 30
