@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5c16b3d6c2ee4bf3b2ec18ce3ddfb67, type: 3}
   m_Name: EndingTextConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.EndingTextConfig
-  <WonTitle>k__BackingField: The streets are quiet
-  <WonMessage>k__BackingField: The next night is already waiting.
+  <WonTitle>k__BackingField: Hamelin is saved
+  <WonMessage>k__BackingField: The town is quiet. Now you only have to collect the payment the mayor promised you. What could possibly go wrong?
   <QuotaOutOfReachTitle>k__BackingField: The rats won tonight
   <QuotaOutOfReachMessage>k__BackingField: Too many rats are gone. There are not enough left to reach the goal.
   <DawnTitle>k__BackingField: The sun rose. You died.

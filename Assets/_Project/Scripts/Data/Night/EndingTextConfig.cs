@@ -8,10 +8,10 @@ namespace DigitalStory.Data
     {
         [field: Header("Won")]
         [field: SerializeField, Tooltip("Title after reaching the quota.")]
-        public string WonTitle { get; private set; } = "The streets are quiet";
+        public string WonTitle { get; private set; } = "Hamelin is saved";
 
         [field: SerializeField, TextArea, Tooltip("Message after reaching the quota.")]
-        public string WonMessage { get; private set; } = "The next night is already waiting.";
+        public string WonMessage { get; private set; } = "The town is quiet. Now you only have to collect the payment the mayor promised you. What could possibly go wrong?";
 
         [field: Header("Quota out of reach")]
         [field: SerializeField, Tooltip("Title when too few rats remain.")]
