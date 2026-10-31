@@ -65,6 +65,25 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("The button after losing.")]
         public string RetryButton { get; private set; } = "Try again";
 
+        [field: Header("HUD")]
+        [field: SerializeField, Tooltip("The rats drowned so far. {0} is drowned and {1} is the goal.")]
+        public string GoalCountFormat { get; private set; } = "{0}/{1}";
+
+        [field: SerializeField, Tooltip("The caption under the goal.")]
+        public string DrownedCaption { get; private set; } = "drowned";
+
+        [field: SerializeField, Tooltip("The caption over the time.")]
+        public string UntilDawnCaption { get; private set; } = "Until dawn";
+
+        [field: SerializeField, Tooltip("The time left. {0} is the seconds.")]
+        public string SecondsFormat { get; private set; } = "{0}s";
+
+        [field: SerializeField, Tooltip("The rats still alive. {0} is the rats.")]
+        public string RatsLeftFormat { get; private set; } = "{0} rats left";
+
+        [field: SerializeField, Tooltip("The rats alive once cats have eaten some. {0} is alive and {1} is eaten.")]
+        public string RatsLeftAndEatenFormat { get; private set; } = "{0} rats left · {1} eaten";
+
         [field: Header("Flute")]
         [field: SerializeField, Tooltip("The word over holes 1 and 2.")]
         public string CallLabel { get; private set; } = "Call";

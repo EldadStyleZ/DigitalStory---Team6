@@ -18,27 +18,21 @@ namespace DigitalStory.View
         private const float SignMinWidth = 130f;
         private const float BigFontSize = 34f;
         private const float SmallFontSize = 15f;
-        private const float EndingFontSize = 34f;
-        private const float EndingPadding = 18f;
-        private const float EndingTopPercent = 36f;
         private const float BreathBarHeight = 6f;
         private const float BreathBarGap = 6f;
 
-        private const string DrownedCaption = "drowned";
-        private const string UntilDawnCaption = "Until dawn";
-
         private NightSession _session;
-        private EndingTextConfig _texts;
+        private MenuTextConfig _texts;
         private HudConfig _hud;
         private HudLayout _layout;
         private Label _goal;
         private Label _time;
         private Label _rats;
-        private Label _ending;
         private VisualElement _breathFill;
         private int _shownDrowned = -1;
         private int _shownSeconds = -1;
         private int _shownRats = -1;
+        private int _shownEaten = -1;
 
         /// <summary>The goal on screen, for tests and debugging.</summary>
         public string GoalText => _goal?.text;
@@ -50,20 +44,12 @@ namespace DigitalStory.View
         public string RatsText => _rats?.text;
 
         /// <summary>Supplies what to show. Call once, before this object is enabled.</summary>
-        public void Initialize(NightSession session, EndingTextConfig texts, HudConfig hud, HudLayout layout)
+        public void Initialize(NightSession session, MenuTextConfig texts, HudConfig hud, HudLayout layout)
         {
             _session = session;
             _texts = texts;
             _hud = hud;
             _layout = layout;
-        }
-
-        private void OnEnable()
-        {
-            if (_session != null)
-            {
-                _session.Ended += HandleEnded;
-            }
         }
 
         private void Start()
@@ -84,15 +70,6 @@ namespace DigitalStory.View
             }
         }
 
-        private void OnDisable()
-        {
-            // Unity also calls this when the scene unloads before Initialize ran, so _session can be null.
-            if (_session != null)
-            {
-                _session.Ended -= HandleEnded;
-            }
-        }
-
         private void BuildPanel(VisualElement root)
         {
             var signs = new VisualElement();
@@ -104,7 +81,6 @@ namespace DigitalStory.View
             signs.Add(BuildGoalSign());
             signs.Add(BuildTimeSign());
             root.Add(signs);
-            root.Add(BuildEnding());
         }
 
         private VisualElement BuildGoalSign()
@@ -122,7 +98,7 @@ namespace DigitalStory.View
 
             VisualElement sign = NewSign();
             sign.Add(_goal);
-            sign.Add(NewCaption(DrownedCaption));
+            sign.Add(NewCaption(_texts.DrownedCaption));
             sign.Add(breathBar);
             return sign;
         }
@@ -134,22 +110,10 @@ namespace DigitalStory.View
 
             VisualElement sign = NewSign();
             sign.style.marginLeft = SignGap;
-            sign.Add(NewCaption(UntilDawnCaption));
+            sign.Add(NewCaption(_texts.UntilDawnCaption));
             sign.Add(_time);
             sign.Add(_rats);
             return sign;
-        }
-
-        private Label BuildEnding()
-        {
-            _ending = NewLabel(EndingFontSize, _hud.TextColor);
-            _ending.style.position = Position.Absolute;
-            _ending.style.left = 0f;
-            _ending.style.right = 0f;
-            _ending.style.top = Length.Percent(EndingTopPercent);
-            _ending.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _ending.style.whiteSpace = WhiteSpace.Normal;
-            return _ending;
         }
 
         private VisualElement NewSign()
@@ -188,19 +152,23 @@ namespace DigitalStory.View
         {
             int drowned = _session.Swarm.DrownedCount;
             int rats = _session.Swarm.AliveCount;
+            int eaten = _session.Swarm.LostCount;
             int seconds = Mathf.Max(0, Mathf.CeilToInt(_session.TimeLeft));
 
-            if (drowned == _shownDrowned && rats == _shownRats && seconds == _shownSeconds)
+            if (drowned == _shownDrowned && rats == _shownRats && eaten == _shownEaten && seconds == _shownSeconds)
             {
                 return;
             }
 
             _shownDrowned = drowned;
             _shownRats = rats;
+            _shownEaten = eaten;
             _shownSeconds = seconds;
-            _goal.text = $"{drowned}/{_session.Quota}";
-            _time.text = $"{seconds}s";
-            _rats.text = $"{rats} rats left";
+            _goal.text = string.Format(_texts.GoalCountFormat, drowned, _session.Quota);
+            _time.text = string.Format(_texts.SecondsFormat, seconds);
+            _rats.text = eaten == 0
+                ? string.Format(_texts.RatsLeftFormat, rats)
+                : string.Format(_texts.RatsLeftAndEatenFormat, rats, eaten);
         }
 
         private void ShowBreath()
@@ -208,19 +176,6 @@ namespace DigitalStory.View
             Breath breath = _session.Breath;
             _breathFill.style.width = Length.Percent(breath.Current / breath.Max * 100f);
             _breathFill.style.backgroundColor = breath.IsExhausted ? _hud.ExhaustedColor : _hud.BreathColor;
-        }
-
-        private void HandleEnded(NightOutcome outcome)
-        {
-            _ending.style.backgroundColor = _hud.PanelColor;
-            _ending.style.paddingTop = EndingPadding;
-            _ending.style.paddingBottom = EndingPadding;
-            _ending.text = outcome switch
-            {
-                NightOutcome.Won => $"{_texts.WonTitle}\n{_texts.WonMessage}",
-                NightOutcome.QuotaOutOfReach => $"{_texts.QuotaOutOfReachTitle}\n{_texts.QuotaOutOfReachMessage}",
-                _ => $"{_texts.DawnTitle}\n{_texts.DawnMessage}",
-            };
         }
     }
 }

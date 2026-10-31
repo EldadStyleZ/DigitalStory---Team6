@@ -91,6 +91,18 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator Town_ACatAteARat_ShowsItOnTheSign()
+        {
+            NightStatusView status = Object.FindAnyObjectByType<NightStatusView>();
+            int ratsLeft = _root.Session.Swarm.AliveCount - 1;
+
+            _root.Session.Swarm.Eat(0);
+            yield return null;
+
+            Assert.That(status.RatsText, Is.EqualTo($"{ratsLeft} rats left · 1 eaten"));
+        }
+
+        [UnityTest]
         public IEnumerator Town_OnLoad_PanelScalesWithTheWindow()
         {
             UIDocument document = Object.FindAnyObjectByType<UIDocument>();

@@ -47,6 +47,12 @@ MonoBehaviour:
   <LostStatFormat>k__BackingField: '{0}/{1} drowned'
   <PlayAgainButton>k__BackingField: Play again
   <RetryButton>k__BackingField: Try again
+  <GoalCountFormat>k__BackingField: '{0}/{1}'
+  <DrownedCaption>k__BackingField: drowned
+  <UntilDawnCaption>k__BackingField: Until dawn
+  <SecondsFormat>k__BackingField: '{0}s'
+  <RatsLeftFormat>k__BackingField: '{0} rats left'
+  <RatsLeftAndEatenFormat>k__BackingField: "{0} rats left \xB7 {1} eaten"
   <CallLabel>k__BackingField: Call
   <MarchLabel>k__BackingField: March
   <ScareLabel>k__BackingField: Scare

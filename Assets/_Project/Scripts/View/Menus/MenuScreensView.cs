@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 namespace DigitalStory.View
@@ -32,6 +33,7 @@ namespace DigitalStory.View
             GameFlow flow,
             NightSession session,
             MenuTextConfig texts,
+            EndingTextConfig endings,
             TownArtConfig art,
             HudConfig hud)
         {
@@ -40,6 +42,8 @@ namespace DigitalStory.View
             _screens = new Dictionary<GamePhase, IMenuScreen>
             {
                 [GamePhase.Title] = new TitleScreen(texts, art, hud, session, flow.Begin),
+                [GamePhase.Paused] = new PauseScreen(texts, flow.TogglePause, RestartGame),
+                [GamePhase.Ended] = new ResultScreen(session, texts, endings, RestartGame),
             };
         }
 
@@ -69,6 +73,9 @@ namespace DigitalStory.View
                 _flow.Changed -= HandleFlowChanged;
             }
         }
+
+        // A new scene guarantees a clean night, with nothing left to reset by hand.
+        private void RestartGame() => SceneManager.LoadScene(gameObject.scene.buildIndex);
 
         private void BuildOverlay(VisualElement root)
         {

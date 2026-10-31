@@ -59,6 +59,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Runs the night every frame.")]
         private NightRunner _runner;
 
+        [SerializeField, Tooltip("Reads the pause keys.")]
+        private GameFlowInput _flowInput;
+
         [SerializeField, Tooltip("Draws the town.")]
         private TownView _townView;
 
@@ -109,15 +112,16 @@ namespace DigitalStory.View
 
             _input.Initialize(Session.Piper, _townCamera.GetComponent<Camera>(), _piper);
             _runner.Initialize(Session, _input, Flow);
+            _flowInput.Initialize(Flow);
             _townView.Initialize(Session.Town, _town, Session.Bank, _art);
             _piperView.Initialize(Session.Piper, Session.Stage, _art);
             _swarmView.Initialize(Session.Swarm, Session.Stage, _art);
             _catView.Initialize(Session.Cats, _art);
             _townCamera.Initialize(Session.Piper, _town, _art);
             _hudLayout.Initialize(Flow);
-            _statusView.Initialize(Session, _endingTexts, _hud, _hudLayout);
+            _statusView.Initialize(Session, _menuTexts, _hud, _hudLayout);
             _comboRow.Initialize(Session, _art, _hud, _hudLayout);
-            _menuScreens.Initialize(Flow, Session, _menuTexts, _art, _hud);
+            _menuScreens.Initialize(Flow, Session, _menuTexts, _endingTexts, _art, _hud);
         }
 
         private void HandleNightEnded(NightOutcome outcome) => Flow.End();
@@ -126,7 +130,7 @@ namespace DigitalStory.View
         {
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
                 && _flute != null && _rats != null && _cats != null && _songConfig != null && _songs.Length > 0 && _art != null && _endingTexts != null && _hud != null && _menuTexts != null
-                && _input != null && _runner != null && _townView != null && _piperView != null
+                && _input != null && _runner != null && _flowInput != null && _townView != null && _piperView != null
                 && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null
                 && _hudLayout != null && _menuScreens != null;
 

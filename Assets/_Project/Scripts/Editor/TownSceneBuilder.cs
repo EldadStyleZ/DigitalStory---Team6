@@ -279,7 +279,7 @@ namespace DigitalStory.Editor
                 typeof(MenuScreensView));
             hud.GetComponent<UIDocument>().panelSettings = assets.Panel;
 
-            var root = new GameObject("Game Root", typeof(GameRoot), typeof(PiperInput), typeof(NightRunner));
+            var root = new GameObject("Game Root", typeof(GameRoot), typeof(PiperInput), typeof(NightRunner), typeof(GameFlowInput));
             var serialized = new SerializedObject(root.GetComponent<GameRoot>());
             SetObject(serialized, "_night", assets.Night);
             SetObject(serialized, "_town", assets.Town);
@@ -296,6 +296,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_menuTexts", assets.MenuTexts);
             SetObject(serialized, "_input", root.GetComponent<PiperInput>());
             SetObject(serialized, "_runner", root.GetComponent<NightRunner>());
+            SetObject(serialized, "_flowInput", root.GetComponent<GameFlowInput>());
             SetObject(serialized, "_townView", townObject.GetComponent<TownView>());
             SetObject(serialized, "_piperView", piperObject.GetComponent<PiperView>());
             SetObject(serialized, "_swarmView", ratsObject.GetComponent<RatSwarmView>());
