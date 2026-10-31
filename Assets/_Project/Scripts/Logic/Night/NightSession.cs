@@ -138,6 +138,7 @@ namespace DigitalStory.Logic
 
             if (Outcome != NightOutcome.InProgress)
             {
+                Stage.Stop();
                 Ended?.Invoke(Outcome);
             }
         }

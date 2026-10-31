@@ -90,6 +90,22 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Tick_NightEndsDuringASong_TheSongStops()
+        {
+            var night = new NightRules(1234, 70, 45, 0.01f, 3);
+            GameRules rules = TestRules.WithSongs(NewSong());
+            var session = new NightSession(rules, night, new Mulberry32Random((uint)night.Seed), new FixedRandomSource());
+            session.Stage.StartSurf(60f, 220f);
+            session.Stage.StartChoir(60f);
+
+            session.Tick(new PiperIntent(Vector2.zero, 0, 0), Step);
+
+            Assert.That(session.Outcome, Is.Not.EqualTo(NightOutcome.InProgress));
+            Assert.That(session.Stage.IsSurfing, Is.False);
+            Assert.That(session.Stage.IsSinging, Is.False);
+        }
+
+        [Test]
         public void Tick_EverySongRunningAtOnce_AllocatesNothing()
         {
             NightRules night = TestRules.PrototypeNight(3);

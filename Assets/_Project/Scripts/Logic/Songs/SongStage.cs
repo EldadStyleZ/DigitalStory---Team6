@@ -24,6 +24,13 @@ namespace DigitalStory.Logic
 
         public void StartChoir(float seconds) => ChoirLeft = seconds;
 
+        /// <summary>Ends every song at once.</summary>
+        public void Stop()
+        {
+            SurfLeft = 0f;
+            ChoirLeft = 0f;
+        }
+
         public void Tick(float deltaTime)
         {
             SurfLeft = Mathf.Max(0f, SurfLeft - deltaTime);
