@@ -83,6 +83,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Lists the songs and their keys.")]
         private ComboRowView _comboRow;
 
+        [SerializeField, Tooltip("The flute on screen.")]
+        private FluteView _fluteView;
+
         [SerializeField, Tooltip("Holds everything drawn over the night.")]
         private HudLayout _hudLayout;
 
@@ -110,7 +113,7 @@ namespace DigitalStory.View
             Flow = new GameFlow();
             Session.Ended += HandleNightEnded;
 
-            _input.Initialize(Session.Piper, _townCamera.GetComponent<Camera>(), _piper);
+            _input.Initialize(Session.Piper, _townCamera.GetComponent<Camera>(), _piper, _fluteView);
             _runner.Initialize(Session, _input, Flow);
             _flowInput.Initialize(Flow);
             _townView.Initialize(Session.Town, _town, Session.Bank, _art);
@@ -121,6 +124,7 @@ namespace DigitalStory.View
             _hudLayout.Initialize(Flow);
             _statusView.Initialize(Session, _menuTexts, _hud, _hudLayout);
             _comboRow.Initialize(Session, _art, _hud, _hudLayout);
+            _fluteView.Initialize(Session, _flute, _hudLayout, _menuTexts, _art, _hud);
             _menuScreens.Initialize(Flow, Session, _menuTexts, _endingTexts, _art, _hud);
         }
 
@@ -131,7 +135,7 @@ namespace DigitalStory.View
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
                 && _flute != null && _rats != null && _cats != null && _songConfig != null && _songs.Length > 0 && _art != null && _endingTexts != null && _hud != null && _menuTexts != null
                 && _input != null && _runner != null && _flowInput != null && _townView != null && _piperView != null
-                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null
+                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null && _fluteView != null
                 && _hudLayout != null && _menuScreens != null;
 
             if (!isComplete)

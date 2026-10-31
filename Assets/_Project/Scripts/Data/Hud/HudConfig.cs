@@ -39,6 +39,19 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("Behind the breath left.")]
         public Color BreathTrackColor { get; private set; } = new Color(1f, 1f, 1f, 0.12f);
 
+        [field: Header("Flute")]
+        [field: SerializeField, Tooltip("The body of the flute.")]
+        public Color FluteColor { get; private set; } = new Color32(0xBD, 0x84, 0x43, 0xFF);
+
+        [field: SerializeField, Tooltip("A hole that is not sounding.")]
+        public Color HoleColor { get; private set; } = new Color32(0x1D, 0x14, 0x0A, 0xFF);
+
+        [field: SerializeField, Tooltip("The number on a hole that is not sounding.")]
+        public Color HoleNumberColor { get; private set; } = new Color32(0xFF, 0xEC, 0xC8, 0x80);
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("How visible the flute is while out of breath.")]
+        public float ExhaustedFluteOpacity { get; private set; } = .5f;
+
         [field: Header("Combos row")]
         [field: SerializeField, Tooltip("The hole numbers on a combo.")]
         public Color KeyTextColor { get; private set; } = new Color32(0x1A, 0x12, 0x09, 0xFF);

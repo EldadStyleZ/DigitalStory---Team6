@@ -276,6 +276,7 @@ namespace DigitalStory.Editor
                 typeof(HudLayout),
                 typeof(NightStatusView),
                 typeof(ComboRowView),
+                typeof(FluteView),
                 typeof(MenuScreensView));
             hud.GetComponent<UIDocument>().panelSettings = assets.Panel;
 
@@ -304,6 +305,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_townCamera", camera.GetComponent<TownCamera>());
             SetObject(serialized, "_statusView", hud.GetComponent<NightStatusView>());
             SetObject(serialized, "_comboRow", hud.GetComponent<ComboRowView>());
+            SetObject(serialized, "_fluteView", hud.GetComponent<FluteView>());
             SetObject(serialized, "_hudLayout", hud.GetComponent<HudLayout>());
             SetObject(serialized, "_menuScreens", hud.GetComponent<MenuScreensView>());
             serialized.ApplyModifiedPropertiesWithoutUndo();
