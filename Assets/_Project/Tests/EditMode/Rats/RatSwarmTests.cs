@@ -197,6 +197,55 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(swarm[0].Velocity.x, Is.GreaterThan(0f));
         }
 
+        [Test]
+        public void Tick_AwakeCatNearby_PushesTheRatAwayAndDrainsCharm()
+        {
+            CatConfig cats = TestRules.Default.Cats;
+            Vector2 ratPosition = FarAway + (Vector2.right * (cats.FearRange / 2f));
+            Rat rat = RatAt(ratPosition);
+            rat.Charm = 0.5f;
+            RatSwarm swarm = SwarmOf(rat);
+
+            swarm.Tick(new SwarmInfluence(PiperPosition, 0f, FluteMode.None, 0f, PackWithCatAt(FarAway, 0f)), Step);
+
+            float expectedCharm = 0.5f - ((Config.CharmFadePerSecond + cats.CharmLossPerSecond) * Step);
+            Assert.That(swarm[0].Charm, Is.EqualTo(expectedCharm).Within(Tolerance));
+            Assert.That(swarm[0].Velocity.x, Is.GreaterThan(cats.FearStrength * 0.25f * Step));
+        }
+
+        [Test]
+        public void Tick_SleepingCatNearby_IsIgnored()
+        {
+            CatConfig cats = TestRules.Default.Cats;
+            Rat rat = RatAt(FarAway + (Vector2.right * (cats.FearRange / 2f)));
+            rat.Charm = 0.5f;
+            RatSwarm swarm = SwarmOf(rat);
+
+            swarm.Tick(new SwarmInfluence(PiperPosition, 0f, FluteMode.None, 0f, PackWithCatAt(FarAway, 5f)), Step);
+
+            Assert.That(swarm[0].Charm, Is.EqualTo(0.5f - (Config.CharmFadePerSecond * Step)).Within(Tolerance));
+        }
+
+        [Test]
+        public void Eat_LivingRat_CountsItAsLostNotDrowned()
+        {
+            RatSwarm swarm = SwarmOf(RatAt(FarAway), RatAt(FarAway));
+
+            swarm.Eat(0);
+
+            Assert.That(swarm[0].IsAlive, Is.False);
+            Assert.That(swarm.AliveCount, Is.EqualTo(1));
+            Assert.That(swarm.LostCount, Is.EqualTo(1));
+            Assert.That(swarm.DrownedCount, Is.EqualTo(0));
+        }
+
+        private static CatPack PackWithCatAt(Vector2 position, float sleepSeconds)
+        {
+            var cat = new Cat(new Junction(position, 0, 0), 0f) { SleepLeft = sleepSeconds };
+            var town = new TownLayout(1, 1, System.Array.Empty<House>(), System.Array.Empty<Junction>(), System.Array.Empty<Vector2>());
+            return new CatPack(new[] { cat }, TestRules.Default, town, TestRules.Bank(), TestRules.NoHouses(), new FixedRandomSource());
+        }
+
         private static Rat RatAt(Vector2 position) => new Rat(position, position, 0f, 0f);
 
         private static RatSwarm SwarmOf(params Rat[] rats)

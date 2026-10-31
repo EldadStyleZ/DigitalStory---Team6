@@ -22,13 +22,17 @@ namespace DigitalStory.Data
         [SerializeField, Min(1), Tooltip("How many nests the rats start in.")]
         private int _nestCount;
 
-        public NightRules(int seed, int ratCount, int quota, float timeLimit, int nestCount)
+        [SerializeField, Min(0), Tooltip("Cats hunting in the town.")]
+        private int _catCount;
+
+        public NightRules(int seed, int ratCount, int quota, float timeLimit, int nestCount, int catCount = 0)
         {
             _seed = seed;
             _ratCount = ratCount;
             _quota = quota;
             _timeLimit = timeLimit;
             _nestCount = nestCount;
+            _catCount = catCount;
         }
 
         public int Seed => _seed;
@@ -36,5 +40,6 @@ namespace DigitalStory.Data
         public int Quota => _quota;
         public float TimeLimit => _timeLimit;
         public int NestCount => _nestCount;
+        public int CatCount => _catCount;
     }
 }

@@ -17,6 +17,7 @@ namespace DigitalStory.Logic
         private readonly Rat[] _rats;
         private readonly RatConfig _config;
         private readonly FluteConfig _flute;
+        private readonly CatConfig _cats;
         private readonly TownConfig _town;
         private readonly RiverBank _bank;
         private readonly HouseCollider _houses;
@@ -35,6 +36,7 @@ namespace DigitalStory.Logic
 
             _config = rules.Rats;
             _flute = rules.Flute;
+            _cats = rules.Cats;
             _town = rules.Town;
             _bank = bank ?? throw new ArgumentNullException(nameof(bank));
             _houses = houses ?? throw new ArgumentNullException(nameof(houses));
@@ -52,9 +54,20 @@ namespace DigitalStory.Logic
         public int AliveCount { get; private set; }
         public int DrownedCount { get; private set; }
 
+        /// <summary>How many rats cats have eaten.</summary>
+        public int LostCount { get; private set; }
+
         public ref readonly Rat this[int index] => ref _rats[index];
 
         public bool IsCharmed(int index) => _rats[index].Charm > _config.CharmedAt;
+
+        /// <summary>Removes a rat that a cat caught.</summary>
+        public void Eat(int index)
+        {
+            _rats[index].IsAlive = false;
+            AliveCount--;
+            LostCount++;
+        }
 
         /// <summary>Advances every living rat by one step.</summary>
         public void Tick(in SwarmInfluence influence, float deltaTime)
@@ -94,6 +107,7 @@ namespace DigitalStory.Logic
 
             float bankEdge = _bank.EdgeAt(rat.Position.y);
             force += BankFearForce(in rat, bankEdge);
+            force += CatFearForce(ref rat, influence.Cats, deltaTime);
 
             Move(ref rat, force, deltaTime);
             BounceOffTownEdges(ref rat);
@@ -270,6 +284,35 @@ namespace DigitalStory.Logic
             }
 
             return Vector2.left * ((rat.Position.x - fearLine) * _config.BankFearStrength);
+        }
+
+        // Returns the push away from awake cats, which also drain the rat's charm.
+        private Vector2 CatFearForce(ref Rat rat, CatPack cats, float deltaTime)
+        {
+            Vector2 force = Vector2.zero;
+
+            if (cats == null)
+            {
+                return force;
+            }
+
+            for (int index = 0; index < cats.Count; index++)
+            {
+                ref readonly Cat cat = ref cats[index];
+                Vector2 away = rat.Position - cat.Position;
+                float distance = away.magnitude;
+
+                if (cat.IsAsleep || distance >= _cats.FearRange)
+                {
+                    continue;
+                }
+
+                float safeDistance = distance > 0f ? distance : 1f;
+                force += away / safeDistance * (_cats.FearStrength * (1f - (distance / _cats.FearRange)));
+                rat.Charm = Mathf.Max(0f, rat.Charm - (deltaTime * _cats.CharmLossPerSecond));
+            }
+
+            return force;
         }
 
         private void Move(ref Rat rat, Vector2 force, float deltaTime)

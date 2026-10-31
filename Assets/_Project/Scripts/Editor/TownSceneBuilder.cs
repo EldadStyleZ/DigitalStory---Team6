@@ -28,6 +28,8 @@ namespace DigitalStory.Editor
         private const int RatWidth = 48;
         private const int RatHeight = 24;
         private const int PiperSize = 72;
+        private const int CatWidth = 92;
+        private const int CatHeight = 40;
         private const int PiperOrder = 4;
         private const int DetailedPixelsPerUnit = 200;
         private const float PanelWidthHeightBalance = 0.5f;
@@ -59,11 +61,12 @@ namespace DigitalStory.Editor
             var breath = LoadOrCreate<BreathConfig>("BreathConfig");
             var flute = LoadOrCreate<FluteConfig>("FluteConfig");
             var rats = LoadOrCreate<RatConfig>("RatConfig");
+            var cats = LoadOrCreate<CatConfig>("CatConfig");
             var endings = LoadOrCreate<EndingTextConfig>("EndingTextConfig");
             TownArtConfig art = LoadOrCreateArt();
             PanelSettings panel = LoadOrCreatePanelSettings();
 
-            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, art, endings, panel));
+            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, art, endings, panel));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuild();
             AssetDatabase.SaveAssets();
@@ -92,24 +95,36 @@ namespace DigitalStory.Editor
             return asset;
         }
 
+        // Only fills in what is missing, so art swapped into the asset survives a rebuild.
         private static TownArtConfig LoadOrCreateArt()
         {
-            string path = $"{GameData}/TownArtConfig.asset";
-
-            if (AssetDatabase.LoadAssetAtPath<TownArtConfig>(path) != null)
-            {
-                return AssetDatabase.LoadAssetAtPath<TownArtConfig>(path);
-            }
-
             var art = LoadOrCreate<TownArtConfig>("TownArtConfig");
             var serialized = new SerializedObject(art);
-            Sprite block = SavePlaceholder("Block", BlockSize, BlockSize, PaintBlock, BlockSize);
-            Sprite rat = SavePlaceholder("Rat", RatWidth, RatHeight, PaintRat, DetailedPixelsPerUnit);
-            Sprite piper = SavePlaceholder("Piper", PiperSize, PiperSize, PaintPiper, DetailedPixelsPerUnit);
 
-            SetObject(serialized, BackingField(nameof(TownArtConfig.BlockSprite)), block);
-            SetObject(serialized, BackingField(nameof(TownArtConfig.RatSprite)), rat);
-            SetObject(serialized, BackingField(nameof(TownArtConfig.PiperSprite)), piper);
+            if (art.BlockSprite == null)
+            {
+                Sprite block = SavePlaceholder("Block", BlockSize, BlockSize, PaintBlock, BlockSize);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.BlockSprite)), block);
+            }
+
+            if (art.RatSprite == null)
+            {
+                Sprite rat = SavePlaceholder("Rat", RatWidth, RatHeight, PaintRat, DetailedPixelsPerUnit);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.RatSprite)), rat);
+            }
+
+            if (art.PiperSprite == null)
+            {
+                Sprite piper = SavePlaceholder("Piper", PiperSize, PiperSize, PaintPiper, DetailedPixelsPerUnit);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.PiperSprite)), piper);
+            }
+
+            if (art.CatSprite == null)
+            {
+                Sprite cat = SavePlaceholder("Cat", CatWidth, CatHeight, PaintCat, DetailedPixelsPerUnit);
+                SetObject(serialized, BackingField(nameof(TownArtConfig.CatSprite)), cat);
+            }
+
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return art;
         }
@@ -153,6 +168,15 @@ namespace DigitalStory.Editor
             bool isHead = IsInEllipse(x, y, width * 0.78f, height * 0.5f, width * 0.17f, height * 0.3f);
             bool isTail = y == height / 2 && x < width * 0.14f;
             return isBody || isHead || isTail ? Color.white : Color.clear;
+        }
+
+        private static Color PaintCat(int x, int y, int width, int height)
+        {
+            bool isBody = IsInEllipse(x, y, width * 0.46f, height * 0.5f, width * 0.27f, height * 0.36f);
+            bool isHead = IsInEllipse(x, y, width * 0.78f, height * 0.5f, width * 0.13f, height * 0.3f);
+            bool isEar = IsInEllipse(x, y, width * 0.84f, height * 0.5f, width * 0.05f, height * 0.46f);
+            bool isTail = Mathf.Abs(y - (height * 0.5f)) < 2f && x < width * 0.24f;
+            return isBody || isHead || isEar || isTail ? Color.white : Color.clear;
         }
 
         private static Color PaintPiper(int x, int y, int width, int height)
@@ -221,6 +245,7 @@ namespace DigitalStory.Editor
 
             var townObject = new GameObject("Town", typeof(TownView));
             var ratsObject = new GameObject("Rats", typeof(RatSwarmView));
+            var catsObject = new GameObject("Cats", typeof(CatView));
 
             var hud = new GameObject("Night Status", typeof(UIDocument), typeof(NightStatusView));
             hud.GetComponent<UIDocument>().panelSettings = assets.Panel;
@@ -233,6 +258,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_breath", assets.Breath);
             SetObject(serialized, "_flute", assets.Flute);
             SetObject(serialized, "_rats", assets.Rats);
+            SetObject(serialized, "_cats", assets.Cats);
             SetObject(serialized, "_art", assets.Art);
             SetObject(serialized, "_endingTexts", assets.Endings);
             SetObject(serialized, "_input", root.GetComponent<PiperInput>());
@@ -240,6 +266,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_townView", townObject.GetComponent<TownView>());
             SetObject(serialized, "_piperView", piperObject.GetComponent<PiperView>());
             SetObject(serialized, "_swarmView", ratsObject.GetComponent<RatSwarmView>());
+            SetObject(serialized, "_catView", catsObject.GetComponent<CatView>());
             SetObject(serialized, "_townCamera", camera.GetComponent<TownCamera>());
             SetObject(serialized, "_statusView", hud.GetComponent<NightStatusView>());
             serialized.ApplyModifiedPropertiesWithoutUndo();
@@ -287,6 +314,7 @@ namespace DigitalStory.Editor
                 BreathConfig breath,
                 FluteConfig flute,
                 RatConfig rats,
+                CatConfig cats,
                 TownArtConfig art,
                 EndingTextConfig endings,
                 PanelSettings panel)
@@ -297,6 +325,7 @@ namespace DigitalStory.Editor
                 Breath = breath;
                 Flute = flute;
                 Rats = rats;
+                Cats = cats;
                 Art = art;
                 Endings = endings;
                 Panel = panel;
@@ -308,6 +337,7 @@ namespace DigitalStory.Editor
             public BreathConfig Breath { get; }
             public FluteConfig Flute { get; }
             public RatConfig Rats { get; }
+            public CatConfig Cats { get; }
             public TownArtConfig Art { get; }
             public EndingTextConfig Endings { get; }
             public PanelSettings Panel { get; }

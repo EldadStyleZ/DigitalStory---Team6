@@ -15,14 +15,15 @@ namespace DigitalStory.Tests.EditMode
             ScriptableObject.CreateInstance<PiperConfig>(),
             ScriptableObject.CreateInstance<BreathConfig>(),
             ScriptableObject.CreateInstance<FluteConfig>(),
-            ScriptableObject.CreateInstance<RatConfig>());
+            ScriptableObject.CreateInstance<RatConfig>(),
+            ScriptableObject.CreateInstance<CatConfig>());
 
         public static NightRules PrototypeNight(int index) => index switch
         {
-            0 => new NightRules(1234, 70, 45, 130f, 3),
-            1 => new NightRules(2211, 170, 115, 150f, 5),
-            2 => new NightRules(3188, 290, 210, 180f, 7),
-            3 => new NightRules(4165, 430, 330, 210f, 9),
+            0 => new NightRules(1234, 70, 45, 130f, 3, 0),
+            1 => new NightRules(2211, 170, 115, 150f, 5, 1),
+            2 => new NightRules(3188, 290, 210, 180f, 7, 3),
+            3 => new NightRules(4165, 430, 330, 210f, 9, 5),
             _ => throw new ArgumentOutOfRangeException(nameof(index), index, "The prototype has four seeds."),
         };
 

@@ -51,6 +51,16 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator Town_OnLoad_DrawsEveryCat()
+        {
+            CatView cats = Object.FindAnyObjectByType<CatView>();
+
+            Assert.That(_root.Session.Cats.Count, Is.EqualTo(1));
+            Assert.That(cats.transform.childCount, Is.EqualTo(_root.Session.Cats.Count));
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator Town_AfterAFewFrames_RatsMoveOnScreen()
         {
             RatSwarmView rats = Object.FindAnyObjectByType<RatSwarmView>();

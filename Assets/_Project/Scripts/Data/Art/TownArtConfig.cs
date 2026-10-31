@@ -16,6 +16,9 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("The Piper facing right.")]
         public Sprite PiperSprite { get; private set; }
 
+        [field: SerializeField, Tooltip("A cat facing right.")]
+        public Sprite CatSprite { get; private set; }
+
         [field: Header("Town colors")]
         [field: SerializeField, Tooltip("Streets.")]
         public Color GroundColor { get; private set; } = new Color32(0x25, 0x29, 0x37, 0xFF);
@@ -46,6 +49,13 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("A rat under the Piper's spell.")]
         public Color CharmedRatColor { get; private set; } = new Color32(0xFF, 0xC5, 0x52, 0xFF);
+
+        [field: Header("Cat colors")]
+        [field: SerializeField, Tooltip("A cat on the prowl.")]
+        public Color CatColor { get; private set; } = new Color32(0x14, 0x13, 0x1A, 0xFF);
+
+        [field: SerializeField, Tooltip("A cat under the lullaby.")]
+        public Color SleepingCatColor { get; private set; } = new Color32(0x6B, 0x6F, 0x9A, 0xFF);
 
         [field: Header("Framing")]
         [field: SerializeField, Min(1f), Tooltip("How much of the town's height is on screen, in town units.")]

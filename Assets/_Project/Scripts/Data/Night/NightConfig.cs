@@ -7,6 +7,6 @@ namespace DigitalStory.Data
     public sealed class NightConfig : ScriptableObject
     {
         [field: SerializeField, Tooltip("The rats, the goal and the time until dawn.")]
-        public NightRules Rules { get; private set; } = new NightRules(2211, 170, 115, 150f, 5);
+        public NightRules Rules { get; private set; } = new NightRules(2211, 170, 115, 150f, 5, 1);
     }
 }

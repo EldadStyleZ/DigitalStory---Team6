@@ -33,7 +33,10 @@ namespace DigitalStory.Logic
             var houses = new HouseCollider(Town.Houses);
             Rat[] rats = new RatSpawner(rules, houses, townRandom).Spawn(night, Town, rules.PiperStart);
 
+            Cat[] cats = new CatSpawner(rules, townRandom).Spawn(night.CatCount, Town, rules.PiperStart);
+
             Swarm = new RatSwarm(rats, rules, Bank, houses, simulationRandom);
+            Cats = new CatPack(cats, rules, Town, Bank, houses, simulationRandom);
             Piper = new Piper(rules.Piper, rules.Town, Bank, houses, rules.PiperStart);
             Breath = new Breath(rules.Breath);
             Flute = new Flute(rules.Flute);
@@ -47,6 +50,7 @@ namespace DigitalStory.Logic
         public Breath Breath { get; }
         public Flute Flute { get; }
         public RatSwarm Swarm { get; }
+        public CatPack Cats { get; }
         public int Quota { get; }
         public float TimeLimit { get; }
         public float TimeLeft { get; private set; }
@@ -63,7 +67,9 @@ namespace DigitalStory.Logic
             TimeLeft -= deltaTime;
             Piper.Tick(intent.Move, deltaTime);
             PlayFlute(in intent, deltaTime);
-            Swarm.Tick(new SwarmInfluence(Piper.Position, Piper.Facing, Flute.Mode, Flute.MusicRadius), deltaTime);
+            ScareCats();
+            Swarm.Tick(new SwarmInfluence(Piper.Position, Piper.Facing, Flute.Mode, Flute.MusicRadius, Cats), deltaTime);
+            Cats.Tick(Piper.Position, Swarm, deltaTime);
             CheckOutcome();
         }
 
@@ -74,6 +80,14 @@ namespace DigitalStory.Logic
             int wantedHole = Flute.ChooseHole(intent.HeldHoles);
             bool isPlaying = Breath.Tick(wantedHole != Flute.NoHole, deltaTime);
             Flute.Sound(isPlaying ? wantedHole : Flute.NoHole);
+        }
+
+        private void ScareCats()
+        {
+            if (Flute.Mode == FluteMode.Scare)
+            {
+                Cats.HearScare(Piper.Position, Flute.MusicRadius);
+            }
         }
 
         private void RememberPressedHoles(int pressedHoles)

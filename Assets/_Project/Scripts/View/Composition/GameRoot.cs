@@ -30,6 +30,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("How rats behave.")]
         private RatConfig _rats;
 
+        [SerializeField, Tooltip("How cats behave.")]
+        private CatConfig _cats;
+
         [Header("Look and words")]
         [SerializeField, Tooltip("Sprites and colors.")]
         private TownArtConfig _art;
@@ -53,6 +56,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Draws the rats.")]
         private RatSwarmView _swarmView;
 
+        [SerializeField, Tooltip("Draws the cats.")]
+        private CatView _catView;
+
         [SerializeField, Tooltip("Follows the Piper.")]
         private TownCamera _townCamera;
 
@@ -70,7 +76,7 @@ namespace DigitalStory.View
                 return;
             }
 
-            var rules = new GameRules(_town, _piper, _breath, _flute, _rats);
+            var rules = new GameRules(_town, _piper, _breath, _flute, _rats, _cats);
             var townRandom = new Mulberry32Random((uint)_night.Rules.Seed);
             var simulationRandom = new Mulberry32Random((uint)Environment.TickCount);
             Session = new NightSession(rules, _night.Rules, townRandom, simulationRandom);
@@ -80,6 +86,7 @@ namespace DigitalStory.View
             _townView.Initialize(Session.Town, _town, Session.Bank, _art);
             _piperView.Initialize(Session.Piper);
             _swarmView.Initialize(Session.Swarm, _art);
+            _catView.Initialize(Session.Cats, _art);
             _townCamera.Initialize(Session.Piper, _town, _art);
             _statusView.Initialize(Session, _endingTexts);
         }
@@ -87,9 +94,9 @@ namespace DigitalStory.View
         private bool HasEverything()
         {
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
-                && _flute != null && _rats != null && _art != null && _endingTexts != null
+                && _flute != null && _rats != null && _cats != null && _art != null && _endingTexts != null
                 && _input != null && _runner != null && _townView != null && _piperView != null
-                && _swarmView != null && _townCamera != null && _statusView != null;
+                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null;
 
             if (!isComplete)
             {
