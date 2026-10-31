@@ -23,16 +23,10 @@ namespace DigitalStory.View
         private const float KeySize = 17f;
         private const float KeyFontSize = 11f;
         private const float KeyGap = 2f;
-        private const float RestingOpacity = .4f;
-        private const float GlowSeconds = .9f;
-
-        private static readonly Color TextColor = new Color32(0xF3, 0xEA, 0xD6, 0xFF);
-        private static readonly Color KeyTextColor = new Color32(0x1A, 0x12, 0x09, 0xFF);
-        private static readonly Color ChipColor = new Color32(0x12, 0x14, 0x22, 0xD6);
-        private static readonly Color GlowColor = new Color32(0xE8, 0xC5, 0x47, 0xFF);
 
         private NightSession _session;
         private TownArtConfig _art;
+        private HudConfig _hud;
         private VisualElement[] _chips;
         private string[] _chipTexts;
         private float[] _glowLeft;
@@ -43,10 +37,11 @@ namespace DigitalStory.View
         public int ChipCount => _chips?.Length ?? 0;
 
         /// <summary>Supplies the songs to show. Call once, before this object is enabled.</summary>
-        public void Initialize(NightSession session, TownArtConfig art)
+        public void Initialize(NightSession session, TownArtConfig art, HudConfig hud)
         {
             _session = session;
             _art = art;
+            _hud = hud;
 
             int count = session.Songs.Count;
             _chips = new VisualElement[count];
@@ -132,7 +127,7 @@ namespace DigitalStory.View
             VisualElement chip = NewChip();
 
             var title = new Label(song.Title);
-            title.style.color = TextColor;
+            title.style.color = _hud.TextColor;
             title.style.fontSize = TitleFontSize;
             title.style.marginRight = TitleGap;
             title.style.paddingLeft = 0f;
@@ -147,7 +142,7 @@ namespace DigitalStory.View
             return chip;
         }
 
-        private static VisualElement NewChip()
+        private VisualElement NewChip()
         {
             var chip = new VisualElement();
             chip.style.flexDirection = FlexDirection.Row;
@@ -168,7 +163,7 @@ namespace DigitalStory.View
             chip.style.borderBottomWidth = ChipBorder;
             chip.style.borderLeftWidth = ChipBorder;
             chip.style.borderRightWidth = ChipBorder;
-            chip.style.backgroundColor = ChipColor;
+            chip.style.backgroundColor = _hud.PanelColor;
             SetBorderColor(chip, Color.clear);
             return chip;
         }
@@ -188,7 +183,7 @@ namespace DigitalStory.View
             label.style.borderBottomLeftRadius = KeySize / 2f;
             label.style.borderBottomRightRadius = KeySize / 2f;
             label.style.backgroundColor = _art.HoleColor(key);
-            label.style.color = KeyTextColor;
+            label.style.color = _hud.KeyTextColor;
             label.style.fontSize = KeyFontSize;
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
             return label;
@@ -215,7 +210,7 @@ namespace DigitalStory.View
             if (_isGlowing[song] != isGlowing)
             {
                 _isGlowing[song] = isGlowing;
-                SetBorderColor(_chips[song], isGlowing ? GlowColor : Color.clear);
+                SetBorderColor(_chips[song], isGlowing ? _hud.GlowColor : Color.clear);
             }
         }
 
@@ -224,10 +219,10 @@ namespace DigitalStory.View
             if (_isDimmed[song] != isDimmed)
             {
                 _isDimmed[song] = isDimmed;
-                _chips[song].style.opacity = isDimmed ? RestingOpacity : 1f;
+                _chips[song].style.opacity = isDimmed ? _hud.RestingOpacity : 1f;
             }
         }
 
-        private void HandleSongCast(int song) => _glowLeft[song] = GlowSeconds;
+        private void HandleSongCast(int song) => _glowLeft[song] = _hud.GlowSeconds;
     }
 }

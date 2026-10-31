@@ -67,10 +67,11 @@ namespace DigitalStory.Editor
             var songConfig = LoadOrCreate<SongConfig>("SongConfig");
             SongEffect[] songs = LoadOrCreateSongs();
             var endings = LoadOrCreate<EndingTextConfig>("EndingTextConfig");
+            var hud = LoadOrCreate<HudConfig>("HudConfig");
             TownArtConfig art = LoadOrCreateArt();
             PanelSettings panel = LoadOrCreatePanelSettings();
 
-            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, songConfig, songs, art, endings, panel));
+            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, songConfig, songs, art, endings, hud, panel));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuild();
             AssetDatabase.SaveAssets();
@@ -284,6 +285,7 @@ namespace DigitalStory.Editor
             SetObjects(serialized, "_songs", assets.Songs);
             SetObject(serialized, "_art", assets.Art);
             SetObject(serialized, "_endingTexts", assets.Endings);
+            SetObject(serialized, "_hud", assets.Hud);
             SetObject(serialized, "_input", root.GetComponent<PiperInput>());
             SetObject(serialized, "_runner", root.GetComponent<NightRunner>());
             SetObject(serialized, "_townView", townObject.GetComponent<TownView>());
@@ -354,6 +356,7 @@ namespace DigitalStory.Editor
                 SongEffect[] songs,
                 TownArtConfig art,
                 EndingTextConfig endings,
+                HudConfig hud,
                 PanelSettings panel)
             {
                 Night = night;
@@ -367,6 +370,7 @@ namespace DigitalStory.Editor
                 Songs = songs;
                 Art = art;
                 Endings = endings;
+                Hud = hud;
                 Panel = panel;
             }
 
@@ -381,6 +385,7 @@ namespace DigitalStory.Editor
             public SongEffect[] Songs { get; }
             public TownArtConfig Art { get; }
             public EndingTextConfig Endings { get; }
+            public HudConfig Hud { get; }
             public PanelSettings Panel { get; }
         }
     }

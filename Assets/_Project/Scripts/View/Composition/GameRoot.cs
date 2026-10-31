@@ -46,6 +46,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The words shown when the night ends.")]
         private EndingTextConfig _endingTexts;
 
+        [SerializeField, Tooltip("The colors and timing of everything drawn over the game.")]
+        private HudConfig _hud;
+
         [Header("Scene objects")]
         [SerializeField, Tooltip("Reads the keyboard and mouse.")]
         private PiperInput _input;
@@ -97,14 +100,14 @@ namespace DigitalStory.View
             _swarmView.Initialize(Session.Swarm, Session.Stage, _art);
             _catView.Initialize(Session.Cats, _art);
             _townCamera.Initialize(Session.Piper, _town, _art);
-            _statusView.Initialize(Session, _endingTexts);
-            _comboRow.Initialize(Session, _art);
+            _statusView.Initialize(Session, _endingTexts, _hud);
+            _comboRow.Initialize(Session, _art, _hud);
         }
 
         private bool HasEverything()
         {
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
-                && _flute != null && _rats != null && _cats != null && _songConfig != null && _songs.Length > 0 && _art != null && _endingTexts != null
+                && _flute != null && _rats != null && _cats != null && _songConfig != null && _songs.Length > 0 && _art != null && _endingTexts != null && _hud != null
                 && _input != null && _runner != null && _townView != null && _piperView != null
                 && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null;
 
