@@ -12,7 +12,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | F-002 | Add injection, advanced tools and fundamentals guides | Done | EldadStyleZ | `feature/F-002-engineering-guides` | – | 49 EditMode and 21 PlayMode tests in Unity batch mode on a scratch project |
 | F-003 | Lead the rats to the river | Done | EldadStyleZ | `feature/F-003-rats-to-river` | – | 94 EditMode and 10 PlayMode tests in the Editor; Play Mode check with real keyboard and mouse (walking, charming, drowning, status); layout and ending seen in Play Mode captures |
 | F-004 | Cats and songs | Done | EldadStyleZ | `feature/F-004-cats-and-songs` | – | 207 EditMode and 17 PlayMode tests in the Editor; the owner played it with real keys and the nine songs, combos row and cat all worked |
-| F-005 | Menus and HUD | Planned | EldadStyleZ | – | – | – |
+| F-005 | Menus and HUD | In progress | EldadStyleZ | `feature/F-005-menus-and-hud` | `Assets/_Project/Scenes/Town.unity` | – |
 | F-006 | Night, effects and sound | Planned | EldadStyleZ | – | – | – |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
