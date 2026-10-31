@@ -2,6 +2,8 @@ using DigitalStory.Data;
 using DigitalStory.Logic;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools.Constraints;
+using Is = UnityEngine.TestTools.Constraints.Is;
 
 namespace DigitalStory.Tests.EditMode
 {
@@ -85,6 +87,30 @@ namespace DigitalStory.Tests.EditMode
             session.Tick(new PiperIntent(Vector2.zero, 0, 0), FakeSongEffect.CooldownSeconds + 0.1f);
             PlayCombo(session);
             Assert.That(song.CastCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Tick_EverySongRunningAtOnce_AllocatesNothing()
+        {
+            NightRules night = TestRules.PrototypeNight(3);
+            var session = new NightSession(TestRules.Default, night, new Mulberry32Random((uint)night.Seed), new FixedRandomSource());
+            Vector2 anywhere = session.Piper.Position;
+            int[] rats = session.Swarm.GatherNear(anywhere, 100000f);
+            var faint = new FaintTrance(1f);
+            var heart = new HeartTrance(rats.Length, 5f, 6f);
+            var conga = new CongaTrance(session.Swarm, rats, 8, 14f);
+
+            for (int index = 0; index < rats.Length; index++)
+            {
+                RatTrance trance = index % 3 == 0 ? faint : index % 3 == 1 ? (RatTrance)heart : conga;
+                session.Swarm.Enchant(rats[index], trance, 60f, index);
+            }
+
+            session.Stage.StartSurf(60f, 220f);
+            session.Stage.StartChoir(60f);
+            var intent = new PiperIntent(Vector2.left, 1, 0);
+
+            Assert.That(() => session.Tick(in intent, Step), Is.Not.AllocatingGCMemory());
         }
 
         private static FakeSongEffect NewSong() => ScriptableObject.CreateInstance<FakeSongEffect>();
