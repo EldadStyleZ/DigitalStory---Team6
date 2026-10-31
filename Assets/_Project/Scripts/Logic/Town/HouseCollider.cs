@@ -35,7 +35,7 @@ namespace DigitalStory.Logic
             PushOut(ref position, ref noVelocity, radius);
         }
 
-        /// <summary>Moves a circle out of any house it overlaps and stops it moving into the wall.</summary>
+        /// <summary>Moves a circle out of any house it overlaps. A circle touching a wall also stops moving into it.</summary>
         public void PushOut(ref Vector2 position, ref Vector2 velocity, float radius)
         {
             for (int index = 0; index < _houses.Length; index++)
@@ -58,6 +58,7 @@ namespace DigitalStory.Logic
                 }
                 else
                 {
+                    // Like the prototype, this keeps the velocity, so tuning matches the original.
                     LeaveByNearestSide(ref position, in house, radius);
                 }
             }
