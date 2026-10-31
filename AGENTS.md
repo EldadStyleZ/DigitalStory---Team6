@@ -4,7 +4,7 @@ Rules for everyone working in this repo: people, Claude Code and Gemini CLI. `CL
 
 ## Project
 
-- A course game built with Unity 6000.6.7f1 and C#. The concept is not final, so check `FEATURES.md` and keep shared code free of assumptions about it.
+- A course game built with Unity 6000.6.7f1 and C#: The Piper, where a six-hole flute leads rats to the river. `FEATURES.md` holds the plan.
 - The repo is public. Anyone can read everything we commit.
 - `docs/CODING_STANDARDS.md` holds the code rules. Read it before writing C#.
 - `docs/FUNDAMENTALS.md` explains OOP, game programming and Unity basics.
@@ -67,6 +67,8 @@ Assets/
   Plugins/             Third-party code only
 ```
 
+`Tools/` holds scripts that run outside Unity.
+
 Create a folder when the first file needs it, because Git does not keep empty folders. Inside each folder, group files by feature, such as `Scripts/Logic/Inventory/`.
 
 ## Architecture
@@ -103,10 +105,31 @@ npx unity-mcp-cli@1.5.0 setup-mcp claude-code . --transport stdio --no-pin
 npx unity-mcp-cli@1.5.0 setup-mcp gemini . --transport stdio --no-pin
 ```
 
+A fresh clone has no plugin settings, and the plugin then starts in cloud mode. Before you open the project for the first time, create `UserSettings/AI-Game-Developer-Config.json`, using the port from `.mcp.json`:
+
+```json
+{
+  "host": "http://localhost:PORT",
+  "connectionMode": "Custom",
+  "transportMethod": "stdio",
+  "authOption": "none",
+  "keepConnected": true,
+  "keepServerRunning": false,
+  "generateSkillFiles": false,
+  "skillAutoGenerate": { "claude-code": false },
+  "skillsPath": ".claude/skills"
+}
+```
+
 - Local only: never run `unity-mcp-cli login`, and never use `--token`, `--oauth` or `--regenerate-key`.
 - Always run the CLI as `npx unity-mcp-cli@1.5.0`.
+- If the plugin offers an update, choose Skip Version. Changing the version is a team decision.
+- Keep the project out of folders that sync, such as iCloud's Desktop and Documents. Sync leaves ` 2` copies of files, and copied DLLs or scripts stop the project compiling.
 - Keep the plugin's transport on stdio, and leave its skill generation off.
 - Run one AI session per project at a time, because the stdio server owns the port. GitHub Copilot in Rider also reads `.mcp.json`, so it can take the port first.
+- With no AI session running, the plugin logs a connection error every few seconds. If the Console's Error Pause is on, Play Mode pauses about a second after it starts, so keep Error Pause off.
+- The game stops whenever Unity is not the front app, because Run In Background is off. This looks like a freeze, but `isPaused` stays false.
 - Take a screenshot only when the visual result is what you are checking.
 - After code changes, check the console for compile errors, then run tests.
+- To run tests in Unity batch mode, set `UNITY_MCP_KEEP_CONNECTED=false` for that run. Otherwise the plugin's connection errors fail them.
 - If the project path has a space, `unity-mcp-cli close` and `status` can report Unity as not running, and the plugin logs an error on each reload. Quit Unity by hand.
