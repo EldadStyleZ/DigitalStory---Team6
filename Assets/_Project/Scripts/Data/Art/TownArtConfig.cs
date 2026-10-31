@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>The sprites and colors that dress the town. Swap these to change the look without code.</summary>
+    /// <summary>The sprites, colors and framing that dress the town. Swap these to change the look without code.</summary>
     [CreateAssetMenu(menuName = "DigitalStory/Town Art Config", fileName = "TownArtConfig")]
     public sealed class TownArtConfig : ScriptableObject
     {
@@ -46,6 +46,16 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("A rat under the Piper's spell.")]
         public Color CharmedRatColor { get; private set; } = new Color32(0xFF, 0xC5, 0x52, 0xFF);
+
+        [field: Header("Framing")]
+        [field: SerializeField, Min(1f), Tooltip("How much of the town's height is on screen, in town units.")]
+        public float VisibleTownHeight { get; private set; } = 700f;
+
+        [field: SerializeField, Min(1f), Tooltip("Height of each strip of the curved river, in town units.")]
+        public float RiverStripHeight { get; private set; } = 8f;
+
+        [field: SerializeField, Min(0f), Tooltip("Width of the muddy strip before the water, in town units.")]
+        public float BankWidth { get; private set; } = 30f;
 
         public Color RoofColor(int roofStyle) => _roofColors[roofStyle % _roofColors.Length];
     }

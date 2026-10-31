@@ -28,3 +28,6 @@ MonoBehaviour:
   - {r: 0.36862746, g: 0.32941177, b: 0.27450982, a: 1}
   <CalmRatColor>k__BackingField: {r: 0.64705884, g: 0.56078434, b: 0.5019608, a: 1}
   <CharmedRatColor>k__BackingField: {r: 1, g: 0.77254903, b: 0.32156864, a: 1}
+  <VisibleTownHeight>k__BackingField: 700
+  <RiverStripHeight>k__BackingField: 8
+  <BankWidth>k__BackingField: 30

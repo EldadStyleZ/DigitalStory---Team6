@@ -80,7 +80,7 @@ namespace DigitalStory.View
             _townView.Initialize(Session.Town, _town, Session.Bank, _art);
             _piperView.Initialize(Session.Piper);
             _swarmView.Initialize(Session.Swarm, _art);
-            _townCamera.Initialize(Session.Piper, _town);
+            _townCamera.Initialize(Session.Piper, _town, _art);
             _statusView.Initialize(Session, _endingTexts);
         }
 

@@ -13,12 +13,6 @@ namespace DigitalStory.View
         private const int WaterOrder = 1;
         private const int HouseOrder = 2;
 
-        [SerializeField, Min(1f), Tooltip("Height of each strip of the curved river, in town units.")]
-        private float _riverStripHeight = 8f;
-
-        [SerializeField, Min(0f), Tooltip("Width of the muddy strip before the water, in town units.")]
-        private float _bankWidth = 30f;
-
         private TownLayout _layout;
         private TownConfig _town;
         private RiverBank _bank;
@@ -48,14 +42,17 @@ namespace DigitalStory.View
 
         private void AddRiver()
         {
-            for (float y = 0f; y < _town.Height; y += _riverStripHeight)
+            float stripHeight = _art.RiverStripHeight;
+            float bankWidth = _art.BankWidth;
+
+            for (float y = 0f; y < _town.Height; y += stripHeight)
             {
                 float edge = _bank.EdgeAt(y);
                 float endOfShallows = edge + _town.ShallowsWidth;
 
-                AddBlock("Bank", edge - _bankWidth, y, _bankWidth, _riverStripHeight, _art.BankColor, WaterOrder);
-                AddBlock("Shallows", edge, y, _town.ShallowsWidth, _riverStripHeight, _art.ShallowsColor, WaterOrder);
-                AddBlock("River", endOfShallows, y, _town.Width - endOfShallows, _riverStripHeight, _art.RiverColor, WaterOrder);
+                AddBlock("Bank", edge - bankWidth, y, bankWidth, stripHeight, _art.BankColor, WaterOrder);
+                AddBlock("Shallows", edge, y, _town.ShallowsWidth, stripHeight, _art.ShallowsColor, WaterOrder);
+                AddBlock("River", endOfShallows, y, _town.Width - endOfShallows, stripHeight, _art.RiverColor, WaterOrder);
             }
         }
 

@@ -12,18 +12,17 @@ namespace DigitalStory.View
     {
         private const float CameraDepth = -10f;
 
-        [SerializeField, Min(1f), Tooltip("How much of the town's height is on screen, in town units.")]
-        private float _visibleTownHeight = 700f;
-
         private Camera _camera;
         private Piper _piper;
         private TownConfig _town;
+        private TownArtConfig _art;
 
         /// <summary>Supplies what to follow. Call once, before this object starts.</summary>
-        public void Initialize(Piper piper, TownConfig town)
+        public void Initialize(Piper piper, TownConfig town, TownArtConfig art)
         {
             _piper = piper;
             _town = town;
+            _art = art;
         }
 
         private void Awake()
@@ -39,11 +38,12 @@ namespace DigitalStory.View
                 return;
             }
 
-            _camera.orthographicSize = TownSpace.ToSceneLength(_visibleTownHeight) / 2f;
+            float visibleHeight = _art.VisibleTownHeight;
+            _camera.orthographicSize = TownSpace.ToSceneLength(visibleHeight) / 2f;
 
-            float visibleWidth = _visibleTownHeight * _camera.aspect;
+            float visibleWidth = visibleHeight * _camera.aspect;
             float x = Follow(_piper.Position.x, visibleWidth, _town.Width);
-            float y = Follow(_piper.Position.y, _visibleTownHeight, _town.Height);
+            float y = Follow(_piper.Position.y, visibleHeight, _town.Height);
 
             Vector3 position = TownSpace.ToScene(new Vector2(x, y));
             position.z = CameraDepth;
