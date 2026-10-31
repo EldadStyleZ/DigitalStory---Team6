@@ -7,10 +7,10 @@ namespace DigitalStory.Logic
     /// <remarks>Each kind is a class of its own, so a new song plugs in without changing the swarm.</remarks>
     public abstract class RatTrance
     {
-        /// <summary>True when cats and other songs cannot touch the rat.</summary>
+        /// <summary>True when cats ignore the rat and crowd songs leave it out. Dance still charms it.</summary>
         public virtual bool IsOutOfReach => false;
 
-        /// <summary>True when the trance moves the rat itself, which takes it out of the flock.</summary>
+        /// <summary>True when the trance moves the rat itself. Other rats still count it as a neighbour.</summary>
         public virtual bool MovesTheRat => false;
 
         public virtual RatLook Look => RatLook.Normal;

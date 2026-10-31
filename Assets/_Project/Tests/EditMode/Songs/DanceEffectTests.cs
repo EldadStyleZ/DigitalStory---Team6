@@ -29,6 +29,17 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Cast_RatPlayingDead_StillGetsCharmed()
+        {
+            var world = new SongWorld(new[] { SongWorld.RatBeside(10f) });
+            world.Swarm.Enchant(0, new FaintTrance(1f), 5f);
+
+            world.Cast<DanceEffect>();
+
+            Assert.That(world.Swarm[0].Charm, Is.EqualTo(1f));
+        }
+
+        [Test]
         public void Cast_DeadRat_StaysUncharmed()
         {
             Rat dead = SongWorld.RatBeside(10f);

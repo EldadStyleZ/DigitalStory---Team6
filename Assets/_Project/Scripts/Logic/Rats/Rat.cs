@@ -47,7 +47,7 @@ namespace DigitalStory.Logic
             TranceDrift = Vector2.zero;
         }
 
-        /// <summary>True when cats and songs cannot touch this rat.</summary>
+        /// <summary>True when cats ignore this rat and crowd songs leave it out.</summary>
         public readonly bool IsOutOfReach => Trance != null && Trance.IsOutOfReach;
     }
 }
