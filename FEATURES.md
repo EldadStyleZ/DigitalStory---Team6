@@ -10,7 +10,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 |---|---|---|---|---|---|---|
 | F-001 | Choose the game concept | Done | Team | – | – | Team chose its HTML prototype, The Piper |
 | F-002 | Add injection, advanced tools and fundamentals guides | Done | EldadStyleZ | `feature/F-002-engineering-guides` | – | 49 EditMode and 21 PlayMode tests in Unity batch mode on a scratch project |
-| F-003 | Lead the rats to the river | In progress | EldadStyleZ | `feature/F-003-rats-to-river` | `Assets/_Project/Scenes/Town.unity` | – |
+| F-003 | Lead the rats to the river | Done | EldadStyleZ | `feature/F-003-rats-to-river` | – | 89 EditMode and 10 PlayMode tests in the Editor; Play Mode check with real keyboard and mouse (walking, charming, drowning, status); layout and ending seen in Play Mode captures |
 | F-004 | Cats and songs | Planned | EldadStyleZ | – | – | – |
 | F-005 | Menus and HUD | Planned | EldadStyleZ | – | – | – |
 | F-006 | Night, effects and sound | Planned | EldadStyleZ | – | – | – |
@@ -91,8 +91,9 @@ flowchart LR
 
 - **Goal:** cats hunt rats, and note sequences cast the nine songs.
 - **Done when:** in Play Mode, a cat eats rats, holes 5 and 6 drive it off, and every song casts from its keys.
-- **Layers:** Data holds cat config and song definitions. Logic holds cat behaviour, the song matcher and one `SongEffect` strategy per song. View holds the cat view and song effect visuals.
+- **Layers:** Data holds cat config and song definitions. Logic holds cat behaviour, the song matcher and one `SongEffect` strategy per song. View holds the cat view, song effect visuals and the combos row, which lists each song's keys.
 - **Tests:** cat patrol, hunt, eat pause, flee and sleep; longest sequence matches first; the three-second note window in game time; cooldowns; each song's effect.
+- **Notes:** the combos row ships here, with the rules, so every combo it shows really casts. The on-screen flute stays in F-005.
 
 ### F-005: Menus and HUD
 
