@@ -13,6 +13,7 @@ namespace DigitalStory.Tests.EditMode
         public SongWorld(Rat[] rats, params Cat[] cats)
         {
             Random = new FixedRandomSource();
+            Stage = new SongStage();
             Swarm = new RatSwarm(rats, TestRules.Default, TestRules.Bank(), TestRules.NoHouses(), Random);
             var town = new TownLayout(6, 7, Array.Empty<House>(), Array.Empty<Junction>(), Array.Empty<Vector2>());
             Cats = new CatPack(cats, TestRules.Default, town, TestRules.Bank(), TestRules.NoHouses(), Random);
@@ -20,6 +21,7 @@ namespace DigitalStory.Tests.EditMode
 
         public RatSwarm Swarm { get; }
         public CatPack Cats { get; }
+        public SongStage Stage { get; }
         public IRandomSource Random { get; }
 
         public static Rat RatAt(Vector2 position) => new Rat(position, position, 0f, 0f);
@@ -30,15 +32,14 @@ namespace DigitalStory.Tests.EditMode
 
         public void Cast<T>() where T : SongEffect => Cast(ScriptableObject.CreateInstance<T>());
 
-        public void Cast(SongEffect song) => song.Cast(new SongContext(Piper, Swarm, Cats, Random));
+        public void Cast(SongEffect song) => song.Cast(new SongContext(Piper, Swarm, Cats, Stage, Random));
 
         public void Run(float seconds, float step = 1f / 60f)
         {
-            var influence = new SwarmInfluence(Piper, 0f, FluteMode.None, 0f, Cats);
-
             for (float time = 0f; time < seconds; time += step)
             {
-                Swarm.Tick(in influence, step);
+                Stage.Tick(step);
+                Swarm.Tick(new SwarmInfluence(Piper, 0f, FluteMode.None, 0f, Cats, Stage.CharmZoneRadius), step);
             }
         }
     }

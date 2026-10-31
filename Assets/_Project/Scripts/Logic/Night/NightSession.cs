@@ -43,6 +43,7 @@ namespace DigitalStory.Logic
             Breath = new Breath(rules.Breath);
             Flute = new Flute(rules.Flute);
             Songs = new SongBook(rules.Songs.Select(song => song.Song).ToArray(), rules.SongConfig, rules.Flute.HoleCount);
+            Stage = new SongStage();
             _simulationRandom = simulationRandom;
         }
 
@@ -59,6 +60,7 @@ namespace DigitalStory.Logic
         public RatSwarm Swarm { get; }
         public CatPack Cats { get; }
         public SongBook Songs { get; }
+        public SongStage Stage { get; }
         public int Quota { get; }
         public float TimeLimit { get; }
         public float TimeLeft { get; private set; }
@@ -76,8 +78,11 @@ namespace DigitalStory.Logic
             Piper.Tick(intent.Move, deltaTime);
             PlayFlute(in intent, deltaTime);
             Songs.Tick(deltaTime);
+            Stage.Tick(deltaTime);
             ScareCats();
-            Swarm.Tick(new SwarmInfluence(Piper.Position, Piper.Facing, Flute.Mode, Flute.MusicRadius, Cats), deltaTime);
+            Swarm.Tick(
+                new SwarmInfluence(Piper.Position, Piper.Facing, Flute.Mode, Flute.MusicRadius, Cats, Stage.CharmZoneRadius),
+                deltaTime);
             Cats.Tick(Piper.Position, Swarm, deltaTime);
             CheckOutcome();
         }
@@ -122,7 +127,7 @@ namespace DigitalStory.Logic
 
             if (song != SongBook.NoSong)
             {
-                _rules.Songs[song].Cast(new SongContext(Piper.Position, Swarm, Cats, _simulationRandom));
+                _rules.Songs[song].Cast(new SongContext(Piper.Position, Swarm, Cats, Stage, _simulationRandom));
                 SongCast?.Invoke(song);
             }
         }

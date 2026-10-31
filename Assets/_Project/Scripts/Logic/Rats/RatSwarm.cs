@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using DigitalStory.Data;
 using UnityEngine;
 
@@ -24,6 +25,8 @@ namespace DigitalStory.Logic
         private readonly IRandomSource _random;
         private readonly RatGrid _grid;
         private readonly float _neighbourRadiusSquared;
+
+        private float _time;
 
         public RatSwarm(Rat[] rats, GameRules rules, RiverBank bank, HouseCollider houses, IRandomSource random)
         {
@@ -75,6 +78,34 @@ namespace DigitalStory.Logic
             }
         }
 
+        /// <summary>Finds the living rats in range that songs can reach, nearest first.</summary>
+        /// <remarks>Allocates, so call it only when a song is cast.</remarks>
+        public int[] GatherNear(Vector2 centre, float radius)
+        {
+            return Enumerable.Range(0, _rats.Length)
+                .Where(index => CanBeGathered(in _rats[index], centre, radius))
+                .OrderBy(index => Vector2.Distance(_rats[index].Position, centre))
+                .ToArray();
+        }
+
+        /// <summary>Fully charms one rat.</summary>
+        public void FullyCharm(int index) => _rats[index].Charm = 1f;
+
+        /// <summary>Puts a rat in a trance, replacing any it was already in.</summary>
+        /// <param name="index">The rat.</param>
+        /// <param name="trance">What holds it.</param>
+        /// <param name="seconds">How long it lasts.</param>
+        /// <param name="slot">Its place in a formation.</param>
+        /// <param name="drift">Its own random drift while floating.</param>
+        public void Enchant(int index, RatTrance trance, float seconds, int slot = 0, Vector2 drift = default)
+        {
+            ref Rat rat = ref _rats[index];
+            rat.Trance = trance;
+            rat.TranceLeft = seconds;
+            rat.TranceSlot = slot;
+            rat.TranceDrift = drift;
+        }
+
         /// <summary>Removes a rat that a cat caught.</summary>
         public void Eat(int index)
         {
@@ -86,6 +117,7 @@ namespace DigitalStory.Logic
         /// <summary>Advances every living rat by one step.</summary>
         public void Tick(in SwarmInfluence influence, float deltaTime)
         {
+            _time += deltaTime;
             SortIntoGrid();
 
             for (int index = 0; index < _rats.Length; index++)
@@ -95,6 +127,11 @@ namespace DigitalStory.Logic
                     UpdateRat(index, in influence, deltaTime);
                 }
             }
+        }
+
+        private static bool CanBeGathered(in Rat rat, Vector2 centre, float radius)
+        {
+            return rat.IsAlive && !rat.IsOutOfReach && Vector2.Distance(rat.Position, centre) < radius;
         }
 
         private void SortIntoGrid()
@@ -113,11 +150,19 @@ namespace DigitalStory.Logic
         private void UpdateRat(int index, in SwarmInfluence influence, float deltaTime)
         {
             ref Rat rat = ref _rats[index];
+
+            if (rat.Trance != null && rat.Trance.MovesTheRat)
+            {
+                UpdateRatInTrance(ref rat, deltaTime);
+                return;
+            }
+
             NeighbourSurvey neighbours = SurveyNeighbours(index);
 
             Vector2 force = FlockingForce(in rat, in neighbours) + WanderForce(ref rat, deltaTime);
             force += UpdateCharm(ref rat, in influence, neighbours.HighestCharm, deltaTime);
             force += rat.Charm > _config.MinimumFollowCharm ? FollowForce(in rat, in influence) : HomeForce(in rat);
+            CountDownFormation(ref rat, deltaTime);
 
             float bankEdge = _bank.EdgeAt(rat.Position.y);
             force += BankFearForce(in rat, bankEdge);
@@ -127,6 +172,26 @@ namespace DigitalStory.Logic
             BounceOffTownEdges(ref rat);
 
             if (rat.Position.x > bankEdge + _config.DrownMargin)
+            {
+                Drown(ref rat);
+            }
+        }
+
+        private void UpdateRatInTrance(ref Rat rat, float deltaTime)
+        {
+            var step = new TranceStep(deltaTime, _time, _town, _houses, _config.Radius);
+            rat.TranceLeft -= deltaTime;
+            rat.Trance.Move(ref rat, in step);
+
+            if (rat.TranceLeft > 0f)
+            {
+                return;
+            }
+
+            rat.Trance.Finish(ref rat, in step);
+            rat.Trance = null;
+
+            if (rat.Position.x > _bank.EdgeAt(rat.Position.y) + _config.DrownMargin)
             {
                 Drown(ref rat);
             }
@@ -215,6 +280,13 @@ namespace DigitalStory.Logic
         {
             Vector2 toPiper = influence.PiperPosition - rat.Position;
             float distance = toPiper.magnitude;
+
+            if (rat.Trance != null || distance < influence.CharmZoneRadius)
+            {
+                rat.Charm = 1f;
+                return Vector2.zero;
+            }
+
             bool isInMusic = distance < influence.MusicRadius;
 
             if (influence.Mode == FluteMode.Scare && isInMusic)
@@ -263,7 +335,12 @@ namespace DigitalStory.Logic
             Vector2 target = influence.PiperPosition;
             float stopDistance = _config.FollowStopDistance;
 
-            if (influence.Mode == FluteMode.March)
+            if (rat.Trance != null)
+            {
+                target = rat.Trance.Target(in rat, influence.PiperPosition);
+                stopDistance = rat.Trance.StopDistance;
+            }
+            else if (influence.Mode == FluteMode.March)
             {
                 var heading = new Vector2(Mathf.Cos(influence.PiperFacing), Mathf.Sin(influence.PiperFacing));
                 target += heading * _flute.MarchDistance;
@@ -278,6 +355,21 @@ namespace DigitalStory.Logic
             Vector2 desiredVelocity = toTarget / safeDistance * speed;
 
             return (desiredVelocity - rat.Velocity) * (_config.SteeringStrength * rat.Charm);
+        }
+
+        private static void CountDownFormation(ref Rat rat, float deltaTime)
+        {
+            if (rat.Trance == null)
+            {
+                return;
+            }
+
+            rat.TranceLeft -= deltaTime;
+
+            if (rat.TranceLeft <= 0f)
+            {
+                rat.Trance = null;
+            }
         }
 
         private Vector2 HomeForce(in Rat rat)

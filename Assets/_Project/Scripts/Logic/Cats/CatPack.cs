@@ -127,7 +127,7 @@ namespace DigitalStory.Logic
             {
                 ref readonly Rat rat = ref swarm[index];
 
-                if (!rat.IsAlive)
+                if (!rat.IsAlive || rat.IsOutOfReach)
                 {
                     continue;
                 }
