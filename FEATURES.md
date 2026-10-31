@@ -13,7 +13,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | F-003 | Lead the rats to the river | Done | EldadStyleZ | `feature/F-003-rats-to-river` | – | 94 EditMode and 10 PlayMode tests in the Editor; Play Mode check with real keyboard and mouse (walking, charming, drowning, status); layout and ending seen in Play Mode captures |
 | F-004 | Cats and songs | Done | EldadStyleZ | `feature/F-004-cats-and-songs` | – | 207 EditMode and 17 PlayMode tests in the Editor; the owner played it with real keys and the nine songs, combos row and cat all worked |
 | F-005 | Menus and HUD | Done | EldadStyleZ | `feature/F-005-menus-and-hud` | – | 224 EditMode and 61 PlayMode tests in the Editor; the owner played it with real keys and mouse and the screens, pause, retry, flute and minimap all worked |
-| F-006 | Night, effects and sound | In progress | EldadStyleZ | `feature/F-006-night-effects-sound` | `Assets/_Project/Scenes/Town.unity` | – |
+| F-006 | Night, effects and sound | Done | EldadStyleZ | `feature/F-006-night-effects-sound` | – | 247 EditMode and 156 PlayMode tests in the Editor; the owner played and listened and the flute, effects, mute and night look all worked; Profiler at 170 rats with all effects on: 1.32 ms average and 2.35 ms worst per frame in the Editor, 0.197 ms per rule tick |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
 - **Holding:** the scenes and prefabs the owner is changing. Nobody else edits them until this cell is cleared, because Unity scenes merge badly.
@@ -110,7 +110,7 @@ flowchart LR
 - **Done when:** lamps light a dark town, the sky warms towards dawn, and notes, ripples, rings, the flute and sound effects all play.
 - **Layers:** Data holds effect and audio configs. Logic only exposes the dawn value. View holds the darkness overlay, pooled effects and generated flute sound.
 - **Tests:** the dawn value, plus a Profiler check at the full rat count.
-- **Notes:** the prototype's mute button and its moving moon-and-sun bar wait for this feature, because they need sound and the dawn value.
+- **Notes:** the prototype's mute button and its moving moon-and-sun bar ship here, because they need sound and the dawn value. Changing audio device stops every source and empties clips made in code, so the flute restarts and the effects bake again. Unity's first read of the listener is blank even with sound playing, so PlayMode tests read it through `ListenerMeter`. Disco lights keep orbiting during Pause, as in the prototype. Left out on purpose: cobblestones, roof detail, water flow lines, a detailed Piper, rat tails and eye glints, and the March target line. Touch is not tested.
 
 ## Ideas
 
