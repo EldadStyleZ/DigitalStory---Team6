@@ -1,0 +1,13 @@
+{
+    "name": "DigitalStory.Editor",
+    "rootNamespace": "DigitalStory.Editor",
+    "references": [
+        "DigitalStory.Data",
+        "DigitalStory.Logic",
+        "DigitalStory.View"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": false
+}

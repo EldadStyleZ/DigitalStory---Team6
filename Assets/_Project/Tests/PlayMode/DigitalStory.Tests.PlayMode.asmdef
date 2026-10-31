@@ -1,0 +1,19 @@
+{
+    "name": "DigitalStory.Tests.PlayMode",
+    "rootNamespace": "DigitalStory.Tests.PlayMode",
+    "references": [
+        "DigitalStory.Data",
+        "DigitalStory.Logic",
+        "DigitalStory.View",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ]
+}
