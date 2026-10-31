@@ -61,6 +61,20 @@ namespace DigitalStory.Logic
 
         public bool IsCharmed(int index) => _rats[index].Charm > _config.CharmedAt;
 
+        /// <summary>Fully charms every living rat in range.</summary>
+        public void CharmEveryRatNear(Vector2 centre, float radius)
+        {
+            for (int index = 0; index < _rats.Length; index++)
+            {
+                ref Rat rat = ref _rats[index];
+
+                if (rat.IsAlive && Vector2.Distance(rat.Position, centre) < radius)
+                {
+                    rat.Charm = 1f;
+                }
+            }
+        }
+
         /// <summary>Removes a rat that a cat caught.</summary>
         public void Eat(int index)
         {

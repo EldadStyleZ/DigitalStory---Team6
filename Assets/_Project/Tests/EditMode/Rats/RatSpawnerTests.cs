@@ -66,8 +66,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var ratConfig = ScriptableObject.CreateInstance<RatConfig>();
             JsonUtility.FromJsonOverwrite(BeyondTheWholeTown, ratConfig);
-            GameRules defaults = TestRules.Default;
-            var rules = new GameRules(defaults.Town, defaults.Piper, defaults.Breath, defaults.Flute, ratConfig, defaults.Cats);
+            GameRules rules = TestRules.With(rats: ratConfig);
             NightRules night = TestRules.PrototypeNight(0);
             TownLayout town = new TownGenerator(rules.Town, new Mulberry32Random((uint)night.Seed)).Generate();
             var spawner = new RatSpawner(rules, TestRules.NoHouses(), new LimitedRandomSource(MostDraws));

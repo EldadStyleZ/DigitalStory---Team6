@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using DigitalStory.Data;
 
 namespace DigitalStory.Logic
@@ -7,6 +8,7 @@ namespace DigitalStory.Logic
     public sealed class NightSession
     {
         private readonly GameRules _rules;
+        private readonly IRandomSource _simulationRandom;
 
         /// <param name="rules">The configs a night runs on.</param>
         /// <param name="night">The numbers for this night.</param>
@@ -40,9 +42,14 @@ namespace DigitalStory.Logic
             Piper = new Piper(rules.Piper, rules.Town, Bank, houses, rules.PiperStart);
             Breath = new Breath(rules.Breath);
             Flute = new Flute(rules.Flute);
+            Songs = new SongBook(rules.Songs.Select(song => song.Song).ToArray(), rules.SongConfig, rules.Flute.HoleCount);
+            _simulationRandom = simulationRandom;
         }
 
         public event Action<NightOutcome> Ended;
+
+        /// <summary>Raised with a song's index in <see cref="Songs"/> when it is cast.</summary>
+        public event Action<int> SongCast;
 
         public TownLayout Town { get; }
         public RiverBank Bank { get; }
@@ -51,6 +58,7 @@ namespace DigitalStory.Logic
         public Flute Flute { get; }
         public RatSwarm Swarm { get; }
         public CatPack Cats { get; }
+        public SongBook Songs { get; }
         public int Quota { get; }
         public float TimeLimit { get; }
         public float TimeLeft { get; private set; }
@@ -67,6 +75,7 @@ namespace DigitalStory.Logic
             TimeLeft -= deltaTime;
             Piper.Tick(intent.Move, deltaTime);
             PlayFlute(in intent, deltaTime);
+            Songs.Tick(deltaTime);
             ScareCats();
             Swarm.Tick(new SwarmInfluence(Piper.Position, Piper.Facing, Flute.Mode, Flute.MusicRadius, Cats), deltaTime);
             Cats.Tick(Piper.Position, Swarm, deltaTime);
@@ -97,7 +106,24 @@ namespace DigitalStory.Logic
                 if ((pressedHoles & (1 << hole)) != 0)
                 {
                     Flute.Press(hole);
+                    PlayNote(hole);
                 }
+            }
+        }
+
+        private void PlayNote(int hole)
+        {
+            if (Breath.IsExhausted || Breath.Current <= 0f)
+            {
+                return;
+            }
+
+            int song = Songs.Press(hole);
+
+            if (song != SongBook.NoSong)
+            {
+                _rules.Songs[song].Cast(new SongContext(Piper.Position, Swarm, Cats, _simulationRandom));
+                SongCast?.Invoke(song);
             }
         }
 

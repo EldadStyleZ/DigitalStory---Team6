@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
@@ -16,7 +17,26 @@ namespace DigitalStory.Tests.EditMode
             ScriptableObject.CreateInstance<BreathConfig>(),
             ScriptableObject.CreateInstance<FluteConfig>(),
             ScriptableObject.CreateInstance<RatConfig>(),
-            ScriptableObject.CreateInstance<CatConfig>());
+            ScriptableObject.CreateInstance<CatConfig>(),
+            ScriptableObject.CreateInstance<SongConfig>(),
+            Array.Empty<SongEffect>());
+
+        /// <summary>The default rules with some configs swapped out.</summary>
+        public static GameRules With(RatConfig rats = null, CatConfig cats = null, IReadOnlyList<SongEffect> songs = null)
+        {
+            GameRules rules = Default;
+            return new GameRules(
+                rules.Town,
+                rules.Piper,
+                rules.Breath,
+                rules.Flute,
+                rats != null ? rats : rules.Rats,
+                cats != null ? cats : rules.Cats,
+                rules.SongConfig,
+                songs ?? rules.Songs);
+        }
+
+        public static GameRules WithSongs(params SongEffect[] songs) => With(songs: songs);
 
         public static NightRules PrototypeNight(int index) => index switch
         {

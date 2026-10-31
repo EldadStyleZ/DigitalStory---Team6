@@ -53,8 +53,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var catConfig = ScriptableObject.CreateInstance<CatConfig>();
             JsonUtility.FromJsonOverwrite(BeyondTheWholeTown, catConfig);
-            GameRules defaults = TestRules.Default;
-            var rules = new GameRules(defaults.Town, defaults.Piper, defaults.Breath, defaults.Flute, defaults.Rats, catConfig);
+            GameRules rules = TestRules.With(cats: catConfig);
             var random = new Mulberry32Random(1);
             TownLayout town = new TownGenerator(rules.Town, random).Generate();
             var spawner = new CatSpawner(rules, random);

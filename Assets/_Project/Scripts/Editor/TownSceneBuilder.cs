@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using DigitalStory.Data;
+using DigitalStory.Logic;
 using DigitalStory.View;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -20,6 +21,7 @@ namespace DigitalStory.Editor
     {
         private const string Root = "Assets/_Project";
         private const string GameData = Root + "/GameData";
+        private const string SongsFolder = "Songs";
         private const string Placeholders = Root + "/Art/Placeholders";
         private const string UiFolder = Root + "/UI";
         private const string ScenePath = Root + "/Scenes/Town.unity";
@@ -62,11 +64,13 @@ namespace DigitalStory.Editor
             var flute = LoadOrCreate<FluteConfig>("FluteConfig");
             var rats = LoadOrCreate<RatConfig>("RatConfig");
             var cats = LoadOrCreate<CatConfig>("CatConfig");
+            var songConfig = LoadOrCreate<SongConfig>("SongConfig");
+            SongEffect[] songs = LoadOrCreateSongs();
             var endings = LoadOrCreate<EndingTextConfig>("EndingTextConfig");
             TownArtConfig art = LoadOrCreateArt();
             PanelSettings panel = LoadOrCreatePanelSettings();
 
-            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, art, endings, panel));
+            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, songConfig, songs, art, endings, panel));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuild();
             AssetDatabase.SaveAssets();
@@ -74,7 +78,7 @@ namespace DigitalStory.Editor
 
         private static void CreateFolders()
         {
-            Directory.CreateDirectory(GameData);
+            Directory.CreateDirectory($"{GameData}/{SongsFolder}");
             Directory.CreateDirectory(Placeholders);
             Directory.CreateDirectory(UiFolder);
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
@@ -93,6 +97,16 @@ namespace DigitalStory.Editor
             }
 
             return asset;
+        }
+
+        // The order here is the order on the combos row.
+        private static SongEffect[] LoadOrCreateSongs()
+        {
+            return new SongEffect[]
+            {
+                LoadOrCreate<LullabyEffect>($"{SongsFolder}/LullabySong"),
+                LoadOrCreate<DanceEffect>($"{SongsFolder}/DanceSong"),
+            };
         }
 
         // Only fills in what is missing, so art swapped into the asset survives a rebuild.
@@ -259,6 +273,8 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_flute", assets.Flute);
             SetObject(serialized, "_rats", assets.Rats);
             SetObject(serialized, "_cats", assets.Cats);
+            SetObject(serialized, "_songConfig", assets.SongConfig);
+            SetObjects(serialized, "_songs", assets.Songs);
             SetObject(serialized, "_art", assets.Art);
             SetObject(serialized, "_endingTexts", assets.Endings);
             SetObject(serialized, "_input", root.GetComponent<PiperInput>());
@@ -305,6 +321,17 @@ namespace DigitalStory.Editor
             property.objectReferenceValue = value;
         }
 
+        private static void SetObjects(SerializedObject target, string propertyName, Object[] values)
+        {
+            SerializedProperty property = target.FindProperty(propertyName);
+            property.arraySize = values.Length;
+
+            for (int index = 0; index < values.Length; index++)
+            {
+                property.GetArrayElementAtIndex(index).objectReferenceValue = values[index];
+            }
+        }
+
         private readonly struct SceneAssets
         {
             public SceneAssets(
@@ -315,6 +342,8 @@ namespace DigitalStory.Editor
                 FluteConfig flute,
                 RatConfig rats,
                 CatConfig cats,
+                SongConfig songConfig,
+                SongEffect[] songs,
                 TownArtConfig art,
                 EndingTextConfig endings,
                 PanelSettings panel)
@@ -326,6 +355,8 @@ namespace DigitalStory.Editor
                 Flute = flute;
                 Rats = rats;
                 Cats = cats;
+                SongConfig = songConfig;
+                Songs = songs;
                 Art = art;
                 Endings = endings;
                 Panel = panel;
@@ -338,6 +369,8 @@ namespace DigitalStory.Editor
             public FluteConfig Flute { get; }
             public RatConfig Rats { get; }
             public CatConfig Cats { get; }
+            public SongConfig SongConfig { get; }
+            public SongEffect[] Songs { get; }
             public TownArtConfig Art { get; }
             public EndingTextConfig Endings { get; }
             public PanelSettings Panel { get; }

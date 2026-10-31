@@ -244,8 +244,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var catConfig = ScriptableObject.CreateInstance<CatConfig>();
             JsonUtility.FromJsonOverwrite("{\"<ScareExtraRange>k__BackingField\":100000}", catConfig);
-            GameRules defaults = TestRules.Default;
-            var rules = new GameRules(defaults.Town, defaults.Piper, defaults.Breath, defaults.Flute, defaults.Rats, catConfig);
+            GameRules rules = TestRules.With(cats: catConfig);
             NightRules night = TestRules.PrototypeNight(1);
             return new NightSession(rules, night, new Mulberry32Random((uint)night.Seed), new FixedRandomSource());
         }

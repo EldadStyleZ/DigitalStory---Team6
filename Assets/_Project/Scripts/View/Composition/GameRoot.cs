@@ -33,6 +33,12 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("How cats behave.")]
         private CatConfig _cats;
 
+        [SerializeField, Tooltip("How the flute remembers notes.")]
+        private SongConfig _songConfig;
+
+        [SerializeField, Tooltip("Every song the flute can cast, in the order the combos row shows them.")]
+        private SongEffect[] _songs = new SongEffect[0];
+
         [Header("Look and words")]
         [SerializeField, Tooltip("Sprites and colors.")]
         private TownArtConfig _art;
@@ -76,7 +82,7 @@ namespace DigitalStory.View
                 return;
             }
 
-            var rules = new GameRules(_town, _piper, _breath, _flute, _rats, _cats);
+            var rules = new GameRules(_town, _piper, _breath, _flute, _rats, _cats, _songConfig, _songs);
             var townRandom = new Mulberry32Random((uint)_night.Rules.Seed);
             var simulationRandom = new Mulberry32Random((uint)Environment.TickCount);
             Session = new NightSession(rules, _night.Rules, townRandom, simulationRandom);
@@ -94,7 +100,7 @@ namespace DigitalStory.View
         private bool HasEverything()
         {
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
-                && _flute != null && _rats != null && _cats != null && _art != null && _endingTexts != null
+                && _flute != null && _rats != null && _cats != null && _songConfig != null && _art != null && _endingTexts != null
                 && _input != null && _runner != null && _townView != null && _piperView != null
                 && _swarmView != null && _catView != null && _townCamera != null && _statusView != null;
 
