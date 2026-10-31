@@ -22,6 +22,7 @@ namespace DigitalStory.View
         private float _nextSplash;
         private float _beatWait;
         private int _beatCount;
+        private bool _wasDisco;
 
         /// <summary>How many sounds have played, for tests and debugging.</summary>
         public int PlayCount { get; private set; }
@@ -49,6 +50,7 @@ namespace DigitalStory.View
                 return;
             }
 
+            AudioSettings.OnAudioConfigurationChanged += HandleAudioChanged;
             _flow.Changed += HandleFlowChanged;
             _session.SongCast += HandleSongCast;
             _session.Swarm.RatDrowned += HandleRatDrowned;
@@ -75,6 +77,15 @@ namespace DigitalStory.View
 
             bool isDisco = _session.Stage.IsDiscoing;
 
+            // Every Disco starts on the same beat, however the last dance left the count.
+            if (isDisco && !_wasDisco)
+            {
+                _beatCount = 0;
+                _beatWait = 0f;
+            }
+
+            _wasDisco = isDisco;
+
             if (!isDisco && !_session.Stage.IsDancingConga)
             {
                 return;
@@ -98,6 +109,7 @@ namespace DigitalStory.View
                 return;
             }
 
+            AudioSettings.OnAudioConfigurationChanged -= HandleAudioChanged;
             _flow.Changed -= HandleFlowChanged;
             _session.SongCast -= HandleSongCast;
             _session.Swarm.RatDrowned -= HandleRatDrowned;
@@ -108,24 +120,41 @@ namespace DigitalStory.View
 
         private void OnDestroy()
         {
+            ForgetEveryClip();
+        }
+
+        private void ForgetEveryClip()
+        {
             // Clips made in code are not freed with the scene.
             foreach (AudioClip clip in _clips.Values)
             {
                 Destroy(clip);
             }
+
+            _clips.Clear();
         }
 
         private void BakeEveryCue()
         {
             SoundCue[] cues =
             {
-                _sound.Squeak, _sound.Splash, _sound.Eaten, _sound.Pop, _sound.SongChime, _sound.Won, _sound.Lost,
+                _sound.Eaten, _sound.Pop, _sound.SongChime, _sound.Won, _sound.Lost,
                 _sound.DiscoKick, _sound.DiscoTick, _sound.CongaBeat, _sound.CongaAccent,
             };
 
             foreach (SoundCue cue in cues)
             {
                 Bake(cue);
+            }
+
+            foreach (SoundCue squeak in _sound.Squeaks)
+            {
+                Bake(squeak);
+            }
+
+            foreach (SoundCue splash in _sound.Splashes)
+            {
+                Bake(splash);
             }
 
             for (int song = 0; song < _session.Songs.Count; song++)
@@ -136,12 +165,14 @@ namespace DigitalStory.View
 
         private void Bake(SoundCue cue)
         {
-            if (cue.Tones.Count == 0)
+            int sampleRate = AudioSettings.outputSampleRate;
+
+            // A machine with no audio device reports no rate, and the game simply plays without sound.
+            if (cue.Tones.Count == 0 || sampleRate <= 0)
             {
                 return;
             }
 
-            int sampleRate = AudioSettings.outputSampleRate;
             float[] samples = ToneBaker.Bake(cue, sampleRate);
             var clip = AudioClip.Create("Generated Sound", samples.Length, 1, sampleRate, false);
             clip.SetData(samples, 0);
@@ -182,8 +213,17 @@ namespace DigitalStory.View
             if (Time.time >= _nextSqueak)
             {
                 _nextSqueak = Time.time + _sound.SqueakGapSeconds;
-                Play(_sound.Squeak);
+                Play(OneOf(_sound.Squeaks));
             }
+        }
+
+        private static SoundCue OneOf(IReadOnlyList<SoundCue> cues) => cues[Random.Range(0, cues.Count)];
+
+        // Changing device, such as plugging in headphones, loses clips made in code.
+        private void HandleAudioChanged(bool deviceWasChanged)
+        {
+            ForgetEveryClip();
+            BakeEveryCue();
         }
 
         private void HandleFlowChanged(GamePhase phase)
@@ -205,7 +245,7 @@ namespace DigitalStory.View
             if (Time.time >= _nextSplash)
             {
                 _nextSplash = Time.time + _sound.SplashGapSeconds;
-                Play(_sound.Splash);
+                Play(OneOf(_sound.Splashes));
             }
         }
 

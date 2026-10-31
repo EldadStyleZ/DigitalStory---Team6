@@ -13,13 +13,14 @@ namespace DigitalStory.Tests.PlayMode
         private const int HalfASecond = SampleRate / 2;
         private const int Mono = 1;
         private const int Stereo = 2;
+        private const int HoleCount = 6;
 
         private static SoundConfig Config => ScriptableObject.CreateInstance<SoundConfig>();
 
         [Test]
         public void Fill_NothingPlaying_IsSilent()
         {
-            var synth = new FluteSynth(Config, SampleRate);
+            var synth = new FluteSynth(Config, SampleRate, HoleCount);
 
             float[] sound = Record(synth, HalfASecond);
 
@@ -29,7 +30,7 @@ namespace DigitalStory.Tests.PlayMode
         [Test]
         public void Fill_PlayingAHole_MakesSound()
         {
-            var synth = new FluteSynth(Config, SampleRate);
+            var synth = new FluteSynth(Config, SampleRate, HoleCount);
             synth.Play(0);
 
             float[] sound = Record(synth, HalfASecond);
@@ -46,7 +47,7 @@ namespace DigitalStory.Tests.PlayMode
         public void Fill_EachHole_SoundsAtItsPitch(int hole)
         {
             SoundConfig config = Config;
-            var synth = new FluteSynth(config, SampleRate);
+            var synth = new FluteSynth(config, SampleRate, HoleCount);
             synth.Play(hole);
             Record(synth, SampleRate / 10);
 
@@ -60,7 +61,7 @@ namespace DigitalStory.Tests.PlayMode
         [Test]
         public void Fill_Always_StaysInRange()
         {
-            var synth = new FluteSynth(Config, SampleRate);
+            var synth = new FluteSynth(Config, SampleRate, HoleCount);
             synth.Play(5);
 
             foreach (float sample in Record(synth, SampleRate))
@@ -72,7 +73,7 @@ namespace DigitalStory.Tests.PlayMode
         [Test]
         public void Fill_AfterStopping_FadesToSilence()
         {
-            var synth = new FluteSynth(Config, SampleRate);
+            var synth = new FluteSynth(Config, SampleRate, HoleCount);
             synth.Play(2);
             Record(synth, HalfASecond);
 
@@ -86,7 +87,7 @@ namespace DigitalStory.Tests.PlayMode
         [Test]
         public void Fill_StartingANote_DoesNotClick()
         {
-            var synth = new FluteSynth(Config, SampleRate);
+            var synth = new FluteSynth(Config, SampleRate, HoleCount);
             synth.Play(0);
 
             float[] sound = Record(synth, 64);
@@ -95,9 +96,44 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [Test]
+        public void Fill_ChangingHole_DipsThenRecoversLikeThePrototype()
+        {
+            SoundConfig config = Config;
+            var synth = new FluteSynth(config, SampleRate, HoleCount);
+            synth.Play(0);
+            Record(synth, HalfASecond);
+            float held = Loudness(Record(synth, SampleRate / 10));
+
+            synth.Play(3);
+            Record(synth, SampleRate * 25 / 1000);
+            float dipped = Loudness(Record(synth, SampleRate * 10 / 1000));
+            Record(synth, SampleRate * 100 / 1000);
+            float recovered = Loudness(Record(synth, SampleRate / 10));
+
+            Assert.That(dipped / held, Is.EqualTo(config.NoteStartVolume / config.FluteVolume).Within(0.1f));
+            Assert.That(recovered / held, Is.EqualTo(1f).Within(0.1f));
+        }
+
+        [Test]
+        public void Constructor_SoundCoversTooFewHoles_FailsWithAClearError()
+        {
+            SoundConfig config = Config;
+
+            Assert.That(
+                () => new FluteSynth(config, SampleRate, config.HoleCount + 1),
+                Throws.ArgumentException.With.Message.Contains("hole"));
+        }
+
+        [Test]
+        public void Silent_MeansTheSameAsTheFlutesNoHole()
+        {
+            Assert.That(FluteSynth.Silent, Is.EqualTo(DigitalStory.Logic.Flute.NoHole));
+        }
+
+        [Test]
         public void Fill_ManyChannels_WritesTheSameToEach()
         {
-            var synth = new FluteSynth(Config, SampleRate);
+            var synth = new FluteSynth(Config, SampleRate, HoleCount);
             synth.Play(1);
             var buffer = new float[2048];
 
@@ -112,7 +148,7 @@ namespace DigitalStory.Tests.PlayMode
         [Test]
         public void Fill_AnyBuffer_AllocatesNothing()
         {
-            var synth = new FluteSynth(Config, SampleRate);
+            var synth = new FluteSynth(Config, SampleRate, HoleCount);
             synth.Play(1);
             var buffer = new float[2048];
 

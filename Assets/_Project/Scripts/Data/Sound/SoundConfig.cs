@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DigitalStory.Data
@@ -39,6 +40,9 @@ namespace DigitalStory.Data
         [field: SerializeField, Range(0f, 1f), Tooltip("How loud the breath noise is.")]
         public float BreathShare { get; private set; } = .12f;
 
+        [field: SerializeField, Range(0f, 1f), Tooltip("How wide the breath noise is, as a share of its pitch either side.")]
+        public float BreathWidth { get; private set; } = .3f;
+
         [field: Header("Flute volume")]
         [field: SerializeField, Range(0f, 1f), Tooltip("The flute's volume while a note holds.")]
         public float FluteVolume { get; private set; } = .13f;
@@ -49,22 +53,26 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Seconds a new note stays at its start volume.")]
         public float NoteStartSeconds { get; private set; } = .035f;
 
-        [field: SerializeField, Min(0.0001f), Tooltip("Seconds for the flute to swell in.")]
-        public float SwellSeconds { get; private set; } = .03f;
+        [field: SerializeField, Min(0.0001f), Tooltip("Seconds for a new note to drop to its start volume.")]
+        public float NoteDipSeconds { get; private set; } = .006f;
+
+        [field: SerializeField, Min(0.0001f), Tooltip("Seconds for a note to rise to its full volume.")]
+        public float NoteRecoverSeconds { get; private set; } = .02f;
 
         [field: SerializeField, Min(0.0001f), Tooltip("Seconds for the flute to fade out.")]
         public float FadeSeconds { get; private set; } = .05f;
 
         public int HoleCount => _fluteSemitones.Length;
 
-        [field: Header("Sound effects")]
-        [field: SerializeField, Tooltip("A rat falling under the spell, or waking up.")]
-        public SoundCue Squeak { get; private set; } = new SoundCue(new Tone(ToneShape.Sine, 3350f, 2300f, .07f, .03f));
+        public IReadOnlyList<SoundCue> Squeaks => _squeaks;
+        public IReadOnlyList<SoundCue> Splashes => _splashes;
 
-        [field: SerializeField, Tooltip("A rat falling in the river.")]
-        public SoundCue Splash { get; private set; } = new SoundCue(
-            new Tone(ToneShape.Noise, 950f, 950f, .28f, .14f),
-            new Tone(ToneShape.Sine, 420f, 180f, .12f, .04f));
+        [field: Header("Sound effects")]
+        [SerializeField, Tooltip("A rat falling under the spell, or waking up. One plays at random, so a swarm does not buzz.")]
+        private SoundCue[] _squeaks = { NewSqueak(2950f), NewSqueak(3250f), NewSqueak(3550f), NewSqueak(3750f) };
+
+        [SerializeField, Tooltip("A rat falling in the river. One plays at random, so a swarm does not buzz.")]
+        private SoundCue[] _splashes = { NewSplash(750f), NewSplash(950f), NewSplash(1150f) };
 
         [field: SerializeField, Tooltip("A cat catching a rat.")]
         public SoundCue Eaten { get; private set; } = new SoundCue(new Tone(ToneShape.Sine, 1800f, 700f, .12f, .04f));
@@ -116,5 +124,14 @@ namespace DigitalStory.Data
 
         /// <summary>The pitch of a hole, in hertz.</summary>
         public float HertzOfHole(int hole) => FluteBaseHertz * Mathf.Pow(2f, _fluteSemitones[hole] / 12f);
+
+        private static SoundCue NewSqueak(float startHertz) => new SoundCue(new Tone(ToneShape.Sine, startHertz, 2300f, .07f, .03f));
+
+        private static SoundCue NewSplash(float brightestHertz)
+        {
+            return new SoundCue(
+                new Tone(ToneShape.Noise, brightestHertz, brightestHertz, .28f, .14f),
+                new Tone(ToneShape.Sine, 420f, 180f, .12f, .04f));
+        }
     }
 }

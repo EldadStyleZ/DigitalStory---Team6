@@ -1,5 +1,6 @@
 using System;
 using DigitalStory.Data;
+using DigitalStory.Logic;
 
 namespace DigitalStory.View
 {
@@ -11,13 +12,11 @@ namespace DigitalStory.View
     /// </remarks>
     public sealed class FluteSynth
     {
-        public const int Silent = -1;
+        public const int Silent = Flute.NoHole;
 
         private const float FullTurn = (float)(Math.PI * 2d);
         private const float OvertoneRatio = 2f;
         private const float QuietEnough = 1e-6f;
-        private const uint NoiseSeed = 2463534242u;
-        private const float NoiseScale = 2147483648f;
 
         private readonly float[] _holeHertz;
         private readonly float _secondsPerSample;
@@ -29,7 +28,8 @@ namespace DigitalStory.View
         private readonly float _noteStartVolume;
         private readonly int _noteStartSamples;
         private readonly float _glide;
-        private readonly float _swell;
+        private readonly float _dip;
+        private readonly float _recover;
         private readonly float _fade;
         private readonly float _brightness;
         private readonly float _breathHigh;
@@ -49,12 +49,20 @@ namespace DigitalStory.View
         private float _tone;
         private float _breathOuter;
         private float _breathInner;
-        private uint _noise = NoiseSeed;
+        private WhiteNoise _noise = WhiteNoise.Start();
 
         /// <param name="config">How the flute sounds.</param>
         /// <param name="sampleRate">How many samples play per second.</param>
-        public FluteSynth(SoundConfig config, int sampleRate)
+        /// <param name="holeCount">How many holes the flute has, which the sound must cover.</param>
+        public FluteSynth(SoundConfig config, int sampleRate, int holeCount)
         {
+            if (holeCount > config.HoleCount)
+            {
+                throw new ArgumentException(
+                    $"The flute has {holeCount} holes, but SoundConfig only has pitches for {config.HoleCount}.",
+                    nameof(holeCount));
+            }
+
             _secondsPerSample = 1f / sampleRate;
             _holeHertz = new float[config.HoleCount];
 
@@ -71,11 +79,12 @@ namespace DigitalStory.View
             _noteStartVolume = config.NoteStartVolume;
             _noteStartSamples = (int)(config.NoteStartSeconds * sampleRate);
             _glide = StepTowards(config.GlideSeconds, sampleRate);
-            _swell = StepTowards(config.SwellSeconds, sampleRate);
+            _dip = StepTowards(config.NoteDipSeconds, sampleRate);
+            _recover = StepTowards(config.NoteRecoverSeconds, sampleRate);
             _fade = StepTowards(config.FadeSeconds, sampleRate);
             _brightness = FilterStep(config.BrightnessHertz, sampleRate);
-            _breathHigh = FilterStep(config.BreathHertz * 1.3f, sampleRate);
-            _breathLow = FilterStep(config.BreathHertz * 0.7f, sampleRate);
+            _breathHigh = FilterStep(config.BreathHertz * (1f + config.BreathWidth), sampleRate);
+            _breathLow = FilterStep(config.BreathHertz * (1f - config.BreathWidth), sampleRate);
         }
 
         /// <summary>Sounds a hole, or fades out with <see cref="Silent"/>.</summary>
@@ -103,8 +112,6 @@ namespace DigitalStory.View
         private static float StepTowards(float seconds, int sampleRate) => 1f - (float)Math.Exp(-1d / (seconds * sampleRate));
 
         private static float FilterStep(float hertz, int sampleRate) => 1f - (float)Math.Exp(-FullTurn * hertz / sampleRate);
-
-        private static float Triangle(float phase) => (4f * Math.Abs(phase - 0.5f)) - 1f;
 
         private void FollowTheRequest()
         {
@@ -155,9 +162,15 @@ namespace DigitalStory.View
                 return;
             }
 
-            float target = _noteStartLeft > 0 ? _noteStartVolume : _fluteVolume;
-            _noteStartLeft = Math.Max(0, _noteStartLeft - 1);
-            _gain += (target - _gain) * _swell;
+            if (_noteStartLeft > 0)
+            {
+                _noteStartLeft--;
+                _gain += (_noteStartVolume - _gain) * _dip;
+            }
+            else
+            {
+                _gain += (_fluteVolume - _gain) * _recover;
+            }
         }
 
         private float NextTone()
@@ -168,18 +181,13 @@ namespace DigitalStory.View
 
             _phase = Wrap(_phase + ((_hertz + vibrato) * _secondsPerSample));
             float overtone = (float)Math.Sin(_phase * OvertoneRatio * FullTurn) * _overtoneShare;
-            return Triangle(_phase) + overtone;
+            return (float)Waveforms.Triangle(_phase) + overtone;
         }
 
         // White noise with its top and bottom removed, which leaves a band around the breath pitch.
         private float NextBreath()
         {
-            _noise ^= _noise << 13;
-            _noise ^= _noise >> 17;
-            _noise ^= _noise << 5;
-
-            float white = (_noise / NoiseScale) - 1f;
-            _breathOuter += (white - _breathOuter) * _breathHigh;
+            _breathOuter += (_noise.Next() - _breathOuter) * _breathHigh;
             _breathInner += (_breathOuter - _breathInner) * _breathLow;
             return _breathOuter - _breathInner;
         }

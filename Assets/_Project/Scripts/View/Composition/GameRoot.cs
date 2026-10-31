@@ -152,7 +152,7 @@ namespace DigitalStory.View
             _catView.Initialize(Session.Cats, _art);
             _darknessView.Initialize(Session, _townCamera.GetComponent<Camera>(), _nightLook);
             _effectsView.Initialize(Session, Flow, _art, _effects);
-            _fluteVoice.Initialize(Session, Flow, _sound);
+            _fluteVoice.Initialize(Session, Flow, _sound, _flute.HoleCount);
             _soundView.Initialize(Session, Flow, _sound);
             _townCamera.Initialize(Session.Piper, _town, _art);
             _hudLayout.Initialize(Flow);

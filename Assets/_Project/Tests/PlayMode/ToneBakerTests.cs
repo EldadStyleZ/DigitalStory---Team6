@@ -89,7 +89,7 @@ namespace DigitalStory.Tests.PlayMode
             var config = ScriptableObject.CreateInstance<SoundConfig>();
             SoundCue[] cues =
             {
-                config.Squeak, config.Splash, config.Eaten, config.Pop, config.SongChime, config.Won, config.Lost,
+                config.Squeaks[0], config.Splashes[0], config.Eaten, config.Pop, config.SongChime, config.Won, config.Lost,
                 config.DiscoKick, config.DiscoTick, config.CongaBeat, config.CongaAccent,
                 ScriptableObject.CreateInstance<BalloonsEffect>().Jingle,
                 ScriptableObject.CreateInstance<FaintEffect>().Jingle,

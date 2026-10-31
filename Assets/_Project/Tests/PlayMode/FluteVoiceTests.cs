@@ -14,6 +14,9 @@ namespace DigitalStory.Tests.PlayMode
         private const int FramesToSettle = 3;
         private const int FramesForAudio = 30;
 
+        // Sound takes real time to reach the listener, and frames can be very short.
+        private const float SecondsForAudio = 0.5f;
+
         private GameRoot _root;
         private FluteVoice _voice;
         private FluteView _flute;
@@ -74,24 +77,44 @@ namespace DigitalStory.Tests.PlayMode
         public IEnumerator Voice_WhilePlaying_ReachesTheListener()
         {
             _flute.StartPlaying(0);
+            yield return ListenerMeter.Connect();
+            yield return new WaitForSecondsRealtime(SecondsForAudio);
 
-            for (int frame = 0; frame < FramesForAudio; frame++)
-            {
-                yield return null;
-            }
+            Assert.That(ListenerMeter.Loudness(), Is.GreaterThan(0.005f));
+        }
 
-            Assert.That(LoudnessAtTheListener(), Is.GreaterThan(0.005f));
+        [UnityTest]
+        public IEnumerator Voice_AfterTheAudioDeviceChanges_KeepsPlaying()
+        {
+            _flute.StartPlaying(0);
+            yield return null;
+
+            AudioSettings.Reset(AudioSettings.GetConfiguration());
+
+            yield return new WaitForSecondsRealtime(SecondsForAudio);
+            yield return ListenerMeter.Connect();
+            int before = _voice.BuffersFilled;
+            yield return new WaitForSecondsRealtime(SecondsForAudio);
+
+            Assert.That(_voice.BuffersFilled, Is.GreaterThan(before));
+            Assert.That(ListenerMeter.Loudness(), Is.GreaterThan(0.005f));
+        }
+
+        [UnityTest]
+        public IEnumerator Voice_InTheScene_DoesNotStartBeforeItIsReady()
+        {
+            yield return null;
+
+            Assert.That(_voice.GetComponent<AudioSource>().playOnAwake, Is.False);
         }
 
         [UnityTest]
         public IEnumerator Voice_WhenSilent_NothingReachesTheListener()
         {
-            for (int frame = 0; frame < FramesForAudio; frame++)
-            {
-                yield return null;
-            }
+            yield return ListenerMeter.Connect();
+            yield return new WaitForSecondsRealtime(SecondsForAudio);
 
-            Assert.That(LoudnessAtTheListener(), Is.LessThan(0.0001f));
+            Assert.That(ListenerMeter.Loudness(), Is.LessThan(0.0001f));
         }
 
         [UnityTest]
@@ -105,20 +128,6 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             Assert.That(_voice.BuffersFilled, Is.GreaterThan(before), "Unity never called the audio filter.");
-        }
-
-        private static float LoudnessAtTheListener()
-        {
-            var samples = new float[1024];
-            AudioListener.GetOutputData(samples, 0);
-            float total = 0f;
-
-            foreach (float sample in samples)
-            {
-                total += sample * sample;
-            }
-
-            return Mathf.Sqrt(total / samples.Length);
         }
     }
 }

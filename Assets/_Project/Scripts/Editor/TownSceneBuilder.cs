@@ -394,6 +394,8 @@ namespace DigitalStory.Editor
             var effectsObject = new GameObject("Effects", typeof(EffectsView));
             var fluteVoiceObject = new GameObject("Flute Voice", typeof(AudioSource), typeof(FluteVoice));
             var soundObject = new GameObject("Sound Effects", typeof(AudioSource), typeof(SoundView));
+            fluteVoiceObject.GetComponent<AudioSource>().playOnAwake = false;
+            soundObject.GetComponent<AudioSource>().playOnAwake = false;
 
             var darknessObject = new GameObject("Darkness", typeof(SpriteRenderer), typeof(DarknessView));
             var darknessRenderer = darknessObject.GetComponent<SpriteRenderer>();

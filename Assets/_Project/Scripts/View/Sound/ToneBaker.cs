@@ -11,8 +11,6 @@ namespace DigitalStory.View
 
         // The level a tone fades to, as in the prototype.
         private const double QuietLevel = .0001d;
-        private const uint NoiseSeed = 2463534242u;
-        private const double NoiseScale = 2147483648d;
 
         public static float[] Bake(SoundCue cue, int sampleRate)
         {
@@ -54,7 +52,7 @@ namespace DigitalStory.View
 
         private static double Wave(ToneShape shape, double phase) => shape switch
         {
-            ToneShape.Triangle => (4d * Math.Abs(phase - .5d)) - 1d,
+            ToneShape.Triangle => Waveforms.Triangle(phase),
             ToneShape.Square => phase < .5d ? 1d : -1d,
             ToneShape.Sawtooth => (2d * phase) - 1d,
             _ => Math.Sin(phase * FullTurn),
@@ -77,24 +75,19 @@ namespace DigitalStory.View
         {
             private readonly double _step;
 
-            private uint _state;
+            private WhiteNoise _white;
             private double _level;
 
             public FilteredNoise(float hertz, int sampleRate)
             {
                 _step = 1d - Math.Exp(-FullTurn * hertz / sampleRate);
-                _state = NoiseSeed;
+                _white = WhiteNoise.Start();
                 _level = 0d;
             }
 
             public double Next()
             {
-                _state ^= _state << 13;
-                _state ^= _state >> 17;
-                _state ^= _state << 5;
-
-                double white = (_state / NoiseScale) - 1d;
-                _level += (white - _level) * _step;
+                _level += (_white.Next() - _level) * _step;
                 return _level;
             }
         }

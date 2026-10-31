@@ -54,7 +54,7 @@ namespace DigitalStory.Tests.PlayMode
             yield return null;
             yield return null;
 
-            Assert.That(_sound.LastPlayed, Is.SameAs(_config.Splash));
+            Assert.That(_config.Splashes, Does.Contain(_sound.LastPlayed));
         }
 
         [UnityTest]
@@ -78,7 +78,7 @@ namespace DigitalStory.Tests.PlayMode
             yield return null;
             yield return null;
 
-            Assert.That(_sound.LastPlayed, Is.SameAs(_config.Squeak));
+            Assert.That(_config.Squeaks, Does.Contain(_sound.LastPlayed));
         }
 
         [UnityTest]
@@ -129,6 +129,46 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator Sound_ManySqueaks_AreNotAllTheSame()
+        {
+            yield return null;
+            var heard = new System.Collections.Generic.HashSet<SoundCue>();
+
+            for (int squeak = 0; squeak < 30; squeak++)
+            {
+                _root.Session.Swarm.Enchant(0, new FaintTrance(1f), 0f);
+                yield return new WaitForSeconds(_config.SqueakGapSeconds * 1.2f);
+
+                if (Contains(_config.Squeaks, _sound.LastPlayed))
+                {
+                    heard.Add(_sound.LastPlayed);
+                }
+            }
+
+            Assert.That(heard.Count, Is.GreaterThan(1));
+        }
+
+        [UnityTest]
+        public IEnumerator Sound_DiscoAfterConga_StartsOnTheTick()
+        {
+            yield return null;
+            _root.Session.Stage.StartConga(0.1f);
+
+            for (int frame = 0; frame < 3; frame++)
+            {
+                yield return null;
+            }
+
+            yield return new WaitForSeconds(0.2f);
+
+            _root.Session.Stage.StartDisco(5f);
+            yield return null;
+            yield return null;
+
+            Assert.That(_sound.HasPlayed(_config.DiscoTick), Is.True, "Every Disco starts on the same beat.");
+        }
+
+        [UnityTest]
         public IEnumerator Sound_DuringDisco_KeepsABeat()
         {
             yield return null;
@@ -156,6 +196,35 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             Assert.That(_sound.HasPlayed(_config.CongaBeat), Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator Sound_AfterTheAudioDeviceChanges_StillReachesTheListener()
+        {
+            yield return null;
+            AudioSettings.Reset(AudioSettings.GetConfiguration());
+            yield return new WaitForSecondsRealtime(0.5f);
+            yield return ListenerMeter.Connect();
+
+            int before = _sound.PlayCount;
+            _root.Session.Tick(new PiperIntent(Vector2.zero, 0, 0), _root.Session.TimeLeft + 1f);
+            yield return new WaitForSecondsRealtime(0.15f);
+
+            Assert.That(_sound.PlayCount, Is.GreaterThan(before));
+            Assert.That(ListenerMeter.Peak(), Is.GreaterThan(0.001f));
+        }
+
+        private static bool Contains(System.Collections.Generic.IReadOnlyList<SoundCue> cues, SoundCue cue)
+        {
+            foreach (SoundCue candidate in cues)
+            {
+                if (candidate == cue)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>Carries a rat past the bank, so it drowns as soon as the trance ends.</summary>
