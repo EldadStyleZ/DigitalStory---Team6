@@ -67,7 +67,8 @@ flowchart LR
 **Fixed while porting:**
 
 - The song note window used wall-clock time, so pausing expired notes. It uses game time.
-- The balloon song left conga and heart timers frozen, so rats went back to an old formation after popping. The song clears them.
+- The balloon song left conga and heart timers frozen, so rats went back to an old formation after popping. A rat now holds one song at a time, so a new song replaces the old one.
+- Fainting rats and sleeping cats slowed once per frame, so frame rate changed them. They now slow by time, and the tuned numbers keep their meaning at 60 frames a second.
 
 **Shared decisions:**
 
@@ -91,9 +92,9 @@ flowchart LR
 
 - **Goal:** cats hunt rats, and note sequences cast the nine songs.
 - **Done when:** in Play Mode, a cat eats rats, holes 5 and 6 drive it off, and every song casts from its keys.
-- **Layers:** Data holds cat config and song definitions. Logic holds cat behaviour, the song matcher and one `SongEffect` strategy per song. View holds the cat view, song effect visuals and the combos row, which lists each song's keys.
+- **Layers:** Data holds cat config, song definitions and HUD config. Logic holds cat behaviour, the song matcher, one `SongEffect` strategy per song and one `RatTrance` per kind of hold on a rat. View holds the cat view, song effect visuals and the combos row, which lists each song's keys.
 - **Tests:** cat patrol, hunt, eat pause, flee and sleep; longest sequence matches first; the three-second note window in game time; cooldowns; each song's effect.
-- **Notes:** the combos row ships here, with the rules, so every combo it shows really casts. The on-screen flute stays in F-005.
+- **Notes:** the combos row ships here, with the rules, so every combo it shows really casts. The on-screen flute stays in F-005. Built on the F-003 branch, because `main` has no game code until PR #3 merges. Its pull request opens after that. Holes pressed in the same frame are read lowest first, so a very fast descending roll can miss its combo at a low frame rate.
 
 ### F-005: Menus and HUD
 
