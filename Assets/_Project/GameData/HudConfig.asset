@@ -15,9 +15,20 @@ MonoBehaviour:
   <TextColor>k__BackingField: {r: 0.9529412, g: 0.91764706, b: 0.8392157, a: 1}
   <CaptionColor>k__BackingField: {r: 0.6666667, g: 0.654902, b: 0.73333335, a: 1}
   <PanelColor>k__BackingField: {r: 0.07058824, g: 0.078431375, b: 0.13333334, a: 0.8392157}
+  <OverlayColor>k__BackingField: {r: 0.03529412, g: 0.039215688, b: 0.078431375, a: 0.7411765}
+  <ButtonColor>k__BackingField: {r: 0.9098039, g: 0.77254903, b: 0.2784314, a: 1}
+  <ButtonTextColor>k__BackingField: {r: 0.13725491, g: 0.10980392, b: 0.047058824, a: 1}
+  <SecondButtonColor>k__BackingField: {r: 1, g: 1, b: 1, a: 0.1}
   <BreathColor>k__BackingField: {r: 0.9490196, g: 0.70980394, b: 0.26666668, a: 1}
   <ExhaustedColor>k__BackingField: {r: 0.5411765, g: 0.3529412, b: 0.3529412, a: 1}
   <BreathTrackColor>k__BackingField: {r: 1, g: 1, b: 1, a: 0.12}
+  <FluteColor>k__BackingField: {r: 0.7411765, g: 0.5176471, b: 0.2627451, a: 1}
+  <HoleColor>k__BackingField: {r: 0.11372549, g: 0.078431375, b: 0.039215688, a: 1}
+  <HoleNumberColor>k__BackingField: {r: 1, g: 0.9254902, b: 0.78431374, a: 0.5019608}
+  <ExhaustedFluteOpacity>k__BackingField: 0.5
+  <MinimapCatColor>k__BackingField: {r: 1, g: 0.3529412, b: 0.2901961, a: 1}
+  <MinimapPiperColor>k__BackingField: {r: 1, g: 0.9411765, b: 0.627451, a: 1}
+  <MinimapWindowColor>k__BackingField: {r: 0.7058824, g: 0.7058824, b: 0.7372549, a: 1}
   <KeyTextColor>k__BackingField: {r: 0.101960786, g: 0.07058824, b: 0.03529412, a: 1}
   <GlowColor>k__BackingField: {r: 0.9098039, g: 0.77254903, b: 0.2784314, a: 1}
   <GlowSeconds>k__BackingField: 0.9

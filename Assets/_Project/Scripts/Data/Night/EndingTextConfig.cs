@@ -18,7 +18,7 @@ namespace DigitalStory.Data
         public string QuotaOutOfReachTitle { get; private set; } = "The rats won tonight";
 
         [field: SerializeField, TextArea, Tooltip("Message when too few rats remain.")]
-        public string QuotaOutOfReachMessage { get; private set; } = "Too many rats are gone. There are not enough left to reach the goal.";
+        public string QuotaOutOfReachMessage { get; private set; } = "The cats ate too many rats. There are not enough left to reach the goal.";
 
         [field: Header("Dawn")]
         [field: SerializeField, Tooltip("Title when the sun rises first.")]

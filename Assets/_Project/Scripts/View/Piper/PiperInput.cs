@@ -28,21 +28,23 @@ namespace DigitalStory.View
         private Piper _piper;
         private Camera _camera;
         private PiperConfig _config;
+        private FluteView _fluteView;
 
         /// <summary>Supplies what pointer walking needs. Call once, before the first read.</summary>
-        public void Initialize(Piper piper, Camera sceneCamera, PiperConfig config)
+        public void Initialize(Piper piper, Camera sceneCamera, PiperConfig config, FluteView fluteView)
         {
             _piper = piper;
             _camera = sceneCamera;
             _config = config;
+            _fluteView = fluteView;
         }
 
         /// <summary>Reads this frame's input.</summary>
         public PiperIntent ReadIntent() => new PiperIntent(ReadMove(), ReadHeldHoles(), ReadPressedHoles());
 
-        private static int ReadHeldHoles()
+        private int ReadHeldHoles()
         {
-            int holes = Input.GetKey(KeyCode.Space) ? FirstHole : 0;
+            int holes = _fluteView.HeldHoles | (Input.GetKey(KeyCode.Space) ? FirstHole : 0);
 
             for (int hole = 0; hole < NumberKeys.Length; hole++)
             {
@@ -55,9 +57,9 @@ namespace DigitalStory.View
             return holes;
         }
 
-        private static int ReadPressedHoles()
+        private int ReadPressedHoles()
         {
-            int holes = Input.GetKeyDown(KeyCode.Space) ? FirstHole : 0;
+            int holes = _fluteView.TakePressedHoles() | (Input.GetKeyDown(KeyCode.Space) ? FirstHole : 0);
 
             for (int hole = 0; hole < NumberKeys.Length; hole++)
             {
@@ -82,11 +84,16 @@ namespace DigitalStory.View
             return Input.GetKey(arrow) || Input.GetKey(letter) ? 1f : 0f;
         }
 
+        private bool IsMousePlayingTheFlute()
+        {
+            return _fluteView.IsBeingPlayed || _fluteView.IsUnderPointer(Input.mousePosition);
+        }
+
         private Vector2 ReadMove()
         {
             Vector2 keys = ReadKeys();
 
-            if (keys != Vector2.zero || !Input.GetMouseButton(0))
+            if (keys != Vector2.zero || !Input.GetMouseButton(0) || IsMousePlayingTheFlute())
             {
                 return keys;
             }

@@ -27,6 +27,7 @@ namespace DigitalStory.View
         private NightSession _session;
         private TownArtConfig _art;
         private HudConfig _hud;
+        private HudLayout _layout;
         private VisualElement[] _chips;
         private string[] _chipTexts;
         private float[] _glowLeft;
@@ -37,11 +38,12 @@ namespace DigitalStory.View
         public int ChipCount => _chips?.Length ?? 0;
 
         /// <summary>Supplies the songs to show. Call once, before this object is enabled.</summary>
-        public void Initialize(NightSession session, TownArtConfig art, HudConfig hud)
+        public void Initialize(NightSession session, TownArtConfig art, HudConfig hud, HudLayout layout)
         {
             _session = session;
             _art = art;
             _hud = hud;
+            _layout = layout;
 
             int count = session.Songs.Count;
             _chips = new VisualElement[count];
@@ -73,7 +75,7 @@ namespace DigitalStory.View
             // GameRoot has already reported the problem if nothing was supplied.
             if (_session != null)
             {
-                BuildRow(GetComponent<UIDocument>().rootVisualElement);
+                BuildRow(_layout.ComboSlot);
             }
         }
 
@@ -104,10 +106,9 @@ namespace DigitalStory.View
         private void BuildRow(VisualElement root)
         {
             var row = new VisualElement();
-            row.style.position = Position.Absolute;
-            row.style.left = RowMargin;
-            row.style.right = RowMargin;
-            row.style.bottom = RowMargin;
+            row.pickingMode = PickingMode.Ignore;
+            row.style.marginLeft = RowMargin;
+            row.style.marginRight = RowMargin;
             row.style.flexDirection = FlexDirection.Row;
             row.style.flexWrap = Wrap.Wrap;
             row.style.justifyContent = Justify.Center;

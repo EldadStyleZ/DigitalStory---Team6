@@ -29,6 +29,7 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             _root = Object.FindAnyObjectByType<GameRoot>();
+            _root.Flow.Begin();
         }
 
         [UnityTest]
@@ -87,6 +88,18 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(status.GoalText, Is.EqualTo($"0/{_root.Session.Quota}"));
             Assert.That(status.TimeText, Is.EqualTo($"{Mathf.CeilToInt(_root.Session.TimeLeft)}s"));
             Assert.That(status.RatsText, Is.EqualTo($"{_root.Session.Swarm.AliveCount} rats left"));
+        }
+
+        [UnityTest]
+        public IEnumerator Town_ACatAteARat_ShowsItOnTheSign()
+        {
+            NightStatusView status = Object.FindAnyObjectByType<NightStatusView>();
+            int ratsLeft = _root.Session.Swarm.AliveCount - 1;
+
+            _root.Session.Swarm.Eat(0);
+            yield return null;
+
+            Assert.That(status.RatsText, Is.EqualTo($"{ratsLeft} rats left · 1 eaten"));
         }
 
         [UnityTest]

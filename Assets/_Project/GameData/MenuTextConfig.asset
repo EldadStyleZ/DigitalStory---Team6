@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 68a0066958bc846fdb2f0d24333e207b, type: 3}
+  m_Name: MenuTextConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.MenuTextConfig
+  <GameTitle>k__BackingField: The Piper
+  <Pitch>k__BackingField: 'Hamelin is crawling with rats, and you have one toy: a flute with six holes. Every note moves the swarm differently. Gather the rats behind you and lead them to the river before dawn.'
+  <GoalFormat>k__BackingField: Drown {0} of {1} rats
+  <Tip>k__BackingField: 'A cat roams the streets and eats rats. Holes 5 and 6 drive it off. Try playing hole 3, then 2, then 1: a lullaby that puts cats to sleep.'
+  <StartButton>k__BackingField: Start playing
+  _howTo:
+  - _label: Move
+    _text: Arrows or WASD, or hold the mouse button
+    _colorHole: -1
+  - _label: Flute
+    _text: 'Six holes: keys 1 to 6, or click the flute and slide between holes'
+    _colorHole: -1
+  - _label: Call
+    _text: 'Holes 1 and 2: the rats come after you'
+    _colorHole: 0
+  - _label: March
+    _text: 'Holes 3 and 4: charmed rats run ahead, the way you are facing'
+    _colorHole: 2
+  - _label: Scare
+    _text: 'Holes 5 and 6: scatters rats and drives cats off'
+    _colorHole: 4
+  - _label: Songs
+    _text: The right run of notes casts a spell. The songs are listed above the flute
+    _colorHole: -1
+  - _label: Pause
+    _text: P or Esc
+    _colorHole: -1
+  <PauseTitle>k__BackingField: Pause
+  <PauseMessage>k__BackingField: The rats are waiting patiently. More or less.
+  <ResumeButton>k__BackingField: Resume
+  <QuitButton>k__BackingField: Back to the title
+  <WonStatFormat>k__BackingField: '{0} rats in the river'
+  <LostStatFormat>k__BackingField: '{0}/{1} drowned'
+  <PlayAgainButton>k__BackingField: Play again
+  <RetryButton>k__BackingField: Try again
+  <GoalCountFormat>k__BackingField: '{0}/{1}'
+  <DrownedCaption>k__BackingField: drowned
+  <UntilDawnCaption>k__BackingField: Until dawn
+  <SecondsFormat>k__BackingField: '{0}s'
+  <RatsLeftFormat>k__BackingField: '{0} rats left'
+  <RatsLeftAndEatenFormat>k__BackingField: "{0} rats left \xB7 {1} eaten"
+  <CallLabel>k__BackingField: Call
+  <MarchLabel>k__BackingField: March
+  <ScareLabel>k__BackingField: Scare

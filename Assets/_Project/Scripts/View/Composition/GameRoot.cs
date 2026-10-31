@@ -49,12 +49,18 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The colors and timing of everything drawn over the game.")]
         private HudConfig _hud;
 
+        [SerializeField, Tooltip("The words on the menus.")]
+        private MenuTextConfig _menuTexts;
+
         [Header("Scene objects")]
         [SerializeField, Tooltip("Reads the keyboard and mouse.")]
         private PiperInput _input;
 
         [SerializeField, Tooltip("Runs the night every frame.")]
         private NightRunner _runner;
+
+        [SerializeField, Tooltip("Reads the pause keys.")]
+        private GameFlowInput _flowInput;
 
         [SerializeField, Tooltip("Draws the town.")]
         private TownView _townView;
@@ -77,8 +83,23 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Lists the songs and their keys.")]
         private ComboRowView _comboRow;
 
+        [SerializeField, Tooltip("The flute on screen.")]
+        private FluteView _fluteView;
+
+        [SerializeField, Tooltip("The small map of the town.")]
+        private MinimapView _minimap;
+
+        [SerializeField, Tooltip("Holds everything drawn over the night.")]
+        private HudLayout _hudLayout;
+
+        [SerializeField, Tooltip("Shows the title, pause and result screens.")]
+        private MenuScreensView _menuScreens;
+
         /// <summary>The running night, for tests and debugging.</summary>
         public NightSession Session { get; private set; }
+
+        /// <summary>Which part of the game the player is in, for tests and debugging.</summary>
+        public GameFlow Flow { get; private set; }
 
         private void Awake()
         {
@@ -92,24 +113,34 @@ namespace DigitalStory.View
             var townRandom = new Mulberry32Random((uint)_night.Rules.Seed);
             var simulationRandom = new Mulberry32Random((uint)Environment.TickCount);
             Session = new NightSession(rules, _night.Rules, townRandom, simulationRandom);
+            Flow = new GameFlow();
+            Session.Ended += HandleNightEnded;
 
-            _input.Initialize(Session.Piper, _townCamera.GetComponent<Camera>(), _piper);
-            _runner.Initialize(Session, _input);
+            _input.Initialize(Session.Piper, _townCamera.GetComponent<Camera>(), _piper, _fluteView);
+            _runner.Initialize(Session, _input, Flow);
+            _flowInput.Initialize(Flow);
             _townView.Initialize(Session.Town, _town, Session.Bank, _art);
             _piperView.Initialize(Session.Piper, Session.Stage, _art);
             _swarmView.Initialize(Session.Swarm, Session.Stage, _art);
             _catView.Initialize(Session.Cats, _art);
             _townCamera.Initialize(Session.Piper, _town, _art);
-            _statusView.Initialize(Session, _endingTexts, _hud);
-            _comboRow.Initialize(Session, _art, _hud);
+            _hudLayout.Initialize(Flow);
+            _statusView.Initialize(Session, _menuTexts, _hud, _hudLayout);
+            _comboRow.Initialize(Session, _art, _hud, _hudLayout);
+            _fluteView.Initialize(Session, Flow, _flute, _hudLayout, _menuTexts, _art, _hud);
+            _minimap.Initialize(Session, Flow, _townCamera.GetComponent<Camera>(), _town, _hudLayout, _art, _hud);
+            _menuScreens.Initialize(Flow, Session, _menuTexts, _endingTexts, _art, _hud);
         }
+
+        private void HandleNightEnded(NightOutcome outcome) => Flow.End();
 
         private bool HasEverything()
         {
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
-                && _flute != null && _rats != null && _cats != null && _songConfig != null && _songs.Length > 0 && _art != null && _endingTexts != null && _hud != null
-                && _input != null && _runner != null && _townView != null && _piperView != null
-                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null;
+                && _flute != null && _rats != null && _cats != null && _songConfig != null && _songs.Length > 0 && _art != null && _endingTexts != null && _hud != null && _menuTexts != null
+                && _input != null && _runner != null && _flowInput != null && _townView != null && _piperView != null
+                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null && _fluteView != null && _minimap != null
+                && _hudLayout != null && _menuScreens != null;
 
             if (!isComplete)
             {
