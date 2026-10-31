@@ -75,6 +75,7 @@ flowchart LR
 - The simulation ticks in `Update` with `deltaTime` capped at 0.033, as the prototype does.
 - Input stays on the Input Manager behind `PiperInput`. Moving to the Input System package is a team decision, and only that class would change.
 - The prototype has no image or audio files. We generate replaceable placeholder sprites, so art can be swapped without code changes.
+- Game text is in English. The UI and theme may differ from the prototype, because the team may change them later.
 
 ### F-003: Lead the rats to the river
 
@@ -93,11 +94,11 @@ flowchart LR
 
 ### F-005: Menus, HUD and progress
 
-- **Goal:** the full game flow in Hebrew, from level select to the result screen.
+- **Goal:** the full game flow in English, from level select to the result screen.
 - **Done when:** a player can pick an unlocked level, read its tip, play, pause, retry and unlock the next level, with progress kept after a restart.
 - **Layers:** Data holds text assets. Logic holds the game flow state machine and level unlocks. View holds the UI Toolkit screens, on-screen flute, HUD, minimap and `PlayerPrefs` progress store.
 - **Tests:** flow transitions, unlock rules and rejected save values, plus a PlayMode test that the screens load.
-- **Notes:** `UIDocument` is built in, so no package is needed. Check right-to-left Hebrew in UI Toolkit first, before building screens.
+- **Notes:** `UIDocument` is built in, so no package is needed. The prototype's Hebrew text is translated to English and kept in text assets.
 
 ### F-006: Night, effects and sound
 
