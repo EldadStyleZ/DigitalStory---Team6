@@ -13,7 +13,6 @@ namespace DigitalStory.View
     {
         private const int MapPixels = 300;
         private const float MapWidth = 150f;
-        private const float EdgeMargin = 12f;
         private const float MapRadius = 6f;
         private const int RatDotSize = 2;
         private const int CatDotSize = 5;
@@ -77,7 +76,7 @@ namespace DigitalStory.View
 
             _painter = new MinimapPainter(MapPixels, _town.Width, _town.Height);
             PaintBackground();
-            BuildMap(_layout.Layer);
+            BuildMap(_layout.MapSlot);
             Paint();
         }
 
@@ -125,9 +124,6 @@ namespace DigitalStory.View
 
             _map = new Image { image = _texture, scaleMode = ScaleMode.StretchToFill };
             _map.pickingMode = PickingMode.Ignore;
-            _map.style.position = Position.Absolute;
-            _map.style.top = EdgeMargin;
-            _map.style.right = EdgeMargin;
             _map.style.width = MapWidth;
             _map.style.height = MapWidth * _painter.Height / _painter.Width;
             _map.style.borderTopLeftRadius = MapRadius;

@@ -23,7 +23,6 @@ namespace DigitalStory.View
         private const float SkyBarBorder = 1f;
         private const float SkyOrbSize = 10f;
         private const float SkyStepsShown = 300f;
-        private const float DawnPulseRate = 6f;
         private const int SkyTextureWidth = 64;
         private const float BreathBarHeight = 6f;
         private const float BreathBarGap = 6f;
@@ -262,7 +261,7 @@ namespace DigitalStory.View
             if (IsSunShown)
             {
                 Color pulse = _hud.DawnPulseColor;
-                pulse.a = (Mathf.Sin(Time.time * DawnPulseRate) + 1f) / 2f;
+                pulse.a = (Mathf.Sin(Time.time * _hud.DawnPulseRate) + 1f) / 2f;
                 SetSkyBorder(pulse);
             }
         }

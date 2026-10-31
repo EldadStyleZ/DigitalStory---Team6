@@ -13,10 +13,6 @@ namespace DigitalStory.View
         /// <summary>Where the choice is saved, for tests and debugging.</summary>
         public const string MutedKey = "DigitalStory.Muted";
 
-        private const float TopMargin = 12f;
-
-        // Clear of the minimap, which sits in the corner.
-        private const float RightMargin = 170f;
         private const float FontSize = 13f;
         private const float SidePadding = 10f;
         private const float EndPadding = 5f;
@@ -61,7 +57,7 @@ namespace DigitalStory.View
 
             IsMuted = PlayerPrefs.GetInt(MutedKey, 0) != 0;
             Button = NewButton();
-            _layout.Layer.Add(Button);
+            _layout.MuteSlot.Add(Button);
             _layout.AddControl(Button);
             ShowTheChoice();
         }
@@ -78,9 +74,9 @@ namespace DigitalStory.View
         {
             // Without this, Space would press it, and Space is also a flute hole.
             var button = new Button(Toggle) { focusable = false };
-            button.style.position = Position.Absolute;
-            button.style.top = TopMargin;
-            button.style.right = RightMargin;
+            button.style.marginLeft = 0f;
+            button.style.marginRight = 0f;
+            button.style.marginTop = 0f;
             button.style.fontSize = FontSize;
             button.style.color = _hud.TextColor;
             button.style.backgroundColor = _hud.PanelColor;

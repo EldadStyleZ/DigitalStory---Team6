@@ -24,6 +24,9 @@ MonoBehaviour:
   <PlayingPulse>k__BackingField: 6
   <PlayingPulseRate>k__BackingField: 6
   <PiperClearing>k__BackingField: 0.92
+  <DiscoLightCount>k__BackingField: 5
+  <DiscoLightSaturation>k__BackingField: 0.8
+  <DiscoLightBrightness>k__BackingField: 0.96
   <DiscoReach>k__BackingField: 320
   <DiscoCircle>k__BackingField: 150
   <DiscoLightReach>k__BackingField: 120

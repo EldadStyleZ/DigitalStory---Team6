@@ -12,6 +12,8 @@ namespace DigitalStory.View
     public sealed class HudLayout : MonoBehaviour
     {
         private const float BottomMargin = 8f;
+        private const float TopRightMargin = 12f;
+        private const float TopRightGap = 8f;
 
         private readonly List<VisualElement> _controls = new List<VisualElement>();
 
@@ -19,6 +21,8 @@ namespace DigitalStory.View
         private VisualElement _layer;
         private VisualElement _comboSlot;
         private VisualElement _fluteSlot;
+        private VisualElement _muteSlot;
+        private VisualElement _mapSlot;
 
         /// <summary>The whole HUD. Children place themselves in it.</summary>
         public VisualElement Layer
@@ -47,6 +51,26 @@ namespace DigitalStory.View
             {
                 Build();
                 return _fluteSlot;
+            }
+        }
+
+        /// <summary>The place for the mute button, beside the minimap.</summary>
+        public VisualElement MuteSlot
+        {
+            get
+            {
+                Build();
+                return _muteSlot;
+            }
+        }
+
+        /// <summary>The place for the minimap, in the corner of the screen.</summary>
+        public VisualElement MapSlot
+        {
+            get
+            {
+                Build();
+                return _mapSlot;
             }
         }
 
@@ -134,8 +158,30 @@ namespace DigitalStory.View
             bottom.Add(_comboSlot);
             bottom.Add(_fluteSlot);
             _layer.Add(bottom);
+            _layer.Add(BuildTopRight());
 
             GetComponent<UIDocument>().rootVisualElement.Add(_layer);
+        }
+
+        private VisualElement BuildTopRight()
+        {
+            var topRight = new VisualElement();
+            topRight.pickingMode = PickingMode.Ignore;
+            topRight.style.position = Position.Absolute;
+            topRight.style.top = TopRightMargin;
+            topRight.style.right = TopRightMargin;
+            topRight.style.flexDirection = FlexDirection.Row;
+
+            _muteSlot = new VisualElement();
+            _muteSlot.pickingMode = PickingMode.Ignore;
+            _muteSlot.style.marginRight = TopRightGap;
+
+            _mapSlot = new VisualElement();
+            _mapSlot.pickingMode = PickingMode.Ignore;
+
+            topRight.Add(_muteSlot);
+            topRight.Add(_mapSlot);
+            return topRight;
         }
 
         private static VisualElement NewSlot()

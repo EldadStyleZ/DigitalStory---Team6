@@ -52,6 +52,9 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("The pulse around the sky bar when dawn is close.")]
         public Color DawnPulseColor { get; private set; } = new Color32(0xFF, 0x7A, 0x4A, 0xFF);
 
+        [field: SerializeField, Min(0f), Tooltip("How quickly the sky bar pulses when dawn is close.")]
+        public float DawnPulseRate { get; private set; } = 6f;
+
         [field: Header("Flute")]
         [field: SerializeField, Tooltip("The body of the flute.")]
         public Color FluteColor { get; private set; } = new Color32(0xBD, 0x84, 0x43, 0xFF);

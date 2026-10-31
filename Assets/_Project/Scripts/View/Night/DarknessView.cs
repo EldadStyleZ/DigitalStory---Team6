@@ -11,10 +11,7 @@ namespace DigitalStory.View
     [AddComponentMenu("DigitalStory/Darkness View")]
     public sealed class DarknessView : MonoBehaviour
     {
-        private const int DiscoLightCount = 5;
         private const float FullTurn = Mathf.PI * 2f;
-        private const float DiscoSaturation = .8f;
-        private const float DiscoBrightness = .96f;
 
         // Slightly larger than the view, so rounding can never show a lit edge.
         private const float Overscan = 1.02f;
@@ -137,12 +134,13 @@ namespace DigitalStory.View
             float circle = TownSpace.ToSceneLength(_look.DiscoCircle);
             float reach = TownSpace.ToSceneLength(_look.DiscoLightReach);
 
-            for (int index = 0; index < DiscoLightCount; index++)
+            for (int index = 0; index < _look.DiscoLightCount; index++)
             {
-                float share = index / (float)DiscoLightCount;
+                float share = index / (float)_look.DiscoLightCount;
                 float angle = (Time.time * _look.DiscoSpinRate) + (share * FullTurn);
                 Vector2 position = piper + (new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * circle);
-                Color glow = Color.HSVToRGB(Mathf.Repeat(share + (Time.time * _look.DiscoHueRate), 1f), DiscoSaturation, DiscoBrightness);
+                float hue = Mathf.Repeat(share + (Time.time * _look.DiscoHueRate), 1f);
+                Color glow = Color.HSVToRGB(hue, _look.DiscoLightSaturation, _look.DiscoLightBrightness);
                 glow.a = _look.DiscoLightStrength;
                 Field.Add(position, reach, 0f, glow, reach);
             }

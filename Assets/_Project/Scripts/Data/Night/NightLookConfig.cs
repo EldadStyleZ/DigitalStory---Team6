@@ -46,6 +46,15 @@ namespace DigitalStory.Data
         public float PiperClearing { get; private set; } = .92f;
 
         [field: Header("Disco")]
+        [field: SerializeField, Min(0), Tooltip("How many colored lights circle the Piper.")]
+        public int DiscoLightCount { get; private set; } = 5;
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("How vivid the colored lights are.")]
+        public float DiscoLightSaturation { get; private set; } = .8f;
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("How bright the colored lights' color is.")]
+        public float DiscoLightBrightness { get; private set; } = .96f;
+
         [field: SerializeField, Min(1f), Tooltip("How far the Piper clears the darkness during Disco, in town units.")]
         public float DiscoReach { get; private set; } = 320f;
 
