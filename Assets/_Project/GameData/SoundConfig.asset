@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2b6829b913444c1786d8facff867556, type: 3}
+  m_Name: SoundConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.SoundConfig
+  <MasterVolume>k__BackingField: 0.9
+  <FluteBaseHertz>k__BackingField: 587.33
+  _fluteSemitones: 00000000020000000500000007000000090000000c000000i
+  <VibratoHertz>k__BackingField: 5.3
+  <VibratoDepthHertz>k__BackingField: 6
+  <GlideSeconds>k__BackingField: 0.012
+  <OvertoneShare>k__BackingField: 0.25
+  <BrightnessHertz>k__BackingField: 2800
+  <BreathHertz>k__BackingField: 1900
+  <BreathShare>k__BackingField: 0.12
+  <FluteVolume>k__BackingField: 0.13
+  <NoteStartVolume>k__BackingField: 0.06
+  <NoteStartSeconds>k__BackingField: 0.035
+  <SwellSeconds>k__BackingField: 0.03
+  <FadeSeconds>k__BackingField: 0.05

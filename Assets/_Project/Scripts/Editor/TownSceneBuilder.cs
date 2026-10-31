@@ -78,6 +78,7 @@ namespace DigitalStory.Editor
             var songConfig = LoadOrCreate<SongConfig>("SongConfig");
             var nightLook = LoadOrCreate<NightLookConfig>("NightLookConfig");
             var effects = LoadOrCreate<EffectsConfig>("EffectsConfig");
+            var sound = LoadOrCreate<SoundConfig>("SoundConfig");
             SongEffect[] songs = LoadOrCreateSongs();
             var endings = LoadOrCreate<EndingTextConfig>("EndingTextConfig");
             var hud = LoadOrCreate<HudConfig>("HudConfig");
@@ -85,7 +86,7 @@ namespace DigitalStory.Editor
             TownArtConfig art = LoadOrCreateArt();
             PanelSettings panel = LoadOrCreatePanelSettings();
 
-            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, dawn, songConfig, songs, art, nightLook, effects, endings, hud, menuTexts, panel));
+            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, dawn, songConfig, songs, art, nightLook, effects, sound, endings, hud, menuTexts, panel));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuild();
             AssetDatabase.SaveAssets();
@@ -391,6 +392,7 @@ namespace DigitalStory.Editor
             var catsObject = new GameObject("Cats", typeof(CatView));
 
             var effectsObject = new GameObject("Effects", typeof(EffectsView));
+            var soundObject = new GameObject("Sound", typeof(AudioSource), typeof(FluteVoice));
 
             var darknessObject = new GameObject("Darkness", typeof(SpriteRenderer), typeof(DarknessView));
             var darknessRenderer = darknessObject.GetComponent<SpriteRenderer>();
@@ -424,6 +426,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_art", assets.Art);
             SetObject(serialized, "_nightLook", assets.NightLook);
             SetObject(serialized, "_effects", assets.Effects);
+            SetObject(serialized, "_sound", assets.Sound);
             SetObject(serialized, "_endingTexts", assets.Endings);
             SetObject(serialized, "_hud", assets.Hud);
             SetObject(serialized, "_menuTexts", assets.MenuTexts);
@@ -436,6 +439,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_catView", catsObject.GetComponent<CatView>());
             SetObject(serialized, "_darknessView", darknessObject.GetComponent<DarknessView>());
             SetObject(serialized, "_effectsView", effectsObject.GetComponent<EffectsView>());
+            SetObject(serialized, "_fluteVoice", soundObject.GetComponent<FluteVoice>());
             SetObject(serialized, "_townCamera", camera.GetComponent<TownCamera>());
             SetObject(serialized, "_statusView", hud.GetComponent<NightStatusView>());
             SetObject(serialized, "_comboRow", hud.GetComponent<ComboRowView>());
@@ -506,6 +510,7 @@ namespace DigitalStory.Editor
                 TownArtConfig art,
                 NightLookConfig nightLook,
                 EffectsConfig effects,
+                SoundConfig sound,
                 EndingTextConfig endings,
                 HudConfig hud,
                 MenuTextConfig menuTexts,
@@ -524,6 +529,7 @@ namespace DigitalStory.Editor
                 Art = art;
                 NightLook = nightLook;
                 Effects = effects;
+                Sound = sound;
                 Endings = endings;
                 Hud = hud;
                 MenuTexts = menuTexts;
@@ -543,6 +549,7 @@ namespace DigitalStory.Editor
             public TownArtConfig Art { get; }
             public NightLookConfig NightLook { get; }
             public EffectsConfig Effects { get; }
+            public SoundConfig Sound { get; }
             public EndingTextConfig Endings { get; }
             public HudConfig Hud { get; }
             public MenuTextConfig MenuTexts { get; }

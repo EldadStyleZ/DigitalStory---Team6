@@ -52,6 +52,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The look and timing of notes, rings, ripples and puffs.")]
         private EffectsConfig _effects;
 
+        [SerializeField, Tooltip("How the game sounds.")]
+        private SoundConfig _sound;
+
         [SerializeField, Tooltip("The words shown when the night ends.")]
         private EndingTextConfig _endingTexts;
 
@@ -88,6 +91,9 @@ namespace DigitalStory.View
 
         [SerializeField, Tooltip("Plays the notes, rings, ripples and puffs.")]
         private EffectsView _effectsView;
+
+        [SerializeField, Tooltip("Plays the flute.")]
+        private FluteVoice _fluteVoice;
 
         [SerializeField, Tooltip("Follows the Piper.")]
         private TownCamera _townCamera;
@@ -140,6 +146,7 @@ namespace DigitalStory.View
             _catView.Initialize(Session.Cats, _art);
             _darknessView.Initialize(Session, _townCamera.GetComponent<Camera>(), _nightLook);
             _effectsView.Initialize(Session, Flow, _art, _effects);
+            _fluteVoice.Initialize(Session, Flow, _sound);
             _townCamera.Initialize(Session.Piper, _town, _art);
             _hudLayout.Initialize(Flow);
             _statusView.Initialize(Session, _menuTexts, _hud, _hudLayout);
@@ -154,9 +161,9 @@ namespace DigitalStory.View
         private bool HasEverything()
         {
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
-                && _flute != null && _rats != null && _cats != null && _dawn != null && _songConfig != null && _songs.Length > 0 && _art != null && _nightLook != null && _effects != null && _endingTexts != null && _hud != null && _menuTexts != null
+                && _flute != null && _rats != null && _cats != null && _dawn != null && _songConfig != null && _songs.Length > 0 && _art != null && _nightLook != null && _effects != null && _sound != null && _endingTexts != null && _hud != null && _menuTexts != null
                 && _input != null && _runner != null && _flowInput != null && _townView != null && _piperView != null
-                && _swarmView != null && _catView != null && _darknessView != null && _effectsView != null && _townCamera != null && _statusView != null && _comboRow != null && _fluteView != null && _minimap != null
+                && _swarmView != null && _catView != null && _darknessView != null && _effectsView != null && _fluteVoice != null && _townCamera != null && _statusView != null && _comboRow != null && _fluteView != null && _minimap != null
                 && _hudLayout != null && _menuScreens != null;
 
             if (!isComplete)
