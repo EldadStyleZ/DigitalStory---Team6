@@ -106,6 +106,13 @@ namespace DigitalStory.Editor
             {
                 LoadOrCreate<LullabyEffect>($"{SongsFolder}/LullabySong"),
                 LoadOrCreate<DanceEffect>($"{SongsFolder}/DanceSong"),
+                LoadOrCreate<CongaEffect>($"{SongsFolder}/CongaSong"),
+                LoadOrCreate<BalloonsEffect>($"{SongsFolder}/BalloonsSong"),
+                LoadOrCreate<DiscoEffect>($"{SongsFolder}/DiscoSong"),
+                LoadOrCreate<HeartEffect>($"{SongsFolder}/HeartSong"),
+                LoadOrCreate<FaintEffect>($"{SongsFolder}/FaintSong"),
+                LoadOrCreate<CrowdSurfEffect>($"{SongsFolder}/CrowdSurfSong"),
+                LoadOrCreate<ChoirEffect>($"{SongsFolder}/ChoirSong"),
             };
         }
 
@@ -261,7 +268,7 @@ namespace DigitalStory.Editor
             var ratsObject = new GameObject("Rats", typeof(RatSwarmView));
             var catsObject = new GameObject("Cats", typeof(CatView));
 
-            var hud = new GameObject("Night Status", typeof(UIDocument), typeof(NightStatusView));
+            var hud = new GameObject("Night Status", typeof(UIDocument), typeof(NightStatusView), typeof(ComboRowView));
             hud.GetComponent<UIDocument>().panelSettings = assets.Panel;
 
             var root = new GameObject("Game Root", typeof(GameRoot), typeof(PiperInput), typeof(NightRunner));
@@ -285,6 +292,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_catView", catsObject.GetComponent<CatView>());
             SetObject(serialized, "_townCamera", camera.GetComponent<TownCamera>());
             SetObject(serialized, "_statusView", hud.GetComponent<NightStatusView>());
+            SetObject(serialized, "_comboRow", hud.GetComponent<ComboRowView>());
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

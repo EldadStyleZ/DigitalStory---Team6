@@ -71,6 +71,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Shows the goal, time and breath.")]
         private NightStatusView _statusView;
 
+        [SerializeField, Tooltip("Lists the songs and their keys.")]
+        private ComboRowView _comboRow;
+
         /// <summary>The running night, for tests and debugging.</summary>
         public NightSession Session { get; private set; }
 
@@ -90,11 +93,12 @@ namespace DigitalStory.View
             _input.Initialize(Session.Piper, _townCamera.GetComponent<Camera>(), _piper);
             _runner.Initialize(Session, _input);
             _townView.Initialize(Session.Town, _town, Session.Bank, _art);
-            _piperView.Initialize(Session.Piper);
-            _swarmView.Initialize(Session.Swarm, _art);
+            _piperView.Initialize(Session.Piper, Session.Stage, _art);
+            _swarmView.Initialize(Session.Swarm, Session.Stage, _art);
             _catView.Initialize(Session.Cats, _art);
             _townCamera.Initialize(Session.Piper, _town, _art);
             _statusView.Initialize(Session, _endingTexts);
+            _comboRow.Initialize(Session, _art);
         }
 
         private bool HasEverything()
@@ -102,7 +106,7 @@ namespace DigitalStory.View
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
                 && _flute != null && _rats != null && _cats != null && _songConfig != null && _art != null && _endingTexts != null
                 && _input != null && _runner != null && _townView != null && _piperView != null
-                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null;
+                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null;
 
             if (!isComplete)
             {

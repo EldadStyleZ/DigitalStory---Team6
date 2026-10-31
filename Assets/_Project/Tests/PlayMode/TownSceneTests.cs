@@ -14,6 +14,7 @@ namespace DigitalStory.Tests.PlayMode
         private const string SceneName = "Town";
         private const int FramesToSettle = 3;
         private const int FramesToMove = 30;
+        private const float FrameSeconds = 1f / 60f;
 
         private GameRoot _root;
 
@@ -110,6 +111,73 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator Town_OnLoad_ListsEverySongAndItsKeys()
+        {
+            ComboRowView row = Object.FindAnyObjectByType<ComboRowView>();
+
+            yield return null;
+
+            Assert.That(row.ChipCount, Is.EqualTo(9));
+            Assert.That(row.ChipText(0), Is.EqualTo("Lullaby 3 2 1"));
+            Assert.That(row.ChipText(7), Is.EqualTo("Crowd Surf 3 3 6"));
+            Assert.That(row.ChipText(8), Is.EqualTo("Choir 1 2 3 4"));
+        }
+
+        [UnityTest]
+        public IEnumerator Town_PlayingACombo_LightsItUpAndDimsItWhileItRests()
+        {
+            ComboRowView row = Object.FindAnyObjectByType<ComboRowView>();
+            yield return null;
+            Assert.That(row.IsDimmed(0), Is.False);
+
+            PlayLullaby();
+            yield return null;
+
+            Assert.That(row.IsGlowing(0), Is.True);
+            Assert.That(row.IsDimmed(0), Is.True);
+            Assert.That(row.IsGlowing(1), Is.False);
+            Assert.That(row.IsDimmed(1), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator Town_PlayingLullaby_CastsTheSongFromItsAsset()
+        {
+            int cast = -1;
+            _root.Session.SongCast += song => cast = song;
+
+            PlayLullaby();
+            yield return null;
+
+            Assert.That(cast, Is.EqualTo(0));
+        }
+
+        [UnityTest]
+        public IEnumerator Town_RatFloating_GrowsAndChangesColor()
+        {
+            RatSwarmView rats = Object.FindAnyObjectByType<RatSwarmView>();
+            Transform firstRat = rats.transform.GetChild(0);
+            Color normalColor = firstRat.GetComponent<SpriteRenderer>().color;
+
+            _root.Session.Swarm.Enchant(0, new FloatTrance(ScriptableObject.CreateInstance<BalloonsEffect>()), 5f);
+            yield return null;
+
+            Assert.That(firstRat.localScale.x, Is.GreaterThan(1f));
+            Assert.That(firstRat.GetComponent<SpriteRenderer>().color, Is.Not.EqualTo(normalColor));
+        }
+
+        [UnityTest]
+        public IEnumerator Town_CrowdSurfing_LiftsThePiper()
+        {
+            Transform piper = Object.FindAnyObjectByType<PiperView>().transform;
+            float onTheGround = TownSpace.ToScene(_root.Session.Piper.Position).y;
+
+            _root.Session.Stage.StartSurf(5f, 220f);
+            yield return null;
+
+            Assert.That(piper.position.y, Is.GreaterThan(onTheGround));
+        }
+
+        [UnityTest]
         public IEnumerator Town_OnLoad_PointsTheCameraAtThePiper()
         {
             PiperView piper = Object.FindAnyObjectByType<PiperView>();
@@ -120,6 +188,15 @@ namespace DigitalStory.Tests.PlayMode
             Vector3 onScreen = sceneCamera.WorldToViewportPoint(piper.transform.position);
             Assert.That(onScreen.x, Is.InRange(0f, 1f));
             Assert.That(onScreen.y, Is.InRange(0f, 1f));
+        }
+
+        private void PlayLullaby()
+        {
+            foreach (int hole in new[] { 2, 1, 0 })
+            {
+                int bit = 1 << hole;
+                _root.Session.Tick(new PiperIntent(Vector2.zero, bit, bit), FrameSeconds);
+            }
         }
     }
 }

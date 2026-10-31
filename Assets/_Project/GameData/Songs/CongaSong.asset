@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbf8dfa86920b4bebb146788c8e4dd57, type: 3}
+  m_Name: CongaSong
+  m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.CongaEffect
+  _song:
+    _title: Conga
+    _description: A dance line behind you
+    _cooldownSeconds: 10
+    _keys: 00000000010000000000000001000000i
+  <Radius>k__BackingField: 360
+  <Seconds>k__BackingField: 9
+  <LookAhead>k__BackingField: 8
+  <StopDistance>k__BackingField: 14

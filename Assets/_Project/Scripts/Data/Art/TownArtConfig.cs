@@ -57,6 +57,41 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("A cat under the lullaby.")]
         public Color SleepingCatColor { get; private set; } = new Color32(0x6B, 0x6F, 0x9A, 0xFF);
 
+        [field: Header("Song looks")]
+        [SerializeField, Tooltip("How each rat look appears, in the order of RatLook.")]
+        private RatLookStyle[] _ratLooks =
+        {
+            new RatLookStyle(Color.white, 1f),
+            new RatLookStyle(new Color32(0x6E, 0x6A, 0x78, 0xFF), 1f),
+            new RatLookStyle(new Color32(0xFF, 0x96, 0xC8, 0xFF), 1.6f),
+        };
+
+        [SerializeField, Tooltip("The color of each flute hole, from hole 1 upward.")]
+        private Color[] _holeColors =
+        {
+            new Color32(0xF2, 0xB5, 0x44, 0xFF),
+            new Color32(0xF2, 0x9A, 0x44, 0xFF),
+            new Color32(0x8F, 0xD3, 0x6A, 0xFF),
+            new Color32(0x5F, 0xC9, 0xA8, 0xFF),
+            new Color32(0x8F, 0xB8, 0xFF, 0xFF),
+            new Color32(0xD9, 0xD2, 0xFF, 0xFF),
+        };
+
+        [field: SerializeField, Min(0f), Tooltip("How high a singing rat hops, in town units.")]
+        public float ChoirHopHeight { get; private set; } = 7f;
+
+        [field: SerializeField, Min(0f), Tooltip("How quickly a singing rat hops.")]
+        public float ChoirHopRate { get; private set; } = 11f;
+
+        [field: SerializeField, Min(0f), Tooltip("How high the swarm lifts the Piper, in town units.")]
+        public float SurfLift { get; private set; } = 12f;
+
+        [field: SerializeField, Min(0f), Tooltip("How far the Piper bobs while lifted, in town units.")]
+        public float SurfBob { get; private set; } = 5f;
+
+        [field: SerializeField, Min(0f), Tooltip("How quickly the Piper bobs.")]
+        public float SurfBobRate { get; private set; } = 9f;
+
         [field: Header("Framing")]
         [field: SerializeField, Min(1f), Tooltip("How much of the town's height is on screen, in town units.")]
         public float VisibleTownHeight { get; private set; } = 700f;
@@ -68,5 +103,9 @@ namespace DigitalStory.Data
         public float BankWidth { get; private set; } = 30f;
 
         public Color RoofColor(int roofStyle) => _roofColors[roofStyle % _roofColors.Length];
+
+        public Color HoleColor(int hole) => _holeColors[hole];
+
+        public RatLookStyle StyleOf(RatLook look) => _ratLooks[(int)look];
     }
 }

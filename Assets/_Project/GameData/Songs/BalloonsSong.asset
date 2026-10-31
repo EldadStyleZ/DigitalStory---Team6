@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61edf6f42dc5244869dc933adb05715f, type: 3}
+  m_Name: BalloonsSong
+  m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.BalloonsEffect
+  _song:
+    _title: Balloons
+    _description: Rats swell up and float
+    _cooldownSeconds: 10
+    _keys: 010000000300000005000000i
+  <Radius>k__BackingField: 360
+  <ShortestSeconds>k__BackingField: 6
+  <ExtraSeconds>k__BackingField: 2.5
+  <WindSpeed>k__BackingField: 22
+  <DriftRange>k__BackingField: 24
+  <BobSize>k__BackingField: 14
+  <BobRate>k__BackingField: 2
+  <SideMargin>k__BackingField: 5
+  <EdgeMargin>k__BackingField: 8
