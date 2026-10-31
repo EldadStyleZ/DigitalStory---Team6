@@ -68,10 +68,11 @@ namespace DigitalStory.Editor
             SongEffect[] songs = LoadOrCreateSongs();
             var endings = LoadOrCreate<EndingTextConfig>("EndingTextConfig");
             var hud = LoadOrCreate<HudConfig>("HudConfig");
+            var menuTexts = LoadOrCreate<MenuTextConfig>("MenuTextConfig");
             TownArtConfig art = LoadOrCreateArt();
             PanelSettings panel = LoadOrCreatePanelSettings();
 
-            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, songConfig, songs, art, endings, hud, panel));
+            FillScene(new SceneAssets(night, town, piper, breath, flute, rats, cats, songConfig, songs, art, endings, hud, menuTexts, panel));
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddSceneToBuild();
             AssetDatabase.SaveAssets();
@@ -269,7 +270,13 @@ namespace DigitalStory.Editor
             var ratsObject = new GameObject("Rats", typeof(RatSwarmView));
             var catsObject = new GameObject("Cats", typeof(CatView));
 
-            var hud = new GameObject("Night Status", typeof(UIDocument), typeof(NightStatusView), typeof(ComboRowView));
+            var hud = new GameObject(
+                "Night Status",
+                typeof(UIDocument),
+                typeof(HudLayout),
+                typeof(NightStatusView),
+                typeof(ComboRowView),
+                typeof(MenuScreensView));
             hud.GetComponent<UIDocument>().panelSettings = assets.Panel;
 
             var root = new GameObject("Game Root", typeof(GameRoot), typeof(PiperInput), typeof(NightRunner));
@@ -286,6 +293,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_art", assets.Art);
             SetObject(serialized, "_endingTexts", assets.Endings);
             SetObject(serialized, "_hud", assets.Hud);
+            SetObject(serialized, "_menuTexts", assets.MenuTexts);
             SetObject(serialized, "_input", root.GetComponent<PiperInput>());
             SetObject(serialized, "_runner", root.GetComponent<NightRunner>());
             SetObject(serialized, "_townView", townObject.GetComponent<TownView>());
@@ -295,6 +303,8 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_townCamera", camera.GetComponent<TownCamera>());
             SetObject(serialized, "_statusView", hud.GetComponent<NightStatusView>());
             SetObject(serialized, "_comboRow", hud.GetComponent<ComboRowView>());
+            SetObject(serialized, "_hudLayout", hud.GetComponent<HudLayout>());
+            SetObject(serialized, "_menuScreens", hud.GetComponent<MenuScreensView>());
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -357,6 +367,7 @@ namespace DigitalStory.Editor
                 TownArtConfig art,
                 EndingTextConfig endings,
                 HudConfig hud,
+                MenuTextConfig menuTexts,
                 PanelSettings panel)
             {
                 Night = night;
@@ -371,6 +382,7 @@ namespace DigitalStory.Editor
                 Art = art;
                 Endings = endings;
                 Hud = hud;
+                MenuTexts = menuTexts;
                 Panel = panel;
             }
 
@@ -386,6 +398,7 @@ namespace DigitalStory.Editor
             public TownArtConfig Art { get; }
             public EndingTextConfig Endings { get; }
             public HudConfig Hud { get; }
+            public MenuTextConfig MenuTexts { get; }
             public PanelSettings Panel { get; }
         }
     }

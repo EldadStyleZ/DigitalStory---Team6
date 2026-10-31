@@ -16,6 +16,19 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("Behind signs, chips and banners.")]
         public Color PanelColor { get; private set; } = new Color32(0x12, 0x14, 0x22, 0xD6);
 
+        [field: SerializeField, Tooltip("Darkens the game behind a menu.")]
+        public Color OverlayColor { get; private set; } = new Color32(0x09, 0x0A, 0x14, 0xBD);
+
+        [field: Header("Buttons")]
+        [field: SerializeField, Tooltip("The main button on a menu.")]
+        public Color ButtonColor { get; private set; } = new Color32(0xE8, 0xC5, 0x47, 0xFF);
+
+        [field: SerializeField, Tooltip("The words on the main button.")]
+        public Color ButtonTextColor { get; private set; } = new Color32(0x23, 0x1C, 0x0C, 0xFF);
+
+        [field: SerializeField, Tooltip("The other button on a menu.")]
+        public Color SecondButtonColor { get; private set; } = new Color(1f, 1f, 1f, 0.1f);
+
         [field: Header("Breath bar")]
         [field: SerializeField, Tooltip("Breath left.")]
         public Color BreathColor { get; private set; } = new Color32(0xF2, 0xB5, 0x44, 0xFF);

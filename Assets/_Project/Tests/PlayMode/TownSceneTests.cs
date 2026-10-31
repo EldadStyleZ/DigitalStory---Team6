@@ -29,6 +29,7 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             _root = Object.FindAnyObjectByType<GameRoot>();
+            _root.Flow.Begin();
         }
 
         [UnityTest]

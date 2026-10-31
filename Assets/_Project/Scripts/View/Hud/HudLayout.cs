@@ -1,0 +1,130 @@
+using DigitalStory.Logic;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace DigitalStory.View
+{
+    /// <summary>Holds everything drawn over the night, and shows it only while a night is running.</summary>
+    [DisallowMultipleComponent]
+    [RequireComponent(typeof(UIDocument))]
+    [AddComponentMenu("DigitalStory/Hud Layout")]
+    public sealed class HudLayout : MonoBehaviour
+    {
+        private const float BottomMargin = 8f;
+
+        private GameFlow _flow;
+        private VisualElement _layer;
+        private VisualElement _comboSlot;
+        private VisualElement _fluteSlot;
+
+        /// <summary>The whole HUD. Children place themselves in it.</summary>
+        public VisualElement Layer
+        {
+            get
+            {
+                Build();
+                return _layer;
+            }
+        }
+
+        /// <summary>The place for the combos row, above the flute.</summary>
+        public VisualElement ComboSlot
+        {
+            get
+            {
+                Build();
+                return _comboSlot;
+            }
+        }
+
+        /// <summary>The place for the flute, at the bottom of the screen.</summary>
+        public VisualElement FluteSlot
+        {
+            get
+            {
+                Build();
+                return _fluteSlot;
+            }
+        }
+
+        /// <summary>True while the HUD is on screen, for tests and debugging.</summary>
+        public bool IsShowing => _layer != null && _layer.style.display == DisplayStyle.Flex;
+
+        /// <summary>Supplies the flow that decides when to show the HUD. Call once, before this object is enabled.</summary>
+        public void Initialize(GameFlow flow) => _flow = flow;
+
+        private void OnEnable()
+        {
+            if (_flow != null)
+            {
+                _flow.Changed += HandleFlowChanged;
+            }
+        }
+
+        private void Start()
+        {
+            // GameRoot has already reported the problem if nothing was supplied.
+            if (_flow != null)
+            {
+                Build();
+                HandleFlowChanged(_flow.Phase);
+            }
+        }
+
+        private void OnDisable()
+        {
+            // Unity also calls this when the scene unloads before Initialize ran, so _flow can be null.
+            if (_flow != null)
+            {
+                _flow.Changed -= HandleFlowChanged;
+            }
+        }
+
+        // Built on first use, because other views ask for their place in their own Start.
+        private void Build()
+        {
+            if (_layer != null)
+            {
+                return;
+            }
+
+            _layer = new VisualElement();
+            _layer.pickingMode = PickingMode.Ignore;
+            _layer.style.position = Position.Absolute;
+            _layer.style.left = 0f;
+            _layer.style.right = 0f;
+            _layer.style.top = 0f;
+            _layer.style.bottom = 0f;
+
+            var bottom = new VisualElement();
+            bottom.pickingMode = PickingMode.Ignore;
+            bottom.style.position = Position.Absolute;
+            bottom.style.left = 0f;
+            bottom.style.right = 0f;
+            bottom.style.bottom = BottomMargin;
+            bottom.style.alignItems = Align.Center;
+
+            _comboSlot = NewSlot();
+            _fluteSlot = NewSlot();
+            bottom.Add(_comboSlot);
+            bottom.Add(_fluteSlot);
+            _layer.Add(bottom);
+
+            GetComponent<UIDocument>().rootVisualElement.Add(_layer);
+        }
+
+        private static VisualElement NewSlot()
+        {
+            var slot = new VisualElement();
+            slot.pickingMode = PickingMode.Ignore;
+            slot.style.alignSelf = Align.Stretch;
+            return slot;
+        }
+
+        private void HandleFlowChanged(GamePhase phase)
+        {
+            bool isNightOnScreen = phase == GamePhase.Playing || phase == GamePhase.Paused;
+            _layer.style.display = isNightOnScreen ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+    }
+}

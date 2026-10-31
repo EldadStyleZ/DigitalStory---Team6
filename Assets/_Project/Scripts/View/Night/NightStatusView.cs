@@ -30,6 +30,7 @@ namespace DigitalStory.View
         private NightSession _session;
         private EndingTextConfig _texts;
         private HudConfig _hud;
+        private HudLayout _layout;
         private Label _goal;
         private Label _time;
         private Label _rats;
@@ -49,11 +50,12 @@ namespace DigitalStory.View
         public string RatsText => _rats?.text;
 
         /// <summary>Supplies what to show. Call once, before this object is enabled.</summary>
-        public void Initialize(NightSession session, EndingTextConfig texts, HudConfig hud)
+        public void Initialize(NightSession session, EndingTextConfig texts, HudConfig hud, HudLayout layout)
         {
             _session = session;
             _texts = texts;
             _hud = hud;
+            _layout = layout;
         }
 
         private void OnEnable()
@@ -69,7 +71,7 @@ namespace DigitalStory.View
             // GameRoot has already reported the problem if nothing was supplied.
             if (_session != null)
             {
-                BuildPanel(GetComponent<UIDocument>().rootVisualElement);
+                BuildPanel(_layout.Layer);
             }
         }
 
