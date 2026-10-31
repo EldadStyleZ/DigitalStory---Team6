@@ -43,6 +43,11 @@ namespace DigitalStory.Editor
         [MenuItem("DigitalStory/Build Town Scene")]
         public static void Build()
         {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                return;
+            }
+
             CreateFolders();
 
             // Starting a new scene unloads assets that nothing uses, so it must come before loading them.
@@ -242,7 +247,16 @@ namespace DigitalStory.Editor
 
         private static void AddSceneToBuild()
         {
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            EditorBuildSettingsScene[] scenes = EditorBuildSettings.scenes;
+
+            if (Array.Exists(scenes, scene => scene.path == ScenePath))
+            {
+                return;
+            }
+
+            Array.Resize(ref scenes, scenes.Length + 1);
+            scenes[scenes.Length - 1] = new EditorBuildSettingsScene(ScenePath, true);
+            EditorBuildSettings.scenes = scenes;
         }
 
         private static string BackingField(string propertyName) => $"<{propertyName}>k__BackingField";
