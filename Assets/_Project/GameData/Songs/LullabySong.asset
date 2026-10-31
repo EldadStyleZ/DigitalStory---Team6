@@ -17,5 +17,9 @@ MonoBehaviour:
     _description: Puts cats to sleep
     _cooldownSeconds: 12
     _keys: 020000000100000000000000i
+  _flourish:
+    _ringColor: {r: 0.78431374, g: 0.78431374, b: 1, a: 1}
+    _ringReach: 520
+    _ringSpeed: 600
   <Radius>k__BackingField: 520
   <SleepSeconds>k__BackingField: 9

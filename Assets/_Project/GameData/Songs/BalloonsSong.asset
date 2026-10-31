@@ -17,6 +17,10 @@ MonoBehaviour:
     _description: Rats swell up and float
     _cooldownSeconds: 10
     _keys: 010000000300000005000000i
+  _flourish:
+    _ringColor: {r: 1, g: 0.47058824, b: 0.8627451, a: 1}
+    _ringReach: 340
+    _ringSpeed: 520
   <Radius>k__BackingField: 360
   <ShortestSeconds>k__BackingField: 6
   <ExtraSeconds>k__BackingField: 2.5

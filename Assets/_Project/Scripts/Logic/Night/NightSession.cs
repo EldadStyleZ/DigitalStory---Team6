@@ -67,6 +67,9 @@ namespace DigitalStory.Logic
         public float TimeLeft { get; private set; }
         public NightOutcome Outcome { get; private set; } = NightOutcome.InProgress;
 
+        /// <summary>What the player sees when a song is cast.</summary>
+        public SongFlourish FlourishOf(int song) => _rules.Songs[song].Flourish;
+
         /// <summary>How much of the night has gone, from 0 at dusk to 1 at dawn.</summary>
         public float NightProgress => Mathf.Clamp01(1f - (TimeLeft / TimeLimit));
 

@@ -17,6 +17,10 @@ MonoBehaviour:
     _description: The swarm lifts you up
     _cooldownSeconds: 10
     _keys: 020000000200000005000000i
+  _flourish:
+    _ringColor: {r: 1, g: 0.47058824, b: 0.8627451, a: 1}
+    _ringReach: 340
+    _ringSpeed: 520
   <Radius>k__BackingField: 360
   <Seconds>k__BackingField: 6
   <CharmZoneRadius>k__BackingField: 220

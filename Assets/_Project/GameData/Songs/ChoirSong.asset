@@ -17,5 +17,9 @@ MonoBehaviour:
     _description: The rats sing
     _cooldownSeconds: 10
     _keys: 00000000010000000200000003000000i
+  _flourish:
+    _ringColor: {r: 1, g: 0.47058824, b: 0.8627451, a: 1}
+    _ringReach: 340
+    _ringSpeed: 520
   <Radius>k__BackingField: 360
   <Seconds>k__BackingField: 4.2

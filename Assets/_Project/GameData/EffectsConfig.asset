@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1870ab090c227436cbc994bfa7eeab90, type: 3}
+  m_Name: EffectsConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.EffectsConfig
+  <NoteInterval>k__BackingField: 0.2
+  <NoteStartHeight>k__BackingField: 14
+  <NoteStartSpread>k__BackingField: 10
+  <NoteRiseSpeed>k__BackingField: 34
+  <NoteDriftSpeed>k__BackingField: 15
+  <NoteSeconds>k__BackingField: 1.6
+  <NoteSize>k__BackingField: 18
+  <ChoirNotesPerSecond>k__BackingField: 10
+  <ChoirNoteColor>k__BackingField: {r: 1, g: 0.6666667, b: 0.9019608, a: 1}
+  <ChoirRiseSpeed>k__BackingField: 40
+  <ChoirNoteSeconds>k__BackingField: 1.2
+  <RingInterval>k__BackingField: 0.7
+  <ScareRingInterval>k__BackingField: 0.35
+  <RingSpeed>k__BackingField: 240
+  <ScareRingSpeed>k__BackingField: 420
+  <RingStartRadius>k__BackingField: 16
+  <RingOpacity>k__BackingField: 0.5
+  <MusicCircleOpacity>k__BackingField: 0.32
+  <RippleColor>k__BackingField: {r: 0.74509805, g: 0.9019608, b: 0.9607843, a: 0.6}
+  <RippleStartRadius>k__BackingField: 3
+  <RippleGrowth>k__BackingField: 26
+  <RippleSeconds>k__BackingField: 1.1
+  <RippleFlatness>k__BackingField: 0.6
+  <PuffSize>k__BackingField: 4.4
+  <SplashPuff>k__BackingField:
+    _color: {r: 0.74509805, g: 0.9019608, b: 0.9411765, a: 1}
+    _count: 3
+    _speed: 22
+    _seconds: 0.9
+  <EatenPuff>k__BackingField:
+    _color: {r: 0.5882353, g: 0.50980395, b: 0.47058824, a: 1}
+    _count: 5
+    _speed: 30
+    _seconds: 0.6
+  <PopPuff>k__BackingField:
+    _color: {r: 1, g: 0.5882353, b: 0.78431374, a: 1}
+    _count: 4
+    _speed: 40
+    _seconds: 0.5

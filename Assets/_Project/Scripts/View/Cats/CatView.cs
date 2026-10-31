@@ -18,6 +18,7 @@ namespace DigitalStory.View
         private TownArtConfig _art;
         private SpriteRenderer[] _renderers;
         private SpriteRenderer[] _eyes;
+        private SpriteRenderer[] _snoozes;
 
         /// <summary>Supplies the cats to show. Call once, before this object starts.</summary>
         public void Initialize(CatPack cats, TownArtConfig art)
@@ -36,11 +37,13 @@ namespace DigitalStory.View
 
             _renderers = new SpriteRenderer[_cats.Count];
             _eyes = new SpriteRenderer[_cats.Count];
+            _snoozes = new SpriteRenderer[_cats.Count];
 
             for (int index = 0; index < _cats.Count; index++)
             {
                 _renderers[index] = AddCat();
                 _eyes[index] = AddEyes(_renderers[index].transform);
+                _snoozes[index] = AddSnooze(_renderers[index].transform);
             }
         }
 
@@ -55,6 +58,7 @@ namespace DigitalStory.View
             {
                 ShowCat(in _cats[index], _renderers[index]);
                 ShowEyes(in _cats[index], _eyes[index]);
+                ShowSnooze(in _cats[index], _snoozes[index]);
             }
         }
 
@@ -78,6 +82,32 @@ namespace DigitalStory.View
             eyesRenderer.sprite = _art.CatEyesSprite;
             eyesRenderer.sortingOrder = EyesOrder;
             return eyesRenderer;
+        }
+
+        private SpriteRenderer AddSnooze(Transform cat)
+        {
+            var snooze = new GameObject("Snooze");
+            snooze.transform.SetParent(cat, false);
+            snooze.transform.localScale = Vector3.one * TownSpace.ToSceneLength(_art.SnoozeSize);
+
+            var snoozeRenderer = snooze.AddComponent<SpriteRenderer>();
+            snoozeRenderer.sprite = _art.SnoozeSprite;
+            snoozeRenderer.color = _art.SnoozeColor;
+            snoozeRenderer.sortingOrder = EyesOrder;
+            snoozeRenderer.enabled = false;
+            return snoozeRenderer;
+        }
+
+        private void ShowSnooze(in Cat cat, SpriteRenderer snooze)
+        {
+            snooze.enabled = cat.IsAsleep;
+
+            if (cat.IsAsleep)
+            {
+                float rise = Mathf.Repeat(Time.time * _art.SnoozeRiseSpeed, _art.SnoozeRise);
+                Vector2 above = Vector2.down * (_art.SnoozeHeight + rise);
+                snooze.transform.SetPositionAndRotation(TownSpace.ToScene(cat.Position + above), Quaternion.identity);
+            }
         }
 
         private void ShowEyes(in Cat cat, SpriteRenderer eyes)

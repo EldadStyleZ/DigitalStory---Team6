@@ -13,9 +13,17 @@ namespace DigitalStory.Logic
         [SerializeField, Tooltip("The song's name, keys and cooldown.")]
         private SongDefinition _song;
 
-        protected SongEffect(SongDefinition song) => _song = song;
+        [SerializeField, Tooltip("What the player sees when the song is cast.")]
+        private SongFlourish _flourish;
+
+        protected SongEffect(SongDefinition song, SongFlourish flourish)
+        {
+            _song = song;
+            _flourish = flourish;
+        }
 
         public SongDefinition Song => _song;
+        public SongFlourish Flourish => _flourish;
 
         /// <summary>Applies the song. Keep runtime state in the rules, never on this asset.</summary>
         public abstract void Cast(in SongContext context);

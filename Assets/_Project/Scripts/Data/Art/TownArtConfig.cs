@@ -25,6 +25,18 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("A street lamp seen from above.")]
         public Sprite LampSprite { get; private set; }
 
+        [field: SerializeField, Tooltip("An empty circle 1 scene unit wide, white so it can be tinted.")]
+        public Sprite RingSprite { get; private set; }
+
+        [field: SerializeField, Tooltip("A solid dot 1 scene unit wide, white so it can be tinted.")]
+        public Sprite DotSprite { get; private set; }
+
+        [field: SerializeField, Tooltip("A music note 1 scene unit wide, white so it can be tinted.")]
+        public Sprite NoteSprite { get; private set; }
+
+        [field: SerializeField, Tooltip("The letter Z over a sleeping cat, 1 scene unit wide.")]
+        public Sprite SnoozeSprite { get; private set; }
+
         [field: SerializeField, Tooltip("The material that draws the night over the town.")]
         public Material DarknessMaterial { get; private set; }
 
@@ -71,6 +83,21 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("A cat's eyes while it runs away.")]
         public Color FleeingCatEyeColor { get; private set; } = Color.white;
+
+        [field: SerializeField, Tooltip("The Z over a sleeping cat.")]
+        public Color SnoozeColor { get; private set; } = new Color32(0xD7, 0xD7, 0xFF, 0xD9);
+
+        [field: SerializeField, Min(0f), Tooltip("How big the Z is, in town units.")]
+        public float SnoozeSize { get; private set; } = 15f;
+
+        [field: SerializeField, Min(0f), Tooltip("How far above a sleeping cat the Z starts, in town units.")]
+        public float SnoozeHeight { get; private set; } = 12f;
+
+        [field: SerializeField, Min(0f), Tooltip("How far the Z rises before it starts again, in town units.")]
+        public float SnoozeRise { get; private set; } = 12f;
+
+        [field: SerializeField, Min(0f), Tooltip("How fast the Z rises.")]
+        public float SnoozeRiseSpeed { get; private set; } = 12f;
 
         [field: Header("Song looks")]
         [SerializeField, Tooltip("How each rat look appears, in the order of RatLook.")]
