@@ -96,7 +96,7 @@ namespace DigitalStory.View
 
         private float HopOf(in Rat rat, bool isCharmed)
         {
-            if (!_stage.IsSinging || !isCharmed)
+            if (!_stage.IsSinging || !isCharmed || rat.IsOutOfReach)
             {
                 return 0f;
             }

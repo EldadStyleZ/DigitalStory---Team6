@@ -166,6 +166,21 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator Town_RatPlayingDeadDuringChoir_DoesNotHop()
+        {
+            RatSwarmView rats = Object.FindAnyObjectByType<RatSwarmView>();
+            RatSwarm swarm = _root.Session.Swarm;
+            swarm.FullyCharm(0);
+            swarm.Enchant(0, new FaintTrance(0f), 5f);
+
+            _root.Session.Stage.StartChoir(5f);
+            yield return null;
+
+            Vector3 expected = TownSpace.ToScene(swarm[0].Position);
+            Assert.That(rats.transform.GetChild(0).position.y, Is.EqualTo(expected.y).Within(0.0001f));
+        }
+
+        [UnityTest]
         public IEnumerator Town_CrowdSurfing_LiftsThePiper()
         {
             Transform piper = Object.FindAnyObjectByType<PiperView>().transform;
