@@ -86,6 +86,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The flute on screen.")]
         private FluteView _fluteView;
 
+        [SerializeField, Tooltip("The small map of the town.")]
+        private MinimapView _minimap;
+
         [SerializeField, Tooltip("Holds everything drawn over the night.")]
         private HudLayout _hudLayout;
 
@@ -125,6 +128,7 @@ namespace DigitalStory.View
             _statusView.Initialize(Session, _menuTexts, _hud, _hudLayout);
             _comboRow.Initialize(Session, _art, _hud, _hudLayout);
             _fluteView.Initialize(Session, _flute, _hudLayout, _menuTexts, _art, _hud);
+            _minimap.Initialize(Session, _townCamera.GetComponent<Camera>(), _town, _hudLayout, _art, _hud);
             _menuScreens.Initialize(Flow, Session, _menuTexts, _endingTexts, _art, _hud);
         }
 
@@ -135,7 +139,7 @@ namespace DigitalStory.View
             bool isComplete = _night != null && _town != null && _piper != null && _breath != null
                 && _flute != null && _rats != null && _cats != null && _songConfig != null && _songs.Length > 0 && _art != null && _endingTexts != null && _hud != null && _menuTexts != null
                 && _input != null && _runner != null && _flowInput != null && _townView != null && _piperView != null
-                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null && _fluteView != null
+                && _swarmView != null && _catView != null && _townCamera != null && _statusView != null && _comboRow != null && _fluteView != null && _minimap != null
                 && _hudLayout != null && _menuScreens != null;
 
             if (!isComplete)

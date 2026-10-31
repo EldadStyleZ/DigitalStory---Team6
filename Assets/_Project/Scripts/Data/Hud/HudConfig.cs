@@ -52,6 +52,16 @@ namespace DigitalStory.Data
         [field: SerializeField, Range(0f, 1f), Tooltip("How visible the flute is while out of breath.")]
         public float ExhaustedFluteOpacity { get; private set; } = .5f;
 
+        [field: Header("Minimap")]
+        [field: SerializeField, Tooltip("A cat on the map.")]
+        public Color MinimapCatColor { get; private set; } = new Color32(0xFF, 0x5A, 0x4A, 0xFF);
+
+        [field: SerializeField, Tooltip("The Piper on the map.")]
+        public Color MinimapPiperColor { get; private set; } = new Color32(0xFF, 0xF0, 0xA0, 0xFF);
+
+        [field: SerializeField, Tooltip("The outline of what the camera sees.")]
+        public Color MinimapWindowColor { get; private set; } = new Color32(0xB4, 0xB4, 0xBC, 0xFF);
+
         [field: Header("Combos row")]
         [field: SerializeField, Tooltip("The hole numbers on a combo.")]
         public Color KeyTextColor { get; private set; } = new Color32(0x1A, 0x12, 0x09, 0xFF);
