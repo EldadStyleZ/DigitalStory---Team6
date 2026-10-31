@@ -225,6 +225,22 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Tick_Asleep_SlowsEquallyAtAnyFrameRate()
+        {
+            Cat cat = CatAt(Spot);
+            cat.SleepLeft = 5f;
+            cat.Velocity = Vector2.right * 50f;
+            CatPack oneStep = PackOf(cat);
+            CatPack twoSteps = PackOf(cat);
+
+            oneStep.Tick(PiperFarAway, SwarmOf(), 2f * Step);
+            twoSteps.Tick(PiperFarAway, SwarmOf(), Step);
+            twoSteps.Tick(PiperFarAway, SwarmOf(), Step);
+
+            Assert.That(oneStep[0].Velocity.x, Is.EqualTo(twoSteps[0].Velocity.x).Within(Tolerance));
+        }
+
+        [Test]
         public void Tick_AtTheBank_StaysBackFromTheWater()
         {
             RiverBank bank = TestRules.Bank();

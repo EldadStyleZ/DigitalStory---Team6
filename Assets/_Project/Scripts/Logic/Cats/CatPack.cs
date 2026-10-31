@@ -94,7 +94,7 @@ namespace DigitalStory.Logic
             if (cat.IsAsleep)
             {
                 cat.SleepLeft -= deltaTime;
-                cat.Velocity *= _config.SleepSlowdown;
+                cat.Velocity *= StepSlowdown.ShareLeft(_config.SleepSlowdown, deltaTime);
                 return;
             }
 

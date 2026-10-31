@@ -53,7 +53,7 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Seconds a cat keeps running after a scare.")]
         public float ScareSeconds { get; private set; } = 1.5f;
 
-        [field: SerializeField, Range(0f, 1f), Tooltip("Share of its speed a sleeping cat keeps each step.")]
+        [field: SerializeField, Range(0f, 1f), Tooltip("Share of its speed a sleeping cat keeps each sixtieth of a second.")]
         public float SleepSlowdown { get; private set; } = .9f;
 
         [field: Header("Effect on rats")]

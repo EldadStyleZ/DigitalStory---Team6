@@ -18,7 +18,7 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Random extra seconds on top of the shortest faint.")]
         public float ExtraSeconds { get; private set; } = 1.5f;
 
-        [field: SerializeField, Range(0f, 1f), Tooltip("Share of its speed a fainting rat keeps each step.")]
+        [field: SerializeField, Range(0f, 1f), Tooltip("Share of its speed a fainting rat keeps each sixtieth of a second.")]
         public float Slowdown { get; private set; } = .8f;
 
         protected override void Affect(int[] rats, in SongContext context)
