@@ -11,5 +11,8 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("The maze's size.")]
         public MazeShape Shape { get; private set; } = new MazeShape(60, 60, 3, 1, 0.015f);
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("The chance that a junction has an arrow on its floor.")]
+        public float SignpostChance { get; private set; } = 0.5f;
     }
 }

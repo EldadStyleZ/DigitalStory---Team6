@@ -25,7 +25,10 @@ namespace DigitalStory.Data
         [SerializeField, Min(0f), Tooltip("Tiles around the target that a hit also covers. Zero hits only the target.")]
         private float _areaRadius;
 
-        public FighterStats(float maxHealth, float moveSpeed, float damage, float secondsBetweenHits, float reach, float areaRadius = 0f)
+        [SerializeField, Tooltip("What makes it more than these numbers.")]
+        private FighterTraits _traits;
+
+        public FighterStats(float maxHealth, float moveSpeed, float damage, float secondsBetweenHits, float reach, float areaRadius = 0f, FighterTraits traits = default)
         {
             _maxHealth = maxHealth;
             _moveSpeed = moveSpeed;
@@ -33,6 +36,7 @@ namespace DigitalStory.Data
             _secondsBetweenHits = secondsBetweenHits;
             _reach = reach;
             _areaRadius = areaRadius;
+            _traits = traits;
         }
 
         public float MaxHealth => _maxHealth;
@@ -42,5 +46,6 @@ namespace DigitalStory.Data
         public float Reach => _reach;
         public float AreaRadius => _areaRadius;
         public bool HitsAnArea => _areaRadius > 0f;
+        public FighterTraits Traits => _traits;
     }
 }

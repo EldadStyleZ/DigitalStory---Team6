@@ -5,20 +5,32 @@ using UnityEngine;
 
 namespace DigitalStory.View
 {
-    /// <summary>Plays the lab's sound effects, baked from data.</summary>
+    /// <summary>Plays the lab's sound effects and each combo's tune, all baked from data.</summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(AudioSource))]
     [AddComponentMenu("DigitalStory/Lab/Lab Sound View")]
     public sealed class LabSoundView : MonoBehaviour
     {
         private readonly Dictionary<SoundCue, AudioClip> _clips = new Dictionary<SoundCue, AudioClip>();
+        private readonly Dictionary<IComboSong, AudioClip> _songs = new Dictionary<IComboSong, AudioClip>();
 
         private LabSession _session;
         private LabSoundConfig _sound;
         private AudioSource _source;
+        private AudioSource _songSource;
+        private float _nextHitAt;
 
         /// <summary>The last sound played, for tests and debugging.</summary>
         public SoundCue LastPlayed { get; private set; }
+
+        /// <summary>How many hit sounds have played, for tests and debugging.</summary>
+        public int HitSoundsPlayed { get; private set; }
+
+        /// <summary>The last combo's tune, for tests and debugging.</summary>
+        public IComboSong LastSong { get; private set; }
+
+        /// <summary>True while a combo's tune plays, for tests and debugging.</summary>
+        public bool IsPlayingASong => _songSource != null && _songSource.isPlaying;
 
         /// <summary>Supplies what to play. Call once, before this object starts.</summary>
         public void Initialize(LabSession session, LabSoundConfig sound)
@@ -27,7 +39,13 @@ namespace DigitalStory.View
             _sound = sound;
         }
 
-        private void Awake() => _source = GetComponent<AudioSource>();
+        // A tune gets its own source, so a new one can cut the last one off without silencing the fight.
+        private void Awake()
+        {
+            _source = GetComponent<AudioSource>();
+            _songSource = gameObject.AddComponent<AudioSource>();
+            _songSource.playOnAwake = false;
+        }
 
         private void Start()
         {
@@ -40,13 +58,15 @@ namespace DigitalStory.View
             BakeEveryCue();
             AudioSettings.OnAudioConfigurationChanged += HandleAudioChanged;
             _session.NotePlayed += HandleNotePlayed;
-            _session.Summoned += HandleSummoned;
+            _session.ComboPlayed += HandleComboPlayed;
             _session.ComboFailed += HandleComboFailed;
             _session.SummonRefused += HandleRefused;
             _session.PiperDied += HandlePiperDied;
             _session.Won += HandleWon;
             _session.Levels.LevelledUp += HandleLevelledUp;
             _session.Battle.Struck += HandleStruck;
+            _session.Ambushes.Warned += HandleAmbushWarned;
+            _session.Ambushes.Sprang += HandleAmbushSprang;
         }
 
         private void OnDestroy()
@@ -59,13 +79,15 @@ namespace DigitalStory.View
 
             AudioSettings.OnAudioConfigurationChanged -= HandleAudioChanged;
             _session.NotePlayed -= HandleNotePlayed;
-            _session.Summoned -= HandleSummoned;
+            _session.ComboPlayed -= HandleComboPlayed;
             _session.ComboFailed -= HandleComboFailed;
             _session.SummonRefused -= HandleRefused;
             _session.PiperDied -= HandlePiperDied;
             _session.Won -= HandleWon;
             _session.Levels.LevelledUp -= HandleLevelledUp;
             _session.Battle.Struck -= HandleStruck;
+            _session.Ambushes.Warned -= HandleAmbushWarned;
+            _session.Ambushes.Sprang -= HandleAmbushSprang;
             ForgetEveryClip();
         }
 
@@ -81,11 +103,21 @@ namespace DigitalStory.View
 
             foreach (SoundCue cue in _sound.EveryCue)
             {
-                float[] samples = ToneBaker.Bake(cue, sampleRate);
-                var clip = AudioClip.Create("Generated Sound", samples.Length, 1, sampleRate, false);
-                clip.SetData(samples, 0);
-                _clips[cue] = clip;
+                _clips[cue] = NewClip(cue, sampleRate);
             }
+
+            foreach (IComboSong song in _session.Songs)
+            {
+                _songs[song] = NewClip(ComboSongWriter.Write(song, _sound.Band), sampleRate);
+            }
+        }
+
+        private static AudioClip NewClip(SoundCue cue, int sampleRate)
+        {
+            float[] samples = ToneBaker.Bake(cue, sampleRate);
+            var clip = AudioClip.Create("Generated Sound", samples.Length, 1, sampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
         }
 
         private void ForgetEveryClip()
@@ -95,7 +127,13 @@ namespace DigitalStory.View
                 Destroy(clip);
             }
 
+            foreach (AudioClip clip in _songs.Values)
+            {
+                Destroy(clip);
+            }
+
             _clips.Clear();
+            _songs.Clear();
         }
 
         // Changing device empties clips made in code, and an empty clip plays silence.
@@ -117,7 +155,16 @@ namespace DigitalStory.View
 
         private void HandleNotePlayed(int note) => Play(_sound.Notes[note]);
 
-        private void HandleSummoned(CreatureType creature) => Play(_sound.Summoned);
+        private void HandleComboPlayed(IComboSong song)
+        {
+            LastSong = song;
+
+            if (_songs.TryGetValue(song, out AudioClip clip))
+            {
+                _songSource.clip = clip;
+                _songSource.Play();
+            }
+        }
 
         private void HandleComboFailed() => Play(_sound.Failed);
 
@@ -129,6 +176,21 @@ namespace DigitalStory.View
 
         private void HandleLevelledUp(int level) => Play(_sound.LevelUp);
 
-        private void HandleStruck(StrikeReport strike) => Play(strike.AreaRadius > 0f ? _sound.AreaHit : _sound.Hit);
+        // A gang lands many hits at once, and every one of them would add up to a roar over the music.
+        private void HandleStruck(StrikeReport strike)
+        {
+            if (Time.time < _nextHitAt)
+            {
+                return;
+            }
+
+            _nextHitAt = Time.time + _sound.HitGapSeconds;
+            HitSoundsPlayed++;
+            Play(strike.AreaRadius > 0f ? _sound.AreaHit : _sound.Hit);
+        }
+
+        private void HandleAmbushWarned(Vector2 position) => Play(_sound.AmbushWarning);
+
+        private void HandleAmbushSprang(Vector2 position) => Play(_sound.AmbushSprung);
     }
 }

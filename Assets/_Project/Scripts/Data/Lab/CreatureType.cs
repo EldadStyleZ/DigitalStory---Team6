@@ -6,10 +6,13 @@ namespace DigitalStory.Data
 {
     /// <summary>A creature the Piper can summon.</summary>
     [Serializable]
-    public sealed class CreatureType
+    public sealed class CreatureType : IComboSong
     {
         [SerializeField, Tooltip("Its name on screen.")]
         private string _name;
+
+        [SerializeField, Tooltip("What it is for, in a few words.")]
+        private string _role;
 
         [SerializeField, Min(1), Tooltip("The level that unlocks it.")]
         private int _unlockLevel;
@@ -29,7 +32,10 @@ namespace DigitalStory.Data
         [SerializeField, Tooltip("How it is drawn.")]
         private FighterLook _look;
 
-        public CreatureType(string name, int unlockLevel, int[] combo, float staminaCost, float cooldownSeconds, FighterStats stats, FighterLook look)
+        [SerializeField, Tooltip("How its tune is played.")]
+        private SongStyle _style;
+
+        public CreatureType(string name, int unlockLevel, int[] combo, float staminaCost, float cooldownSeconds, FighterStats stats, FighterLook look, string role = "", SongStyle style = default)
         {
             _name = name;
             _unlockLevel = unlockLevel;
@@ -38,14 +44,18 @@ namespace DigitalStory.Data
             _cooldownSeconds = cooldownSeconds;
             _stats = stats;
             _look = look;
+            _role = role;
+            _style = style;
         }
 
         public string Name => _name;
+        public string Role => _role;
         public int UnlockLevel => _unlockLevel;
         public IReadOnlyList<int> Combo => _combo ?? Array.Empty<int>();
         public float StaminaCost => _staminaCost;
         public float CooldownSeconds => _cooldownSeconds;
         public FighterStats Stats => _stats;
         public FighterLook Look => _look;
+        public SongStyle Style => _style;
     }
 }

@@ -14,47 +14,92 @@ MonoBehaviour:
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.LabSoundConfig
   _notes:
   - _tones:
+    - _shape: 1
+      _startHertz: 440
+      _endHertz: 440
+      _seconds: 0.24
+      _volume: 0.26
+      _delay: 0
     - _shape: 0
-      _startHertz: 523
-      _endHertz: 523
-      _seconds: 0.14
-      _volume: 0.3
+      _startHertz: 880
+      _endHertz: 880
+      _seconds: 0.18
+      _volume: 0.05
       _delay: 0
   - _tones:
+    - _shape: 1
+      _startHertz: 523.25
+      _endHertz: 523.25
+      _seconds: 0.24
+      _volume: 0.26
+      _delay: 0
     - _shape: 0
-      _startHertz: 659
-      _endHertz: 659
-      _seconds: 0.14
-      _volume: 0.3
+      _startHertz: 1046.5
+      _endHertz: 1046.5
+      _seconds: 0.18
+      _volume: 0.05
       _delay: 0
   - _tones:
+    - _shape: 1
+      _startHertz: 659.25
+      _endHertz: 659.25
+      _seconds: 0.24
+      _volume: 0.26
+      _delay: 0
     - _shape: 0
+      _startHertz: 1318.5
+      _endHertz: 1318.5
+      _seconds: 0.18
+      _volume: 0.05
+      _delay: 0
+  - _tones:
+    - _shape: 1
       _startHertz: 784
       _endHertz: 784
-      _seconds: 0.14
-      _volume: 0.3
+      _seconds: 0.24
+      _volume: 0.26
       _delay: 0
-  - _tones:
     - _shape: 0
-      _startHertz: 988
-      _endHertz: 988
-      _seconds: 0.14
-      _volume: 0.3
-      _delay: 0
-  <Summoned>k__BackingField:
-    _tones:
-    - _shape: 1
-      _startHertz: 392
-      _endHertz: 784
+      _startHertz: 1568
+      _endHertz: 1568
       _seconds: 0.18
-      _volume: 0.3
+      _volume: 0.05
       _delay: 0
-    - _shape: 1
-      _startHertz: 587
-      _endHertz: 1175
-      _seconds: 0.2
-      _volume: 0.2
-      _delay: 0.06
+  <Band>k__BackingField:
+    _noteHertz:
+    - 440
+    - 523.25
+    - 659.25
+    - 784
+    _chords:
+    - _bassHertz: 110
+      _hertz:
+      - 261.63
+      - 329.63
+      - 440
+    - _bassHertz: 87.31
+      _hertz:
+      - 261.63
+      - 349.23
+      - 440
+    - _bassHertz: 130.81
+      _hertz:
+      - 261.63
+      - 329.63
+      - 392
+    - _bassHertz: 98
+      _hertz:
+      - 246.94
+      - 293.66
+      - 392
+    _leadVolume: 0.22
+    _airVolume: 0.05
+    _chordVolume: 0.04
+    _bassVolume: 0.18
+    _kickVolume: 0.3
+    _snareVolume: 0.18
+    _hatVolume: 0.07
+  <HitGapSeconds>k__BackingField: 0.09
   <Failed>k__BackingField:
     _tones:
     - _shape: 3
@@ -77,7 +122,7 @@ MonoBehaviour:
       _startHertz: 900
       _endHertz: 400
       _seconds: 0.07
-      _volume: 0.16
+      _volume: 0.1
       _delay: 0
   <AreaHit>k__BackingField:
     _tones:
@@ -85,7 +130,35 @@ MonoBehaviour:
       _startHertz: 300
       _endHertz: 120
       _seconds: 0.3
+      _volume: 0.2
+      _delay: 0
+  <AmbushWarning>k__BackingField:
+    _tones:
+    - _shape: 3
+      _startHertz: 220
+      _endHertz: 233
+      _seconds: 0.5
+      _volume: 0.2
+      _delay: 0
+    - _shape: 3
+      _startHertz: 233
+      _endHertz: 247
+      _seconds: 0.4
+      _volume: 0.2
+      _delay: 0.25
+  <AmbushSprung>k__BackingField:
+    _tones:
+    - _shape: 4
+      _startHertz: 1400
+      _endHertz: 200
+      _seconds: 0.25
       _volume: 0.3
+      _delay: 0
+    - _shape: 2
+      _startHertz: 110
+      _endHertz: 82
+      _seconds: 0.3
+      _volume: 0.16
       _delay: 0
   <LevelUp>k__BackingField:
     _tones:

@@ -2,16 +2,16 @@ using DigitalStory.Data;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>What happened to a combo, and which creature it finished, if any.</summary>
+    /// <summary>What happened to a combo, and which one it finished, if any.</summary>
     public readonly struct ComboResult
     {
-        public ComboResult(ComboOutcome outcome, CreatureType creature = null)
+        public ComboResult(ComboOutcome outcome, IComboSong song = null)
         {
             Outcome = outcome;
-            Creature = creature;
+            Song = song;
         }
 
         public ComboOutcome Outcome { get; }
-        public CreatureType Creature { get; }
+        public IComboSong Song { get; }
     }
 }

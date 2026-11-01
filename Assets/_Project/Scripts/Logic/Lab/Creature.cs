@@ -13,5 +13,12 @@ namespace DigitalStory.Logic
         }
 
         public CreatureType Type { get; }
+
+        /// <summary>How long it has gone without a fight.</summary>
+        public float QuietSeconds { get; private set; }
+
+        public void WaitQuietly(float deltaTime) => QuietSeconds += deltaTime;
+
+        public void KeepBusy() => QuietSeconds = 0f;
     }
 }

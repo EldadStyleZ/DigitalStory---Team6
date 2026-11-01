@@ -128,6 +128,17 @@ namespace DigitalStory.Logic
                 Shape.WallTiles + (row * Shape.CellPitch) + halfCorridor);
         }
 
+        /// <summary>
+        /// One of several spots in a ring around a cell's centre, so a group can share a cell without
+        /// standing on each other. The ring is half a corridor wide, which keeps everyone off the walls.
+        /// </summary>
+        public Vector2 SpotAround(int cell, int index, int count)
+        {
+            float angle = index * (Mathf.PI * 2f) / count;
+            float radius = Shape.CorridorTiles / 4f;
+            return CenterOf(cell) + (new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+        }
+
         /// <summary>Returns the cell nearest a position. A position inside a passage belongs to the closer side.</summary>
         public int CellAt(Vector2 position)
         {

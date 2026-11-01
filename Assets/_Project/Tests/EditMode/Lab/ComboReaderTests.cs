@@ -41,7 +41,7 @@ namespace DigitalStory.Tests.EditMode
             ComboResult result = _reader.Press(J, 1);
 
             Assert.That(result.Outcome, Is.EqualTo(ComboOutcome.Completed));
-            Assert.That(result.Creature, Is.SameAs(_mouse));
+            Assert.That(result.Song, Is.SameAs(_mouse));
             Assert.That(_reader.Notes, Is.Empty);
         }
 
@@ -71,7 +71,7 @@ namespace DigitalStory.Tests.EditMode
             ComboResult result = _reader.Press(H, 2);
 
             Assert.That(result.Outcome, Is.EqualTo(ComboOutcome.Completed));
-            Assert.That(result.Creature, Is.SameAs(_cat));
+            Assert.That(result.Song, Is.SameAs(_cat));
         }
 
         [Test]
@@ -141,11 +141,92 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Constructor_ASongClashingWithACreature_FailsWithAClearError()
+        {
+            IComboSong[] clashing = { Creature("Short", 1, H, J), new BattleSong("Long", "Boost", 2, new[] { H, J, K }, 1f, 1f, 2f, 1f) };
+
+            var error = Assert.Throws<ArgumentException>(() => new ComboReader(_config, clashing));
+            Assert.That(error.Message, Does.Contain("Short").And.Contain("Long"));
+        }
+
+        [Test]
+        public void Candidates_AfterTheFirstNote_ListEveryKnownComboThatFits()
+        {
+            CreatureType longer = Creature("Longer", 1, H, K, L);
+            var reader = new ComboReader(_config, new[] { _mouse, _cat, longer });
+
+            reader.Press(H, 1);
+
+            Assert.That(reader.Candidates, Is.EqualTo(new[] { _mouse, longer }));
+        }
+
+        [Test]
+        public void Candidates_LeaveOutCombosStillLocked()
+        {
+            _reader.Press(K, 1);
+
+            Assert.That(_reader.Candidates, Is.Empty);
+        }
+
+        [Test]
+        public void Candidates_AfterAnotherNote_Narrow()
+        {
+            CreatureType longer = Creature("Longer", 1, H, K, L);
+            var reader = new ComboReader(_config, new[] { _mouse, _cat, longer });
+            reader.Press(H, 1);
+
+            reader.Press(K, 1);
+
+            Assert.That(reader.Candidates, Is.EqualTo(new[] { longer }));
+        }
+
+        [Test]
+        public void Candidates_OnceTheComboFinishes_AreEmpty()
+        {
+            _reader.Press(H, 1);
+
+            _reader.Press(J, 1);
+
+            Assert.That(_reader.Candidates, Is.Empty);
+        }
+
+        [Test]
+        public void Candidates_OnceTheComboFails_AreEmpty()
+        {
+            _reader.Press(H, 1);
+
+            _reader.Press(L, 1);
+
+            Assert.That(_reader.Candidates, Is.Empty);
+        }
+
+        [Test]
+        public void Candidates_AfterClear_AreEmpty()
+        {
+            _reader.Press(H, 1);
+
+            _reader.Clear();
+
+            Assert.That(_reader.Candidates, Is.Empty);
+        }
+
+        [Test]
         public void TheRealRoster_NoComboStartsAnother()
         {
             var roster = ScriptableObject.CreateInstance<CreatureRoster>();
 
-            Assert.DoesNotThrow(() => new ComboReader(_config, roster.Creatures));
+            Assert.DoesNotThrow(() => new ComboReader(_config, roster.Creatures.Concat<IComboSong>(roster.BattleSongs).ToArray()));
+        }
+
+        [Test]
+        public void TheRealRoster_EveryComboSaysWhatItIsFor()
+        {
+            var roster = ScriptableObject.CreateInstance<CreatureRoster>();
+
+            foreach (IComboSong song in roster.Creatures.Concat<IComboSong>(roster.BattleSongs))
+            {
+                Assert.That(song.Role, Is.Not.Empty, song.Name);
+            }
         }
 
         [Test]

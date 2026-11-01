@@ -16,6 +16,8 @@ namespace DigitalStory.Tests.PlayMode
         private const string SceneName = "eldad-lab-scene";
         private const int H = 0;
         private const int J = 1;
+        private const int K = 2;
+        private const int L = 3;
 
         private static readonly FighterLook Plain = new FighterLook(Color.red, 1f, FighterShape.Rat);
         private static readonly FighterStats Statue = new FighterStats(5000f, 0f, 0f, 1000f, 1f);
@@ -26,8 +28,11 @@ namespace DigitalStory.Tests.PlayMode
         private LabHudView _hud;
         private LabScreensView _screens;
         private LabSoundView _sound;
+        private ComboBalloonView _balloon;
+        private LabArtConfig _art;
         private LabSoundConfig _soundConfig;
         private LabTextConfig _texts;
+        private AmbushConfig _ambush;
 
         private LabSession Session => _root.Session;
 
@@ -44,8 +49,11 @@ namespace DigitalStory.Tests.PlayMode
             _hud = Object.FindAnyObjectByType<LabHudView>();
             _screens = Object.FindAnyObjectByType<LabScreensView>();
             _sound = Object.FindAnyObjectByType<LabSoundView>();
+            _balloon = Object.FindAnyObjectByType<ComboBalloonView>();
+            _art = Resources.FindObjectsOfTypeAll<LabArtConfig>()[0];
             _soundConfig = Resources.FindObjectsOfTypeAll<LabSoundConfig>()[0];
             _texts = Resources.FindObjectsOfTypeAll<LabTextConfig>()[0];
+            _ambush = Resources.FindObjectsOfTypeAll<AmbushConfig>()[0];
         }
 
         private Minion StartBattle(FighterStats stats, float xp = 10f)
@@ -64,6 +72,15 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(Session.Battle.IsInBattle, Is.True, "The test needs a fight.");
             return minion;
         }
+
+        // Hides a group right beside the Piper, so the watch sets it off straight away.
+        private void SpringNextToThePiper()
+        {
+            var hidden = new MinionType("Hidden", 60f, 1, 0f, 1f, Statue, Plain);
+            Session.Ambushes.Add(new Ambush(Session.Maze.Entrance, new[] { hidden, hidden, hidden }));
+        }
+
+        private float DistanceFromDone(Color color) => ((Vector4)(color - _art.BalloonDoneColor)).magnitude;
 
         private void Press(string buttonName)
         {
@@ -159,12 +176,179 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Hud_WhenAKeyIsPressedInPeace_SaysWhyNothingHappened()
+        public IEnumerator Hud_WhenAComboIsSummonedInPeace_NamesTheCreature()
         {
+            Session.Press(H);
+            Session.Press(J);
+            yield return null;
+
+            Assert.That(Session.Battle.Creatures.Count, Is.EqualTo(1));
+            Assert.That(_hud.ShownMessage, Is.EqualTo(Session.Battle.Creatures[0].Type.Name));
+        }
+
+        [UnityTest]
+        public IEnumerator Hud_WhileTheCreaturesAreBoosted_ShowsIt()
+        {
+            Assert.That(_hud.IsShowingABoost, Is.False);
+
+            Session.Battle.Boost(2f, 5f);
+            yield return null;
+
+            Assert.That(_hud.IsShowingABoost, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator Hud_WhenAnAmbushIsComing_Warns()
+        {
+            SpringNextToThePiper();
+            yield return new WaitForSeconds(_ambush.DelaySeconds + 0.2f);
+
+            Assert.That(_hud.ShownMessage, Is.EqualTo(_texts.AmbushMessage));
+        }
+
+        [UnityTest]
+        public IEnumerator Effects_WhenAnAmbushIsComing_MarkWhere()
+        {
+            SpringNextToThePiper();
+            yield return new WaitForSeconds(_ambush.DelaySeconds + 0.2f);
+
+            Assert.That(_effects.ActiveCount, Is.GreaterThan(0));
+            Assert.That(_sound.LastPlayed, Is.SameAs(_soundConfig.AmbushWarning));
+        }
+
+        [UnityTest]
+        public IEnumerator Ambush_AfterItsWarning_DrawsItsEnemies()
+        {
+            int before = Session.Battle.Minions.Count;
+            SpringNextToThePiper();
+            yield return new WaitForSeconds(_ambush.DelaySeconds + _ambush.WarningSeconds + 0.3f);
+
+            Assert.That(Session.Battle.Minions.Count, Is.EqualTo(before + 3));
+            Assert.That(_units.DrawnCount, Is.EqualTo(Session.Battle.Minions.Count + Session.Battle.Creatures.Count));
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_WithNoCombo_IsHidden()
+        {
+            yield return null;
+
+            Assert.That(_balloon.IsShowing, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_OnTheFirstNote_ListsTheCombosItCouldBecome()
+        {
+            Session.Levels.Add(1000000);
+            yield return null;
+
             Session.Press(H);
             yield return null;
 
-            Assert.That(_hud.ShownMessage, Is.EqualTo(_texts.NotInBattleMessage));
+            Assert.That(_balloon.IsShowing, Is.True);
+            Assert.That(_balloon.ShownRows, Is.EqualTo(Session.Combos.Candidates.Count));
+            Assert.That(_balloon.ShownRows, Is.EqualTo(2), "Mouse and Bear both start with H.");
+            Assert.That(_balloon.ShownName(0), Is.EqualTo(Session.Combos.Candidates[0].Name));
+            Assert.That(_balloon.ShownLetters(0), Is.EqualTo("HJ"));
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_ThePlayedLetters_AreColored()
+        {
+            Session.Levels.Add(1000000);
+            Session.Press(H);
+            Session.Press(L);
+            Session.Press(K);
+            yield return null;
+
+            Assert.That(_balloon.ShownName(0), Is.EqualTo("Bear"));
+            Assert.That(_balloon.LetterColor(0, 0), Is.Not.EqualTo(_art.BalloonWaitingColor));
+            Assert.That(_balloon.LetterColor(0, 2), Is.Not.EqualTo(_art.BalloonWaitingColor));
+            Assert.That(_balloon.LetterColor(0, 3), Is.EqualTo(_art.BalloonWaitingColor));
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_MoreLettersPlayed_MovesTheColorTowardDone()
+        {
+            Session.Levels.Add(1000000);
+            Session.Press(H);
+            Session.Press(L);
+            yield return null;
+            Color earlier = _balloon.LetterColor(0, 0);
+
+            Session.Press(K);
+            Session.Press(J);
+            Session.Press(H);
+            yield return null;
+            Color later = _balloon.LetterColor(0, 0);
+
+            Assert.That(DistanceFromDone(later), Is.LessThan(DistanceFromDone(earlier)));
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_ANarrowingCombo_DropsTheOthers()
+        {
+            Session.Levels.Add(1000000);
+            Session.Press(H);
+            yield return null;
+            Assert.That(_balloon.ShownRows, Is.EqualTo(2));
+
+            Session.Press(L);
+            yield return null;
+
+            Assert.That(_balloon.ShownRows, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_WhenTheComboFinishes_ShowsItDoneThenGoes()
+        {
+            Session.Press(H);
+            Session.Press(J);
+            yield return null;
+
+            Assert.That(_balloon.IsShowing, Is.True);
+            Assert.That(DistanceFromDone(_balloon.LetterColor(0, 1)), Is.LessThan(0.01f));
+
+            yield return new WaitForSeconds(_art.BalloonEndSeconds + 0.2f);
+
+            Assert.That(_balloon.IsShowing, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_WhenTheComboFails_TurnsRedThenGoes()
+        {
+            Session.Press(H);
+            Session.Press(L);
+            yield return null;
+
+            Assert.That(_balloon.IsShowing, Is.True);
+            Assert.That(_balloon.ShownColor, Is.EqualTo(_art.BalloonFailedColor));
+
+            yield return new WaitForSeconds(_art.BalloonEndSeconds + 0.2f);
+
+            Assert.That(_balloon.IsShowing, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_AWrongFirstNote_StillShowsIt()
+        {
+            Session.Press(L);
+            yield return null;
+
+            Assert.That(_balloon.IsShowing, Is.True);
+            Assert.That(_balloon.ShownLetters(0), Is.EqualTo("L"));
+            Assert.That(_balloon.ShownColor, Is.EqualTo(_art.BalloonFailedColor));
+        }
+
+        [UnityTest]
+        public IEnumerator Balloon_FloatsOverThePiper()
+        {
+            Session.Press(H);
+            yield return null;
+            yield return null;
+
+            var screen = Object.FindAnyObjectByType<UIDocument>().rootVisualElement.worldBound;
+            Assert.That(_balloon.ShownPosition.x, Is.EqualTo(screen.width / 2f).Within(screen.width / 10f));
+            Assert.That(_balloon.ShownPosition.y, Is.LessThan(screen.height / 2f), "It sits above the Piper.");
         }
 
         [UnityTest]
@@ -180,24 +364,100 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Sound_WhenACreatureArrives_Plays()
+        public IEnumerator Sound_WhenACreatureArrives_PlaysItsSong()
         {
-            StartBattle(Statue);
-
             Session.Press(H);
             Session.Press(J);
             yield return null;
 
-            Assert.That(_sound.LastPlayed, Is.SameAs(_soundConfig.Summoned));
+            Assert.That(_sound.LastSong, Is.SameAs(Session.Songs[0]));
+            Assert.That(_sound.IsPlayingASong, Is.True);
         }
 
         [UnityTest]
-        public IEnumerator Sound_WhenAKeyIsPressedInPeace_PlaysTheRefusal()
+        public IEnumerator Sound_ANewSong_ReplacesTheLast()
+        {
+            Session.Levels.Add(1000000);
+            Session.Press(H);
+            Session.Press(J);
+            yield return null;
+
+            Session.Press(J);
+            Session.Press(H);
+            Session.Press(K);
+            yield return null;
+
+            Assert.That(_sound.LastSong.Name, Is.EqualTo("Rat"));
+            Assert.That(_sound.IsPlayingASong, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator Sound_ASong_ReachesTheListener()
+        {
+            yield return ListenerMeter.Connect();
+
+            Session.Press(H);
+            Session.Press(J);
+            yield return new WaitForSeconds(0.2f);
+
+            float loudest = 0f;
+
+            for (int frame = 0; frame < 30; frame++)
+            {
+                loudest = Mathf.Max(loudest, ListenerMeter.Peak());
+                yield return null;
+            }
+
+            Assert.That(loudest, Is.GreaterThan(0.01f));
+        }
+
+        [UnityTest]
+        public IEnumerator Sound_EverySong_StaysInsideFullVolume()
+        {
+            yield return null;
+
+            foreach (IComboSong song in Session.Songs)
+            {
+                float[] samples = ToneBaker.Bake(ComboSongWriter.Write(song, _soundConfig.Band), 48000);
+                float peak = samples.Max(sample => Mathf.Abs(sample));
+
+                Assert.That(peak, Is.LessThanOrEqualTo(1f), song.Name);
+                Assert.That(peak, Is.GreaterThan(0.1f), song.Name);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator Sound_WhenAComboIsRefused_PlaysTheRefusal()
         {
             Session.Press(H);
+            Session.Press(J);
+            Session.Press(H);
+            Session.Press(J);
             yield return null;
 
             Assert.That(_sound.LastPlayed, Is.SameAs(_soundConfig.Refused));
+        }
+
+        [UnityTest]
+        public IEnumerator Sound_ManyHitsAtOnce_PlayOnlyOnce()
+        {
+            yield return null;
+            int strikes = 0;
+            Session.Battle.Struck += _ => strikes++;
+            Session.Battle.AddMinion(new MinionType("Test", 12f, 1, 0f, 1f, Statue, Plain), Session.Piper.Position);
+            var mouse = (CreatureType)Session.Songs[0];
+
+            for (int creature = 0; creature < 5; creature++)
+            {
+                Session.Battle.AddCreature(mouse);
+            }
+
+            int soundsBefore = _sound.HitSoundsPlayed;
+            Session.Tick(Vector2.zero, 0.01f);
+            Session.Tick(Vector2.zero, 0.01f);
+
+            Assert.That(strikes, Is.GreaterThanOrEqualTo(5));
+            Assert.That(_sound.HitSoundsPlayed - soundsBefore, Is.EqualTo(1));
         }
 
         [UnityTest]

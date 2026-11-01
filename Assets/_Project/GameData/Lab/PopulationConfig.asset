@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7927904cc0e8f45f1973e4db54625040, type: 3}
   m_Name: PopulationConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.PopulationConfig
-  _chancePerCell: 0.09
+  _chancePerCell: 0.02
+  _gangChancePerCell: 0.035
   _safeCells: 8
   _minions:
   - _name: Imp
@@ -27,6 +28,15 @@ MonoBehaviour:
       _secondsBetweenHits: 1
       _reach: 0.5
       _areaRadius: 0
+      _traits:
+        _healing: 0
+        _packBonus: 0.2
+        _huntsBackline: 0
+        _standsBack: 0
+        _slowShare: 0
+        _slowSeconds: 0
+        _guardTiles: 0
+        _armour: 0
     _look:
       _color: {r: 0.84705883, g: 0.36078432, b: 0.36078432, a: 1}
       _size: 0.9
@@ -43,6 +53,15 @@ MonoBehaviour:
       _secondsBetweenHits: 1.2
       _reach: 0.6
       _areaRadius: 0
+      _traits:
+        _healing: 0
+        _packBonus: 0
+        _huntsBackline: 0
+        _standsBack: 0
+        _slowShare: 0
+        _slowSeconds: 0
+        _guardTiles: 0
+        _armour: 0
     _look:
       _color: {r: 0.6901961, g: 0.22745098, b: 0.28235295, a: 1}
       _size: 1.4
@@ -59,9 +78,43 @@ MonoBehaviour:
       _secondsBetweenHits: 1.5
       _reach: 4
       _areaRadius: 3
+      _traits:
+        _healing: 0
+        _packBonus: 0
+        _huntsBackline: 0
+        _standsBack: 1
+        _slowShare: 0
+        _slowSeconds: 0
+        _guardTiles: 0
+        _armour: 0
     _look:
       _color: {r: 0.65882355, g: 0.36078432, b: 0.8784314, a: 1}
       _size: 1.2
+      _shape: 2
+  - _name: Mender
+    _detectTiles: 16
+    _xpReward: 24
+    _firstDepth: 0.3
+    _lastDepth: 1
+    _stats:
+      _maxHealth: 30
+      _moveSpeed: 3.2
+      _damage: 0
+      _secondsBetweenHits: 1.4
+      _reach: 5
+      _areaRadius: 0
+      _traits:
+        _healing: 7
+        _packBonus: 0
+        _huntsBackline: 0
+        _standsBack: 1
+        _slowShare: 0
+        _slowSeconds: 0
+        _guardTiles: 0
+        _armour: 0
+    _look:
+      _color: {r: 0.36078432, g: 0.84705883, b: 0.6901961, a: 1}
+      _size: 1.1
       _shape: 2
   - _name: Ogre
     _detectTiles: 14
@@ -75,10 +128,95 @@ MonoBehaviour:
       _secondsBetweenHits: 1.6
       _reach: 1
       _areaRadius: 2.5
+      _traits:
+        _healing: 0
+        _packBonus: 0
+        _huntsBackline: 0
+        _standsBack: 0
+        _slowShare: 0
+        _slowSeconds: 0
+        _guardTiles: 0
+        _armour: 0
     _look:
       _color: {r: 0.41568628, g: 0.56078434, b: 0.22745098, a: 1}
       _size: 2
       _shape: 1
+  _gangs:
+  - _name: Imp pack
+    _members:
+    - Imp
+    - Imp
+    - Imp
+    _hiddenCount: 0
+    _firstDepth: 0
+    _lastDepth: 0.4
+  - _name: Imp trap
+    _members:
+    - Imp
+    - Imp
+    - Imp
+    - Imp
+    _hiddenCount: 3
+    _firstDepth: 0.05
+    _lastDepth: 0.4
+  - _name: Brute and Imps
+    _members:
+    - Brute
+    - Imp
+    - Imp
+    - Imp
+    _hiddenCount: 0
+    _firstDepth: 0.15
+    _lastDepth: 0.6
+  - _name: Hidden Brutes
+    _members:
+    - Imp
+    - Brute
+    - Brute
+    _hiddenCount: 2
+    _firstDepth: 0.2
+    _lastDepth: 0.7
+  - _name: Front and caster
+    _members:
+    - Brute
+    - Brute
+    - Shaman
+    _hiddenCount: 0
+    _firstDepth: 0.35
+    _lastDepth: 0.8
+  - _name: Mended casters
+    _members:
+    - Shaman
+    - Mender
+    - Imp
+    - Imp
+    _hiddenCount: 0
+    _firstDepth: 0.4
+    _lastDepth: 1
+  - _name: Empty corridor
+    _members:
+    - Brute
+    - Shaman
+    - Mender
+    _hiddenCount: 3
+    _firstDepth: 0.45
+    _lastDepth: 1
+  - _name: Ogre band
+    _members:
+    - Ogre
+    - Shaman
+    - Mender
+    _hiddenCount: 0
+    _firstDepth: 0.65
+    _lastDepth: 1
+  - _name: Ogre trap
+    _members:
+    - Shaman
+    - Ogre
+    - Ogre
+    _hiddenCount: 2
+    _firstDepth: 0.7
+    _lastDepth: 1
   _bosses:
   - _boss:
       _name: Imp King
@@ -93,11 +231,24 @@ MonoBehaviour:
         _secondsBetweenHits: 0.9
         _reach: 0.8
         _areaRadius: 0
+        _traits:
+          _healing: 0
+          _packBonus: 0
+          _huntsBackline: 0
+          _standsBack: 0
+          _slowShare: 0
+          _slowSeconds: 0
+          _guardTiles: 0
+          _armour: 0
       _look:
         _color: {r: 1, g: 0.4392157, b: 0.4392157, a: 1}
         _size: 2.2
         _shape: 0
     _depth: 0.25
+    _guards:
+    - Imp
+    - Imp
+    - Imp
   - _boss:
       _name: Iron Brute
       _detectTiles: 16
@@ -111,11 +262,24 @@ MonoBehaviour:
         _secondsBetweenHits: 1.2
         _reach: 1
         _areaRadius: 2.5
+        _traits:
+          _healing: 0
+          _packBonus: 0
+          _huntsBackline: 0
+          _standsBack: 0
+          _slowShare: 0
+          _slowSeconds: 0
+          _guardTiles: 0
+          _armour: 0
       _look:
         _color: {r: 0.8156863, g: 0.2509804, b: 0.3137255, a: 1}
         _size: 2.8
         _shape: 1
     _depth: 0.5
+    _guards:
+    - Brute
+    - Brute
+    - Mender
   - _boss:
       _name: Elder Shaman
       _detectTiles: 18
@@ -129,11 +293,24 @@ MonoBehaviour:
         _secondsBetweenHits: 1.4
         _reach: 5
         _areaRadius: 3.5
+        _traits:
+          _healing: 0
+          _packBonus: 0
+          _huntsBackline: 0
+          _standsBack: 1
+          _slowShare: 0
+          _slowSeconds: 0
+          _guardTiles: 0
+          _armour: 0
       _look:
         _color: {r: 0.78431374, g: 0.5019608, b: 1, a: 1}
         _size: 2.6
         _shape: 2
     _depth: 0.75
+    _guards:
+    - Brute
+    - Shaman
+    - Mender
   - _boss:
       _name: Ogre Lord
       _detectTiles: 18
@@ -147,8 +324,22 @@ MonoBehaviour:
         _secondsBetweenHits: 1.5
         _reach: 1.4
         _areaRadius: 4
+        _traits:
+          _healing: 0
+          _packBonus: 0
+          _huntsBackline: 0
+          _standsBack: 0
+          _slowShare: 0
+          _slowSeconds: 0
+          _guardTiles: 0
+          _armour: 0
       _look:
         _color: {r: 0.5647059, g: 0.7529412, b: 0.2509804, a: 1}
         _size: 3.4
         _shape: 1
     _depth: 1
+    _guards:
+    - Ogre
+    - Shaman
+    - Mender
+    - Mender

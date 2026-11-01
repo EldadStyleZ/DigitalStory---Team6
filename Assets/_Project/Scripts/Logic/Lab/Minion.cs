@@ -8,14 +8,19 @@ namespace DigitalStory.Logic
     {
         private readonly MinionRank _rank;
 
-        public Minion(MinionType type, Vector2 position, MinionRank rank)
+        public Minion(MinionType type, Vector2 position, MinionRank rank, MinionGang gang = null)
             : base(type.Stats, type.Look, position)
         {
             Type = type;
             _rank = rank;
+            Gang = gang;
         }
 
         public MinionType Type { get; }
+
+        /// <summary>The group it wakes with, if any.</summary>
+        public MinionGang Gang { get; }
+
         public bool IsAwake { get; private set; }
         public bool IsBoss => _rank != MinionRank.Ordinary;
         public bool IsFinalBoss => _rank == MinionRank.FinalBoss;

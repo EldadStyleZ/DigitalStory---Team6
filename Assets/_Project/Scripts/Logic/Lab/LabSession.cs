@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using DigitalStory.Data;
 using UnityEngine;
 
@@ -8,6 +10,7 @@ namespace DigitalStory.Logic
     public sealed class LabSession
     {
         private readonly StaminaConfig _staminaConfig;
+        private readonly Dictionary<IComboSong, IComboAction> _actions = new Dictionary<IComboSong, IComboAction>();
 
         private int _revivalCell;
         private bool _hasReportedDeath;
@@ -22,24 +25,32 @@ namespace DigitalStory.Logic
             Piper = new LabPiper(rules.Player, Maze);
             PiperHealth = new Health(rules.Player.MaxHealth);
             Stamina = new Stamina(rules.Stamina);
-            Combos = new ComboReader(rules.Combos, rules.Creatures);
-            Cooldowns = new ComboCooldowns(rules.Creatures);
             Levels = new LevelTrack(rules.Levels);
             Battle = new Battle(Maze, rules.Battle, Piper, PiperHealth);
+            Songs = PrepareSongs(rules);
+            Combos = new ComboReader(rules.Combos, Songs);
+            Cooldowns = new ComboCooldowns(Songs);
 
             _revivalCell = Maze.Entrance;
-            MinionPlacer.Populate(Battle, Maze, rules.Population, random);
+            Ambushes = new AmbushWatch(Maze, rules.Ambush, Battle, MinionPlacer.Populate(Battle, Maze, rules.Population, random));
+            Signposts = new Signposts(Maze, rules.SignpostChance, random);
+            PointSignpostsAtTheNextBoss();
             Battle.MinionKilled += HandleMinionKilled;
             Levels.LevelledUp += HandleLevelledUp;
         }
 
-        /// <summary>Raised when a note or a combo could not summon anything.</summary>
+        /// <summary>Raised when a finished combo could not do anything.</summary>
         public event Action<SummonRefusal> SummonRefused;
 
         /// <summary>Raised with each note the flute answers.</summary>
         public event Action<int> NotePlayed;
 
-        public event Action<CreatureType> Summoned;
+        /// <summary>Raised after a note that leaves the combo unfinished.</summary>
+        public event Action ComboBuilding;
+
+        /// <summary>Raised when a finished combo does what it does.</summary>
+        public event Action<IComboSong> ComboPlayed;
+
         public event Action ComboFailed;
         public event Action PiperDied;
         public event Action Won;
@@ -50,21 +61,18 @@ namespace DigitalStory.Logic
         public Stamina Stamina { get; }
         public ComboReader Combos { get; }
         public ComboCooldowns Cooldowns { get; }
+
+        /// <summary>Everything the flute can play, by unlock level.</summary>
+        public IReadOnlyList<IComboSong> Songs { get; }
+
+        public AmbushWatch Ambushes { get; }
+        public Signposts Signposts { get; }
         public LevelTrack Levels { get; }
         public Battle Battle { get; }
 
-        /// <summary>
-        /// Plays a note. Outside a battle the flute does nothing, so nobody can gather creatures while
-        /// idle, and a stray key costs nothing.
-        /// </summary>
+        /// <summary>Plays a note, in a fight or out of one.</summary>
         public void Press(int note)
         {
-            if (!Battle.IsInBattle)
-            {
-                SummonRefused?.Invoke(SummonRefusal.NotInBattle);
-                return;
-            }
-
             NotePlayed?.Invoke(note);
             Apply(Combos.Press(note, Levels.Level));
         }
@@ -77,12 +85,7 @@ namespace DigitalStory.Logic
             Cooldowns.Tick(deltaTime);
             Apply(Combos.Tick(deltaTime));
             Battle.Tick(deltaTime);
-
-            if (!Battle.IsInBattle)
-            {
-                Combos.Clear();
-            }
-
+            Ambushes.Tick(deltaTime);
             ReportDeath();
         }
 
@@ -97,8 +100,24 @@ namespace DigitalStory.Logic
             Cooldowns.Reset();
             Combos.Clear();
             Battle.Retreat();
+            Ambushes.Calm();
             Piper.MoveTo(_revivalCell);
             _hasReportedDeath = false;
+        }
+
+        private IReadOnlyList<IComboSong> PrepareSongs(LabRules rules)
+        {
+            foreach (CreatureType creature in rules.Creatures)
+            {
+                _actions[creature] = new SummonAction(Battle, creature);
+            }
+
+            foreach (BattleSong song in rules.BattleSongs)
+            {
+                _actions[song] = new BoostAction(Battle, song);
+            }
+
+            return rules.Creatures.Concat<IComboSong>(rules.BattleSongs).OrderBy(song => song.UnlockLevel).ToArray();
         }
 
         private void Apply(ComboResult result)
@@ -108,32 +127,53 @@ namespace DigitalStory.Logic
                 Stamina.Lose(_staminaConfig.FailedComboCost);
                 ComboFailed?.Invoke();
             }
+            else if (result.Outcome == ComboOutcome.Building)
+            {
+                ComboBuilding?.Invoke();
+            }
             else if (result.Outcome == ComboOutcome.Completed)
             {
-                TrySummon(result.Creature);
+                TryPlay(result.Song);
             }
         }
 
-        private void TrySummon(CreatureType creature)
+        private void TryPlay(IComboSong song)
         {
-            if (!Battle.HasRoomForACreature)
+            IComboAction action = _actions[song];
+
+            if (!action.HasRoom)
             {
                 SummonRefused?.Invoke(SummonRefusal.NoRoom);
             }
-            else if (!Cooldowns.IsReady(creature))
+            else if (!Cooldowns.IsReady(song))
             {
                 SummonRefused?.Invoke(SummonRefusal.CoolingDown);
             }
-            else if (!Stamina.TrySpend(creature.StaminaCost))
+            else if (!Stamina.TrySpend(song.StaminaCost))
             {
                 SummonRefused?.Invoke(SummonRefusal.TooTired);
             }
             else
             {
-                Cooldowns.Start(creature);
-                Battle.AddCreature(creature);
-                Summoned?.Invoke(creature);
+                Cooldowns.Start(song);
+                action.Perform();
+                ComboPlayed?.Invoke(song);
             }
+        }
+
+        // Bosses are added shallowest first and never reordered, so the first left is the next one.
+        private void PointSignpostsAtTheNextBoss()
+        {
+            foreach (Minion minion in Battle.Minions)
+            {
+                if (minion.IsBoss)
+                {
+                    Signposts.PointTo(Maze.CellAt(minion.Position));
+                    return;
+                }
+            }
+
+            Signposts.Clear();
         }
 
         private void ReportDeath()
@@ -152,6 +192,7 @@ namespace DigitalStory.Logic
             if (minion.IsBoss)
             {
                 _revivalCell = Maze.CellAt(minion.Position);
+                PointSignpostsAtTheNextBoss();
             }
 
             if (minion.IsFinalBoss)

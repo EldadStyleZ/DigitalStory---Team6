@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e185928b7c4364df08dfd629a4c2b66b, type: 3}
   m_Name: LevelConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.LevelConfig
-  _xpToReach: 0000000032000000c800000058020000dc050000i
+  _xpToReach: 0000000096000000f401000078050000b80b0000i

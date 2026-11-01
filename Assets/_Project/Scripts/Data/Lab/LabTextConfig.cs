@@ -22,13 +22,13 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("Shown while nothing has noticed the Piper.")]
         public string QuietLabel { get; private set; } = "All quiet";
 
+        [field: SerializeField, Tooltip("Shown while the creatures hit harder, before the seconds left.")]
+        public string BoostLabel { get; private set; } = "War Song";
+
         [field: SerializeField, Tooltip("Shown over a combo not yet unlocked, before its level.")]
         public string LockedLabel { get; private set; } = "Unlocks at level";
 
         [field: Header("Messages")]
-        [field: SerializeField, Tooltip("When a note is played with no fight on.")]
-        public string NotInBattleMessage { get; private set; } = "You can only summon in battle";
-
         [field: SerializeField, Tooltip("When a combo is still cooling down.")]
         public string CoolingDownMessage { get; private set; } = "Still cooling down";
 
@@ -40,6 +40,12 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("When a combo fails.")]
         public string FailedComboMessage { get; private set; } = "Wrong combo: stamina lost";
+
+        [field: SerializeField, Tooltip("When creatures go home after a quiet spell.")]
+        public string CreatureLeftMessage { get; private set; } = "A creature went home";
+
+        [field: SerializeField, Tooltip("When hidden enemies are about to appear.")]
+        public string AmbushMessage { get; private set; } = "Ambush!";
 
         [field: SerializeField, Tooltip("When the Piper reaches a new level, before the level number.")]
         public string LevelUpMessage { get; private set; } = "You reached level";

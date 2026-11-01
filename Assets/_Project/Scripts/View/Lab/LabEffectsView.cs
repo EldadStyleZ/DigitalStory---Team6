@@ -12,21 +12,25 @@ namespace DigitalStory.View
         private const int EffectOrder = 8;
         private const float StartingRing = 0.5f;
         private const float SummonRing = 3f;
+        private const float LeavingRing = 1.5f;
+        private const float AmbushRing = 5f;
 
         private LabSession _session;
         private TownArtConfig _sprites;
         private LabArtConfig _art;
+        private AmbushConfig _ambush;
         private EffectPool _pool;
 
         /// <summary>How many effects are on screen, for tests and debugging.</summary>
         public int ActiveCount => _pool == null ? 0 : _pool.ActiveCount;
 
         /// <summary>Supplies what to show. Call once, before this object starts.</summary>
-        public void Initialize(LabSession session, TownArtConfig sprites, LabArtConfig art)
+        public void Initialize(LabSession session, TownArtConfig sprites, LabArtConfig art, AmbushConfig ambush)
         {
             _session = session;
             _sprites = sprites;
             _art = art;
+            _ambush = ambush;
         }
 
         private void Start()
@@ -39,7 +43,11 @@ namespace DigitalStory.View
 
             _pool = new EffectPool(transform);
             _session.Battle.Struck += HandleStruck;
-            _session.Summoned += HandleSummoned;
+            _session.Battle.Healed += HandleHealed;
+            _session.Battle.CreatureLeft += HandleCreatureLeft;
+            _session.ComboPlayed += HandleComboPlayed;
+            _session.Ambushes.Warned += HandleAmbushWarned;
+            _session.Ambushes.Sprang += HandleAmbushSprang;
         }
 
         private void Update() => _pool?.Tick(Time.deltaTime);
@@ -50,7 +58,11 @@ namespace DigitalStory.View
             if (_pool != null)
             {
                 _session.Battle.Struck -= HandleStruck;
-                _session.Summoned -= HandleSummoned;
+                _session.Battle.Healed -= HandleHealed;
+                _session.Battle.CreatureLeft -= HandleCreatureLeft;
+                _session.ComboPlayed -= HandleComboPlayed;
+                _session.Ambushes.Warned -= HandleAmbushWarned;
+                _session.Ambushes.Sprang -= HandleAmbushSprang;
             }
         }
 
@@ -62,23 +74,40 @@ namespace DigitalStory.View
             }
             else
             {
-                Spawn(_sprites.DotSprite, strike.Position, _art.HitSize, 0f, _art.HitColor);
+                Spawn(_sprites.DotSprite, strike.Position, _art.HitSize, 0f, _art.HitColor, _art.EffectSeconds);
             }
         }
 
-        private void HandleSummoned(CreatureType creature)
+        private void HandleHealed(Vector2 position)
+        {
+            Spawn(_sprites.DotSprite, position, _art.HitSize, 0f, _art.HealColor, _art.EffectSeconds);
+        }
+
+        private void HandleCreatureLeft(Creature creature) => SpawnRing(creature.Position, LeavingRing, _art.LeftColor);
+
+        // The warning stays on the ground for as long as it lasts, so the player can see where to look.
+        private void HandleAmbushWarned(Vector2 position)
+        {
+            SpawnRing(position, AmbushRing, _art.AmbushColor, _ambush.WarningSeconds);
+        }
+
+        private void HandleAmbushSprang(Vector2 position) => SpawnRing(position, AmbushRing, _art.AmbushColor);
+
+        private void HandleComboPlayed(IComboSong song)
         {
             SpawnRing(_session.Piper.Position, SummonRing, _art.SummonColor);
         }
 
-        private void SpawnRing(Vector2 position, float width, Color color)
+        private void SpawnRing(Vector2 position, float width, Color color) => SpawnRing(position, width, color, _art.EffectSeconds);
+
+        private void SpawnRing(Vector2 position, float width, Color color, float seconds)
         {
-            float growth = (width - StartingRing) / _art.EffectSeconds;
-            Spawn(_sprites.RingSprite, position, StartingRing, growth, color);
+            float growth = (width - StartingRing) / seconds;
+            Spawn(_sprites.RingSprite, position, StartingRing, growth, color, seconds);
         }
 
         // The pool works in town units, so tiles are converted on the way in.
-        private void Spawn(Sprite sprite, Vector2 position, float size, float growth, Color color)
+        private void Spawn(Sprite sprite, Vector2 position, float size, float growth, Color color, float seconds)
         {
             float townPerTile = 1f / TownSpace.ToSceneLength(1f);
             _pool.Spawn(new EffectSpawn(
@@ -90,8 +119,8 @@ namespace DigitalStory.View
                 size * townPerTile,
                 growth * townPerTile,
                 1f,
-                _art.EffectSeconds,
-                _art.EffectSeconds));
+                seconds,
+                seconds));
         }
     }
 }

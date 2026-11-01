@@ -35,6 +35,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Which minions and bosses live in the maze.")]
         private PopulationConfig _population;
 
+        [SerializeField, Tooltip("When hidden enemies appear.")]
+        private AmbushConfig _ambush;
+
         [Header("Look")]
         [SerializeField, Tooltip("The town's sprites.")]
         private TownArtConfig _sprites;
@@ -73,6 +76,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Shows the level, bars and combos.")]
         private LabHudView _hudView;
 
+        [SerializeField, Tooltip("Shows the combo being played over the Piper.")]
+        private ComboBalloonView _balloonView;
+
         [SerializeField, Tooltip("Shows the pause, death and victory screens.")]
         private LabScreensView _screensView;
 
@@ -94,19 +100,21 @@ namespace DigitalStory.View
             }
 
             Session = new LabSession(new LabRules(
-                _maze.Shape, _maze.Seed, _player, _stamina, _combos, _levels, _battle, _roster.Creatures, _population.Plan));
+                _maze.Shape, _maze.Seed, _player, _stamina, _combos, _levels, _battle,
+                _roster.Creatures, _roster.BattleSongs, _population.Plan, _ambush, _maze.SignpostChance));
 
             Flow = new LabFlow();
             Session.PiperDied += Flow.Die;
             Session.Won += Flow.Win;
 
             _runner.Initialize(Session, Flow);
-            _mazeView.Initialize(Session.Maze, _sprites, _art);
+            _mazeView.Initialize(Session.Maze, Session.Signposts, _sprites, _art);
             _piperView.Initialize(Session.Piper, _art);
             _camera.Initialize(Session.Piper, _art);
             _unitsView.Initialize(Session.Battle, _sprites, _art);
-            _effectsView.Initialize(Session, _sprites, _art);
-            _hudView.Initialize(Session, _roster.Creatures, _texts, _art, _hud);
+            _effectsView.Initialize(Session, _sprites, _art, _ambush);
+            _hudView.Initialize(Session, _texts, _art, _hud);
+            _balloonView.Initialize(Session, _texts, _art, _camera.GetComponent<Camera>());
             _screensView.Initialize(Flow, Session, _texts, _hud);
             _soundView.Initialize(Session, _sound);
         }
@@ -114,10 +122,11 @@ namespace DigitalStory.View
         private bool HasEverything()
         {
             bool isComplete = _maze != null && _player != null && _stamina != null && _combos != null && _levels != null
-                && _battle != null && _roster != null && _population != null && _sprites != null && _art != null
-                && _hud != null && _texts != null && _sound != null
+                && _battle != null && _roster != null && _population != null && _ambush != null && _sprites != null && _art != null
+                && _hud != null && _texts != null && _sound != null && _art.ArrowSprite != null
                 && _runner != null && _mazeView != null && _piperView != null && _camera != null
-                && _unitsView != null && _effectsView != null && _hudView != null && _screensView != null && _soundView != null;
+                && _unitsView != null && _effectsView != null && _hudView != null && _balloonView != null
+                && _screensView != null && _soundView != null;
 
             if (!isComplete)
             {

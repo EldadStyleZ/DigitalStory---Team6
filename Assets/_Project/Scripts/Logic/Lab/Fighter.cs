@@ -7,6 +7,8 @@ namespace DigitalStory.Logic
     public abstract class Fighter
     {
         private float _secondsToNextHit;
+        private float _slowShare;
+        private float _slowSecondsLeft;
 
         protected Fighter(FighterStats stats, FighterLook look, Vector2 position)
         {
@@ -26,9 +28,16 @@ namespace DigitalStory.Logic
 
         public bool IsAlive => Health.IsAlive;
         public bool CanHitNow => _secondsToNextHit <= 0f;
+        public bool IsSlowed => _slowSecondsLeft > 0f;
 
-        /// <summary>Waits out the time between hits.</summary>
-        public void Rest(float deltaTime) => _secondsToNextHit -= deltaTime;
+        private float Pace => IsSlowed ? 1f - _slowShare : 1f;
+
+        /// <summary>Waits out the time between hits and any slow.</summary>
+        public void Rest(float deltaTime)
+        {
+            _secondsToNextHit -= deltaTime * Pace;
+            _slowSecondsLeft -= deltaTime;
+        }
 
         /// <summary>Starts the wait before the next hit.</summary>
         public void MarkHit() => _secondsToNextHit = Stats.SecondsBetweenHits;
@@ -45,7 +54,17 @@ namespace DigitalStory.Logic
 
             Vector2 heading = offset / distance;
             Facing = Mathf.Atan2(heading.y, heading.x) * Mathf.Rad2Deg;
-            Position = maze.Move(Position, heading * Mathf.Min(Stats.MoveSpeed * deltaTime, distance), radius);
+            Position = maze.Move(Position, heading * Mathf.Min(Stats.MoveSpeed * Pace * deltaTime, distance), radius);
+        }
+
+        /// <summary>Takes a hit, less whatever its armour ignores.</summary>
+        public void TakeHit(float damage) => Health.Damage(damage * (1f - Stats.Traits.Armour));
+
+        /// <summary>Takes a share of its speed for a while.</summary>
+        public void Slow(float share, float seconds)
+        {
+            _slowShare = share;
+            _slowSecondsLeft = seconds;
         }
 
         /// <summary>Shifts it slightly without changing the way it faces.</summary>

@@ -12,7 +12,6 @@ namespace DigitalStory.Tests.PlayMode
     {
         private const string SceneName = "Town";
         private const int FramesToSettle = 3;
-        private const int FramesForAudio = 30;
 
         // Sound takes real time to reach the listener, and frames can be very short.
         private const float SecondsForAudio = 0.5f;
@@ -122,10 +121,7 @@ namespace DigitalStory.Tests.PlayMode
         {
             int before = _voice.BuffersFilled;
 
-            for (int frame = 0; frame < FramesForAudio; frame++)
-            {
-                yield return null;
-            }
+            yield return new WaitForSecondsRealtime(SecondsForAudio);
 
             Assert.That(_voice.BuffersFilled, Is.GreaterThan(before), "Unity never called the audio filter.");
         }

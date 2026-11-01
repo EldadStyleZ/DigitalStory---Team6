@@ -19,11 +19,13 @@ namespace DigitalStory.Tests.EditMode
         private ComboConfig _combos;
         private LevelConfig _levels;
         private BattleConfig _battle;
+        private AmbushConfig _ambush;
         private CreatureType _mouse;
         private CreatureType _cat;
+        private BattleSong _song;
         private LabSession _session;
         private List<SummonRefusal> _refusals;
-        private List<CreatureType> _summoned;
+        private List<IComboSong> _summoned;
 
         [SetUp]
         public void CreateSession()
@@ -32,19 +34,21 @@ namespace DigitalStory.Tests.EditMode
             _combos = ScriptableObject.CreateInstance<ComboConfig>();
             _levels = ScriptableObject.CreateInstance<LevelConfig>();
             _battle = ScriptableObject.CreateInstance<BattleConfig>();
+            _ambush = ScriptableObject.CreateInstance<AmbushConfig>();
             _mouse = Creature(Sturdy, "Mouse", 1, 10f, 2f, H, J);
             _cat = Creature(Sturdy, "Cat", 2, 25f, 4f, K, L, H);
+            _song = new BattleSong("War Song", "Boost", 1, new[] { J, K, L }, 30f, 20f, 2f, 5f);
             _session = NewSession();
             _refusals = new List<SummonRefusal>();
-            _summoned = new List<CreatureType>();
+            _summoned = new List<IComboSong>();
             _session.SummonRefused += _refusals.Add;
-            _session.Summoned += _summoned.Add;
+            _session.ComboPlayed += _summoned.Add;
         }
 
-        private LabSession NewSession(float staminaMax = 0f)
+        private LabSession NewSession(float signpostChance = 0f, int[] bossCells = null)
         {
             var rules = new LabRules(
-                new MazeShape(16, 1, 3, 1, 0f),
+                new MazeShape(16, bossCells == null ? 1 : 16, 3, 1, 0f),
                 1,
                 ScriptableObject.CreateInstance<LabPlayerConfig>(),
                 _stamina,
@@ -52,8 +56,44 @@ namespace DigitalStory.Tests.EditMode
                 _levels,
                 _battle,
                 new[] { _mouse, _cat },
-                new PopulationPlan(Array.Empty<MinionType>(), Array.Empty<BossPlacement>(), 0f, 0));
+                new[] { _song },
+                new PopulationPlan(Array.Empty<MinionType>(), Bosses(bossCells), 0f, 0),
+                _ambush,
+                signpostChance);
             return new LabSession(rules);
+        }
+
+        private static BossPlacement[] Bosses(int[] cells)
+        {
+            var bosses = new BossPlacement[cells == null ? 0 : cells.Length];
+
+            for (int index = 0; index < bosses.Length; index++)
+            {
+                bosses[index] = new BossPlacement(Minion(Statue, detectTiles: 0f), (index + 1f) / bosses.Length);
+            }
+
+            return bosses;
+        }
+
+        private static void AssertArrowsLeadToTheNextBoss(LabSession session)
+        {
+            Minion boss = session.Battle.Minions[0];
+            int goal = session.Maze.CellAt(boss.Position);
+            var field = new StepField(session.Maze);
+            field.Fill(goal);
+
+            Assert.That(session.Signposts.Cells, Is.Not.Empty);
+
+            foreach (int cell in session.Signposts.Cells)
+            {
+                int direction = session.Signposts.DirectionAt(cell);
+
+                if (cell != goal)
+                {
+                    int next = session.Maze.NeighbourThrough(cell, direction);
+                    Assert.That(field.StepsAt(next), Is.LessThan(field.StepsAt(cell)), $"The arrow at {cell} leads away from the boss.");
+                }
+            }
         }
 
         private Maze Maze => _session.Maze;
@@ -77,50 +117,129 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Press_TheComboOutsideABattle_SummonsNothing()
+        public void Press_TheComboWithNoFightOn_SummonsTheCreature()
         {
             Play(H, J);
 
-            Assert.That(_session.Battle.Creatures, Is.Empty);
-            Assert.That(_summoned, Is.Empty);
+            Assert.That(_session.Battle.Creatures.Count, Is.EqualTo(1));
+            Assert.That(_summoned, Is.EqualTo(new[] { _mouse }));
         }
 
         [Test]
-        public void Press_OutsideABattle_CostsNothing()
+        public void Press_TheComboWithNoFightOn_PaysForIt()
         {
-            Play(L, L, H, J);
+            Play(H, J);
 
-            Assert.That(_session.Stamina.Current, Is.EqualTo(_stamina.Max));
-            Assert.That(_session.Cooldowns.IsReady(_mouse), Is.True);
+            Assert.That(_session.Stamina.Current, Is.EqualTo(_stamina.Max - _mouse.StaminaCost).Within(Tolerance));
+            Assert.That(_session.Cooldowns.IsReady(_mouse), Is.False);
         }
 
         [Test]
-        public void Press_OnlyInABattle_ReportsTheNote()
+        public void Press_AWrongNoteWithNoFightOn_LosesStamina()
+        {
+            Play(L);
+
+            Assert.That(_session.Stamina.Current, Is.EqualTo(_stamina.Max - _stamina.FailedComboCost).Within(Tolerance));
+        }
+
+        [Test]
+        public void Press_WithNoFightOn_ReportsTheNoteAndRemembersIt()
         {
             var notes = new List<int>();
             _session.NotePlayed += notes.Add;
 
-            Play(K);
-            StartBattle();
             Play(H);
 
             Assert.That(notes, Is.EqualTo(new[] { H }));
+            Assert.That(_session.Combos.Notes, Is.EqualTo(new[] { H }));
+            Assert.That(_refusals, Is.Empty);
         }
 
         [Test]
-        public void Press_OutsideABattle_RemembersNoNotes()
+        public void ACreatureSummonedInPeace_GoesHomeIfNoFightComes()
         {
-            Play(H);
+            Play(H, J);
 
-            Assert.That(_session.Combos.Notes, Is.Empty);
+            Tick(_battle.QuietSecondsBeforeLeaving + 0.1f);
+
+            Assert.That(_session.Battle.Creatures, Is.Empty);
         }
 
         [Test]
-        public void Press_OutsideABattle_SaysWhyNothingHappened()
+        public void Press_ANoteThatKeepsBuilding_ReportsIt()
         {
+            int building = 0;
+            _session.ComboBuilding += () => building++;
+
             Play(H);
 
-            Assert.That(_refusals, Is.EqualTo(new[] { SummonRefusal.NotInBattle }));
+            Assert.That(building, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Press_TheLastNote_DoesNotReportBuilding()
+        {
+            int building = 0;
+            Play(H);
+            _session.ComboBuilding += () => building++;
+
+            Play(J);
+
+            Assert.That(building, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Press_TheBattleSong_BoostsTheCreatures()
+        {
+            Play(J, K, L);
+
+            Assert.That(_session.Battle.IsBoosted, Is.True);
+            Assert.That(_session.Battle.BoostSecondsLeft, Is.EqualTo(_song.Seconds).Within(Tolerance));
+            Assert.That(_summoned, Is.EqualTo(new[] { _song }));
+        }
+
+        [Test]
+        public void Press_TheBattleSong_PaysForItAndCools()
+        {
+            Play(J, K, L);
+
+            Assert.That(_session.Stamina.Current, Is.EqualTo(_stamina.Max - _song.StaminaCost).Within(Tolerance));
+            Assert.That(_session.Cooldowns.SecondsLeft(_song), Is.EqualTo(_song.CooldownSeconds));
+        }
+
+        [Test]
+        public void Press_TheBattleSongWithNoRoomForCreatures_StillPlays()
+        {
+            for (int creature = 0; creature < _battle.MaxCreatures; creature++)
+            {
+                _session.Battle.AddCreature(_mouse);
+            }
+
+            Play(J, K, L);
+
+            Assert.That(_session.Battle.IsBoosted, Is.True);
+        }
+
+        [Test]
+        public void Press_TheBattleSongWhileItCools_DoesNotPlay()
+        {
+            Play(J, K, L);
+            float afterFirst = _session.Stamina.Current;
+            Tick(_song.Seconds + 0.1f);
+            float recovered = _session.Stamina.Current;
+
+            Play(J, K, L);
+
+            Assert.That(_session.Battle.IsBoosted, Is.False);
+            Assert.That(_session.Stamina.Current, Is.EqualTo(recovered).Within(Tolerance));
+            Assert.That(recovered, Is.GreaterThanOrEqualTo(afterFirst));
+            Assert.That(_refusals, Is.EqualTo(new[] { SummonRefusal.CoolingDown }));
+        }
+
+        [Test]
+        public void Songs_ListEveryComboByUnlockLevel()
+        {
+            Assert.That(_session.Songs, Is.EqualTo(new IComboSong[] { _mouse, _song, _cat }));
         }
 
         [Test]
@@ -225,18 +344,17 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void BattleEnding_MidCombo_DropsItForFree()
+        public void BattleEnding_MidCombo_LeavesTheComboGoing()
         {
             StartBattle();
             Play(H);
 
             _session.Piper.MoveTo(15);
-            Tick(0.5f);
-            Tick(_combos.SecondsToNextNote + 1f);
+            Tick(0.2f);
+            Tick(0.2f);
 
             Assert.That(_session.Battle.IsInBattle, Is.False);
-            Assert.That(_session.Combos.Notes, Is.Empty);
-            Assert.That(_session.Stamina.Current, Is.EqualTo(_stamina.Max));
+            Assert.That(_session.Combos.Notes, Is.EqualTo(new[] { H }));
         }
 
         [Test]
@@ -259,6 +377,26 @@ namespace DigitalStory.Tests.EditMode
             Play(K, L, H);
 
             Assert.That(_summoned, Is.EqualTo(new[] { _cat }));
+        }
+
+        [Test]
+        public void Signposts_AtTheStart_PointToTheShallowestBoss()
+        {
+            LabSession session = NewSession(signpostChance: 1f, bossCells: new[] { 5, 10 });
+
+            AssertArrowsLeadToTheNextBoss(session);
+        }
+
+        [Test]
+        public void Signposts_WhenABossFalls_PointToTheNext()
+        {
+            LabSession session = NewSession(signpostChance: 1f, bossCells: new[] { 5, 10 });
+            Minion first = session.Battle.Minions[0];
+
+            first.Health.Damage(first.Health.Max);
+            session.Tick(Vector2.zero, Step);
+
+            AssertArrowsLeadToTheNextBoss(session);
         }
 
         [Test]
@@ -338,6 +476,30 @@ namespace DigitalStory.Tests.EditMode
             _session.Continue();
 
             Assert.That(_session.Piper.Position, Is.EqualTo(Maze.CenterOf(5)));
+        }
+
+        [Test]
+        public void Continue_DuringAnAmbushWarning_CallsItOff()
+        {
+            _session.Ambushes.Add(new Ambush(Maze.Entrance, new[] { Minion(Statue) }));
+            Tick();
+            Tick();
+            Tick(_ambush.DelaySeconds + 0.1f);
+
+            _session.Continue();
+            Tick(_ambush.WarningSeconds + 0.1f);
+
+            Assert.That(_session.Battle.Minions, Is.Empty);
+        }
+
+        [Test]
+        public void Continue_EndsTheBoost()
+        {
+            Play(J, K, L);
+
+            _session.Continue();
+
+            Assert.That(_session.Battle.IsBoosted, Is.False);
         }
 
         [Test]

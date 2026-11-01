@@ -16,3 +16,33 @@ MonoBehaviour:
   <FloorColor>k__BackingField: {r: 0.09019608, g: 0.09803922, b: 0.14117648, a: 1}
   <VisibleTiles>k__BackingField: 20
   <PiperSize>k__BackingField: 1.3
+  <ArrowSprite>k__BackingField: {fileID: -4346244404228752641, guid: 46b31fc988c4d42c5852cd644f80a3df, type: 3}
+  <ArrowColor>k__BackingField: {r: 0.91, g: 0.77, b: 0.28, a: 0.55}
+  <ArrowTiles>k__BackingField: 2
+  <SleepingTint>k__BackingField: {r: 0.5, g: 0.5, b: 0.6, a: 1}
+  <BoostTint>k__BackingField: {r: 1, g: 0.55, b: 0.35, a: 1}
+  <BarBackColor>k__BackingField: {r: 0, g: 0, b: 0, a: 0.7}
+  <CreatureBarColor>k__BackingField: {r: 0.41960785, g: 0.8784314, b: 0.47843137, a: 1}
+  <MinionBarColor>k__BackingField: {r: 1, g: 0.3529412, b: 0.3529412, a: 1}
+  <BarThickness>k__BackingField: 0.14
+  <HitColor>k__BackingField: {r: 1, g: 0.9411765, b: 0.7529412, a: 1}
+  <CreatureAreaColor>k__BackingField: {r: 0.5568628, g: 0.8784314, b: 0.41960785, a: 1}
+  <MinionAreaColor>k__BackingField: {r: 0.8784314, g: 0.41960785, b: 0.8784314, a: 1}
+  <SummonColor>k__BackingField: {r: 0.9098039, g: 0.77254903, b: 0.2784314, a: 1}
+  <HealColor>k__BackingField: {r: 0.4862745, g: 0.9490196, b: 0.627451, a: 1}
+  <AmbushColor>k__BackingField: {r: 1, g: 0.3019608, b: 0.3019608, a: 1}
+  <LeftColor>k__BackingField: {r: 0.41960785, g: 0.43529412, b: 0.52156866, a: 1}
+  <HitSize>k__BackingField: 0.7
+  <EffectSeconds>k__BackingField: 0.35
+  <HealthColor>k__BackingField: {r: 0.8862745, g: 0.29411766, b: 0.29411766, a: 1}
+  <StaminaColor>k__BackingField: {r: 0.9490196, g: 0.70980394, b: 0.26666668, a: 1}
+  <XpColor>k__BackingField: {r: 0.3529412, g: 0.65882355, b: 1, a: 1}
+  <CoolingColor>k__BackingField: {r: 0.41960785, g: 0.43529412, b: 0.52156866, a: 1}
+  <BalloonColor>k__BackingField: {r: 0.97, g: 0.95, b: 0.88, a: 0.96}
+  <BalloonWaitingColor>k__BackingField: {r: 0.5411765, g: 0.5529412, b: 0.6117647, a: 1}
+  <BalloonTextColor>k__BackingField: {r: 0.14117648, g: 0.14901961, b: 0.2, a: 1}
+  <BalloonStartColor>k__BackingField: {r: 0.8784314, g: 0.5882353, b: 0.0627451, a: 1}
+  <BalloonDoneColor>k__BackingField: {r: 0.07058824, g: 0.61960787, b: 0.2901961, a: 1}
+  <BalloonFailedColor>k__BackingField: {r: 0.8862745, g: 0.29411766, b: 0.29411766, a: 1}
+  <BalloonEndSeconds>k__BackingField: 0.7
+  <BalloonLift>k__BackingField: 1.2

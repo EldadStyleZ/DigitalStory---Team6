@@ -18,9 +18,22 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("How long the Piper is drawn, in tiles.")]
         public float PiperSize { get; private set; } = 1.3f;
 
+        [field: Header("Arrows")]
+        [field: SerializeField, Tooltip("The arrow on the floor, pointing east.")]
+        public Sprite ArrowSprite { get; private set; }
+
+        [field: SerializeField, Tooltip("The color of the arrows on the floor.")]
+        public Color ArrowColor { get; private set; } = new Color(0.91f, 0.77f, 0.28f, 0.55f);
+
+        [field: SerializeField, Min(0.1f), Tooltip("How long an arrow is drawn, in tiles.")]
+        public float ArrowTiles { get; private set; } = 2f;
+
         [field: Header("Fighters")]
         [field: SerializeField, Tooltip("Multiplies a sleeping minion's color.")]
         public Color SleepingTint { get; private set; } = new Color(0.5f, 0.5f, 0.6f, 1f);
+
+        [field: SerializeField, Tooltip("Multiplies a creature's color while it hits harder.")]
+        public Color BoostTint { get; private set; } = new Color(1f, 0.55f, 0.35f, 1f);
 
         [field: SerializeField, Tooltip("The empty part of a health bar over a fighter.")]
         public Color BarBackColor { get; private set; } = new Color(0f, 0f, 0f, 0.7f);
@@ -47,6 +60,15 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("The ring when a creature arrives.")]
         public Color SummonColor { get; private set; } = new Color32(0xE8, 0xC5, 0x47, 0xFF);
 
+        [field: SerializeField, Tooltip("The flash when health comes back.")]
+        public Color HealColor { get; private set; } = new Color32(0x7C, 0xF2, 0xA0, 0xFF);
+
+        [field: SerializeField, Tooltip("The ring warning that hidden enemies are coming, and their arrival.")]
+        public Color AmbushColor { get; private set; } = new Color32(0xFF, 0x4D, 0x4D, 0xFF);
+
+        [field: SerializeField, Tooltip("The ring when a creature goes home.")]
+        public Color LeftColor { get; private set; } = new Color32(0x6B, 0x6F, 0x85, 0xFF);
+
         [field: SerializeField, Min(0f), Tooltip("How wide a hit's flash is, in tiles.")]
         public float HitSize { get; private set; } = 0.7f;
 
@@ -65,5 +87,30 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("A combo waiting for its cooldown.")]
         public Color CoolingColor { get; private set; } = new Color32(0x6B, 0x6F, 0x85, 0xFF);
+
+        [field: Header("Balloon")]
+        [field: SerializeField, Tooltip("The balloon behind the combo words.")]
+        public Color BalloonColor { get; private set; } = new Color(0.97f, 0.95f, 0.88f, 0.96f);
+
+        [field: SerializeField, Tooltip("A letter not played yet.")]
+        public Color BalloonWaitingColor { get; private set; } = new Color32(0x8A, 0x8D, 0x9C, 0xFF);
+
+        [field: SerializeField, Tooltip("The name in the balloon.")]
+        public Color BalloonTextColor { get; private set; } = new Color32(0x24, 0x26, 0x33, 0xFF);
+
+        [field: SerializeField, Tooltip("The letters played, when the combo has only begun.")]
+        public Color BalloonStartColor { get; private set; } = new Color32(0xE0, 0x96, 0x10, 0xFF);
+
+        [field: SerializeField, Tooltip("The letters played, when the combo is nearly done or finished.")]
+        public Color BalloonDoneColor { get; private set; } = new Color32(0x12, 0x9E, 0x4A, 0xFF);
+
+        [field: SerializeField, Tooltip("The balloon when a combo fails.")]
+        public Color BalloonFailedColor { get; private set; } = new Color32(0xE2, 0x4B, 0x4B, 0xFF);
+
+        [field: SerializeField, Min(0.05f), Tooltip("Seconds a finished or failed combo stays on the balloon.")]
+        public float BalloonEndSeconds { get; private set; } = 0.7f;
+
+        [field: SerializeField, Min(0f), Tooltip("How far above the Piper the balloon floats, in tiles.")]
+        public float BalloonLift { get; private set; } = 1.2f;
     }
 }

@@ -7,7 +7,8 @@ namespace DigitalStory.Logic
 {
     /// <summary>
     /// Everything fighting in the maze. Minions wake when the Piper or a creature comes close, and they
-    /// hit the Piper only once no creature is left. Creatures follow the Piper and fight whatever is awake.
+    /// hit the Piper only once no creature is left. Creatures follow the Piper and fight whatever is awake,
+    /// and each side's traits shape how: both sides follow the same rules.
     /// </summary>
     public sealed class Battle
     {
@@ -20,13 +21,16 @@ namespace DigitalStory.Logic
         private readonly List<Creature> _creatures = new List<Creature>();
         private readonly List<Minion> _minions = new List<Minion>();
         private readonly List<Minion> _awake = new List<Minion>();
+        private readonly List<Minion> _standingBack = new List<Minion>();
         private readonly List<Fighter> _crowd = new List<Fighter>();
         private readonly StepField _towardPiper;
         private readonly StepField _towardCreatures;
         private readonly StepField _towardMinions;
+        private readonly StepField _towardStandingBack;
 
         private float _secondsToNewRoutes;
         private bool _routesAreStale = true;
+        private float _boostMultiplier = 1f;
 
         public Battle(Maze maze, BattleConfig config, LabPiper piper, Health piperHealth)
         {
@@ -37,6 +41,7 @@ namespace DigitalStory.Logic
             _towardPiper = new StepField(maze);
             _towardCreatures = new StepField(maze);
             _towardMinions = new StepField(maze);
+            _towardStandingBack = new StepField(maze);
         }
 
         /// <summary>Raised once for each minion that falls, after it leaves the field.</summary>
@@ -44,6 +49,12 @@ namespace DigitalStory.Logic
 
         /// <summary>Raised for every hit.</summary>
         public event Action<StrikeReport> Struck;
+
+        /// <summary>Raised with the place health came back.</summary>
+        public event Action<Vector2> Healed;
+
+        /// <summary>Raised for each creature that goes home after a quiet spell.</summary>
+        public event Action<Creature> CreatureLeft;
 
         public IReadOnlyList<Creature> Creatures => _creatures;
         public IReadOnlyList<Minion> Minions => _minions;
@@ -54,6 +65,19 @@ namespace DigitalStory.Logic
 
         public bool HasRoomForACreature => _creatures.Count < _config.MaxCreatures;
 
+        public bool IsBoosted => BoostSecondsLeft > 0f;
+        public float BoostSecondsLeft { get; private set; }
+
+        /// <summary>Makes every creature hit harder for a while. A new boost replaces the old one.</summary>
+        public void Boost(float damageMultiplier, float seconds)
+        {
+            _boostMultiplier = damageMultiplier;
+            BoostSecondsLeft = seconds;
+        }
+
+        /// <summary>How many cells of walking a cell is from the Piper, as of the last route update.</summary>
+        public int StepsToPiper(int cell) => _towardPiper.StepsAt(cell);
+
         /// <summary>Summons a creature beside the Piper.</summary>
         public Creature AddCreature(CreatureType type)
         {
@@ -63,15 +87,18 @@ namespace DigitalStory.Logic
             return creature;
         }
 
-        public Minion AddMinion(MinionType type, Vector2 position, MinionRank rank = MinionRank.Ordinary)
+        public Minion AddMinion(MinionType type, Vector2 position, MinionRank rank = MinionRank.Ordinary, MinionGang gang = null)
         {
-            var minion = new Minion(type, position, rank);
+            var minion = new Minion(type, position, rank, gang);
             _minions.Add(minion);
+            gang?.Add(minion);
+            _routesAreStale = true;
             return minion;
         }
 
         public void Tick(float deltaTime)
         {
+            BoostSecondsLeft = Mathf.Max(0f, BoostSecondsLeft - deltaTime);
             UpdateRoutes(deltaTime);
             UpdateAlertness();
 
@@ -87,6 +114,7 @@ namespace DigitalStory.Logic
 
             SpreadOut(deltaTime);
             RemoveFallen();
+            SendQuietCreaturesHome(deltaTime);
         }
 
         /// <summary>Ends every fight: creatures vanish and minions go back to sleep where they stand.</summary>
@@ -94,6 +122,8 @@ namespace DigitalStory.Logic
         {
             _creatures.Clear();
             _awake.Clear();
+            _standingBack.Clear();
+            BoostSecondsLeft = 0f;
 
             foreach (Minion minion in _minions)
             {
@@ -117,6 +147,7 @@ namespace DigitalStory.Logic
             _towardPiper.Fill(_maze.CellAt(_piper.Position));
             FillFrom(_towardCreatures, _creatures);
             FillFrom(_towardMinions, _awake);
+            FillFrom(_towardStandingBack, _standingBack);
         }
 
         private void FillFrom<T>(StepField field, List<T> fighters) where T : Fighter
@@ -134,6 +165,7 @@ namespace DigitalStory.Logic
         private void UpdateAlertness()
         {
             _awake.Clear();
+            _standingBack.Clear();
 
             foreach (Minion minion in _minions)
             {
@@ -142,6 +174,11 @@ namespace DigitalStory.Logic
                 if (minion.IsAwake)
                 {
                     _awake.Add(minion);
+                }
+
+                if (minion.IsAwake && minion.Stats.Traits.StandsBack)
+                {
+                    _standingBack.Add(minion);
                 }
             }
         }
@@ -158,8 +195,23 @@ namespace DigitalStory.Logic
             }
             else if (!minion.IsAwake && walkingTiles <= minion.Type.DetectTiles)
             {
-                minion.Wake();
-                _routesAreStale = true;
+                Rouse(minion);
+            }
+        }
+
+        private void Rouse(Minion minion)
+        {
+            minion.Wake();
+            _routesAreStale = true;
+
+            if (minion.Gang == null)
+            {
+                return;
+            }
+
+            foreach (Minion member in minion.Gang.Members)
+            {
+                member.Wake();
             }
         }
 
@@ -169,13 +221,20 @@ namespace DigitalStory.Logic
         {
             creature.Rest(deltaTime);
             int cell = _maze.CellAt(creature.Position);
+            MendCreatures(creature, cell);
+
+            if (creature.Stats.Traits.HuntsBackline && Hunt(creature, cell, deltaTime))
+            {
+                return;
+            }
+
             Minion target = NearestLinked(_awake, creature.Position, cell);
 
             if (target != null)
             {
                 FightMinion(creature, cell, target, deltaTime);
             }
-            else if (CanGoLooking(cell))
+            else if (CanGoLooking(cell, _towardMinions))
             {
                 Chase(creature, cell, _towardMinions, creature.Position, deltaTime);
             }
@@ -183,6 +242,26 @@ namespace DigitalStory.Logic
             {
                 FollowPiper(creature, cell, deltaTime);
             }
+        }
+
+        // A hunter ignores the front line and goes straight for whatever stands behind it.
+        private bool Hunt(Creature creature, int cell, float deltaTime)
+        {
+            Minion prey = NearestLinked(_standingBack, creature.Position, cell);
+
+            if (prey != null)
+            {
+                FightMinion(creature, cell, prey, deltaTime);
+                return true;
+            }
+
+            if (CanGoLooking(cell, _towardStandingBack))
+            {
+                Chase(creature, cell, _towardStandingBack, creature.Position, deltaTime);
+                return true;
+            }
+
+            return false;
         }
 
         private void FightMinion(Creature creature, int cell, Minion target, float deltaTime)
@@ -193,14 +272,76 @@ namespace DigitalStory.Logic
             }
             else
             {
-                Chase(creature, cell, _towardMinions, target.Position, deltaTime);
+                Approach(creature, cell, target.Position, deltaTime);
             }
         }
 
-        private bool CanGoLooking(int cell)
+        private bool CanGoLooking(int cell, StepField route)
         {
             bool isOnLeash = _towardPiper.StepsAt(cell) * (float)_maze.Shape.CellPitch <= _config.LeashTiles;
-            return isOnLeash && _towardMinions.StepsAt(cell) != StepField.Unreached;
+            return isOnLeash && route.StepsAt(cell) != StepField.Unreached;
+        }
+
+        private void MendCreatures(Creature healer, int cell)
+        {
+            if (!healer.Stats.Traits.Heals || !healer.CanHitNow)
+            {
+                return;
+            }
+
+            Creature hurt = MostHurtInReach(healer, cell, _creatures);
+            bool isPiperInReach = IsInReach(healer, _piper.Position) && _maze.AreLinked(cell, _maze.CellAt(_piper.Position));
+            float worstShare = hurt != null ? hurt.Health.Share : 1f;
+
+            if (isPiperInReach && _piperHealth.Share < worstShare)
+            {
+                Heal(healer, _piperHealth, _piper.Position);
+            }
+            else if (hurt != null)
+            {
+                Heal(healer, hurt.Health, hurt.Position);
+            }
+        }
+
+        private void MendMinions(Minion healer, int cell)
+        {
+            if (!healer.Stats.Traits.Heals || !healer.CanHitNow)
+            {
+                return;
+            }
+
+            Minion hurt = MostHurtInReach(healer, cell, _awake);
+
+            if (hurt != null)
+            {
+                Heal(healer, hurt.Health, hurt.Position);
+            }
+        }
+
+        private T MostHurtInReach<T>(Fighter healer, int cell, List<T> side) where T : Fighter
+        {
+            T worst = null;
+            float worstShare = 1f;
+
+            foreach (T fighter in side)
+            {
+                bool canReach = fighter.IsAlive && IsInReach(healer, fighter.Position) && _maze.AreLinked(cell, _maze.CellAt(fighter.Position));
+
+                if (canReach && fighter.Health.Share < worstShare)
+                {
+                    worst = fighter;
+                    worstShare = fighter.Health.Share;
+                }
+            }
+
+            return worst;
+        }
+
+        private void Heal(Fighter healer, Health health, Vector2 position)
+        {
+            healer.MarkHit();
+            health.Heal(healer.Stats.Traits.Healing);
+            Healed?.Invoke(position);
         }
 
         private void FollowPiper(Creature creature, int cell, float deltaTime)
@@ -218,6 +359,7 @@ namespace DigitalStory.Logic
         {
             minion.Rest(deltaTime);
             int cell = _maze.CellAt(minion.Position);
+            MendMinions(minion, cell);
 
             if (_creatures.Count > 0)
             {
@@ -231,15 +373,42 @@ namespace DigitalStory.Logic
 
         private void FightCreatures(Minion minion, int cell, float deltaTime)
         {
-            Creature target = NearestLinked(_creatures, minion.Position, cell);
+            Creature target = GuardOver(minion, cell) ?? NearestLinked(_creatures, minion.Position, cell);
 
-            if (target != null && IsInReach(minion, target.Position))
+            if (target == null)
+            {
+                Chase(minion, cell, _towardCreatures, minion.Position, deltaTime);
+            }
+            else if (IsInReach(minion, target.Position))
             {
                 HitCreatures(minion, target);
-                return;
+            }
+            else
+            {
+                Approach(minion, cell, target.Position, deltaTime);
+            }
+        }
+
+        // Only a guardian joined by a passage counts, so nothing is drawn to one through a wall.
+        private Creature GuardOver(Minion minion, int cell)
+        {
+            Creature nearest = null;
+            float nearestSquared = float.MaxValue;
+
+            foreach (Creature creature in _creatures)
+            {
+                float range = creature.Stats.Traits.GuardTiles;
+                float squared = (creature.Position - minion.Position).sqrMagnitude;
+                bool isGuarding = creature.Stats.Traits.Guards && creature.IsAlive && squared <= range * range;
+
+                if (isGuarding && squared < nearestSquared && _maze.AreLinked(cell, _maze.CellAt(creature.Position)))
+                {
+                    nearest = creature;
+                    nearestSquared = squared;
+                }
             }
 
-            Chase(minion, cell, _towardCreatures, target != null ? target.Position : minion.Position, deltaTime);
+            return nearest;
         }
 
         private void FightPiper(Minion minion, int cell, float deltaTime)
@@ -252,10 +421,10 @@ namespace DigitalStory.Logic
                 return;
             }
 
-            if (minion.CanHitNow)
+            if (CanStrike(minion))
             {
                 minion.MarkHit();
-                _piperHealth.Damage(minion.Stats.Damage);
+                _piperHealth.Damage(DamageOf(minion, _awake));
                 Struck?.Invoke(new StrikeReport(piper, 0f, false));
             }
         }
@@ -264,6 +433,14 @@ namespace DigitalStory.Logic
         {
             int next = route.StepToward(cell);
             Vector2 goal = next == cell ? target : _maze.CenterOf(next);
+            fighter.WalkToward(goal, _maze, _config.UnitRadius, deltaTime);
+        }
+
+        // The target stands in this cell or the next, so there is no need for a route.
+        private void Approach(Fighter fighter, int cell, Vector2 target, float deltaTime)
+        {
+            int targetCell = _maze.CellAt(target);
+            Vector2 goal = targetCell == cell ? target : _maze.CenterOf(targetCell);
             fighter.WalkToward(goal, _maze, _config.UnitRadius, deltaTime);
         }
 
@@ -293,32 +470,64 @@ namespace DigitalStory.Logic
             return nearest;
         }
 
+        private static bool CanStrike(Fighter attacker) => attacker.CanHitNow && !attacker.Stats.Traits.Heals;
+
         private void HitMinions(Creature attacker, Minion target)
         {
-            if (attacker.CanHitNow)
+            if (CanStrike(attacker))
             {
+                float boost = IsBoosted ? _boostMultiplier : 1f;
                 attacker.MarkHit();
-                Land(attacker.Stats, target, _minions, true);
+                Land(attacker.Stats, DamageOf(attacker, _creatures) * boost, target, _minions, true);
             }
         }
 
         private void HitCreatures(Minion attacker, Creature target)
         {
-            if (attacker.CanHitNow)
+            if (CanStrike(attacker))
             {
                 attacker.MarkHit();
-                Land(attacker.Stats, target, _creatures, false);
+                Land(attacker.Stats, DamageOf(attacker, _awake), target, _creatures, false);
             }
         }
 
-        private void Land<T>(FighterStats stats, T target, List<T> side, bool isByCreature) where T : Fighter
+        private float DamageOf<T>(T attacker, List<T> side) where T : Fighter
+        {
+            float bonus = attacker.Stats.Traits.PackBonus;
+            return attacker.Stats.Damage * (1f + (bonus * PackmatesOf(attacker, side)));
+        }
+
+        private int PackmatesOf<T>(T attacker, List<T> side) where T : Fighter
+        {
+            if (attacker.Stats.Traits.PackBonus <= 0f)
+            {
+                return 0;
+            }
+
+            int packmates = 0;
+            float rangeSquared = _config.PackTiles * _config.PackTiles;
+
+            foreach (T fighter in side)
+            {
+                bool isPackmate = fighter != attacker && fighter.Stats.Traits.PackBonus > 0f;
+
+                if (isPackmate && (fighter.Position - attacker.Position).sqrMagnitude <= rangeSquared)
+                {
+                    packmates++;
+                }
+            }
+
+            return packmates;
+        }
+
+        private void Land<T>(FighterStats stats, float damage, T target, List<T> side, bool isByCreature) where T : Fighter
         {
             Vector2 center = target.Position;
             Struck?.Invoke(new StrikeReport(center, stats.AreaRadius, isByCreature));
 
             if (!stats.HitsAnArea)
             {
-                target.Health.Damage(stats.Damage);
+                Affect(target, stats, damage);
                 return;
             }
 
@@ -331,8 +540,18 @@ namespace DigitalStory.Logic
 
                 if (isCovered)
                 {
-                    fighter.Health.Damage(stats.Damage);
+                    Affect(fighter, stats, damage);
                 }
+            }
+        }
+
+        private static void Affect(Fighter fighter, FighterStats stats, float damage)
+        {
+            fighter.TakeHit(damage);
+
+            if (stats.Traits.SlowShare > 0f)
+            {
+                fighter.Slow(stats.Traits.SlowShare, stats.Traits.SlowSeconds);
             }
         }
 
@@ -387,8 +606,33 @@ namespace DigitalStory.Logic
                 {
                     _minions.RemoveAt(index);
                     _awake.Remove(minion);
+                    _standingBack.Remove(minion);
                     _routesAreStale = true;
                     MinionKilled?.Invoke(minion);
+                }
+            }
+        }
+
+        // Summoning works anywhere, so this is what stops a full army walking the maze for free.
+        private void SendQuietCreaturesHome(float deltaTime)
+        {
+            for (int index = _creatures.Count - 1; index >= 0; index--)
+            {
+                Creature creature = _creatures[index];
+
+                if (IsInBattle)
+                {
+                    creature.KeepBusy();
+                    continue;
+                }
+
+                creature.WaitQuietly(deltaTime);
+
+                if (creature.QuietSeconds >= _config.QuietSecondsBeforeLeaving)
+                {
+                    _creatures.RemoveAt(index);
+                    _routesAreStale = true;
+                    CreatureLeft?.Invoke(creature);
                 }
             }
         }

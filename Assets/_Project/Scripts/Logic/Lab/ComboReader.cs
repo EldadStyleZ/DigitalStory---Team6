@@ -11,45 +11,49 @@ namespace DigitalStory.Logic
         public const int NoteCount = 4;
 
         private readonly ComboConfig _config;
-        private readonly IReadOnlyList<CreatureType> _creatures;
+        private readonly IReadOnlyList<IComboSong> _songs;
         private readonly List<int> _notes = new List<int>();
+        private readonly List<IComboSong> _candidates = new List<IComboSong>();
 
         private float _secondsLeft;
 
-        public ComboReader(ComboConfig config, IReadOnlyList<CreatureType> creatures)
+        public ComboReader(ComboConfig config, IReadOnlyList<IComboSong> songs)
         {
             _config = config != null ? config : throw new ArgumentNullException(nameof(config));
-            _creatures = creatures ?? throw new ArgumentNullException(nameof(creatures));
-            CheckCombos(creatures);
+            _songs = songs ?? throw new ArgumentNullException(nameof(songs));
+            CheckCombos(songs);
         }
 
         /// <summary>The notes of the combo being played.</summary>
         public IReadOnlyList<int> Notes => _notes;
+
+        /// <summary>Every known combo the notes so far could still become.</summary>
+        public IReadOnlyList<IComboSong> Candidates => _candidates;
 
         /// <summary>Adds a note to the combo being played.</summary>
         /// <param name="level">The Piper's level, which decides which combos are known.</param>
         public ComboResult Press(int note, int level)
         {
             _notes.Add(note);
-            bool canStillBecomeOne = false;
+            _candidates.Clear();
 
-            foreach (CreatureType creature in _creatures)
+            foreach (IComboSong song in _songs)
             {
-                if (creature.UnlockLevel > level || !Starts(_notes, creature.Combo))
+                if (song.UnlockLevel > level || !Starts(_notes, song.Combo))
                 {
                     continue;
                 }
 
-                if (creature.Combo.Count == _notes.Count)
+                if (song.Combo.Count == _notes.Count)
                 {
                     Clear();
-                    return new ComboResult(ComboOutcome.Completed, creature);
+                    return new ComboResult(ComboOutcome.Completed, song);
                 }
 
-                canStillBecomeOne = true;
+                _candidates.Add(song);
             }
 
-            return canStillBecomeOne ? KeepBuilding() : Fail();
+            return _candidates.Count > 0 ? KeepBuilding() : Fail();
         }
 
         /// <summary>Counts down the time allowed for the next note.</summary>
@@ -65,38 +69,42 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>Drops the combo being played, without it counting as a failure.</summary>
-        public void Clear() => _notes.Clear();
-
-        private static void CheckCombos(IReadOnlyList<CreatureType> creatures)
+        public void Clear()
         {
-            foreach (CreatureType creature in creatures)
-            {
-                CheckNotes(creature);
+            _notes.Clear();
+            _candidates.Clear();
+        }
 
-                foreach (CreatureType other in creatures)
+        private static void CheckCombos(IReadOnlyList<IComboSong> songs)
+        {
+            foreach (IComboSong song in songs)
+            {
+                CheckNotes(song);
+
+                foreach (IComboSong other in songs)
                 {
-                    if (creature != other && Starts(creature.Combo, other.Combo))
+                    if (!ReferenceEquals(song, other) && Starts(song.Combo, other.Combo))
                     {
                         throw new ArgumentException(
-                            $"{creature.Name}'s combo is the start of {other.Name}'s, so {other.Name} could never be summoned.",
-                            nameof(creatures));
+                            $"{song.Name}'s combo is the start of {other.Name}'s, so {other.Name} could never be played.",
+                            nameof(songs));
                     }
                 }
             }
         }
 
-        private static void CheckNotes(CreatureType creature)
+        private static void CheckNotes(IComboSong song)
         {
-            if (creature.Combo.Count == 0)
+            if (song.Combo.Count == 0)
             {
-                throw new ArgumentException($"{creature.Name} has no combo.", nameof(creature));
+                throw new ArgumentException($"{song.Name} has no combo.", nameof(song));
             }
 
-            foreach (int note in creature.Combo)
+            foreach (int note in song.Combo)
             {
                 if (note < 0 || note >= NoteCount)
                 {
-                    throw new ArgumentException($"{creature.Name}'s combo has note {note}, which is not on the flute.", nameof(creature));
+                    throw new ArgumentException($"{song.Name}'s combo has note {note}, which is not on the flute.", nameof(song));
                 }
             }
         }

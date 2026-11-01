@@ -16,7 +16,10 @@ namespace DigitalStory.Logic
             LevelConfig levels,
             BattleConfig battle,
             IReadOnlyList<CreatureType> creatures,
-            PopulationPlan population)
+            IReadOnlyList<BattleSong> battleSongs,
+            PopulationPlan population,
+            AmbushConfig ambush,
+            float signpostChance)
         {
             MazeShape = mazeShape;
             MazeSeed = mazeSeed;
@@ -26,7 +29,10 @@ namespace DigitalStory.Logic
             Levels = levels != null ? levels : throw new ArgumentNullException(nameof(levels));
             Battle = battle != null ? battle : throw new ArgumentNullException(nameof(battle));
             Creatures = creatures ?? throw new ArgumentNullException(nameof(creatures));
+            BattleSongs = battleSongs ?? throw new ArgumentNullException(nameof(battleSongs));
             Population = population;
+            Ambush = ambush != null ? ambush : throw new ArgumentNullException(nameof(ambush));
+            SignpostChance = signpostChance;
         }
 
         public MazeShape MazeShape { get; }
@@ -37,6 +43,11 @@ namespace DigitalStory.Logic
         public LevelConfig Levels { get; }
         public BattleConfig Battle { get; }
         public IReadOnlyList<CreatureType> Creatures { get; }
+        public IReadOnlyList<BattleSong> BattleSongs { get; }
         public PopulationPlan Population { get; }
+        public AmbushConfig Ambush { get; }
+
+        /// <summary>The chance that a junction has an arrow on its floor.</summary>
+        public float SignpostChance { get; }
     }
 }

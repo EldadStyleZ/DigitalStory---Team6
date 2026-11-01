@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using DigitalStory.Logic;
 using DigitalStory.View;
 using NUnit.Framework;
@@ -57,6 +58,66 @@ namespace DigitalStory.Tests.PlayMode
                     Assert.That(looksLikeWall, Is.EqualTo(!maze.IsFloor(x, y)), $"Tile {x},{y} is drawn wrongly.");
                 }
             }
+        }
+
+        [Test]
+        public void Arrows_WhenDrawn_MatchTheSignposts()
+        {
+            Signposts signposts = _root.Session.Signposts;
+
+            Assert.That(signposts.Cells.Count, Is.GreaterThan(50));
+
+            foreach (int cell in signposts.Cells)
+            {
+                AssertArrowMatches(signposts, cell);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator Arrows_WhenABossFalls_TurnTowardTheNext()
+        {
+            LabSession session = _root.Session;
+            Signposts signposts = session.Signposts;
+            Minion boss = session.Battle.Minions.First(minion => minion.IsBoss);
+            int before = signposts.Cells.Count(cell => signposts.DirectionAt(cell) != Signposts.NoDirection);
+
+            boss.Health.Damage(boss.Health.Max);
+            session.Tick(Vector2.zero, 0.01f);
+            yield return null;
+
+            Assert.That(before, Is.GreaterThan(0));
+
+            foreach (int cell in signposts.Cells)
+            {
+                AssertArrowMatches(signposts, cell);
+            }
+        }
+
+        [Test]
+        public void Arrows_SitOverTheFloorAndUnderTheFighters()
+        {
+            var arrows = _mazeView.Arrows.GetComponent<UnityEngine.Tilemaps.TilemapRenderer>();
+            var floor = _mazeView.Tiles.GetComponent<UnityEngine.Tilemaps.TilemapRenderer>();
+
+            Assert.That(arrows.sortingOrder, Is.GreaterThan(floor.sortingOrder));
+            Assert.That(arrows.sortingOrder, Is.LessThan(3), "Minions draw at 3.");
+        }
+
+        private void AssertArrowMatches(Signposts signposts, int cell)
+        {
+            Vector3Int tile = MazeView.ArrowTileOf(_root.Session.Maze, cell);
+            int direction = signposts.DirectionAt(cell);
+
+            if (direction == Signposts.NoDirection)
+            {
+                Assert.That(_mazeView.Arrows.GetSprite(tile), Is.Null);
+                return;
+            }
+
+            Assert.That(_mazeView.Arrows.GetSprite(tile), Is.Not.Null, $"Cell {cell} has no arrow.");
+            Vector3 pointing = _mazeView.Arrows.GetTransformMatrix(tile).MultiplyVector(Vector3.right).normalized;
+            Vector3 expected = Quaternion.Euler(0f, 0f, direction * 90f) * Vector3.right;
+            Assert.That((pointing - expected).magnitude, Is.LessThan(Tolerance), $"The arrow at cell {cell} points the wrong way.");
         }
 
         [UnityTest]

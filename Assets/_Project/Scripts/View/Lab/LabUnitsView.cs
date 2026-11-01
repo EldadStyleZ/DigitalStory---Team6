@@ -67,15 +67,24 @@ namespace DigitalStory.View
         {
             FighterLook look = fighter.Look;
             Sprite sprite = SpriteOf(look.Shape);
-            bool isAsleep = fighter is Minion minion && !minion.IsAwake;
 
             unit.Body.enabled = true;
             unit.Body.sprite = sprite;
-            unit.Body.color = isAsleep ? look.Color * _art.SleepingTint : look.Color;
+            unit.Body.color = look.Color * TintOf(fighter);
             unit.Body.transform.SetPositionAndRotation(fighter.Position, Quaternion.Euler(0f, 0f, fighter.Facing));
             unit.Body.transform.localScale = Vector3.one * (look.Size / sprite.bounds.size.x);
 
             DrawBar(fighter, unit);
+        }
+
+        private Color TintOf(Fighter fighter)
+        {
+            if (fighter is Minion minion)
+            {
+                return minion.IsAwake ? Color.white : _art.SleepingTint;
+            }
+
+            return _battle.IsBoosted ? _art.BoostTint : Color.white;
         }
 
         private void DrawBar(Fighter fighter, UnitSprites unit)

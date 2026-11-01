@@ -21,7 +21,13 @@ namespace DigitalStory.Editor
         private const string HudConfigPath = Root + "/GameData/HudConfig.asset";
         private const string PanelPath = Root + "/UI/GamePanelSettings.asset";
         private const string ScenePath = Root + "/Scenes/eldad-lab-scene.unity";
+        private const string ArrowPath = Root + "/Art/Placeholders/Arrow.png";
         private const int PiperOrder = 5;
+        private const int ArrowPixels = 64;
+        private const float ArrowShaftThickness = 0.3f;
+        private const float ArrowShaftEnd = 0.45f;
+        private const float ArrowStart = 0.05f;
+        private const float ArrowTip = 0.95f;
 
         /// <summary>Builds everything the lab's scene needs.</summary>
         [MenuItem("DigitalStory/Build Lab Scene")]
@@ -69,7 +75,7 @@ namespace DigitalStory.Editor
             var sound = new GameObject("Sound Effects", typeof(AudioSource), typeof(LabSoundView));
             sound.GetComponent<AudioSource>().playOnAwake = false;
 
-            var hud = new GameObject("Hud", typeof(UIDocument), typeof(LabHudView), typeof(LabScreensView));
+            var hud = new GameObject("Hud", typeof(UIDocument), typeof(LabHudView), typeof(ComboBalloonView), typeof(LabScreensView));
             hud.GetComponent<UIDocument>().panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelPath);
 
             var root = new GameObject("Lab Root", typeof(LabRoot), typeof(LabRunner));
@@ -82,8 +88,9 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_battle", LoadOrCreate<BattleConfig>("BattleConfig"));
             SetObject(serialized, "_roster", LoadOrCreate<CreatureRoster>("CreatureRoster"));
             SetObject(serialized, "_population", LoadOrCreate<PopulationConfig>("PopulationConfig"));
+            SetObject(serialized, "_ambush", LoadOrCreate<AmbushConfig>("AmbushConfig"));
             SetObject(serialized, "_sprites", sprites);
-            SetObject(serialized, "_art", LoadOrCreate<LabArtConfig>("LabArtConfig"));
+            SetObject(serialized, "_art", LoadArt());
             SetObject(serialized, "_hud", AssetDatabase.LoadAssetAtPath<HudConfig>(HudConfigPath));
             SetObject(serialized, "_texts", LoadOrCreate<LabTextConfig>("LabTextConfig"));
             SetObject(serialized, "_sound", LoadOrCreate<LabSoundConfig>("LabSoundConfig"));
@@ -94,9 +101,53 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_unitsView", units.GetComponent<LabUnitsView>());
             SetObject(serialized, "_effectsView", effects.GetComponent<LabEffectsView>());
             SetObject(serialized, "_hudView", hud.GetComponent<LabHudView>());
+            SetObject(serialized, "_balloonView", hud.GetComponent<ComboBalloonView>());
             SetObject(serialized, "_screensView", hud.GetComponent<LabScreensView>());
             SetObject(serialized, "_soundView", sound.GetComponent<LabSoundView>());
             serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static LabArtConfig LoadArt()
+        {
+            var art = LoadOrCreate<LabArtConfig>("LabArtConfig");
+            var serialized = new SerializedObject(art);
+            SetObject(serialized, $"<{nameof(LabArtConfig.ArrowSprite)}>k__BackingField", SaveArrow());
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            return art;
+        }
+
+        private static Sprite SaveArrow()
+        {
+            var texture = new Texture2D(ArrowPixels, ArrowPixels, TextureFormat.RGBA32, false);
+
+            for (int y = 0; y < ArrowPixels; y++)
+            {
+                for (int x = 0; x < ArrowPixels; x++)
+                {
+                    float across = (x + 0.5f) / ArrowPixels;
+                    float up = Mathf.Abs(((y + 0.5f) / ArrowPixels) - 0.5f) * 2f;
+                    texture.SetPixel(x, y, IsOnTheArrow(across, up) ? Color.white : Color.clear);
+                }
+            }
+
+            File.WriteAllBytes(ArrowPath, texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(ArrowPath);
+
+            var importer = (TextureImporter)AssetImporter.GetAtPath(ArrowPath);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spritePixelsPerUnit = ArrowPixels;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Sprite>(ArrowPath);
+        }
+
+        // across runs from tail to tip, and up is the distance from the arrow's middle line.
+        private static bool IsOnTheArrow(float across, float up)
+        {
+            bool isShaft = across >= ArrowStart && across < ArrowShaftEnd && up <= ArrowShaftThickness;
+            bool isHead = across >= ArrowShaftEnd && across <= ArrowTip && up <= (ArrowTip - across) / (ArrowTip - ArrowShaftEnd);
+            return isShaft || isHead;
         }
 
         private static T LoadOrCreate<T>(string assetName) where T : ScriptableObject

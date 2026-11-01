@@ -5,25 +5,25 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>Keeps each creature's combo waiting after it is used.</summary>
+    /// <summary>Keeps each combo waiting after it is used.</summary>
     public sealed class ComboCooldowns
     {
-        private readonly List<CreatureType> _creatures;
+        private readonly List<IComboSong> _songs;
         private readonly float[] _secondsLeft;
 
-        public ComboCooldowns(IReadOnlyList<CreatureType> creatures)
+        public ComboCooldowns(IReadOnlyList<IComboSong> songs)
         {
-            _creatures = new List<CreatureType>(creatures ?? throw new ArgumentNullException(nameof(creatures)));
-            _secondsLeft = new float[creatures.Count];
+            _songs = new List<IComboSong>(songs ?? throw new ArgumentNullException(nameof(songs)));
+            _secondsLeft = new float[songs.Count];
         }
 
-        public bool IsReady(CreatureType creature) => SecondsLeft(creature) <= 0f;
+        public bool IsReady(IComboSong song) => SecondsLeft(song) <= 0f;
 
-        public float SecondsLeft(CreatureType creature) => _secondsLeft[_creatures.IndexOf(creature)];
+        public float SecondsLeft(IComboSong song) => _secondsLeft[_songs.IndexOf(song)];
 
-        public void Start(CreatureType creature)
+        public void Start(IComboSong song)
         {
-            _secondsLeft[_creatures.IndexOf(creature)] = creature.CooldownSeconds;
+            _secondsLeft[_songs.IndexOf(song)] = song.CooldownSeconds;
         }
 
         public void Tick(float deltaTime)

@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 
 namespace DigitalStory.View
 {
-    /// <summary>Shows the Piper's level, bars and combos, and says what the flute just did.</summary>
+    /// <summary>Shows the Piper's level, bars and combos, and says what just happened.</summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(UIDocument))]
     [AddComponentMenu("DigitalStory/Lab/Lab Hud View")]
@@ -31,7 +31,7 @@ namespace DigitalStory.View
         private readonly StringBuilder _noteText = new StringBuilder();
 
         private LabSession _session;
-        private IReadOnlyList<CreatureType> _creatures;
+        private IReadOnlyList<IComboSong> _songs;
         private LabTextConfig _texts;
         private LabArtConfig _art;
         private HudConfig _hud;
@@ -40,10 +40,11 @@ namespace DigitalStory.View
         private Label _levelLabel;
         private Label _statusLabel;
         private Label _messageLabel;
-        private Label _notesLabel;
+        private Label _boostLabel;
         private Label _bossLabel;
         private LabBar _bossBar;
         private float _messageSecondsLeft;
+        private int _shownBoostSeconds;
 
         /// <summary>The health bar, for tests and debugging.</summary>
         public LabBar HealthBar { get; private set; }
@@ -63,14 +64,17 @@ namespace DigitalStory.View
         /// <summary>How many combos can be played now, for tests and debugging.</summary>
         public int ShownCombos { get; private set; }
 
+        /// <summary>True while the boost shows, for tests and debugging.</summary>
+        public bool IsShowingABoost => _boostLabel != null && _boostLabel.style.display == DisplayStyle.Flex;
+
         /// <summary>True while a boss's bar is on screen, for tests and debugging.</summary>
         public bool IsShowingABoss => _bossPanel != null && _bossPanel.style.display == DisplayStyle.Flex;
 
         /// <summary>Supplies what to show. Call once, before this object starts.</summary>
-        public void Initialize(LabSession session, IReadOnlyList<CreatureType> creatures, LabTextConfig texts, LabArtConfig art, HudConfig hud)
+        public void Initialize(LabSession session, LabTextConfig texts, LabArtConfig art, HudConfig hud)
         {
             _session = session;
-            _creatures = creatures;
+            _songs = session.Songs;
             _texts = texts;
             _art = art;
             _hud = hud;
@@ -88,8 +92,10 @@ namespace DigitalStory.View
             RebuildCombos();
             _session.SummonRefused += HandleRefused;
             _session.ComboFailed += HandleComboFailed;
-            _session.Summoned += HandleSummoned;
+            _session.ComboPlayed += HandleComboPlayed;
             _session.Levels.LevelledUp += HandleLevelledUp;
+            _session.Battle.CreatureLeft += HandleCreatureLeft;
+            _session.Ambushes.Warned += HandleAmbushWarned;
         }
 
         private void Update()
@@ -104,7 +110,7 @@ namespace DigitalStory.View
             XpBar.Show(_session.Levels.Progress);
             _statusLabel.text = _session.Battle.IsInBattle ? _texts.InBattleLabel : _texts.QuietLabel;
             _statusLabel.style.color = _session.Battle.IsInBattle ? _art.HealthColor : _hud.CaptionColor;
-            ShowNotes();
+            ShowBoost();
             ShowCooldowns();
             ShowBoss();
             FadeMessage();
@@ -117,8 +123,10 @@ namespace DigitalStory.View
             {
                 _session.SummonRefused -= HandleRefused;
                 _session.ComboFailed -= HandleComboFailed;
-                _session.Summoned -= HandleSummoned;
+                _session.ComboPlayed -= HandleComboPlayed;
                 _session.Levels.LevelledUp -= HandleLevelledUp;
+                _session.Battle.CreatureLeft -= HandleCreatureLeft;
+                _session.Ambushes.Warned -= HandleAmbushWarned;
             }
         }
 
@@ -151,12 +159,15 @@ namespace DigitalStory.View
             HealthBar = NewBar(_art.HealthColor);
             StaminaBar = NewBar(_art.StaminaColor);
             XpBar = NewBar(_art.XpColor);
+            _boostLabel = NewLabel(BodyFontSize, _art.StaminaColor);
+            _boostLabel.style.display = DisplayStyle.None;
 
             panel.Add(_levelLabel);
             panel.Add(HealthBar.Root);
             panel.Add(StaminaBar.Root);
             panel.Add(XpBar.Root);
             panel.Add(_statusLabel);
+            panel.Add(_boostLabel);
             return panel;
         }
 
@@ -187,7 +198,6 @@ namespace DigitalStory.View
             bottom.style.bottom = Margin;
             bottom.style.alignItems = Align.Center;
 
-            _notesLabel = NewLabel(BigFontSize, _hud.GlowColor);
             _messageLabel = NewLabel(BodyFontSize, _hud.TextColor);
             _comboRow = new VisualElement();
             _comboRow.pickingMode = PickingMode.Ignore;
@@ -195,7 +205,6 @@ namespace DigitalStory.View
             _comboRow.style.flexWrap = Wrap.Wrap;
             _comboRow.style.justifyContent = Justify.Center;
 
-            bottom.Add(_notesLabel);
             bottom.Add(_messageLabel);
             bottom.Add(_comboRow);
             return bottom;
@@ -209,16 +218,16 @@ namespace DigitalStory.View
             ShownCombos = 0;
             bool hasShownALock = false;
 
-            foreach (CreatureType creature in _creatures)
+            foreach (IComboSong song in _songs)
             {
-                if (creature.UnlockLevel <= _session.Levels.Level)
+                if (song.UnlockLevel <= _session.Levels.Level)
                 {
-                    AddCombo(creature);
+                    AddCombo(song);
                     ShownCombos++;
                 }
                 else if (!hasShownALock)
                 {
-                    AddLockedCombo(creature);
+                    AddLockedCombo(song);
                     hasShownALock = true;
                 }
             }
@@ -226,26 +235,30 @@ namespace DigitalStory.View
             _levelLabel.text = $"{_texts.LevelLabel} {_session.Levels.Level}";
         }
 
-        private void AddCombo(CreatureType creature)
+        private void AddCombo(IComboSong song)
         {
             VisualElement panel = NewComboPanel();
             Label name = NewLabel(BodyFontSize, _hud.TextColor);
             Label notes = NewLabel(SmallFontSize, _hud.GlowColor);
-            name.text = $"{creature.Name} ({creature.StaminaCost:0})";
-            notes.text = NoteNames(creature.Combo);
+            Label role = NewLabel(SmallFontSize, _hud.CaptionColor);
+            name.text = $"{song.Name} ({song.StaminaCost:0})";
+            notes.text = NoteNames(song.Combo);
+            role.text = song.Role;
+            role.style.whiteSpace = WhiteSpace.Normal;
             panel.Add(name);
             panel.Add(notes);
+            panel.Add(role);
             _comboRow.Add(panel);
-            _combos.Add(new ComboPanel(creature, name, notes));
+            _combos.Add(new ComboPanel(song, name, notes));
         }
 
-        private void AddLockedCombo(CreatureType creature)
+        private void AddLockedCombo(IComboSong song)
         {
             VisualElement panel = NewComboPanel();
             Label name = NewLabel(BodyFontSize, _art.CoolingColor);
             Label level = NewLabel(SmallFontSize, _art.CoolingColor);
-            name.text = creature.Name;
-            level.text = $"{_texts.LockedLabel} {creature.UnlockLevel}";
+            name.text = song.Name;
+            level.text = $"{_texts.LockedLabel} {song.UnlockLevel}";
             panel.Add(name);
             panel.Add(level);
             _comboRow.Add(panel);
@@ -263,20 +276,29 @@ namespace DigitalStory.View
             return _noteText.ToString().TrimEnd();
         }
 
-        private void ShowNotes()
+        // Only rewrites the words when the number changes, because this runs every frame.
+        private void ShowBoost()
         {
-            _notesLabel.text = NoteNames(_session.Combos.Notes);
+            bool isBoosted = _session.Battle.IsBoosted;
+            _boostLabel.style.display = isBoosted ? DisplayStyle.Flex : DisplayStyle.None;
+            int seconds = Mathf.CeilToInt(_session.Battle.BoostSecondsLeft);
+
+            if (isBoosted && seconds != _shownBoostSeconds)
+            {
+                _shownBoostSeconds = seconds;
+                _boostLabel.text = $"{_texts.BoostLabel} {seconds}s";
+            }
         }
 
         private void ShowCooldowns()
         {
             foreach (ComboPanel combo in _combos)
             {
-                float seconds = _session.Cooldowns.SecondsLeft(combo.Creature);
+                float seconds = _session.Cooldowns.SecondsLeft(combo.Song);
                 bool isReady = seconds <= 0f;
                 combo.Name.style.color = isReady ? _hud.TextColor : _art.CoolingColor;
                 combo.Notes.style.color = isReady ? _hud.GlowColor : _art.CoolingColor;
-                combo.Notes.text = isReady ? NoteNames(combo.Creature.Combo) : $"{seconds:0.0}s";
+                combo.Notes.text = isReady ? NoteNames(combo.Song.Combo) : $"{seconds:0.0}s";
             }
         }
 
@@ -330,9 +352,6 @@ namespace DigitalStory.View
         {
             switch (refusal)
             {
-                case SummonRefusal.NotInBattle:
-                    Say(_texts.NotInBattleMessage);
-                    break;
                 case SummonRefusal.CoolingDown:
                     Say(_texts.CoolingDownMessage);
                     break;
@@ -347,7 +366,11 @@ namespace DigitalStory.View
 
         private void HandleComboFailed() => Say(_texts.FailedComboMessage);
 
-        private void HandleSummoned(CreatureType creature) => Say(creature.Name);
+        private void HandleComboPlayed(IComboSong song) => Say(song.Name);
+
+        private void HandleCreatureLeft(Creature creature) => Say(_texts.CreatureLeftMessage);
+
+        private void HandleAmbushWarned(Vector2 position) => Say(_texts.AmbushMessage);
 
         private void HandleLevelledUp(int level)
         {
@@ -403,14 +426,14 @@ namespace DigitalStory.View
 
         private readonly struct ComboPanel
         {
-            public ComboPanel(CreatureType creature, Label name, Label notes)
+            public ComboPanel(IComboSong song, Label name, Label notes)
             {
-                Creature = creature;
+                Song = song;
                 Name = name;
                 Notes = notes;
             }
 
-            public CreatureType Creature { get; }
+            public IComboSong Song { get; }
             public Label Name { get; }
             public Label Notes { get; }
         }
