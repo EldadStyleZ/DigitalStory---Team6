@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec4e91adb071c40b9a09818d02f784ed, type: 3}
+  m_Name: LabArtConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.LabArtConfig
+  <WallColor>k__BackingField: {r: 0.2901961, g: 0.30980393, b: 0.41568628, a: 1}
+  <FloorColor>k__BackingField: {r: 0.09019608, g: 0.09803922, b: 0.14117648, a: 1}
+  <VisibleTiles>k__BackingField: 20
+  <PiperSize>k__BackingField: 1.3
