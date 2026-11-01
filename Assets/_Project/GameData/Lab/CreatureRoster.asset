@@ -1,0 +1,95 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 890cef66af3ac4addb231df39207a16f, type: 3}
+  m_Name: CreatureRoster
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.CreatureRoster
+  _creatures:
+  - _name: Mouse
+    _unlockLevel: 1
+    _combo: 0000000001000000i
+    _staminaCost: 10
+    _cooldownSeconds: 1
+    _stats:
+      _maxHealth: 14
+      _moveSpeed: 6.5
+      _damage: 3
+      _secondsBetweenHits: 0.7
+      _reach: 0.5
+      _areaRadius: 0
+    _look:
+      _color: {r: 0.7882353, g: 0.7372549, b: 0.65882355, a: 1}
+      _size: 0.8
+      _shape: 0
+  - _name: Rat
+    _unlockLevel: 2
+    _combo: 010000000000000002000000i
+    _staminaCost: 15
+    _cooldownSeconds: 2
+    _stats:
+      _maxHealth: 24
+      _moveSpeed: 6
+      _damage: 5
+      _secondsBetweenHits: 0.8
+      _reach: 0.5
+      _areaRadius: 0
+    _look:
+      _color: {r: 0.60784316, g: 0.48235294, b: 0.35686275, a: 1}
+      _size: 1.1
+      _shape: 0
+  - _name: Cat
+    _unlockLevel: 3
+    _combo: 02000000030000000000000001000000i
+    _staminaCost: 25
+    _cooldownSeconds: 4
+    _stats:
+      _maxHealth: 40
+      _moveSpeed: 7.5
+      _damage: 9
+      _secondsBetweenHits: 0.6
+      _reach: 0.6
+      _areaRadius: 0
+    _look:
+      _color: {r: 0.8784314, g: 0.6039216, b: 0.23529412, a: 1}
+      _size: 1.5
+      _shape: 1
+  - _name: Skunk
+    _unlockLevel: 4
+    _combo: 0300000002000000010000000000000003000000i
+    _staminaCost: 35
+    _cooldownSeconds: 7
+    _stats:
+      _maxHealth: 45
+      _moveSpeed: 5
+      _damage: 6
+      _secondsBetweenHits: 1.2
+      _reach: 1.5
+      _areaRadius: 3.5
+    _look:
+      _color: {r: 0.5568628, g: 0.8784314, b: 0.41960785, a: 1}
+      _size: 1.4
+      _shape: 1
+  - _name: Bear
+    _unlockLevel: 5
+    _combo: 000000000300000002000000010000000000000003000000i
+    _staminaCost: 50
+    _cooldownSeconds: 12
+    _stats:
+      _maxHealth: 120
+      _moveSpeed: 4.5
+      _damage: 14
+      _secondsBetweenHits: 1.2
+      _reach: 1
+      _areaRadius: 2.8
+    _look:
+      _color: {r: 0.47843137, g: 0.30588236, b: 0.1764706, a: 1}
+      _size: 2.2
+      _shape: 1

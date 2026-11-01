@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 880d5e1de147249f5aeef3bc45e392b0, type: 3}
+  m_Name: LabTextConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.LabTextConfig
+  _noteNames:
+  - H
+  - J
+  - K
+  - L
+  <LevelLabel>k__BackingField: Level
+  <InBattleLabel>k__BackingField: Battle! Play a combo
+  <QuietLabel>k__BackingField: All quiet
+  <LockedLabel>k__BackingField: Unlocks at level
+  <NotInBattleMessage>k__BackingField: You can only summon in battle
+  <CoolingDownMessage>k__BackingField: Still cooling down
+  <TooTiredMessage>k__BackingField: Not enough stamina
+  <NoRoomMessage>k__BackingField: You can't lead any more creatures
+  <FailedComboMessage>k__BackingField: 'Wrong combo: stamina lost'
+  <LevelUpMessage>k__BackingField: You reached level
+  <PausedTitle>k__BackingField: Paused
+  <ResumeButton>k__BackingField: Resume
+  <DeadTitle>k__BackingField: You fell in the maze
+  <DeadMessage>k__BackingField: Continue with your level and everything you killed, or start over from level 1?
+  <WonTitle>k__BackingField: The maze is yours
+  <WonMessage>k__BackingField: You beat the last boss and everything between you and it.
+  <ContinueButton>k__BackingField: Continue
+  <NewGameButton>k__BackingField: New game

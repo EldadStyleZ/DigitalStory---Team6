@@ -1,0 +1,154 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7927904cc0e8f45f1973e4db54625040, type: 3}
+  m_Name: PopulationConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.PopulationConfig
+  _chancePerCell: 0.09
+  _safeCells: 8
+  _minions:
+  - _name: Imp
+    _detectTiles: 12
+    _xpReward: 6
+    _firstDepth: 0
+    _lastDepth: 0.4
+    _stats:
+      _maxHealth: 12
+      _moveSpeed: 3.6
+      _damage: 2
+      _secondsBetweenHits: 1
+      _reach: 0.5
+      _areaRadius: 0
+    _look:
+      _color: {r: 0.84705883, g: 0.36078432, b: 0.36078432, a: 1}
+      _size: 0.9
+      _shape: 0
+  - _name: Brute
+    _detectTiles: 14
+    _xpReward: 16
+    _firstDepth: 0.15
+    _lastDepth: 0.7
+    _stats:
+      _maxHealth: 40
+      _moveSpeed: 3.2
+      _damage: 6
+      _secondsBetweenHits: 1.2
+      _reach: 0.6
+      _areaRadius: 0
+    _look:
+      _color: {r: 0.6901961, g: 0.22745098, b: 0.28235295, a: 1}
+      _size: 1.4
+      _shape: 1
+  - _name: Shaman
+    _detectTiles: 16
+    _xpReward: 28
+    _firstDepth: 0.4
+    _lastDepth: 1
+    _stats:
+      _maxHealth: 34
+      _moveSpeed: 3.4
+      _damage: 6
+      _secondsBetweenHits: 1.5
+      _reach: 4
+      _areaRadius: 3
+    _look:
+      _color: {r: 0.65882355, g: 0.36078432, b: 0.8784314, a: 1}
+      _size: 1.2
+      _shape: 2
+  - _name: Ogre
+    _detectTiles: 14
+    _xpReward: 55
+    _firstDepth: 0.65
+    _lastDepth: 1
+    _stats:
+      _maxHealth: 110
+      _moveSpeed: 2.8
+      _damage: 14
+      _secondsBetweenHits: 1.6
+      _reach: 1
+      _areaRadius: 2.5
+    _look:
+      _color: {r: 0.41568628, g: 0.56078434, b: 0.22745098, a: 1}
+      _size: 2
+      _shape: 1
+  _bosses:
+  - _boss:
+      _name: Imp King
+      _detectTiles: 16
+      _xpReward: 60
+      _firstDepth: 0
+      _lastDepth: 0
+      _stats:
+        _maxHealth: 160
+        _moveSpeed: 3.8
+        _damage: 5
+        _secondsBetweenHits: 0.9
+        _reach: 0.8
+        _areaRadius: 0
+      _look:
+        _color: {r: 1, g: 0.4392157, b: 0.4392157, a: 1}
+        _size: 2.2
+        _shape: 0
+    _depth: 0.25
+  - _boss:
+      _name: Iron Brute
+      _detectTiles: 16
+      _xpReward: 150
+      _firstDepth: 0
+      _lastDepth: 0
+      _stats:
+        _maxHealth: 420
+        _moveSpeed: 3.4
+        _damage: 12
+        _secondsBetweenHits: 1.2
+        _reach: 1
+        _areaRadius: 2.5
+      _look:
+        _color: {r: 0.8156863, g: 0.2509804, b: 0.3137255, a: 1}
+        _size: 2.8
+        _shape: 1
+    _depth: 0.5
+  - _boss:
+      _name: Elder Shaman
+      _detectTiles: 18
+      _xpReward: 260
+      _firstDepth: 0
+      _lastDepth: 0
+      _stats:
+        _maxHealth: 650
+        _moveSpeed: 3.4
+        _damage: 12
+        _secondsBetweenHits: 1.4
+        _reach: 5
+        _areaRadius: 3.5
+      _look:
+        _color: {r: 0.78431374, g: 0.5019608, b: 1, a: 1}
+        _size: 2.6
+        _shape: 2
+    _depth: 0.75
+  - _boss:
+      _name: Ogre Lord
+      _detectTiles: 18
+      _xpReward: 500
+      _firstDepth: 0
+      _lastDepth: 0
+      _stats:
+        _maxHealth: 1400
+        _moveSpeed: 3
+        _damage: 22
+        _secondsBetweenHits: 1.5
+        _reach: 1.4
+        _areaRadius: 4
+      _look:
+        _color: {r: 0.5647059, g: 0.7529412, b: 0.2509804, a: 1}
+        _size: 3.4
+        _shape: 1
+    _depth: 1

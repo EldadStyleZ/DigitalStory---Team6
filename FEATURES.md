@@ -113,6 +113,14 @@ flowchart LR
 - **Tests:** the dawn value, plus a Profiler check at the full rat count.
 - **Notes:** the prototype's mute button and its moving moon-and-sun bar ship here, because they need sound and the dawn value. Changing audio device stops every source and empties clips made in code, so the flute restarts and the effects bake again. Unity's first read of the listener is blank even with sound playing, so PlayMode tests read it through `ListenerMeter`. Disco lights keep orbiting during Pause, as in the prototype. Left out on purpose: cobblestones, roof detail, water flow lines, a detailed Piper, rat tails and eye glints, and the March target line. Touch is not tested.
 
+### F-007: Eldad's lab
+
+- **Goal:** test a different game on its own branch: summon creatures with four-key combos, fight through a huge maze and level up.
+- **Done when:** a player can walk the maze, summon in battle with H, J, K and L, level up by killing minions, meet stronger minions and bosses further in, and choose New game or Continue after dying.
+- **Layers:** Data holds the maze, creature, minion, boss, level, stamina, combo and battle configs. Logic holds the maze, walking distance, combos, cooldowns, stamina, levels and the battle. View holds the tilemap, units, effects, HUD, screens and sound.
+- **Tests:** every rule above in EditMode, plus PlayMode tests on the real scene and its buttons.
+- **Notes:** this stays on `eldad-lab` and does not merge to `main` without a team decision, because the team decided on no levels. The branch and scene names are the owner's choice and differ from the usual patterns. The flute only answers in battle, meaning a minion has noticed the Piper or a creature, so nobody can gather creatures while idle. Continue returns to the last boss beaten, or the entrance, and killed minions stay dead. Beating the deepest boss wins. Sprites are placeholders from the town.
+
 ## Ideas
 
 Not approved work. Do not build on these until they move to the board.

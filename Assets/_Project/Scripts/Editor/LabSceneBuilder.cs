@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
 
 namespace DigitalStory.Editor
@@ -17,6 +18,8 @@ namespace DigitalStory.Editor
         private const string Root = "Assets/_Project";
         private const string LabData = Root + "/GameData/Lab";
         private const string TownArtPath = Root + "/GameData/TownArtConfig.asset";
+        private const string HudConfigPath = Root + "/GameData/HudConfig.asset";
+        private const string PanelPath = Root + "/UI/GamePanelSettings.asset";
         private const string ScenePath = Root + "/Scenes/eldad-lab-scene.unity";
         private const int PiperOrder = 5;
 
@@ -61,16 +64,38 @@ namespace DigitalStory.Editor
             piperRenderer.sprite = sprites.PiperSprite;
             piperRenderer.sortingOrder = PiperOrder;
 
+            var units = new GameObject("Units", typeof(LabUnitsView));
+            var effects = new GameObject("Effects", typeof(LabEffectsView));
+            var sound = new GameObject("Sound Effects", typeof(AudioSource), typeof(LabSoundView));
+            sound.GetComponent<AudioSource>().playOnAwake = false;
+
+            var hud = new GameObject("Hud", typeof(UIDocument), typeof(LabHudView), typeof(LabScreensView));
+            hud.GetComponent<UIDocument>().panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelPath);
+
             var root = new GameObject("Lab Root", typeof(LabRoot), typeof(LabRunner));
             var serialized = new SerializedObject(root.GetComponent<LabRoot>());
             SetObject(serialized, "_maze", LoadOrCreate<MazeConfig>("MazeConfig"));
             SetObject(serialized, "_player", LoadOrCreate<LabPlayerConfig>("LabPlayerConfig"));
+            SetObject(serialized, "_stamina", LoadOrCreate<StaminaConfig>("StaminaConfig"));
+            SetObject(serialized, "_combos", LoadOrCreate<ComboConfig>("ComboConfig"));
+            SetObject(serialized, "_levels", LoadOrCreate<LevelConfig>("LevelConfig"));
+            SetObject(serialized, "_battle", LoadOrCreate<BattleConfig>("BattleConfig"));
+            SetObject(serialized, "_roster", LoadOrCreate<CreatureRoster>("CreatureRoster"));
+            SetObject(serialized, "_population", LoadOrCreate<PopulationConfig>("PopulationConfig"));
             SetObject(serialized, "_sprites", sprites);
             SetObject(serialized, "_art", LoadOrCreate<LabArtConfig>("LabArtConfig"));
+            SetObject(serialized, "_hud", AssetDatabase.LoadAssetAtPath<HudConfig>(HudConfigPath));
+            SetObject(serialized, "_texts", LoadOrCreate<LabTextConfig>("LabTextConfig"));
+            SetObject(serialized, "_sound", LoadOrCreate<LabSoundConfig>("LabSoundConfig"));
             SetObject(serialized, "_runner", root.GetComponent<LabRunner>());
             SetObject(serialized, "_mazeView", maze.GetComponent<MazeView>());
             SetObject(serialized, "_piperView", piper.GetComponent<LabPiperView>());
             SetObject(serialized, "_camera", camera.GetComponent<LabCamera>());
+            SetObject(serialized, "_unitsView", units.GetComponent<LabUnitsView>());
+            SetObject(serialized, "_effectsView", effects.GetComponent<LabEffectsView>());
+            SetObject(serialized, "_hudView", hud.GetComponent<LabHudView>());
+            SetObject(serialized, "_screensView", hud.GetComponent<LabScreensView>());
+            SetObject(serialized, "_soundView", sound.GetComponent<LabSoundView>());
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
