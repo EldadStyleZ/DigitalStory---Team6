@@ -13,14 +13,14 @@ MonoBehaviour:
   m_Name: PopulationConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.PopulationConfig
   _chancePerCell: 0.02
-  _gangChancePerCell: 0.035
-  _safeCells: 8
+  _gangChancePerCell: 0.06
+  _safeCells: 10
   _minions:
   - _name: Imp
     _detectTiles: 12
     _xpReward: 6
     _firstDepth: 0
-    _lastDepth: 0.4
+    _lastDepth: 0.35
     _stats:
       _maxHealth: 12
       _moveSpeed: 3.6
@@ -44,8 +44,8 @@ MonoBehaviour:
   - _name: Brute
     _detectTiles: 14
     _xpReward: 16
-    _firstDepth: 0.15
-    _lastDepth: 0.7
+    _firstDepth: 0.08
+    _lastDepth: 0.6
     _stats:
       _maxHealth: 40
       _moveSpeed: 3.2
@@ -69,7 +69,7 @@ MonoBehaviour:
   - _name: Shaman
     _detectTiles: 16
     _xpReward: 28
-    _firstDepth: 0.4
+    _firstDepth: 0.2
     _lastDepth: 1
     _stats:
       _maxHealth: 34
@@ -94,7 +94,7 @@ MonoBehaviour:
   - _name: Mender
     _detectTiles: 16
     _xpReward: 24
-    _firstDepth: 0.3
+    _firstDepth: 0.15
     _lastDepth: 1
     _stats:
       _maxHealth: 30
@@ -119,7 +119,7 @@ MonoBehaviour:
   - _name: Ogre
     _detectTiles: 14
     _xpReward: 55
-    _firstDepth: 0.65
+    _firstDepth: 0.4
     _lastDepth: 1
     _stats:
       _maxHealth: 110
@@ -149,7 +149,7 @@ MonoBehaviour:
     - Imp
     _hiddenCount: 0
     _firstDepth: 0
-    _lastDepth: 0.4
+    _lastDepth: 0.3
   - _name: Imp trap
     _members:
     - Imp
@@ -157,8 +157,21 @@ MonoBehaviour:
     - Imp
     - Imp
     _hiddenCount: 3
-    _firstDepth: 0.05
-    _lastDepth: 0.4
+    _firstDepth: 0.03
+    _lastDepth: 0.3
+  - _name: Imp swarm
+    _members:
+    - Imp
+    - Imp
+    - Imp
+    - Imp
+    - Imp
+    - Imp
+    - Imp
+    - Imp
+    _hiddenCount: 0
+    _firstDepth: 0.15
+    _lastDepth: 0.45
   - _name: Brute and Imps
     _members:
     - Brute
@@ -166,24 +179,24 @@ MonoBehaviour:
     - Imp
     - Imp
     _hiddenCount: 0
-    _firstDepth: 0.15
-    _lastDepth: 0.6
+    _firstDepth: 0.08
+    _lastDepth: 0.5
   - _name: Hidden Brutes
     _members:
     - Imp
     - Brute
     - Brute
     _hiddenCount: 2
-    _firstDepth: 0.2
-    _lastDepth: 0.7
+    _firstDepth: 0.12
+    _lastDepth: 0.6
   - _name: Front and caster
     _members:
     - Brute
     - Brute
     - Shaman
     _hiddenCount: 0
-    _firstDepth: 0.35
-    _lastDepth: 0.8
+    _firstDepth: 0.2
+    _lastDepth: 0.7
   - _name: Mended casters
     _members:
     - Shaman
@@ -191,23 +204,35 @@ MonoBehaviour:
     - Imp
     - Imp
     _hiddenCount: 0
-    _firstDepth: 0.4
-    _lastDepth: 1
+    _firstDepth: 0.25
+    _lastDepth: 0.9
   - _name: Empty corridor
     _members:
     - Brute
     - Shaman
     - Mender
     _hiddenCount: 3
-    _firstDepth: 0.45
+    _firstDepth: 0.3
     _lastDepth: 1
+  - _name: Brute mob
+    _members:
+    - Brute
+    - Brute
+    - Brute
+    - Brute
+    - Imp
+    - Imp
+    - Imp
+    _hiddenCount: 0
+    _firstDepth: 0.3
+    _lastDepth: 0.8
   - _name: Ogre band
     _members:
     - Ogre
     - Shaman
     - Mender
     _hiddenCount: 0
-    _firstDepth: 0.65
+    _firstDepth: 0.4
     _lastDepth: 1
   - _name: Ogre trap
     _members:
@@ -215,7 +240,20 @@ MonoBehaviour:
     - Ogre
     - Ogre
     _hiddenCount: 2
-    _firstDepth: 0.7
+    _firstDepth: 0.45
+    _lastDepth: 1
+  - _name: War band
+    _members:
+    - Ogre
+    - Ogre
+    - Brute
+    - Brute
+    - Shaman
+    - Mender
+    - Imp
+    - Imp
+    _hiddenCount: 0
+    _firstDepth: 0.8
     _lastDepth: 1
   _bosses:
   - _boss:
@@ -244,8 +282,10 @@ MonoBehaviour:
         _color: {r: 1, g: 0.4392157, b: 0.4392157, a: 1}
         _size: 2.2
         _shape: 0
-    _depth: 0.25
+    _depth: 0.4
     _guards:
+    - Imp
+    - Imp
     - Imp
     - Imp
     - Imp
@@ -275,11 +315,15 @@ MonoBehaviour:
         _color: {r: 0.8156863, g: 0.2509804, b: 0.3137255, a: 1}
         _size: 2.8
         _shape: 1
-    _depth: 0.5
+    _depth: 0.65
     _guards:
     - Brute
     - Brute
+    - Brute
     - Mender
+    - Imp
+    - Imp
+    - Imp
   - _boss:
       _name: Elder Shaman
       _detectTiles: 18
@@ -306,11 +350,15 @@ MonoBehaviour:
         _color: {r: 0.78431374, g: 0.5019608, b: 1, a: 1}
         _size: 2.6
         _shape: 2
-    _depth: 0.75
+    _depth: 0.85
     _guards:
+    - Brute
     - Brute
     - Shaman
     - Mender
+    - Imp
+    - Imp
+    - Imp
   - _boss:
       _name: Ogre Lord
       _detectTiles: 18
@@ -318,7 +366,7 @@ MonoBehaviour:
       _firstDepth: 0
       _lastDepth: 0
       _stats:
-        _maxHealth: 1400
+        _maxHealth: 1000
         _moveSpeed: 3
         _damage: 22
         _secondsBetweenHits: 1.5
@@ -340,5 +388,11 @@ MonoBehaviour:
     _depth: 1
     _guards:
     - Ogre
+    - Ogre
     - Shaman
-    - Mender
+    - Imp
+    - Imp
+    - Imp
+    - Imp
+    - Imp
+    - Imp

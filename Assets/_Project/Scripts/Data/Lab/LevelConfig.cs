@@ -8,7 +8,7 @@ namespace DigitalStory.Data
     public sealed class LevelConfig : ScriptableObject
     {
         [SerializeField, Tooltip("Total experience needed to reach each level, starting with level 1.")]
-        private int[] _xpToReach = { 0, 150, 500, 1400, 3000 };
+        private int[] _xpToReach = { 0, 80, 220, 550, 1100 };
 
         public IReadOnlyList<int> XpToReach => _xpToReach;
     }

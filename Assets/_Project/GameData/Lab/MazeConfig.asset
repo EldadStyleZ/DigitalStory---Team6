@@ -14,8 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.MazeConfig
   <Seed>k__BackingField: 4242
   <Shape>k__BackingField:
-    _columns: 60
-    _rows: 60
+    _columns: 40
+    _rows: 40
     _corridorTiles: 3
     _wallTiles: 1
     _loopChance: 0.015
+  <SignpostChance>k__BackingField: 0.5
