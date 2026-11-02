@@ -159,7 +159,7 @@ namespace DigitalStory.Tests.EditMode
         public void TheRealSongs_EachSoundsDifferent()
         {
             var roster = ScriptableObject.CreateInstance<CreatureRoster>();
-            IComboSong[] songs = roster.Creatures.Concat<IComboSong>(roster.BattleSongs).ToArray();
+            IComboSong[] songs = AllSongs(roster).ToArray();
 
             Assert.That(songs.Select(song => song.Style.BeatsPerMinute).Distinct().Count(), Is.EqualTo(songs.Length), "Each has its own tempo.");
             Assert.That(songs.Select(song => ComboSongWriter.Write(song, _band).Tones.Count).All(count => count > 0), Is.True);
@@ -170,7 +170,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var roster = ScriptableObject.CreateInstance<CreatureRoster>();
 
-            foreach (IComboSong song in roster.Creatures.Concat<IComboSong>(roster.BattleSongs))
+            foreach (IComboSong song in AllSongs(roster))
             {
                 float seconds = ComboSongWriter.Write(song, _band).Tones.Max(tone => tone.EndsAt);
 

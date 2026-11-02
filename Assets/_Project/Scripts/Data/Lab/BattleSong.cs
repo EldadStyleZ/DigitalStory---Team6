@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>A combo that makes the Piper's creatures hit harder for a while.</summary>
+    /// <summary>A combo that helps the Piper's creatures, in whatever way its buff says.</summary>
     [Serializable]
     public sealed class BattleSong : IComboSong
     {
@@ -26,16 +26,13 @@ namespace DigitalStory.Data
         [SerializeField, Min(0f), Tooltip("Seconds before it can be played again.")]
         private float _cooldownSeconds;
 
-        [SerializeField, Min(1f), Tooltip("Multiplies the damage of every creature while it lasts.")]
-        private float _damageMultiplier;
-
-        [SerializeField, Min(0f), Tooltip("How long it lasts, in seconds.")]
-        private float _seconds;
+        [SerializeField, Tooltip("What it does.")]
+        private SongBuff _buff;
 
         [SerializeField, Tooltip("How its tune is played.")]
         private SongStyle _style;
 
-        public BattleSong(string name, string role, int unlockLevel, int[] combo, float staminaCost, float cooldownSeconds, float damageMultiplier, float seconds, SongStyle style = default)
+        public BattleSong(string name, string role, int unlockLevel, int[] combo, float staminaCost, float cooldownSeconds, SongBuff buff, SongStyle style = default)
         {
             _name = name;
             _role = role;
@@ -43,8 +40,7 @@ namespace DigitalStory.Data
             _combo = combo;
             _staminaCost = staminaCost;
             _cooldownSeconds = cooldownSeconds;
-            _damageMultiplier = damageMultiplier;
-            _seconds = seconds;
+            _buff = buff;
             _style = style;
         }
 
@@ -54,8 +50,7 @@ namespace DigitalStory.Data
         public IReadOnlyList<int> Combo => _combo ?? Array.Empty<int>();
         public float StaminaCost => _staminaCost;
         public float CooldownSeconds => _cooldownSeconds;
-        public float DamageMultiplier => _damageMultiplier;
-        public float Seconds => _seconds;
+        public SongBuff Buff => _buff;
         public SongStyle Style => _style;
     }
 }

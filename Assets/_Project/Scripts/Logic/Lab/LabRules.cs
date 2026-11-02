@@ -15,8 +15,8 @@ namespace DigitalStory.Logic
             ComboConfig combos,
             LevelConfig levels,
             BattleConfig battle,
-            IReadOnlyList<CreatureType> creatures,
-            IReadOnlyList<BattleSong> battleSongs,
+            CreatureOffer starter,
+            IReadOnlyList<CreatureChoice> choices,
             PopulationPlan population,
             AmbushConfig ambush,
             float signpostChance)
@@ -28,8 +28,8 @@ namespace DigitalStory.Logic
             Combos = combos != null ? combos : throw new ArgumentNullException(nameof(combos));
             Levels = levels != null ? levels : throw new ArgumentNullException(nameof(levels));
             Battle = battle != null ? battle : throw new ArgumentNullException(nameof(battle));
-            Creatures = creatures ?? throw new ArgumentNullException(nameof(creatures));
-            BattleSongs = battleSongs ?? throw new ArgumentNullException(nameof(battleSongs));
+            Starter = starter ?? throw new ArgumentNullException(nameof(starter));
+            Choices = choices ?? throw new ArgumentNullException(nameof(choices));
             Population = population;
             Ambush = ambush != null ? ambush : throw new ArgumentNullException(nameof(ambush));
             SignpostChance = signpostChance;
@@ -42,8 +42,8 @@ namespace DigitalStory.Logic
         public ComboConfig Combos { get; }
         public LevelConfig Levels { get; }
         public BattleConfig Battle { get; }
-        public IReadOnlyList<CreatureType> Creatures { get; }
-        public IReadOnlyList<BattleSong> BattleSongs { get; }
+        public CreatureOffer Starter { get; }
+        public IReadOnlyList<CreatureChoice> Choices { get; }
         public PopulationPlan Population { get; }
         public AmbushConfig Ambush { get; }
 

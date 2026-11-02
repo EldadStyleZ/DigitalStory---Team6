@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using DigitalStory.Data;
 using UnityEngine;
 
@@ -11,6 +10,10 @@ namespace DigitalStory.Logic
     {
         private readonly StaminaConfig _staminaConfig;
         private readonly Dictionary<IComboSong, IComboAction> _actions = new Dictionary<IComboSong, IComboAction>();
+        private readonly List<IComboSong> _songs = new List<IComboSong>();
+        private readonly List<CreatureOffer> _party = new List<CreatureOffer>();
+        private readonly Queue<CreatureChoice> _waiting = new Queue<CreatureChoice>();
+        private readonly IReadOnlyList<CreatureChoice> _choices;
 
         private int _revivalCell;
         private bool _hasReportedDeath;
@@ -19,6 +22,7 @@ namespace DigitalStory.Logic
         {
             _ = rules ?? throw new ArgumentNullException(nameof(rules));
             _staminaConfig = rules.Stamina;
+            _choices = rules.Choices;
 
             var random = new Mulberry32Random((uint)rules.MazeSeed);
             Maze = MazeGenerator.Generate(rules.MazeShape, random);
@@ -27,9 +31,10 @@ namespace DigitalStory.Logic
             Stamina = new Stamina(rules.Stamina);
             Levels = new LevelTrack(rules.Levels);
             Battle = new Battle(Maze, rules.Battle, Piper, PiperHealth);
-            Songs = PrepareSongs(rules);
-            Combos = new ComboReader(rules.Combos, Songs);
-            Cooldowns = new ComboCooldowns(Songs);
+            AllSongs = PrepareSongs(rules);
+            Combos = new ComboReader(rules.Combos, Array.Empty<IComboSong>());
+            Cooldowns = new ComboCooldowns(AllSongs);
+            Learn(rules.Starter);
 
             _revivalCell = Maze.Entrance;
             Ambushes = new AmbushWatch(Maze, rules.Ambush, Battle, MinionPlacer.Populate(Battle, Maze, rules.Population, random));
@@ -51,6 +56,9 @@ namespace DigitalStory.Logic
         /// <summary>Raised when a finished combo does what it does.</summary>
         public event Action<IComboSong> ComboPlayed;
 
+        /// <summary>Raised with the option picked.</summary>
+        public event Action<CreatureOffer> ChoiceMade;
+
         public event Action ComboFailed;
         public event Action PiperDied;
         public event Action Won;
@@ -62,8 +70,34 @@ namespace DigitalStory.Logic
         public ComboReader Combos { get; }
         public ComboCooldowns Cooldowns { get; }
 
-        /// <summary>Everything the flute can play, by unlock level.</summary>
-        public IReadOnlyList<IComboSong> Songs { get; }
+        /// <summary>Everything the flute can play in this run so far, by unlock level.</summary>
+        public IReadOnlyList<IComboSong> Songs => _songs;
+
+        /// <summary>Everything any run could play, picked or not.</summary>
+        public IReadOnlyList<IComboSong> AllSongs { get; }
+
+        /// <summary>The starter and every creature picked so far, each with its song.</summary>
+        public IReadOnlyList<CreatureOffer> Party => _party;
+
+        /// <summary>The choice waiting for a pick, if any.</summary>
+        public CreatureChoice WaitingChoice => _waiting.Count > 0 ? _waiting.Peek() : null;
+
+        /// <summary>The next choice still to come, if any.</summary>
+        public CreatureChoice NextChoice
+        {
+            get
+            {
+                foreach (CreatureChoice choice in _choices)
+                {
+                    if (choice.Level > Levels.Level)
+                    {
+                        return choice;
+                    }
+                }
+
+                return null;
+            }
+        }
 
         public AmbushWatch Ambushes { get; }
         public Signposts Signposts { get; }
@@ -75,6 +109,23 @@ namespace DigitalStory.Logic
         {
             NotePlayed?.Invoke(note);
             Apply(Combos.Press(note, Levels.Level));
+        }
+
+        /// <summary>Picks an option of the waiting choice. The other never returns.</summary>
+        public void Choose(int option)
+        {
+            CreatureChoice choice = WaitingChoice ?? throw new InvalidOperationException("No choice is waiting.");
+
+            if (option < 0 || option >= choice.Options.Count)
+            {
+                throw new IndexOutOfRangeException($"{choice.Problem} has no option {option}.");
+            }
+
+            CreatureOffer offer = choice.Options[option];
+            _waiting.Dequeue();
+            Learn(offer);
+            Combos.Clear();
+            ChoiceMade?.Invoke(offer);
         }
 
         /// <summary>Advances the run by one step.</summary>
@@ -107,17 +158,35 @@ namespace DigitalStory.Logic
 
         private IReadOnlyList<IComboSong> PrepareSongs(LabRules rules)
         {
-            foreach (CreatureType creature in rules.Creatures)
+            var all = new List<IComboSong>();
+            Prepare(rules.Starter, all);
+
+            foreach (CreatureChoice choice in rules.Choices)
             {
-                _actions[creature] = new SummonAction(Battle, creature);
+                foreach (CreatureOffer option in choice.Options)
+                {
+                    Prepare(option, all);
+                }
             }
 
-            foreach (BattleSong song in rules.BattleSongs)
-            {
-                _actions[song] = new BoostAction(Battle, song);
-            }
+            return all;
+        }
 
-            return rules.Creatures.Concat<IComboSong>(rules.BattleSongs).OrderBy(song => song.UnlockLevel).ToArray();
+        private void Prepare(CreatureOffer offer, List<IComboSong> all)
+        {
+            _actions[offer.Creature] = new SummonAction(Battle, offer.Creature);
+            _actions[offer.Song] = new SongAction(Battle, offer.Song);
+            all.Add(offer.Creature);
+            all.Add(offer.Song);
+        }
+
+        private void Learn(CreatureOffer offer)
+        {
+            _party.Add(offer);
+            _songs.Add(offer.Creature);
+            _songs.Add(offer.Song);
+            Combos.Learn(offer.Creature);
+            Combos.Learn(offer.Song);
         }
 
         private void Apply(ComboResult result)
@@ -205,6 +274,14 @@ namespace DigitalStory.Logic
         {
             Stamina.Refill();
             PiperHealth.Refill();
+
+            foreach (CreatureChoice choice in _choices)
+            {
+                if (choice.Level == level)
+                {
+                    _waiting.Enqueue(choice);
+                }
+            }
         }
     }
 }

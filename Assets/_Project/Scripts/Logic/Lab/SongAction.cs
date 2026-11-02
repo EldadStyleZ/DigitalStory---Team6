@@ -2,13 +2,13 @@ using DigitalStory.Data;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>Makes every creature hit harder for a while.</summary>
-    public sealed class BoostAction : IComboAction
+    /// <summary>Plays a battle song.</summary>
+    public sealed class SongAction : IComboAction
     {
         private readonly Battle _battle;
         private readonly BattleSong _song;
 
-        public BoostAction(Battle battle, BattleSong song)
+        public SongAction(Battle battle, BattleSong song)
         {
             _battle = battle;
             _song = song;
@@ -16,6 +16,6 @@ namespace DigitalStory.Logic
 
         public bool HasRoom => true;
 
-        public void Perform() => _battle.Boost(_song.DamageMultiplier, _song.Seconds);
+        public void Perform() => _battle.Play(_song);
     }
 }

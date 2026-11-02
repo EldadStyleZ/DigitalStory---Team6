@@ -282,11 +282,11 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(_plan.Minions.Any(minion => minion.Stats.Traits.Heals), Is.True, "An enemy healer");
             Assert.That(_plan.Minions.Count(minion => minion.Stats.Traits.StandsBack), Is.GreaterThanOrEqualTo(2), "A back line");
-            Assert.That(roster.Creatures.Any(creature => creature.Stats.Traits.Heals), Is.True, "A healer");
-            Assert.That(roster.Creatures.Any(creature => creature.Stats.Traits.PackBonus > 0f), Is.True, "A swarm");
-            Assert.That(roster.Creatures.Any(creature => creature.Stats.Traits.HuntsBackline), Is.True, "A hunter");
-            Assert.That(roster.Creatures.Any(creature => creature.Stats.Traits.SlowShare > 0f), Is.True, "A cloud");
-            Assert.That(roster.Creatures.Any(creature => creature.Stats.Traits.Guards), Is.True, "A guardian");
+            Assert.That(AllCreatures(roster).Any(creature => creature.Stats.Traits.Heals), Is.True, "A healer");
+            Assert.That(AllCreatures(roster).Any(creature => creature.Stats.Traits.PackBonus > 0f), Is.True, "A swarm");
+            Assert.That(AllCreatures(roster).Any(creature => creature.Stats.Traits.HuntsBackline), Is.True, "A hunter");
+            Assert.That(AllCreatures(roster).Any(creature => creature.Stats.Traits.SlowShare > 0f), Is.True, "A cloud");
+            Assert.That(AllCreatures(roster).Any(creature => creature.Stats.Traits.Guards), Is.True, "A guardian");
         }
 
         [Test]
@@ -296,8 +296,8 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(_plan.Minions.Any(minion => minion.Stats.HitsAnArea), Is.True);
             Assert.That(_plan.Minions.Any(minion => !minion.Stats.HitsAnArea), Is.True);
-            Assert.That(roster.Creatures.Any(creature => creature.Stats.HitsAnArea), Is.True);
-            Assert.That(roster.Creatures.Any(creature => !creature.Stats.HitsAnArea), Is.True);
+            Assert.That(AllCreatures(roster).Any(creature => creature.Stats.HitsAnArea), Is.True);
+            Assert.That(AllCreatures(roster).Any(creature => !creature.Stats.HitsAnArea), Is.True);
         }
     }
 }

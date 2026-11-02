@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
@@ -49,6 +51,27 @@ namespace DigitalStory.Tests.EditMode
         public static CreatureType Creature(string name, int unlockLevel, params int[] combo)
         {
             return Creature(Sturdy, name, unlockLevel, 10f, 2f, combo);
+        }
+
+        public static BattleSong Song(SongBuff buff, string name = "Song", int unlockLevel = 1, params int[] combo)
+        {
+            return new BattleSong(name, "Role", unlockLevel, combo.Length > 0 ? combo : new[] { L, H }, 10f, 2f, buff);
+        }
+
+        /// <summary>Every creature and song the real roster holds, chosen or not.</summary>
+        public static IEnumerable<CreatureOffer> AllOffers(CreatureRoster roster)
+        {
+            return new[] { roster.Starter }.Concat(roster.Choices.SelectMany(choice => choice.Options));
+        }
+
+        public static IEnumerable<CreatureType> AllCreatures(CreatureRoster roster)
+        {
+            return AllOffers(roster).Select(offer => offer.Creature);
+        }
+
+        public static IEnumerable<IComboSong> AllSongs(CreatureRoster roster)
+        {
+            return AllOffers(roster).SelectMany(offer => new IComboSong[] { offer.Creature, offer.Song });
         }
 
         public static MinionType Minion(FighterStats stats, float detectTiles = 8f, int xp = 10, float firstDepth = 0f, float lastDepth = 1f)

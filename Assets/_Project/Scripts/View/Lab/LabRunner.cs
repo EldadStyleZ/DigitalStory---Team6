@@ -13,6 +13,10 @@ namespace DigitalStory.View
 
         private static readonly KeyCode[] NoteKeys = { KeyCode.H, KeyCode.J, KeyCode.K, KeyCode.L };
 
+        // Not the flute's keys: a pick lasts the whole run, and a level can arrive in the middle of a combo.
+        private static readonly KeyCode[] ChoiceKeys = { KeyCode.Alpha1, KeyCode.Alpha2 };
+        private static readonly KeyCode[] ChoicePadKeys = { KeyCode.Keypad1, KeyCode.Keypad2 };
+
         private LabSession _session;
         private LabFlow _flow;
 
@@ -35,10 +39,31 @@ namespace DigitalStory.View
                 _flow.TogglePause();
             }
 
-            if (_flow.IsPlaying)
+            if (_flow.Phase == LabPhase.Choosing)
+            {
+                ReadChoiceKeys();
+            }
+            else if (_flow.IsPlaying && _session.WaitingChoice != null)
+            {
+                // Asked here, not when the level arrives, so a death or win on that same step goes first.
+                _flow.OfferChoice();
+            }
+            else if (_flow.IsPlaying)
             {
                 PlayPressedNotes();
                 _session.Tick(ReadMove(), Mathf.Min(Time.deltaTime, LongestStepSeconds));
+            }
+        }
+
+        private void ReadChoiceKeys()
+        {
+            for (int option = 0; option < ChoiceKeys.Length; option++)
+            {
+                if (Input.GetKeyDown(ChoiceKeys[option]) || Input.GetKeyDown(ChoicePadKeys[option]))
+                {
+                    _session.Choose(option);
+                    return;
+                }
             }
         }
 

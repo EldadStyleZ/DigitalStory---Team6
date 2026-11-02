@@ -26,6 +26,9 @@ namespace DigitalStory.View
         /// <summary>How many hit sounds have played, for tests and debugging.</summary>
         public int HitSoundsPlayed { get; private set; }
 
+        /// <summary>How many tunes are ready, for tests and debugging.</summary>
+        public int TunesBaked => _songs.Count;
+
         /// <summary>The last combo's tune, for tests and debugging.</summary>
         public IComboSong LastSong { get; private set; }
 
@@ -59,6 +62,7 @@ namespace DigitalStory.View
             AudioSettings.OnAudioConfigurationChanged += HandleAudioChanged;
             _session.NotePlayed += HandleNotePlayed;
             _session.ComboPlayed += HandleComboPlayed;
+            _session.ChoiceMade += HandleChoiceMade;
             _session.ComboFailed += HandleComboFailed;
             _session.SummonRefused += HandleRefused;
             _session.PiperDied += HandlePiperDied;
@@ -80,6 +84,7 @@ namespace DigitalStory.View
             AudioSettings.OnAudioConfigurationChanged -= HandleAudioChanged;
             _session.NotePlayed -= HandleNotePlayed;
             _session.ComboPlayed -= HandleComboPlayed;
+            _session.ChoiceMade -= HandleChoiceMade;
             _session.ComboFailed -= HandleComboFailed;
             _session.SummonRefused -= HandleRefused;
             _session.PiperDied -= HandlePiperDied;
@@ -106,10 +111,16 @@ namespace DigitalStory.View
                 _clips[cue] = NewClip(cue, sampleRate);
             }
 
+            // Only what this run knows, because baking every option would hold up the start for most of a second.
             foreach (IComboSong song in _session.Songs)
             {
-                _songs[song] = NewClip(ComboSongWriter.Write(song, _sound.Band), sampleRate);
+                BakeTune(song, sampleRate);
             }
+        }
+
+        private void BakeTune(IComboSong song, int sampleRate)
+        {
+            _songs[song] = NewClip(ComboSongWriter.Write(song, _sound.Band), sampleRate);
         }
 
         private static AudioClip NewClip(SoundCue cue, int sampleRate)
@@ -163,6 +174,18 @@ namespace DigitalStory.View
             {
                 _songSource.clip = clip;
                 _songSource.Play();
+            }
+        }
+
+        // The game is stopped on the choice screen here, so nobody hears or feels the wait.
+        private void HandleChoiceMade(CreatureOffer offer)
+        {
+            int sampleRate = AudioSettings.outputSampleRate;
+
+            if (sampleRate > 0)
+            {
+                BakeTune(offer.Creature, sampleRate);
+                BakeTune(offer.Song, sampleRate);
             }
         }
 

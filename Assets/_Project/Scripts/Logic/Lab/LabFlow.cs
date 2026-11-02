@@ -24,6 +24,11 @@ namespace DigitalStory.Logic
             }
         }
 
+        /// <summary>Stops the game until the player picks.</summary>
+        public void OfferChoice() => Move(LabPhase.Playing, LabPhase.Choosing);
+
+        public void FinishChoice() => Move(LabPhase.Choosing, LabPhase.Playing);
+
         public void Die() => Move(LabPhase.Playing, LabPhase.Dead);
 
         /// <summary>Returns to the maze after choosing to continue.</summary>

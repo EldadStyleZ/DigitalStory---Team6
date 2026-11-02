@@ -22,9 +22,6 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("Shown while nothing has noticed the Piper.")]
         public string QuietLabel { get; private set; } = "All quiet";
 
-        [field: SerializeField, Tooltip("Shown while the creatures hit harder, before the seconds left.")]
-        public string BoostLabel { get; private set; } = "War Song";
-
         [field: SerializeField, Tooltip("Shown over a combo not yet unlocked, before its level.")]
         public string LockedLabel { get; private set; } = "Unlocks at level";
 
@@ -49,6 +46,19 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("When the Piper reaches a new level, before the level number.")]
         public string LevelUpMessage { get; private set; } = "You reached level";
+
+        [field: Header("Choice")]
+        [field: SerializeField, Tooltip("The choice screen's heading.")]
+        public string ChoiceTitle { get; private set; } = "Choose one";
+
+        [field: SerializeField, Tooltip("The warning on the choice screen.")]
+        public string ChoiceWarning { get; private set; } = "The other never returns.";
+
+        [field: SerializeField, Tooltip("On each option's button, before its name.")]
+        public string ChooseButton { get; private set; } = "Choose";
+
+        [field: SerializeField, Tooltip("Before the level of the next choice.")]
+        public string NextChoiceLabel { get; private set; } = "Next choice at level";
 
         [field: Header("Pause")]
         [field: SerializeField, Tooltip("The pause screen's heading.")]

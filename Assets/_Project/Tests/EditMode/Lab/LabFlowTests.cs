@@ -74,6 +74,56 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void OfferChoice_WhilePlaying_StopsPlay()
+        {
+            _flow.OfferChoice();
+
+            Assert.That(_flow.Phase, Is.EqualTo(LabPhase.Choosing));
+            Assert.That(_flow.IsPlaying, Is.False);
+        }
+
+        [Test]
+        public void FinishChoice_AfterChoosing_PlaysAgain()
+        {
+            _flow.OfferChoice();
+
+            _flow.FinishChoice();
+
+            Assert.That(_flow.IsPlaying, Is.True);
+        }
+
+        [Test]
+        public void FinishChoice_WhilePlaying_DoesNothing()
+        {
+            int changes = 0;
+            _flow.Changed += _ => changes++;
+
+            _flow.FinishChoice();
+
+            Assert.That(changes, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void OfferChoice_AfterDying_DoesNothing()
+        {
+            _flow.Die();
+
+            _flow.OfferChoice();
+
+            Assert.That(_flow.Phase, Is.EqualTo(LabPhase.Dead));
+        }
+
+        [Test]
+        public void TogglePause_WhileChoosing_DoesNothing()
+        {
+            _flow.OfferChoice();
+
+            _flow.TogglePause();
+
+            Assert.That(_flow.Phase, Is.EqualTo(LabPhase.Choosing));
+        }
+
+        [Test]
         public void Changed_OnEachMove_ReportsTheNewPhase()
         {
             var phases = new List<LabPhase>();

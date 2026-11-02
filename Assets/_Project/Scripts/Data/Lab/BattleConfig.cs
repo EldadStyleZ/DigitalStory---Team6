@@ -33,6 +33,9 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("How close fighters must stand to count as a pack, in tiles.")]
         public float PackTiles { get; private set; } = 3f;
 
+        [field: SerializeField, Range(0f, 1f), Tooltip("The share of health under which a target counts as nearly finished.")]
+        public float FinisherHealthShare { get; private set; } = 0.5f;
+
         [field: SerializeField, Min(0.02f), Tooltip("Seconds between route updates.")]
         public float RouteSeconds { get; private set; } = 0.2f;
     }

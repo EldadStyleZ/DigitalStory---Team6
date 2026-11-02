@@ -143,7 +143,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Constructor_ASongClashingWithACreature_FailsWithAClearError()
         {
-            IComboSong[] clashing = { Creature("Short", 1, H, J), new BattleSong("Long", "Boost", 2, new[] { H, J, K }, 1f, 1f, 2f, 1f) };
+            IComboSong[] clashing = { Creature("Short", 1, H, J), Song(default, "Long", 2, H, J, K) };
 
             var error = Assert.Throws<ArgumentException>(() => new ComboReader(_config, clashing));
             Assert.That(error.Message, Does.Contain("Short").And.Contain("Long"));
@@ -211,11 +211,115 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void TheRealRoster_NoComboStartsAnother()
+        public void Learn_ANewCombo_LetsItBePlayed()
+        {
+            var reader = new ComboReader(_config, new[] { _mouse });
+            CreatureType learned = Creature("Learned", 1, K, L);
+
+            reader.Learn(learned);
+            reader.Press(K, 1);
+
+            Assert.That(reader.Press(L, 1).Song, Is.SameAs(learned));
+        }
+
+        [Test]
+        public void Learn_AComboStartingAKnownOne_FailsWithAClearError()
+        {
+            var error = Assert.Throws<ArgumentException>(() => _reader.Learn(Creature("Stub", 1, K, L)));
+
+            Assert.That(error.Message, Does.Contain("Stub").And.Contain("Cat"));
+        }
+
+        [Test]
+        public void Learn_AComboAKnownOneStarts_FailsWithAClearError()
+        {
+            Assert.Throws<ArgumentException>(() => _reader.Learn(Creature("Long", 1, H, J, K)));
+        }
+
+        [Test]
+        public void Learn_TheSameCombo_FailsWithAClearError()
+        {
+            Assert.Throws<ArgumentException>(() => _reader.Learn(Creature("Twin", 1, H, J)));
+        }
+
+        [Test]
+        public void Learn_ANoteThatIsNotOnTheFlute_FailsWithAClearError()
+        {
+            Assert.Throws<ArgumentException>(() => _reader.Learn(Creature("Odd", 1, K, 4)));
+        }
+
+        [Test]
+        public void TheRealRoster_EveryPathOfChoices_LeavesEveryComboPlayable()
         {
             var roster = ScriptableObject.CreateInstance<CreatureRoster>();
 
-            Assert.DoesNotThrow(() => new ComboReader(_config, roster.Creatures.Concat<IComboSong>(roster.BattleSongs).ToArray()));
+            for (int path = 0; path < 1 << roster.Choices.Count; path++)
+            {
+                var reader = new ComboReader(_config, new IComboSong[] { roster.Starter.Creature, roster.Starter.Song });
+
+                for (int index = 0; index < roster.Choices.Count; index++)
+                {
+                    CreatureOffer offer = roster.Choices[index].Options[(path >> index) & 1];
+                    Assert.DoesNotThrow(() => reader.Learn(offer.Creature), offer.Creature.Name);
+                    Assert.DoesNotThrow(() => reader.Learn(offer.Song), offer.Song.Name);
+                }
+            }
+        }
+
+        [Test]
+        public void TheRealRoster_EachPair_SharesItsCombos()
+        {
+            foreach (CreatureChoice choice in ScriptableObject.CreateInstance<CreatureRoster>().Choices)
+            {
+                CreatureOffer first = choice.Options[0];
+                CreatureOffer second = choice.Options[1];
+
+                Assert.That(second.Creature.Combo, Is.EqualTo(first.Creature.Combo), choice.Problem);
+                Assert.That(second.Song.Combo, Is.EqualTo(first.Song.Combo), choice.Problem);
+            }
+        }
+
+        [Test]
+        public void TheRealRoster_EachPair_CostsTheSame()
+        {
+            foreach (CreatureChoice choice in ScriptableObject.CreateInstance<CreatureRoster>().Choices)
+            {
+                Assert.That(choice.Options[1].Creature.StaminaCost, Is.EqualTo(choice.Options[0].Creature.StaminaCost), choice.Problem);
+                Assert.That(choice.Options[1].Song.StaminaCost, Is.EqualTo(choice.Options[0].Song.StaminaCost), choice.Problem);
+            }
+        }
+
+        [Test]
+        public void TheRealRoster_EachPair_OffersTwoOptions_AtItsOwnLevel()
+        {
+            var roster = ScriptableObject.CreateInstance<CreatureRoster>();
+            var levels = ScriptableObject.CreateInstance<LevelConfig>();
+
+            Assert.That(roster.Choices.Select(choice => choice.Level), Is.EqualTo(Enumerable.Range(2, levels.XpToReach.Count - 1)));
+
+            foreach (CreatureChoice choice in roster.Choices)
+            {
+                Assert.That(choice.Options.Count, Is.EqualTo(2), choice.Problem);
+                Assert.That(choice.Problem, Is.Not.Empty);
+                Assert.That(choice.Options.All(offer => offer.Creature.UnlockLevel == choice.Level && offer.Song.UnlockLevel == choice.Level), Is.True, choice.Problem);
+            }
+        }
+
+        [Test]
+        public void TheRealRoster_ThirdChoice_ReachesTheBackLineEitherWay()
+        {
+            CreatureChoice third = ScriptableObject.CreateInstance<CreatureRoster>().Choices.Single(choice => choice.Level == 3);
+
+            Assert.That(third.Options.All(offer => offer.Creature.Stats.Traits.HuntsBackline), Is.True);
+        }
+
+        [Test]
+        public void TheRealRoster_NoTwoCreaturesOrSongsAreTheSame()
+        {
+            var roster = ScriptableObject.CreateInstance<CreatureRoster>();
+            string[] names = AllSongs(roster).Select(song => song.Name).ToArray();
+
+            Assert.That(names, Is.Unique);
         }
 
         [Test]
@@ -223,7 +327,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var roster = ScriptableObject.CreateInstance<CreatureRoster>();
 
-            foreach (IComboSong song in roster.Creatures.Concat<IComboSong>(roster.BattleSongs))
+            foreach (IComboSong song in AllSongs(roster))
             {
                 Assert.That(song.Role, Is.Not.Empty, song.Name);
             }
@@ -234,21 +338,26 @@ namespace DigitalStory.Tests.EditMode
         {
             var roster = ScriptableObject.CreateInstance<CreatureRoster>();
 
-            Assert.That(roster.Creatures.Count(creature => creature.UnlockLevel == 1), Is.EqualTo(1));
+            Assert.That(AllSongs(roster).Count(song => song.UnlockLevel == 1), Is.EqualTo(1));
         }
 
         [Test]
-        public void TheRealRoster_HigherLevels_CostMoreTakeLongerAndCoolLonger()
+        public void TheRealRoster_HigherChoices_CostMoreTakeLongerAndCoolLonger()
         {
-            CreatureType[] byLevel = ScriptableObject.CreateInstance<CreatureRoster>().Creatures.OrderBy(creature => creature.UnlockLevel).ToArray();
+            var roster = ScriptableObject.CreateInstance<CreatureRoster>();
+            CreatureType lower = roster.Starter.Creature;
 
-            for (int index = 1; index < byLevel.Length; index++)
+            foreach (CreatureChoice choice in roster.Choices)
             {
-                CreatureType lower = byLevel[index - 1];
-                CreatureType higher = byLevel[index];
-                Assert.That(higher.StaminaCost, Is.GreaterThan(lower.StaminaCost), higher.Name);
-                Assert.That(higher.CooldownSeconds, Is.GreaterThan(lower.CooldownSeconds), higher.Name);
-                Assert.That(higher.Combo.Count, Is.GreaterThan(lower.Combo.Count), higher.Name);
+                foreach (CreatureOffer offer in choice.Options)
+                {
+                    CreatureType higher = offer.Creature;
+                    Assert.That(higher.StaminaCost, Is.GreaterThan(lower.StaminaCost), higher.Name);
+                    Assert.That(higher.CooldownSeconds, Is.GreaterThan(lower.CooldownSeconds), higher.Name);
+                    Assert.That(higher.Combo.Count, Is.GreaterThan(lower.Combo.Count), higher.Name);
+                }
+
+                lower = choice.Options[0].Creature;
             }
         }
     }

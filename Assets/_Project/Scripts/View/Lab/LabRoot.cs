@@ -101,11 +101,12 @@ namespace DigitalStory.View
 
             Session = new LabSession(new LabRules(
                 _maze.Shape, _maze.Seed, _player, _stamina, _combos, _levels, _battle,
-                _roster.Creatures, _roster.BattleSongs, _population.Plan, _ambush, _maze.SignpostChance));
+                _roster.Starter, _roster.Choices, _population.Plan, _ambush, _maze.SignpostChance));
 
             Flow = new LabFlow();
             Session.PiperDied += Flow.Die;
             Session.Won += Flow.Win;
+            Session.ChoiceMade += HandleChoiceMade;
 
             _runner.Initialize(Session, Flow);
             _mazeView.Initialize(Session.Maze, Session.Signposts, _sprites, _art);
@@ -118,6 +119,8 @@ namespace DigitalStory.View
             _screensView.Initialize(Flow, Session, _texts, _hud);
             _soundView.Initialize(Session, _sound);
         }
+
+        private void HandleChoiceMade(CreatureOffer offer) => Flow.FinishChoice();
 
         private bool HasEverything()
         {

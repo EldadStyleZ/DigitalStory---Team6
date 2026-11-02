@@ -6,12 +6,23 @@ using UnityEngine.UIElements;
 
 namespace DigitalStory.View
 {
-    /// <summary>Shows the pause, death and victory screens, including the choice after dying.</summary>
+    /// <summary>Shows the choice between two creatures and the pause, death and victory screens.</summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(UIDocument))]
     [AddComponentMenu("DigitalStory/Lab/Lab Screens View")]
     public sealed class LabScreensView : MonoBehaviour
     {
+        private const float NameFontSize = 20f;
+        private const float BodyFontSize = 13f;
+        private const float OptionGap = 8f;
+        private const float OptionPadding = 12f;
+        private const float OptionRadius = 8f;
+        private const float LineGap = 6f;
+        private const float ButtonFontSize = 14f;
+        private const float ButtonPadding = 8f;
+
+        private static readonly string[] OptionButtons = { "chooseFirst", "chooseSecond" };
+
         private LabFlow _flow;
         private LabSession _session;
         private LabTextConfig _texts;
@@ -77,6 +88,9 @@ namespace DigitalStory.View
 
             switch (phase)
             {
+                case LabPhase.Choosing:
+                    ShowChoice(_session.WaitingChoice);
+                    break;
                 case LabPhase.Paused:
                     _card.AddHeading(_texts.PausedTitle);
                     _card.AddMainButton("resumeButton", _texts.ResumeButton, _flow.TogglePause);
@@ -101,6 +115,85 @@ namespace DigitalStory.View
             // The HUD builds itself in its own Start, so its place among the children is not fixed.
             _overlay.BringToFront();
             _overlay.style.display = DisplayStyle.Flex;
+        }
+
+        private void ShowChoice(CreatureChoice choice)
+        {
+            _card.AddHeading(_texts.ChoiceTitle);
+            _card.AddParagraph($"{choice.Problem}. {_texts.ChoiceWarning}");
+
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.marginTop = LineGap;
+
+            for (int option = 0; option < choice.Options.Count; option++)
+            {
+                row.Add(NewOption(choice.Options[option], option));
+            }
+
+            _card.Root.Add(row);
+        }
+
+        // Neither button takes focus, so Space or Enter can never make a pick that lasts the whole run.
+        private VisualElement NewOption(CreatureOffer offer, int option)
+        {
+            var panel = new VisualElement();
+            panel.style.flexGrow = 1f;
+            panel.style.flexBasis = 0f;
+            panel.style.marginRight = option == 0 ? OptionGap : 0f;
+            panel.style.paddingLeft = OptionPadding;
+            panel.style.paddingRight = OptionPadding;
+            panel.style.paddingTop = OptionPadding;
+            panel.style.paddingBottom = OptionPadding;
+            panel.style.borderTopLeftRadius = OptionRadius;
+            panel.style.borderTopRightRadius = OptionRadius;
+            panel.style.borderBottomLeftRadius = OptionRadius;
+            panel.style.borderBottomRightRadius = OptionRadius;
+            panel.style.backgroundColor = _hud.BreathTrackColor;
+
+            panel.Add(NewLine(offer.Creature.Name, NameFontSize, _hud.GlowColor));
+            panel.Add(NewLine(offer.Creature.Role, BodyFontSize, _hud.TextColor));
+            panel.Add(NewLine(offer.Song.Name, BodyFontSize, _hud.GlowColor));
+            panel.Add(NewLine(offer.Song.Role, BodyFontSize, _hud.CaptionColor));
+            panel.Add(NewOptionButton(offer, option));
+            return panel;
+        }
+
+        private Button NewOptionButton(CreatureOffer offer, int option)
+        {
+            var button = new Button(() => _session.Choose(option))
+            {
+                name = OptionButtons[option],
+                text = $"{option + 1}: {_texts.ChooseButton} {offer.Creature.Name}",
+            };
+
+            button.style.fontSize = ButtonFontSize;
+            button.style.color = _hud.ButtonTextColor;
+            button.style.backgroundColor = _hud.ButtonColor;
+            button.style.marginTop = LineGap * 2f;
+            button.style.marginLeft = 0f;
+            button.style.marginRight = 0f;
+            button.style.paddingTop = ButtonPadding;
+            button.style.paddingBottom = ButtonPadding;
+            button.style.borderTopWidth = 0f;
+            button.style.borderBottomWidth = 0f;
+            button.style.borderLeftWidth = 0f;
+            button.style.borderRightWidth = 0f;
+            return button;
+        }
+
+        private static Label NewLine(string text, float fontSize, Color color)
+        {
+            var label = new Label(text);
+            label.style.fontSize = fontSize;
+            label.style.color = color;
+            label.style.whiteSpace = WhiteSpace.Normal;
+            label.style.marginTop = LineGap;
+            label.style.marginLeft = 0f;
+            label.style.marginRight = 0f;
+            label.style.paddingLeft = 0f;
+            label.style.paddingRight = 0f;
+            return label;
         }
 
         private void ContinueRun()

@@ -30,7 +30,6 @@ namespace DigitalStory.Logic
 
         private float _secondsToNewRoutes;
         private bool _routesAreStale = true;
-        private float _boostMultiplier = 1f;
 
         public Battle(Maze maze, BattleConfig config, LabPiper piper, Health piperHealth)
         {
@@ -65,14 +64,31 @@ namespace DigitalStory.Logic
 
         public bool HasRoomForACreature => _creatures.Count < _config.MaxCreatures;
 
-        public bool IsBoosted => BoostSecondsLeft > 0f;
-        public float BoostSecondsLeft { get; private set; }
+        /// <summary>The battle songs still working.</summary>
+        public SongEffects Songs { get; } = new SongEffects();
 
-        /// <summary>Makes every creature hit harder for a while. A new boost replaces the old one.</summary>
-        public void Boost(float damageMultiplier, float seconds)
+        public bool IsBoosted => Songs.IsAnyRunning;
+        public float BoostSecondsLeft => Songs.LongestSecondsLeft;
+
+        /// <summary>Plays a battle song. Different songs work together.</summary>
+        public void Play(BattleSong song)
         {
-            _boostMultiplier = damageMultiplier;
-            BoostSecondsLeft = seconds;
+            SongBuff buff = song.Buff;
+
+            if (buff.Healing > 0f)
+            {
+                HealEveryone(buff.Healing);
+            }
+
+            if (buff.EnemySlowShare > 0f || buff.BurstDamage > 0f)
+            {
+                StrikeEveryEnemy(buff);
+            }
+
+            if (buff.Lasts)
+            {
+                Songs.Add(song);
+            }
         }
 
         /// <summary>How many cells of walking a cell is from the Piper, as of the last route update.</summary>
@@ -98,13 +114,14 @@ namespace DigitalStory.Logic
 
         public void Tick(float deltaTime)
         {
-            BoostSecondsLeft = Mathf.Max(0f, BoostSecondsLeft - deltaTime);
+            Songs.Tick(deltaTime);
             UpdateRoutes(deltaTime);
             UpdateAlertness();
 
+            // A faster creature simply lives through more time, so it walks and hits faster alike.
             foreach (Creature creature in _creatures)
             {
-                TickCreature(creature, deltaTime);
+                TickCreature(creature, deltaTime * Songs.PaceMultiplier);
             }
 
             foreach (Minion minion in _awake)
@@ -123,7 +140,7 @@ namespace DigitalStory.Logic
             _creatures.Clear();
             _awake.Clear();
             _standingBack.Clear();
-            BoostSecondsLeft = 0f;
+            Songs.Clear();
 
             foreach (Minion minion in _minions)
             {
@@ -131,6 +148,35 @@ namespace DigitalStory.Logic
             }
 
             _routesAreStale = true;
+        }
+
+        private void HealEveryone(float amount)
+        {
+            foreach (Creature creature in _creatures)
+            {
+                creature.Health.Heal(amount);
+                Healed?.Invoke(creature.Position);
+            }
+
+            _piperHealth.Heal(amount);
+            Healed?.Invoke(_piper.Position);
+        }
+
+        private void StrikeEveryEnemy(SongBuff buff)
+        {
+            foreach (Minion minion in _awake)
+            {
+                if (buff.EnemySlowShare > 0f)
+                {
+                    minion.Slow(buff.EnemySlowShare, buff.EnemySlowSeconds);
+                }
+
+                if (buff.BurstDamage > 0f)
+                {
+                    minion.TakeHit(buff.BurstDamage);
+                    Struck?.Invoke(new StrikeReport(minion.Position, 0f, true));
+                }
+            }
         }
 
         private void UpdateRoutes(float deltaTime)
@@ -305,7 +351,7 @@ namespace DigitalStory.Logic
 
         private void MendMinions(Minion healer, int cell)
         {
-            if (!healer.Stats.Traits.Heals || !healer.CanHitNow)
+            if (!healer.Stats.Traits.Heals || !healer.CanHitNow || Songs.StopsEnemyHealing)
             {
                 return;
             }
@@ -476,9 +522,9 @@ namespace DigitalStory.Logic
         {
             if (CanStrike(attacker))
             {
-                float boost = IsBoosted ? _boostMultiplier : 1f;
                 attacker.MarkHit();
-                Land(attacker.Stats, DamageOf(attacker, _creatures) * boost, target, _minions, true);
+                float damage = DamageOf(attacker, _creatures) * Songs.DamageMultiplier * FinisherOn(target);
+                Land(attacker.Stats, damage, target, _minions, true);
             }
         }
 
@@ -487,8 +533,14 @@ namespace DigitalStory.Logic
             if (CanStrike(attacker))
             {
                 attacker.MarkHit();
-                Land(attacker.Stats, DamageOf(attacker, _awake), target, _creatures, false);
+                float damage = DamageOf(attacker, _awake) * (1f - Songs.ShieldShare);
+                Land(attacker.Stats, damage, target, _creatures, false);
             }
+        }
+
+        private float FinisherOn(Minion target)
+        {
+            return target.Health.Share < _config.FinisherHealthShare ? Songs.FinisherMultiplier : 1f;
         }
 
         private float DamageOf<T>(T attacker, List<T> side) where T : Fighter

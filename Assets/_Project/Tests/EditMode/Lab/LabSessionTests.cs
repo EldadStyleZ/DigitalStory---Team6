@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using NUnit.Framework;
@@ -22,7 +23,10 @@ namespace DigitalStory.Tests.EditMode
         private AmbushConfig _ambush;
         private CreatureType _mouse;
         private CreatureType _cat;
+        private CreatureType _dog;
         private BattleSong _song;
+        private BattleSong _catSong;
+        private BattleSong _dogSong;
         private LabSession _session;
         private List<SummonRefusal> _refusals;
         private List<IComboSong> _summoned;
@@ -37,7 +41,10 @@ namespace DigitalStory.Tests.EditMode
             _ambush = ScriptableObject.CreateInstance<AmbushConfig>();
             _mouse = Creature(Sturdy, "Mouse", 1, 10f, 2f, H, J);
             _cat = Creature(Sturdy, "Cat", 2, 25f, 4f, K, L, H);
-            _song = new BattleSong("War Song", "Boost", 1, new[] { J, K, L }, 30f, 20f, 2f, 5f);
+            _dog = Creature(Sturdy, "Dog", 2, 25f, 4f, K, L, H);
+            _song = new BattleSong("War Song", "Boost", 1, new[] { J, K, L }, 30f, 20f, new SongBuff(seconds: 5f, damageMultiplier: 2f));
+            _catSong = Song(new SongBuff(seconds: 3f, shieldShare: 0.5f), "Cat Song", 2, L, H);
+            _dogSong = Song(new SongBuff(healing: 5f), "Dog Song", 2, L, H);
             _session = NewSession();
             _refusals = new List<SummonRefusal>();
             _summoned = new List<IComboSong>();
@@ -45,7 +52,7 @@ namespace DigitalStory.Tests.EditMode
             _session.ComboPlayed += _summoned.Add;
         }
 
-        private LabSession NewSession(float signpostChance = 0f, int[] bossCells = null)
+        private LabSession NewSession(float signpostChance = 0f, int[] bossCells = null, CreatureChoice[] choices = null)
         {
             var rules = new LabRules(
                 new MazeShape(16, bossCells == null ? 1 : 16, 3, 1, 0f),
@@ -55,12 +62,17 @@ namespace DigitalStory.Tests.EditMode
                 _combos,
                 _levels,
                 _battle,
-                new[] { _mouse, _cat },
-                new[] { _song },
+                new CreatureOffer(_mouse, _song),
+                choices ?? new[] { CatOrDog() },
                 new PopulationPlan(Array.Empty<MinionType>(), Bosses(bossCells), 0f, 0),
                 _ambush,
                 signpostChance);
             return new LabSession(rules);
+        }
+
+        private CreatureChoice CatOrDog(int level = 2)
+        {
+            return new CreatureChoice(level, "Problem", new CreatureOffer(_cat, _catSong), new CreatureOffer(_dog, _dogSong));
         }
 
         private static BossPlacement[] Bosses(int[] cells)
@@ -194,7 +206,7 @@ namespace DigitalStory.Tests.EditMode
             Play(J, K, L);
 
             Assert.That(_session.Battle.IsBoosted, Is.True);
-            Assert.That(_session.Battle.BoostSecondsLeft, Is.EqualTo(_song.Seconds).Within(Tolerance));
+            Assert.That(_session.Battle.BoostSecondsLeft, Is.EqualTo(_song.Buff.Seconds).Within(Tolerance));
             Assert.That(_summoned, Is.EqualTo(new[] { _song }));
         }
 
@@ -225,7 +237,7 @@ namespace DigitalStory.Tests.EditMode
         {
             Play(J, K, L);
             float afterFirst = _session.Stamina.Current;
-            Tick(_song.Seconds + 0.1f);
+            Tick(_song.Buff.Seconds + 0.1f);
             float recovered = _session.Stamina.Current;
 
             Play(J, K, L);
@@ -239,7 +251,10 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Songs_ListEveryComboByUnlockLevel()
         {
-            Assert.That(_session.Songs, Is.EqualTo(new IComboSong[] { _mouse, _song, _cat }));
+            _session.Levels.Add(_levels.XpToReach[1]);
+            _session.Choose(0);
+
+            Assert.That(_session.Songs, Is.EqualTo(new IComboSong[] { _mouse, _song, _cat, _catSong }));
         }
 
         [Test]
@@ -374,6 +389,7 @@ namespace DigitalStory.Tests.EditMode
             StartBattle();
 
             _session.Levels.Add(_levels.XpToReach[1]);
+            _session.Choose(0);
             Play(K, L, H);
 
             Assert.That(_summoned, Is.EqualTo(new[] { _cat }));
@@ -397,6 +413,207 @@ namespace DigitalStory.Tests.EditMode
             session.Tick(Vector2.zero, Step);
 
             AssertArrowsLeadToTheNextBoss(session);
+        }
+
+        [Test]
+        public void LevellingUp_ToAChoiceLevel_WaitsForAPick()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            Assert.That(_session.WaitingChoice, Is.Not.Null);
+            Assert.That(_session.WaitingChoice.Options[0].Creature, Is.SameAs(_cat));
+        }
+
+        [Test]
+        public void LevellingUp_ToALevelWithNoChoice_WaitsForNothing()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+            _session.Choose(0);
+
+            _session.Levels.Add(_levels.XpToReach[2]);
+
+            Assert.That(_session.WaitingChoice, Is.Null);
+        }
+
+        [Test]
+        public void WaitingChoice_AtTheStart_IsNothing()
+        {
+            Assert.That(_session.WaitingChoice, Is.Null);
+        }
+
+        [Test]
+        public void TwoLevelsAtOnce_WaitInOrder()
+        {
+            CreatureChoice second = CatOrDog(3);
+            LabSession session = NewSession(choices: new[] { CatOrDog(), second });
+
+            session.Levels.Add(_levels.XpToReach[2]);
+            session.Choose(0);
+
+            Assert.That(session.WaitingChoice, Is.SameAs(second));
+        }
+
+        [Test]
+        public void Choose_AnOption_MakesThePickPlayable()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            _session.Choose(1);
+            Play(K, L, H);
+
+            Assert.That(_summoned, Is.EqualTo(new[] { _dog }));
+        }
+
+        [Test]
+        public void Choose_AnOption_BringsItsSong()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            _session.Choose(0);
+            Play(L, H);
+
+            Assert.That(_summoned, Is.EqualTo(new[] { _catSong }));
+        }
+
+        [Test]
+        public void Choose_AnOption_NeverPlaysTheOther()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            _session.Choose(0);
+            Play(K, L, H);
+            Tick(_cat.CooldownSeconds + 0.1f);
+            Play(K, L, H);
+
+            Assert.That(_summoned, Has.No.Member(_dog));
+            Assert.That(_session.Songs, Has.No.Member(_dog).And.No.Member(_dogSong));
+        }
+
+        [Test]
+        public void Party_AfterAPick_HoldsTheStarterAndThePick()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            _session.Choose(1);
+
+            Assert.That(_session.Party.Select(offer => offer.Creature), Is.EqualTo(new[] { _mouse, _dog }));
+        }
+
+        [Test]
+        public void Choose_AnOption_ReportsIt()
+        {
+            var picks = new List<CreatureOffer>();
+            _session.ChoiceMade += picks.Add;
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            _session.Choose(1);
+
+            Assert.That(picks.Select(offer => offer.Creature), Is.EqualTo(new[] { _dog }));
+        }
+
+        [Test]
+        public void Choose_AnOption_ClearsTheChoice()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            _session.Choose(0);
+
+            Assert.That(_session.WaitingChoice, Is.Null);
+        }
+
+        [Test]
+        public void Choose_MidCombo_DropsTheCombo()
+        {
+            Play(H);
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            _session.Choose(0);
+
+            Assert.That(_session.Combos.Notes, Is.Empty);
+            Assert.That(_session.Stamina.Current, Is.EqualTo(_stamina.Max));
+        }
+
+        [Test]
+        public void Choose_WithNothingWaiting_FailsLoudly()
+        {
+            Assert.Throws<InvalidOperationException>(() => _session.Choose(0));
+        }
+
+        [Test]
+        public void Choose_AnOptionThatDoesNotExist_FailsAndKeepsTheChoice()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            Assert.Throws<IndexOutOfRangeException>(() => _session.Choose(2));
+
+            Assert.That(_session.WaitingChoice, Is.Not.Null);
+        }
+
+        [Test]
+        public void NextChoice_ListsTheNextOneStillToCome()
+        {
+            CreatureChoice second = CatOrDog(3);
+            LabSession session = NewSession(choices: new[] { CatOrDog(), second });
+
+            session.Levels.Add(_levels.XpToReach[1]);
+
+            Assert.That(session.NextChoice, Is.SameAs(second));
+        }
+
+        [Test]
+        public void NextChoice_WhenAllAreBehind_IsNothing()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+
+            Assert.That(_session.NextChoice, Is.Null);
+        }
+
+        [Test]
+        public void AllSongs_HoldsEveryOptionEvenBeforeItIsPicked()
+        {
+            Assert.That(_session.AllSongs, Is.EquivalentTo(new IComboSong[] { _mouse, _song, _cat, _catSong, _dog, _dogSong }));
+        }
+
+        [Test]
+        public void Continue_KeepsEveryPick()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+            _session.Choose(1);
+            _session.PiperHealth.Damage(_session.PiperHealth.Max);
+            Tick();
+
+            _session.Continue();
+
+            Assert.That(_session.Party.Select(offer => offer.Creature), Is.EqualTo(new[] { _mouse, _dog }));
+        }
+
+        [Test]
+        public void Continue_KeepsAChoiceStillWaiting()
+        {
+            _session.Levels.Add(_levels.XpToReach[1]);
+            _session.PiperHealth.Damage(_session.PiperHealth.Max);
+            Tick();
+
+            _session.Continue();
+
+            Assert.That(_session.WaitingChoice, Is.Not.Null);
+        }
+
+        [Test]
+        public void LevellingUpWhileDying_StillReportsTheDeath()
+        {
+            int deaths = 0;
+            _session.PiperDied += () => deaths++;
+            Minion minion = StartBattle();
+            minion.Health.Damage(minion.Health.Max);
+            _session.PiperHealth.Damage(_session.PiperHealth.Max);
+
+            _session.Levels.Add(_levels.XpToReach[1]);
+            _session.PiperHealth.Damage(_session.PiperHealth.Max);
+            Tick();
+
+            Assert.That(deaths, Is.EqualTo(1));
+            Assert.That(_session.WaitingChoice, Is.Not.Null);
         }
 
         [Test]

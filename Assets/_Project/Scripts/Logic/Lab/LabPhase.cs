@@ -4,6 +4,7 @@ namespace DigitalStory.Logic
     public enum LabPhase
     {
         Playing,
+        Choosing,
         Paused,
         Dead,
         Won,

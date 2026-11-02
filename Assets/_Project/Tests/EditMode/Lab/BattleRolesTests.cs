@@ -50,6 +50,11 @@ namespace DigitalStory.Tests.EditMode
             return new FighterStats(1000f, 0f, damage, seconds, reach, area, traits);
         }
 
+        private static BattleSong Boost(float multiplier, float seconds)
+        {
+            return Song(new SongBuff(seconds: seconds, damageMultiplier: multiplier));
+        }
+
         private Minion AwakeStatue(int cell, FighterStats stats, float detectTiles = 30f)
         {
             return _battle.AddMinion(Minion(stats, detectTiles), Cell(cell));
@@ -139,7 +144,7 @@ namespace DigitalStory.Tests.EditMode
             Build(Corridor(4));
             Minion minion = AwakeStatue(0, Statue);
             _battle.AddCreature(Creature(Runner));
-            _battle.Boost(1.5f, 5f);
+            _battle.Play(Boost(1.5f, 5f));
 
             Run(0.2f);
 
@@ -150,7 +155,7 @@ namespace DigitalStory.Tests.EditMode
         public void Boost_WhenItEnds_HitsAsBefore()
         {
             Build(Corridor(4));
-            _battle.Boost(1.5f, 1f);
+            _battle.Play(Boost(1.5f, 1f));
             Run(1.1f);
             Minion minion = AwakeStatue(0, Statue);
             _battle.AddCreature(Creature(Runner));
@@ -167,7 +172,7 @@ namespace DigitalStory.Tests.EditMode
             Build(Corridor(4));
             AwakeStatue(0, StillHitter);
             Creature creature = _battle.AddCreature(Creature(Statue));
-            _battle.Boost(3f, 5f);
+            _battle.Play(Boost(3f, 5f));
 
             Run(0.2f);
 
@@ -178,7 +183,7 @@ namespace DigitalStory.Tests.EditMode
         public void Boost_CountsDown()
         {
             Build(Corridor(4));
-            _battle.Boost(2f, 5f);
+            _battle.Play(Boost(2f, 5f));
 
             Run(1f);
 
@@ -189,7 +194,7 @@ namespace DigitalStory.Tests.EditMode
         public void Retreat_EndsTheBoost()
         {
             Build(Corridor(4));
-            _battle.Boost(2f, 5f);
+            _battle.Play(Boost(2f, 5f));
 
             _battle.Retreat();
 

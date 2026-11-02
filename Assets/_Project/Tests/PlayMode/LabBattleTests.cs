@@ -82,6 +82,17 @@ namespace DigitalStory.Tests.PlayMode
 
         private float DistanceFromDone(Color color) => ((Vector4)(color - _art.BalloonDoneColor)).magnitude;
 
+        // Picks in the same frame, so the game never gets as far as stopping for the choice.
+        private void LevelUpAndChoose(int xp)
+        {
+            Session.Levels.Add(xp);
+
+            while (Session.WaitingChoice != null)
+            {
+                Session.Choose(0);
+            }
+        }
+
         private void Press(string buttonName)
         {
             Button button = _screens.Card.Q<Button>(buttonName);
@@ -168,7 +179,7 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator Hud_OnLevellingUp_OffersTheNewCombo()
         {
-            Session.Levels.Add(1000);
+            LevelUpAndChoose(1000);
             yield return null;
 
             Assert.That(_hud.ShownCombos, Is.GreaterThan(1));
@@ -191,7 +202,7 @@ namespace DigitalStory.Tests.PlayMode
         {
             Assert.That(_hud.IsShowingABoost, Is.False);
 
-            Session.Battle.Boost(2f, 5f);
+            Session.Battle.Play(new BattleSong("Test", "Test", 1, new[] { H }, 1f, 1f, new SongBuff(seconds: 5f, damageMultiplier: 2f)));
             yield return null;
 
             Assert.That(_hud.IsShowingABoost, Is.True);
@@ -238,7 +249,7 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator Balloon_OnTheFirstNote_ListsTheCombosItCouldBecome()
         {
-            Session.Levels.Add(1000000);
+            LevelUpAndChoose(1000000);
             yield return null;
 
             Session.Press(H);
@@ -254,7 +265,7 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator Balloon_ThePlayedLetters_AreColored()
         {
-            Session.Levels.Add(1000000);
+            LevelUpAndChoose(1000000);
             Session.Press(H);
             Session.Press(L);
             Session.Press(K);
@@ -269,7 +280,7 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator Balloon_MoreLettersPlayed_MovesTheColorTowardDone()
         {
-            Session.Levels.Add(1000000);
+            LevelUpAndChoose(1000000);
             Session.Press(H);
             Session.Press(L);
             yield return null;
@@ -287,7 +298,7 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator Balloon_ANarrowingCombo_DropsTheOthers()
         {
-            Session.Levels.Add(1000000);
+            LevelUpAndChoose(1000000);
             Session.Press(H);
             yield return null;
             Assert.That(_balloon.ShownRows, Is.EqualTo(2));
@@ -377,7 +388,7 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator Sound_ANewSong_ReplacesTheLast()
         {
-            Session.Levels.Add(1000000);
+            LevelUpAndChoose(1000000);
             Session.Press(H);
             Session.Press(J);
             yield return null;
@@ -416,7 +427,7 @@ namespace DigitalStory.Tests.PlayMode
         {
             yield return null;
 
-            foreach (IComboSong song in Session.Songs)
+            foreach (IComboSong song in Session.AllSongs)
             {
                 float[] samples = ToneBaker.Bake(ComboSongWriter.Write(song, _soundConfig.Band), 48000);
                 float peak = samples.Max(sample => Mathf.Abs(sample));
@@ -492,7 +503,7 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator ContinueButton_KeepsTheLevelAndGoesOn()
         {
-            Session.Levels.Add(200);
+            LevelUpAndChoose(200);
             int level = Session.Levels.Level;
             Session.PiperHealth.Damage(Session.PiperHealth.Max);
             yield return null;
@@ -510,7 +521,7 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator NewGameButton_StartsAgainAtLevelOne()
         {
-            Session.Levels.Add(200);
+            LevelUpAndChoose(200);
             Session.PiperHealth.Damage(Session.PiperHealth.Max);
             yield return null;
             yield return null;

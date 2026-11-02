@@ -11,7 +11,7 @@ namespace DigitalStory.Logic
         public const int NoteCount = 4;
 
         private readonly ComboConfig _config;
-        private readonly IReadOnlyList<IComboSong> _songs;
+        private readonly List<IComboSong> _songs;
         private readonly List<int> _notes = new List<int>();
         private readonly List<IComboSong> _candidates = new List<IComboSong>();
 
@@ -20,7 +20,7 @@ namespace DigitalStory.Logic
         public ComboReader(ComboConfig config, IReadOnlyList<IComboSong> songs)
         {
             _config = config != null ? config : throw new ArgumentNullException(nameof(config));
-            _songs = songs ?? throw new ArgumentNullException(nameof(songs));
+            _songs = new List<IComboSong>(songs ?? throw new ArgumentNullException(nameof(songs)));
             CheckCombos(songs);
         }
 
@@ -29,6 +29,20 @@ namespace DigitalStory.Logic
 
         /// <summary>Every known combo the notes so far could still become.</summary>
         public IReadOnlyList<IComboSong> Candidates => _candidates;
+
+        /// <summary>Adds a combo the Piper can play.</summary>
+        public void Learn(IComboSong song)
+        {
+            CheckNotes(song);
+
+            foreach (IComboSong known in _songs)
+            {
+                CheckClash(song, known, nameof(song));
+                CheckClash(known, song, nameof(song));
+            }
+
+            _songs.Add(song);
+        }
 
         /// <summary>Adds a note to the combo being played.</summary>
         /// <param name="level">The Piper's level, which decides which combos are known.</param>
@@ -83,13 +97,21 @@ namespace DigitalStory.Logic
 
                 foreach (IComboSong other in songs)
                 {
-                    if (!ReferenceEquals(song, other) && Starts(song.Combo, other.Combo))
+                    if (!ReferenceEquals(song, other))
                     {
-                        throw new ArgumentException(
-                            $"{song.Name}'s combo is the start of {other.Name}'s, so {other.Name} could never be played.",
-                            nameof(songs));
+                        CheckClash(song, other, nameof(songs));
                     }
                 }
+            }
+        }
+
+        private static void CheckClash(IComboSong shorter, IComboSong longer, string parameter)
+        {
+            if (Starts(shorter.Combo, longer.Combo))
+            {
+                throw new ArgumentException(
+                    $"{shorter.Name}'s combo is the start of {longer.Name}'s, so {longer.Name} could never be played.",
+                    parameter);
             }
         }
 

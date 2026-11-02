@@ -26,12 +26,12 @@ namespace DigitalStory.View
         private const float ComboWidth = 138f;
         private const float ComboGap = 6f;
         private const float MessageSeconds = 1.6f;
+        private const int SecondsStampBase = 64;
 
         private readonly List<ComboPanel> _combos = new List<ComboPanel>();
         private readonly StringBuilder _noteText = new StringBuilder();
 
         private LabSession _session;
-        private IReadOnlyList<IComboSong> _songs;
         private LabTextConfig _texts;
         private LabArtConfig _art;
         private HudConfig _hud;
@@ -48,6 +48,9 @@ namespace DigitalStory.View
 
         /// <summary>The health bar, for tests and debugging.</summary>
         public LabBar HealthBar { get; private set; }
+
+        /// <summary>The songs at work on screen, for tests and debugging.</summary>
+        public string ShownSongs => _boostLabel?.text;
 
         /// <summary>The stamina bar, for tests and debugging.</summary>
         public LabBar StaminaBar { get; private set; }
@@ -74,7 +77,6 @@ namespace DigitalStory.View
         public void Initialize(LabSession session, LabTextConfig texts, LabArtConfig art, HudConfig hud)
         {
             _session = session;
-            _songs = session.Songs;
             _texts = texts;
             _art = art;
             _hud = hud;
@@ -94,6 +96,7 @@ namespace DigitalStory.View
             _session.ComboFailed += HandleComboFailed;
             _session.ComboPlayed += HandleComboPlayed;
             _session.Levels.LevelledUp += HandleLevelledUp;
+            _session.ChoiceMade += HandleChoiceMade;
             _session.Battle.CreatureLeft += HandleCreatureLeft;
             _session.Ambushes.Warned += HandleAmbushWarned;
         }
@@ -125,6 +128,7 @@ namespace DigitalStory.View
                 _session.ComboFailed -= HandleComboFailed;
                 _session.ComboPlayed -= HandleComboPlayed;
                 _session.Levels.LevelledUp -= HandleLevelledUp;
+                _session.ChoiceMade -= HandleChoiceMade;
                 _session.Battle.CreatureLeft -= HandleCreatureLeft;
                 _session.Ambushes.Warned -= HandleAmbushWarned;
             }
@@ -210,57 +214,54 @@ namespace DigitalStory.View
             return bottom;
         }
 
-        // Known combos, then the next one to unlock, so the player can see what they are working towards.
+        // The party, then the next choice, so the player can see what they are working towards.
         private void RebuildCombos()
         {
             _combos.Clear();
             _comboRow.Clear();
-            ShownCombos = 0;
-            bool hasShownALock = false;
+            ShownCombos = _session.Party.Count;
 
-            foreach (IComboSong song in _songs)
+            foreach (CreatureOffer offer in _session.Party)
             {
-                if (song.UnlockLevel <= _session.Levels.Level)
-                {
-                    AddCombo(song);
-                    ShownCombos++;
-                }
-                else if (!hasShownALock)
-                {
-                    AddLockedCombo(song);
-                    hasShownALock = true;
-                }
+                AddCombo(offer);
             }
 
+            AddNextChoice();
             _levelLabel.text = $"{_texts.LevelLabel} {_session.Levels.Level}";
         }
 
-        private void AddCombo(IComboSong song)
+        private void AddCombo(CreatureOffer offer)
         {
             VisualElement panel = NewComboPanel();
+            AddLines(panel, offer.Creature);
+            AddLines(panel, offer.Song);
+            _comboRow.Add(panel);
+        }
+
+        private void AddLines(VisualElement panel, IComboSong song)
+        {
             Label name = NewLabel(BodyFontSize, _hud.TextColor);
             Label notes = NewLabel(SmallFontSize, _hud.GlowColor);
-            Label role = NewLabel(SmallFontSize, _hud.CaptionColor);
             name.text = $"{song.Name} ({song.StaminaCost:0})";
-            notes.text = NoteNames(song.Combo);
-            role.text = song.Role;
-            role.style.whiteSpace = WhiteSpace.Normal;
             panel.Add(name);
             panel.Add(notes);
-            panel.Add(role);
-            _comboRow.Add(panel);
             _combos.Add(new ComboPanel(song, name, notes));
         }
 
-        private void AddLockedCombo(IComboSong song)
+        private void AddNextChoice()
         {
+            CreatureChoice next = _session.NextChoice;
+
+            if (next == null)
+            {
+                return;
+            }
+
             VisualElement panel = NewComboPanel();
-            Label name = NewLabel(BodyFontSize, _art.CoolingColor);
-            Label level = NewLabel(SmallFontSize, _art.CoolingColor);
-            name.text = song.Name;
-            level.text = $"{_texts.LockedLabel} {song.UnlockLevel}";
-            panel.Add(name);
-            panel.Add(level);
+            Label label = NewLabel(SmallFontSize, _art.CoolingColor);
+            label.text = $"{_texts.NextChoiceLabel} {next.Level}";
+            label.style.whiteSpace = WhiteSpace.Normal;
+            panel.Add(label);
             _comboRow.Add(panel);
         }
 
@@ -276,18 +277,35 @@ namespace DigitalStory.View
             return _noteText.ToString().TrimEnd();
         }
 
-        // Only rewrites the words when the number changes, because this runs every frame.
+        // Only rewrites the words when a number changes, because this runs every frame.
         private void ShowBoost()
         {
-            bool isBoosted = _session.Battle.IsBoosted;
-            _boostLabel.style.display = isBoosted ? DisplayStyle.Flex : DisplayStyle.None;
-            int seconds = Mathf.CeilToInt(_session.Battle.BoostSecondsLeft);
+            IReadOnlyList<RunningSong> running = _session.Battle.Songs.Running;
+            _boostLabel.style.display = running.Count > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            int stamp = running.Count;
 
-            if (isBoosted && seconds != _shownBoostSeconds)
+            foreach (RunningSong song in running)
             {
-                _shownBoostSeconds = seconds;
-                _boostLabel.text = $"{_texts.BoostLabel} {seconds}s";
+                stamp = (stamp * SecondsStampBase) + Mathf.CeilToInt(song.SecondsLeft);
             }
+
+            if (stamp != _shownBoostSeconds)
+            {
+                _shownBoostSeconds = stamp;
+                _boostLabel.text = SongsAndSeconds(running);
+            }
+        }
+
+        private string SongsAndSeconds(IReadOnlyList<RunningSong> running)
+        {
+            _noteText.Clear();
+
+            foreach (RunningSong song in running)
+            {
+                _noteText.Append(song.Song.Name).Append(' ').Append(Mathf.CeilToInt(song.SecondsLeft)).Append("s  ");
+            }
+
+            return _noteText.ToString().TrimEnd();
         }
 
         private void ShowCooldowns()
@@ -295,10 +313,11 @@ namespace DigitalStory.View
             foreach (ComboPanel combo in _combos)
             {
                 float seconds = _session.Cooldowns.SecondsLeft(combo.Song);
-                bool isReady = seconds <= 0f;
+                bool isLocked = combo.Song.UnlockLevel > _session.Levels.Level;
+                bool isReady = seconds <= 0f && !isLocked;
                 combo.Name.style.color = isReady ? _hud.TextColor : _art.CoolingColor;
                 combo.Notes.style.color = isReady ? _hud.GlowColor : _art.CoolingColor;
-                combo.Notes.text = isReady ? NoteNames(combo.Song.Combo) : $"{seconds:0.0}s";
+                combo.Notes.text = isLocked ? $"{_texts.LockedLabel} {combo.Song.UnlockLevel}" : isReady ? NoteNames(combo.Song.Combo) : $"{seconds:0.0}s";
             }
         }
 
@@ -371,6 +390,8 @@ namespace DigitalStory.View
         private void HandleCreatureLeft(Creature creature) => Say(_texts.CreatureLeftMessage);
 
         private void HandleAmbushWarned(Vector2 position) => Say(_texts.AmbushMessage);
+
+        private void HandleChoiceMade(CreatureOffer offer) => RebuildCombos();
 
         private void HandleLevelledUp(int level)
         {

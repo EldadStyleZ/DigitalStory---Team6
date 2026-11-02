@@ -12,185 +12,548 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 890cef66af3ac4addb231df39207a16f, type: 3}
   m_Name: CreatureRoster
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.CreatureRoster
-  _creatures:
-  - _name: Mouse
-    _role: 'Swarm: stronger together'
-    _unlockLevel: 1
-    _combo: 0000000001000000i
-    _staminaCost: 10
-    _cooldownSeconds: 1
-    _stats:
-      _maxHealth: 14
-      _moveSpeed: 6.5
-      _damage: 3
-      _secondsBetweenHits: 0.7
-      _reach: 0.5
-      _areaRadius: 0
-      _traits:
+  _starter:
+    _creature:
+      _name: Mouse
+      _role: 'Swarm: stronger together'
+      _unlockLevel: 1
+      _combo: 0000000001000000i
+      _staminaCost: 10
+      _cooldownSeconds: 1
+      _stats:
+        _maxHealth: 14
+        _moveSpeed: 6.5
+        _damage: 3
+        _secondsBetweenHits: 0.7
+        _reach: 0.5
+        _areaRadius: 0
+        _traits:
+          _healing: 0
+          _packBonus: 0.3
+          _huntsBackline: 0
+          _standsBack: 0
+          _slowShare: 0
+          _slowSeconds: 0
+          _guardTiles: 0
+          _armour: 0
+      _look:
+        _color: {r: 0.7882353, g: 0.7372549, b: 0.65882355, a: 1}
+        _size: 0.8
+        _shape: 0
+      _style:
+        _beatsPerMinute: 200
+        _lead: 1
+        _pitch: 2
+        _beatsPerNote: 0.5
+        _repeats: 3
+        _drums: 0.5
+    _song:
+      _name: War Song
+      _role: Creatures hit 50% harder for 8s
+      _unlockLevel: 2
+      _combo: 010000000200000003000000i
+      _staminaCost: 30
+      _cooldownSeconds: 20
+      _buff:
+        _seconds: 8
+        _damageMultiplier: 1.5
+        _shieldShare: 0
+        _paceMultiplier: 0
+        _finisherMultiplier: 0
+        _stopsEnemyHealing: 0
         _healing: 0
-        _packBonus: 0.3
-        _huntsBackline: 0
-        _standsBack: 0
-        _slowShare: 0
-        _slowSeconds: 0
-        _guardTiles: 0
-        _armour: 0
-    _look:
-      _color: {r: 0.7882353, g: 0.7372549, b: 0.65882355, a: 1}
-      _size: 0.8
-      _shape: 0
-    _style:
-      _beatsPerMinute: 200
-      _lead: 1
-      _pitch: 2
-      _beatsPerNote: 0.5
-      _repeats: 3
-      _drums: 0.5
-  - _name: Rat
-    _role: 'Healer: mends allies and you'
-    _unlockLevel: 2
-    _combo: 010000000000000002000000i
-    _staminaCost: 15
-    _cooldownSeconds: 2
-    _stats:
-      _maxHealth: 24
-      _moveSpeed: 6
-      _damage: 0
-      _secondsBetweenHits: 1
-      _reach: 4
-      _areaRadius: 0
-      _traits:
-        _healing: 6
-        _packBonus: 0
-        _huntsBackline: 0
-        _standsBack: 0
-        _slowShare: 0
-        _slowSeconds: 0
-        _guardTiles: 0
-        _armour: 0
-    _look:
-      _color: {r: 0.60784316, g: 0.48235294, b: 0.35686275, a: 1}
-      _size: 1.1
-      _shape: 0
-    _style:
-      _beatsPerMinute: 120
-      _lead: 0
-      _pitch: 2
-      _beatsPerNote: 1
-      _repeats: 1
-      _drums: 0
-  - _name: Cat
-    _role: 'Hunter: reaches the back line'
-    _unlockLevel: 3
-    _combo: 02000000030000000000000001000000i
-    _staminaCost: 25
-    _cooldownSeconds: 4
-    _stats:
-      _maxHealth: 36
-      _moveSpeed: 8
-      _damage: 11
-      _secondsBetweenHits: 0.6
-      _reach: 0.6
-      _areaRadius: 0
-      _traits:
-        _healing: 0
-        _packBonus: 0
-        _huntsBackline: 1
-        _standsBack: 0
-        _slowShare: 0
-        _slowSeconds: 0
-        _guardTiles: 0
-        _armour: 0
-    _look:
-      _color: {r: 0.8784314, g: 0.6039216, b: 0.23529412, a: 1}
-      _size: 1.5
-      _shape: 1
-    _style:
-      _beatsPerMinute: 170
-      _lead: 2
-      _pitch: 1
-      _beatsPerNote: 0.5
-      _repeats: 2
-      _drums: 0.8
-  - _name: Skunk
-    _role: 'Cloud: slows a whole group'
-    _unlockLevel: 4
-    _combo: 0300000002000000010000000000000003000000i
-    _staminaCost: 35
-    _cooldownSeconds: 7
-    _stats:
-      _maxHealth: 45
-      _moveSpeed: 5
-      _damage: 6
-      _secondsBetweenHits: 1.2
-      _reach: 1.5
-      _areaRadius: 3.5
-      _traits:
-        _healing: 0
-        _packBonus: 0
-        _huntsBackline: 0
-        _standsBack: 0
-        _slowShare: 0.5
-        _slowSeconds: 2.5
-        _guardTiles: 0
-        _armour: 0
-    _look:
-      _color: {r: 0.5568628, g: 0.8784314, b: 0.41960785, a: 1}
-      _size: 1.4
-      _shape: 1
-    _style:
-      _beatsPerMinute: 100
-      _lead: 3
-      _pitch: 1
-      _beatsPerNote: 0.5
-      _repeats: 1
-      _drums: 0.5
-  - _name: Bear
-    _role: 'Guardian: draws every attack'
-    _unlockLevel: 5
-    _combo: 000000000300000002000000010000000000000003000000i
-    _staminaCost: 50
-    _cooldownSeconds: 12
-    _stats:
-      _maxHealth: 180
-      _moveSpeed: 5.5
-      _damage: 8
-      _secondsBetweenHits: 1.2
-      _reach: 1
-      _areaRadius: 0
-      _traits:
-        _healing: 0
-        _packBonus: 0
-        _huntsBackline: 0
-        _standsBack: 0
-        _slowShare: 0
-        _slowSeconds: 0
-        _guardTiles: 8
-        _armour: 0.5
-    _look:
-      _color: {r: 0.47843137, g: 0.30588236, b: 0.1764706, a: 1}
-      _size: 2.2
-      _shape: 1
-    _style:
-      _beatsPerMinute: 90
-      _lead: 3
-      _pitch: 0.5
-      _beatsPerNote: 0.5
-      _repeats: 1
-      _drums: 1
-  _battleSongs:
-  - _name: War Song
-    _role: 'Boost: creatures hit 50% harder'
-    _unlockLevel: 2
-    _combo: 010000000200000003000000i
-    _staminaCost: 30
-    _cooldownSeconds: 20
-    _damageMultiplier: 1.5
-    _seconds: 8
-    _style:
-      _beatsPerMinute: 150
-      _lead: 2
-      _pitch: 1
-      _beatsPerNote: 0.5
-      _repeats: 2
-      _drums: 1
+        _enemySlowShare: 0
+        _enemySlowSeconds: 0
+        _burstDamage: 0
+      _style:
+        _beatsPerMinute: 150
+        _lead: 2
+        _pitch: 1
+        _beatsPerNote: 0.5
+        _repeats: 2
+        _drums: 1
+  _choices:
+  - _level: 2
+    _problem: Keep your side alive
+    _options:
+    - _creature:
+        _name: Rat
+        _role: 'Healer: mends allies and you'
+        _unlockLevel: 2
+        _combo: 010000000000000002000000i
+        _staminaCost: 15
+        _cooldownSeconds: 2
+        _stats:
+          _maxHealth: 24
+          _moveSpeed: 6
+          _damage: 0
+          _secondsBetweenHits: 1
+          _reach: 4
+          _areaRadius: 0
+          _traits:
+            _healing: 6
+            _packBonus: 0
+            _huntsBackline: 0
+            _standsBack: 0
+            _slowShare: 0
+            _slowSeconds: 0
+            _guardTiles: 0
+            _armour: 0
+        _look:
+          _color: {r: 0.60784316, g: 0.48235294, b: 0.35686275, a: 1}
+          _size: 1.1
+          _shape: 0
+        _style:
+          _beatsPerMinute: 120
+          _lead: 0
+          _pitch: 2
+          _beatsPerNote: 1
+          _repeats: 1
+          _drums: 0
+      _song:
+        _name: Mending Song
+        _role: Heals all creatures and you at once
+        _unlockLevel: 2
+        _combo: 020000000000000003000000i
+        _staminaCost: 25
+        _cooldownSeconds: 18
+        _buff:
+          _seconds: 0
+          _damageMultiplier: 0
+          _shieldShare: 0
+          _paceMultiplier: 0
+          _finisherMultiplier: 0
+          _stopsEnemyHealing: 0
+          _healing: 30
+          _enemySlowShare: 0
+          _enemySlowSeconds: 0
+          _burstDamage: 0
+        _style:
+          _beatsPerMinute: 112
+          _lead: 0
+          _pitch: 1
+          _beatsPerNote: 1
+          _repeats: 1
+          _drums: 0
+    - _creature:
+        _name: Beetle
+        _role: 'Shield: tough, draws nearby attacks'
+        _unlockLevel: 2
+        _combo: 010000000000000002000000i
+        _staminaCost: 15
+        _cooldownSeconds: 2
+        _stats:
+          _maxHealth: 70
+          _moveSpeed: 4.5
+          _damage: 2
+          _secondsBetweenHits: 1
+          _reach: 0.6
+          _areaRadius: 0
+          _traits:
+            _healing: 0
+            _packBonus: 0
+            _huntsBackline: 0
+            _standsBack: 0
+            _slowShare: 0
+            _slowSeconds: 0
+            _guardTiles: 4
+            _armour: 0.4
+        _look:
+          _color: {r: 0.30980393, g: 0.47843137, b: 0.35686275, a: 1}
+          _size: 1
+          _shape: 2
+        _style:
+          _beatsPerMinute: 96
+          _lead: 1
+          _pitch: 1
+          _beatsPerNote: 0.5
+          _repeats: 2
+          _drums: 0.6
+      _song:
+        _name: Shell Song
+        _role: Creatures take 40% less damage for 8s
+        _unlockLevel: 2
+        _combo: 020000000000000003000000i
+        _staminaCost: 25
+        _cooldownSeconds: 18
+        _buff:
+          _seconds: 8
+          _damageMultiplier: 0
+          _shieldShare: 0.4
+          _paceMultiplier: 0
+          _finisherMultiplier: 0
+          _stopsEnemyHealing: 0
+          _healing: 0
+          _enemySlowShare: 0
+          _enemySlowSeconds: 0
+          _burstDamage: 0
+        _style:
+          _beatsPerMinute: 104
+          _lead: 1
+          _pitch: 0.5
+          _beatsPerNote: 1
+          _repeats: 1
+          _drums: 0.5
+  - _level: 3
+    _problem: Reach the back line
+    _options:
+    - _creature:
+        _name: Cat
+        _role: 'Hunter: runs in, hits hard, dies fast'
+        _unlockLevel: 3
+        _combo: 02000000030000000000000001000000i
+        _staminaCost: 25
+        _cooldownSeconds: 4
+        _stats:
+          _maxHealth: 36
+          _moveSpeed: 8
+          _damage: 11
+          _secondsBetweenHits: 0.6
+          _reach: 0.6
+          _areaRadius: 0
+          _traits:
+            _healing: 0
+            _packBonus: 0
+            _huntsBackline: 1
+            _standsBack: 0
+            _slowShare: 0
+            _slowSeconds: 0
+            _guardTiles: 0
+            _armour: 0
+        _look:
+          _color: {r: 0.8784314, g: 0.6039216, b: 0.23529412, a: 1}
+          _size: 1.5
+          _shape: 1
+        _style:
+          _beatsPerMinute: 170
+          _lead: 2
+          _pitch: 1
+          _beatsPerNote: 0.5
+          _repeats: 2
+          _drums: 0.8
+      _song:
+        _name: Hunt Song
+        _role: Creatures move and hit 40% faster for 8s
+        _unlockLevel: 3
+        _combo: 030000000100000002000000i
+        _staminaCost: 30
+        _cooldownSeconds: 20
+        _buff:
+          _seconds: 8
+          _damageMultiplier: 0
+          _shieldShare: 0
+          _paceMultiplier: 1.4
+          _finisherMultiplier: 0
+          _stopsEnemyHealing: 0
+          _healing: 0
+          _enemySlowShare: 0
+          _enemySlowSeconds: 0
+          _burstDamage: 0
+        _style:
+          _beatsPerMinute: 180
+          _lead: 2
+          _pitch: 2
+          _beatsPerNote: 0.5
+          _repeats: 2
+          _drums: 0.7
+    - _creature:
+        _name: Owl
+        _role: 'Sniper: hits the back line from afar'
+        _unlockLevel: 3
+        _combo: 02000000030000000000000001000000i
+        _staminaCost: 25
+        _cooldownSeconds: 4
+        _stats:
+          _maxHealth: 28
+          _moveSpeed: 7
+          _damage: 11
+          _secondsBetweenHits: 0.8
+          _reach: 6
+          _areaRadius: 0
+          _traits:
+            _healing: 0
+            _packBonus: 0
+            _huntsBackline: 1
+            _standsBack: 0
+            _slowShare: 0
+            _slowSeconds: 0
+            _guardTiles: 0
+            _armour: 0
+        _look:
+          _color: {r: 0.78431374, g: 0.7137255, b: 1, a: 1}
+          _size: 1
+          _shape: 2
+        _style:
+          _beatsPerMinute: 132
+          _lead: 0
+          _pitch: 2
+          _beatsPerNote: 0.5
+          _repeats: 1
+          _drums: 0.3
+      _song:
+        _name: Hush Song
+        _role: Enemy healers stop for 8s
+        _unlockLevel: 3
+        _combo: 030000000100000002000000i
+        _staminaCost: 30
+        _cooldownSeconds: 20
+        _buff:
+          _seconds: 8
+          _damageMultiplier: 0
+          _shieldShare: 0
+          _paceMultiplier: 0
+          _finisherMultiplier: 0
+          _stopsEnemyHealing: 1
+          _healing: 0
+          _enemySlowShare: 0
+          _enemySlowSeconds: 0
+          _burstDamage: 0
+        _style:
+          _beatsPerMinute: 84
+          _lead: 0
+          _pitch: 1
+          _beatsPerNote: 1
+          _repeats: 1
+          _drums: 0
+  - _level: 4
+    _problem: Handle a group
+    _options:
+    - _creature:
+        _name: Skunk
+        _role: 'Cloud: slows a whole group'
+        _unlockLevel: 4
+        _combo: 0300000002000000010000000000000003000000i
+        _staminaCost: 35
+        _cooldownSeconds: 7
+        _stats:
+          _maxHealth: 45
+          _moveSpeed: 5
+          _damage: 6
+          _secondsBetweenHits: 1.2
+          _reach: 1.5
+          _areaRadius: 3.5
+          _traits:
+            _healing: 0
+            _packBonus: 0
+            _huntsBackline: 0
+            _standsBack: 0
+            _slowShare: 0.5
+            _slowSeconds: 2.5
+            _guardTiles: 0
+            _armour: 0
+        _look:
+          _color: {r: 0.5568628, g: 0.8784314, b: 0.41960785, a: 1}
+          _size: 1.4
+          _shape: 1
+        _style:
+          _beatsPerMinute: 100
+          _lead: 3
+          _pitch: 1
+          _beatsPerNote: 0.5
+          _repeats: 1
+          _drums: 0.5
+      _song:
+        _name: Stink Song
+        _role: Every awake enemy slows by half for 5s
+        _unlockLevel: 4
+        _combo: 01000000030000000000000002000000i
+        _staminaCost: 35
+        _cooldownSeconds: 22
+        _buff:
+          _seconds: 0
+          _damageMultiplier: 0
+          _shieldShare: 0
+          _paceMultiplier: 0
+          _finisherMultiplier: 0
+          _stopsEnemyHealing: 0
+          _healing: 0
+          _enemySlowShare: 0.5
+          _enemySlowSeconds: 5
+          _burstDamage: 0
+        _style:
+          _beatsPerMinute: 108
+          _lead: 3
+          _pitch: 0.5
+          _beatsPerNote: 0.5
+          _repeats: 1
+          _drums: 0.4
+    - _creature:
+        _name: Hornet
+        _role: 'Burst: heavy area hits, very frail'
+        _unlockLevel: 4
+        _combo: 0300000002000000010000000000000003000000i
+        _staminaCost: 35
+        _cooldownSeconds: 7
+        _stats:
+          _maxHealth: 26
+          _moveSpeed: 6.5
+          _damage: 12
+          _secondsBetweenHits: 1.1
+          _reach: 1.5
+          _areaRadius: 3.5
+          _traits:
+            _healing: 0
+            _packBonus: 0
+            _huntsBackline: 0
+            _standsBack: 0
+            _slowShare: 0
+            _slowSeconds: 0
+            _guardTiles: 0
+            _armour: 0
+        _look:
+          _color: {r: 0.9490196, g: 0.8352941, b: 0.26666668, a: 1}
+          _size: 0.9
+          _shape: 0
+        _style:
+          _beatsPerMinute: 210
+          _lead: 3
+          _pitch: 2
+          _beatsPerNote: 0.5
+          _repeats: 1
+          _drums: 0.8
+      _song:
+        _name: Sting Song
+        _role: Hits every awake enemy for 25 at once
+        _unlockLevel: 4
+        _combo: 01000000030000000000000002000000i
+        _staminaCost: 35
+        _cooldownSeconds: 22
+        _buff:
+          _seconds: 0
+          _damageMultiplier: 0
+          _shieldShare: 0
+          _paceMultiplier: 0
+          _finisherMultiplier: 0
+          _stopsEnemyHealing: 0
+          _healing: 0
+          _enemySlowShare: 0
+          _enemySlowSeconds: 0
+          _burstDamage: 25
+        _style:
+          _beatsPerMinute: 190
+          _lead: 2
+          _pitch: 1
+          _beatsPerNote: 0.5
+          _repeats: 1
+          _drums: 1
+  - _level: 5
+    _problem: Beat a heavy
+    _options:
+    - _creature:
+        _name: Bear
+        _role: 'Guardian: draws every attack'
+        _unlockLevel: 5
+        _combo: 000000000300000002000000010000000000000003000000i
+        _staminaCost: 50
+        _cooldownSeconds: 12
+        _stats:
+          _maxHealth: 180
+          _moveSpeed: 5.5
+          _damage: 8
+          _secondsBetweenHits: 1.2
+          _reach: 1
+          _areaRadius: 0
+          _traits:
+            _healing: 0
+            _packBonus: 0
+            _huntsBackline: 0
+            _standsBack: 0
+            _slowShare: 0
+            _slowSeconds: 0
+            _guardTiles: 8
+            _armour: 0.5
+        _look:
+          _color: {r: 0.47843137, g: 0.30588236, b: 0.1764706, a: 1}
+          _size: 2.2
+          _shape: 1
+        _style:
+          _beatsPerMinute: 90
+          _lead: 3
+          _pitch: 0.5
+          _beatsPerNote: 0.5
+          _repeats: 1
+          _drums: 1
+      _song:
+        _name: Stand Song
+        _role: Creatures take no damage for 4s
+        _unlockLevel: 5
+        _combo: 0200000001000000030000000000000001000000i
+        _staminaCost: 40
+        _cooldownSeconds: 25
+        _buff:
+          _seconds: 4
+          _damageMultiplier: 0
+          _shieldShare: 1
+          _paceMultiplier: 0
+          _finisherMultiplier: 0
+          _stopsEnemyHealing: 0
+          _healing: 0
+          _enemySlowShare: 0
+          _enemySlowSeconds: 0
+          _burstDamage: 0
+        _style:
+          _beatsPerMinute: 88
+          _lead: 1
+          _pitch: 0.5
+          _beatsPerNote: 0.5
+          _repeats: 1
+          _drums: 1
+    - _creature:
+        _name: Wolf
+        _role: 'Slayer: huge damage to one target'
+        _unlockLevel: 5
+        _combo: 000000000300000002000000010000000000000003000000i
+        _staminaCost: 50
+        _cooldownSeconds: 12
+        _stats:
+          _maxHealth: 70
+          _moveSpeed: 7
+          _damage: 30
+          _secondsBetweenHits: 0.9
+          _reach: 1
+          _areaRadius: 0
+          _traits:
+            _healing: 0
+            _packBonus: 0
+            _huntsBackline: 0
+            _standsBack: 0
+            _slowShare: 0
+            _slowSeconds: 0
+            _guardTiles: 0
+            _armour: 0
+        _look:
+          _color: {r: 0.6039216, g: 0.64705884, b: 0.69411767, a: 1}
+          _size: 1.7
+          _shape: 1
+        _style:
+          _beatsPerMinute: 140
+          _lead: 3
+          _pitch: 1
+          _beatsPerNote: 0.5
+          _repeats: 1
+          _drums: 1
+      _song:
+        _name: Howl
+        _role: Double damage to enemies under half health for 8s
+        _unlockLevel: 5
+        _combo: 0200000001000000030000000000000001000000i
+        _staminaCost: 40
+        _cooldownSeconds: 25
+        _buff:
+          _seconds: 8
+          _damageMultiplier: 0
+          _shieldShare: 0
+          _paceMultiplier: 0
+          _finisherMultiplier: 2
+          _stopsEnemyHealing: 0
+          _healing: 0
+          _enemySlowShare: 0
+          _enemySlowSeconds: 0
+          _burstDamage: 0
+        _style:
+          _beatsPerMinute: 124
+          _lead: 3
+          _pitch: 0.5
+          _beatsPerNote: 1
+          _repeats: 1
+          _drums: 0.6

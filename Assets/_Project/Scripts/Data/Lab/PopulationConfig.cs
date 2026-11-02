@@ -45,7 +45,7 @@ namespace DigitalStory.Data
             new BossPlacement(new MinionType("Imp King", 16f, 60, 0f, 0f, new FighterStats(160f, 3.8f, 5f, 0.9f, 0.8f), new FighterLook(new Color32(0xFF, 0x70, 0x70, 0xFF), 2.2f, FighterShape.Rat)), 0.25f, "Imp", "Imp", "Imp"),
             new BossPlacement(new MinionType("Iron Brute", 16f, 150, 0f, 0f, new FighterStats(420f, 3.4f, 12f, 1.2f, 1f, 2.5f), new FighterLook(new Color32(0xD0, 0x40, 0x50, 0xFF), 2.8f, FighterShape.Cat)), 0.5f, "Brute", "Brute", "Mender"),
             new BossPlacement(new MinionType("Elder Shaman", 18f, 260, 0f, 0f, new FighterStats(650f, 3.4f, 12f, 1.4f, 5f, 3.5f, new FighterTraits(standsBack: true)), new FighterLook(new Color32(0xC8, 0x80, 0xFF, 0xFF), 2.6f, FighterShape.Dot)), 0.75f, "Brute", "Shaman", "Mender"),
-            new BossPlacement(new MinionType("Ogre Lord", 18f, 500, 0f, 0f, new FighterStats(1400f, 3f, 22f, 1.5f, 1.4f, 4f), new FighterLook(new Color32(0x90, 0xC0, 0x40, 0xFF), 3.4f, FighterShape.Cat)), 1f, "Ogre", "Shaman", "Mender", "Mender"),
+            new BossPlacement(new MinionType("Ogre Lord", 18f, 500, 0f, 0f, new FighterStats(1400f, 3f, 22f, 1.5f, 1.4f, 4f), new FighterLook(new Color32(0x90, 0xC0, 0x40, 0xFF), 3.4f, FighterShape.Cat)), 1f, "Ogre", "Shaman", "Mender"),
         };
 
         /// <summary>The plan the rules follow.</summary>
