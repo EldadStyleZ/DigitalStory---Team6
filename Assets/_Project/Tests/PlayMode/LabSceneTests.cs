@@ -13,6 +13,7 @@ namespace DigitalStory.Tests.PlayMode
     {
         private const string SceneName = "eldad-lab-scene";
         private const float Tolerance = 0.001f;
+        private const int BossWalkCells = 40;
 
         private LabRoot _root;
         private MazeView _mazeView;
@@ -86,6 +87,34 @@ namespace DigitalStory.Tests.PlayMode
             yield return null;
 
             Assert.That(before, Is.GreaterThan(0));
+
+            foreach (int cell in signposts.Cells)
+            {
+                AssertArrowMatches(signposts, cell);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator Arrows_WhenTheNextBossWalks_TurnToFollowIt()
+        {
+            LabSession session = _root.Session;
+            Signposts signposts = session.Signposts;
+            Minion boss = session.Battle.Minions.First(minion => minion.IsBoss);
+            int[] before = signposts.Cells.Select(signposts.DirectionAt).ToArray();
+            var route = new StepField(session.Maze);
+            route.Fill(session.Maze.Entrance);
+
+            for (int walked = 0; walked < BossWalkCells; walked++)
+            {
+                int next = route.StepToward(session.Maze.CellAt(boss.Position));
+                boss.Nudge(session.Maze.CenterOf(next) - boss.Position, session.Maze, 0f);
+            }
+
+            session.Tick(Vector2.zero, 0.01f);
+            yield return null;
+
+            int[] after = signposts.Cells.Select(signposts.DirectionAt).ToArray();
+            Assert.That(after, Is.Not.EqualTo(before));
 
             foreach (int cell in signposts.Cells)
             {

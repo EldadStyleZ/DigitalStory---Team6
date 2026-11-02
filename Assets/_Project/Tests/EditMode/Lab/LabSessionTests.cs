@@ -13,6 +13,7 @@ namespace DigitalStory.Tests.EditMode
     {
         private const float Tolerance = 0.001f;
         private const float Step = 1f / 30f;
+        private const int BossWalkCells = 10;
 
         private static readonly FighterStats Statue = new FighterStats(10000f, 0f, 0f, 1000f, 1f);
 
@@ -105,6 +106,19 @@ namespace DigitalStory.Tests.EditMode
                     int next = session.Maze.NeighbourThrough(cell, direction);
                     Assert.That(field.StepsAt(next), Is.LessThan(field.StepsAt(cell)), $"The arrow at {cell} leads away from the boss.");
                 }
+            }
+        }
+
+        // Moves a boss a whole cell at a time, as if it were chasing the Piper back along the route.
+        private static void WalkTowardTheEntrance(LabSession session, Minion boss, int cells)
+        {
+            var route = new StepField(session.Maze);
+            route.Fill(session.Maze.Entrance);
+
+            for (int walked = 0; walked < cells; walked++)
+            {
+                int next = route.StepToward(session.Maze.CellAt(boss.Position));
+                boss.Nudge(session.Maze.CenterOf(next) - boss.Position, session.Maze, 0f);
             }
         }
 
@@ -413,6 +427,61 @@ namespace DigitalStory.Tests.EditMode
             session.Tick(Vector2.zero, Step);
 
             AssertArrowsLeadToTheNextBoss(session);
+        }
+
+        [Test]
+        public void Signposts_WhenTheNextBossWalks_FollowIt()
+        {
+            LabSession session = NewSession(signpostChance: 1f, bossCells: new[] { 5, 10 });
+
+            WalkTowardTheEntrance(session, session.Battle.Minions[0], BossWalkCells);
+            session.Tick(Vector2.zero, Step);
+
+            AssertArrowsLeadToTheNextBoss(session);
+        }
+
+        [Test]
+        public void Signposts_WhenALaterBossWalks_StayOnTheNext()
+        {
+            LabSession session = NewSession(signpostChance: 1f, bossCells: new[] { 5, 10 });
+            int changes = 0;
+            session.Signposts.Changed += () => changes++;
+
+            WalkTowardTheEntrance(session, session.Battle.Minions[1], BossWalkCells);
+            session.Tick(Vector2.zero, Step);
+
+            Assert.That(changes, Is.EqualTo(0));
+            AssertArrowsLeadToTheNextBoss(session);
+        }
+
+        [Test]
+        public void Signposts_WhileTheNextBossStandsInOneCell_AreLeftAlone()
+        {
+            LabSession session = NewSession(signpostChance: 1f, bossCells: new[] { 5, 10 });
+            int changes = 0;
+            session.Signposts.Changed += () => changes++;
+
+            session.Tick(Vector2.zero, Step);
+            session.Tick(Vector2.zero, Step);
+
+            Assert.That(changes, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Signposts_AfterTheLastBossFalls_ShowNothingAndKeepRunning()
+        {
+            LabSession session = NewSession(signpostChance: 1f, bossCells: new[] { 5, 10 });
+
+            for (int fallen = 0; fallen < 2; fallen++)
+            {
+                Minion boss = session.Battle.Minions[0];
+                boss.Health.Damage(boss.Health.Max);
+                session.Tick(Vector2.zero, Step);
+            }
+
+            session.Tick(Vector2.zero, Step);
+
+            Assert.That(session.Signposts.Cells.All(cell => session.Signposts.DirectionAt(cell) == Signposts.NoDirection), Is.True);
         }
 
         [Test]

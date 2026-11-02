@@ -15,6 +15,8 @@ namespace DigitalStory.Logic
         private readonly Queue<CreatureChoice> _waiting = new Queue<CreatureChoice>();
         private readonly IReadOnlyList<CreatureChoice> _choices;
 
+        private Minion _nextBoss;
+        private int _signpostGoal;
         private int _revivalCell;
         private bool _hasReportedDeath;
 
@@ -137,6 +139,7 @@ namespace DigitalStory.Logic
             Apply(Combos.Tick(deltaTime));
             Battle.Tick(deltaTime);
             Ambushes.Tick(deltaTime);
+            KeepSignpostsOnTheNextBoss();
             ReportDeath();
         }
 
@@ -230,19 +233,42 @@ namespace DigitalStory.Logic
             }
         }
 
-        // Bosses are added shallowest first and never reordered, so the first left is the next one.
         private void PointSignpostsAtTheNextBoss()
+        {
+            _nextBoss = FirstBossLeft();
+
+            if (_nextBoss == null)
+            {
+                Signposts.Clear();
+                return;
+            }
+
+            _signpostGoal = Maze.CellAt(_nextBoss.Position);
+            Signposts.PointTo(_signpostGoal);
+        }
+
+        // Bosses are added shallowest first and never reordered, so the first left is the next one.
+        private Minion FirstBossLeft()
         {
             foreach (Minion minion in Battle.Minions)
             {
                 if (minion.IsBoss)
                 {
-                    Signposts.PointTo(Maze.CellAt(minion.Position));
-                    return;
+                    return minion;
                 }
             }
 
-            Signposts.Clear();
+            return null;
+        }
+
+        // A boss walks when it wakes and sleeps wherever it stands, so the arrows follow the boss, not
+        // the cell it began in. Only a change of cell redraws them, which keeps a standing boss free.
+        private void KeepSignpostsOnTheNextBoss()
+        {
+            if (_nextBoss != null && Maze.CellAt(_nextBoss.Position) != _signpostGoal)
+            {
+                PointSignpostsAtTheNextBoss();
+            }
         }
 
         private void ReportDeath()
