@@ -18,6 +18,7 @@ namespace DigitalStory.Tests.PlayMode
         private const int J = 1;
         private const int K = 2;
         private const int L = 3;
+        private const float GameStep = 0.05f;
 
         private static readonly FighterLook Plain = new FighterLook(Color.red, 1f, FighterShape.Rat);
         private static readonly FighterStats Statue = new FighterStats(5000f, 0f, 0f, 1000f, 1f);
@@ -78,6 +79,16 @@ namespace DigitalStory.Tests.PlayMode
         {
             var hidden = new MinionType("Hidden", 60f, 1, 0f, 1f, Statue, Plain);
             Session.Ambushes.Add(new Ambush(Session.Maze.Entrance, new[] { hidden, hidden, hidden }));
+        }
+
+        // Steps the game itself. Waiting real seconds would race it, because a frame slower than its
+        // longest step moves the game less than the time that passed.
+        private void PassGameTime(float seconds)
+        {
+            for (float passed = 0f; passed < seconds; passed += GameStep)
+            {
+                Session.Tick(Vector2.zero, GameStep);
+            }
         }
 
         private float DistanceFromDone(Color color) => ((Vector4)(color - _art.BalloonDoneColor)).magnitude;
@@ -208,20 +219,20 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(_hud.IsShowingABoost, Is.True);
         }
 
-        [UnityTest]
-        public IEnumerator Hud_WhenAnAmbushIsComing_Warns()
+        [Test]
+        public void Hud_WhenAnAmbushIsComing_Warns()
         {
             SpringNextToThePiper();
-            yield return new WaitForSeconds(_ambush.DelaySeconds + 0.2f);
+            PassGameTime(_ambush.DelaySeconds + 0.2f);
 
             Assert.That(_hud.ShownMessage, Is.EqualTo(_texts.AmbushMessage));
         }
 
-        [UnityTest]
-        public IEnumerator Effects_WhenAnAmbushIsComing_MarkWhere()
+        [Test]
+        public void Effects_WhenAnAmbushIsComing_MarkWhere()
         {
             SpringNextToThePiper();
-            yield return new WaitForSeconds(_ambush.DelaySeconds + 0.2f);
+            PassGameTime(_ambush.DelaySeconds + 0.2f);
 
             Assert.That(_effects.ActiveCount, Is.GreaterThan(0));
             Assert.That(_sound.LastPlayed, Is.SameAs(_soundConfig.AmbushWarning));
@@ -232,7 +243,8 @@ namespace DigitalStory.Tests.PlayMode
         {
             int before = Session.Battle.Minions.Count;
             SpringNextToThePiper();
-            yield return new WaitForSeconds(_ambush.DelaySeconds + _ambush.WarningSeconds + 0.3f);
+            PassGameTime(_ambush.DelaySeconds + _ambush.WarningSeconds + 0.3f);
+            yield return null;
 
             Assert.That(Session.Battle.Minions.Count, Is.EqualTo(before + 3));
             Assert.That(_units.DrawnCount, Is.EqualTo(Session.Battle.Minions.Count + Session.Battle.Creatures.Count));
