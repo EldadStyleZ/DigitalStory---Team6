@@ -38,6 +38,17 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Tick_SpeedChangedDuringARun_UsesTheNewSpeed()
+        {
+            Vector2 start = _piper.Position;
+
+            JsonUtility.FromJsonOverwrite("{\"<MoveSpeed>k__BackingField\": 9}", _config);
+            _piper.Tick(Vector2.right, 0.1f);
+
+            Assert.That(_piper.Position.x - start.x, Is.EqualTo(0.9f).Within(Tolerance));
+        }
+
+        [Test]
         public void Tick_WalkingDiagonally_IsNoFasterThanStraight()
         {
             var piper = new LabPiper(_config, new Maze(new MazeShape(1, 1, 9, 1, 0f), new[] { false }, new[] { false }));

@@ -6,7 +6,7 @@ namespace DigitalStory.Data
     [CreateAssetMenu(menuName = "DigitalStory/Lab/Player Config", fileName = "LabPlayerConfig")]
     public sealed class LabPlayerConfig : ScriptableObject
     {
-        [field: SerializeField, Min(0f), Tooltip("Walking speed, in tiles per second.")]
+        [field: SerializeField, Range(1f, 16f), Tooltip("Walking speed, in tiles per second. It works at once while playing. Creatures walk at 4.5 to 8, so much faster leaves them behind.")]
         public float MoveSpeed { get; private set; } = 6f;
 
         [field: SerializeField, Min(0f), Tooltip("How far the Piper stays from walls, in tiles.")]
