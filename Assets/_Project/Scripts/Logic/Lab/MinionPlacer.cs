@@ -26,10 +26,12 @@ namespace DigitalStory.Logic
 
         private static void PlaceBosses(Battle battle, Maze maze, PopulationPlan plan, StepField depth, bool[] isTaken)
         {
+            List<int> route = RouteToTheFurthestCell(maze, depth);
+
             for (int index = 0; index < plan.Bosses.Count; index++)
             {
                 BossPlacement placement = plan.Bosses[index];
-                int cell = CellNearest(Mathf.RoundToInt(placement.Depth * depth.Furthest), maze, depth, isTaken);
+                int cell = CellNearest(Mathf.RoundToInt(placement.Depth * depth.Furthest), route, depth, isTaken);
                 MinionRank rank = index == plan.Bosses.Count - 1 ? MinionRank.FinalBoss : MinionRank.Boss;
                 MinionGang gang = placement.Guards.Count > 0 ? new MinionGang() : null;
 
@@ -60,12 +62,43 @@ namespace DigitalStory.Logic
             throw new InvalidOperationException($"{owner} names {name}, which is not one of the population's minions.");
         }
 
-        private static int CellNearest(int steps, Maze maze, StepField depth, bool[] isTaken)
+        // Bosses stand along one walk, because two deep cells can sit in far-apart branches, and reviving
+        // at the last boss beaten would then mean crossing the maze after every death.
+        private static List<int> RouteToTheFurthestCell(Maze maze, StepField depth)
+        {
+            int cell = FurthestCell(maze, depth);
+            var route = new List<int> { cell };
+
+            while (cell != maze.Entrance)
+            {
+                cell = depth.StepToward(cell);
+                route.Add(cell);
+            }
+
+            return route;
+        }
+
+        private static int FurthestCell(Maze maze, StepField depth)
+        {
+            int furthest = maze.Entrance;
+
+            for (int cell = 0; cell < maze.CellCount; cell++)
+            {
+                if (depth.StepsAt(cell) == depth.Furthest)
+                {
+                    furthest = cell;
+                }
+            }
+
+            return furthest;
+        }
+
+        private static int CellNearest(int steps, List<int> cells, StepField depth, bool[] isTaken)
         {
             int best = Maze.NoCell;
             int bestGap = int.MaxValue;
 
-            for (int cell = 0; cell < maze.CellCount; cell++)
+            foreach (int cell in cells)
             {
                 int gap = Mathf.Abs(depth.StepsAt(cell) - steps);
 

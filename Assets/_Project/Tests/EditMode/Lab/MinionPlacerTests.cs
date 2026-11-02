@@ -92,6 +92,32 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Populate_EachBoss_StandsOnTheWayToTheNext()
+        {
+            Minion[] bosses = _battle.Minions.Where(minion => minion.IsBoss).ToArray();
+            var fromBoss = new StepField(_maze);
+
+            for (int index = 0; index + 1 < bosses.Length; index++)
+            {
+                int cell = _maze.CellAt(bosses[index].Position);
+                int next = _maze.CellAt(bosses[index + 1].Position);
+                fromBoss.Fill(cell);
+
+                Assert.That(fromBoss.StepsAt(next), Is.EqualTo(_fromEntrance.StepsAt(next) - _fromEntrance.StepsAt(cell)), bosses[index].Type.Name);
+            }
+        }
+
+        [Test]
+        public void Populate_TwoBossesAtOneDepth_TakeDifferentCells()
+        {
+            var bosses = new[] { new BossPlacement(Minion(Sturdy), 0.5f), new BossPlacement(Minion(Sturdy), 0.5f) };
+
+            Battle battle = Place(new PopulationPlan(_plan.Minions, bosses, 0f, 0), 1u);
+
+            Assert.That(_maze.CellAt(battle.Minions[0].Position), Is.Not.EqualTo(_maze.CellAt(battle.Minions[1].Position)));
+        }
+
+        [Test]
         public void Populate_TheLastBoss_IsTheFinalOne_AtTheDeepestCell()
         {
             Minion[] finals = _battle.Minions.Where(minion => minion.IsFinalBoss).ToArray();
