@@ -29,6 +29,8 @@ namespace DigitalStory.Tests.PlayMode
 
         private int LevelTwoXp => _levels.XpToReach[1];
 
+        private int EveryLevelsXp => _levels.XpToReach[_levels.XpToReach.Count - 1];
+
         [UnitySetUp]
         public IEnumerator LoadLab()
         {
@@ -98,6 +100,46 @@ namespace DigitalStory.Tests.PlayMode
 
             Assert.That(ShownWords, Does.Contain(Session.WaitingChoice.Problem));
             Assert.That(ShownWords, Does.Contain(_texts.ChoiceWarning));
+        }
+
+        [UnityTest]
+        public IEnumerator Choice_ShowsBothCreaturesPictures()
+        {
+            Session.Levels.Add(LevelTwoXp);
+            yield return null;
+
+            Sprite[] shown = _screens.Card.Query<Image>().ToList().Select(image => image.sprite).ToArray();
+            Sprite[] expected = Session.WaitingChoice.Options.Select(offer => offer.Creature.Look.Sprite).ToArray();
+
+            Assert.That(shown, Is.EqualTo(expected));
+            Assert.That(shown, Has.None.Null);
+        }
+
+        // A card too tall for the screen never runs off it: it squeezes its pictures instead.
+        [UnityTest]
+        public IEnumerator Choice_EveryOne_HasRoomForItsPictures()
+        {
+            Session.Levels.Add(EveryLevelsXp);
+            Assert.That(Session.WaitingChoice, Is.Not.Null);
+
+            while (Session.WaitingChoice != null)
+            {
+                yield return null;
+                yield return null;
+
+                // Layout snaps to screen pixels, and in the small window tests run in, those are coarse.
+                float tolerance = 2f * _screens.Card.panel.visualTree.worldBound.height / Screen.height;
+
+                foreach (Image picture in _screens.Card.Query<Image>().ToList())
+                {
+                    Rect shown = picture.worldBound;
+                    Assert.That(shown.height, Is.GreaterThan(0f), Session.WaitingChoice.Problem);
+                    Assert.That(shown.height, Is.EqualTo(shown.width).Within(tolerance), Session.WaitingChoice.Problem);
+                }
+
+                Press("chooseFirst");
+                yield return null;
+            }
         }
 
         [UnityTest]

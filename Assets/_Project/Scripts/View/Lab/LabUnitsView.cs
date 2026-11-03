@@ -1,18 +1,24 @@
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
 
 namespace DigitalStory.View
 {
-    /// <summary>Draws every creature and minion, with a health bar on anything hurt.</summary>
+    /// <summary>
+    /// Draws every creature and minion with its shadow, and a health bar on anything hurt. Fighters walk,
+    /// lunge, flash and breathe from what the battle says they just did, so nothing here keeps its own state.
+    /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("DigitalStory/Lab/Lab Units View")]
     public sealed class LabUnitsView : MonoBehaviour
     {
+        private const int ShadowOrder = 2;
         private const int MinionOrder = 3;
         private const int CreatureOrder = 4;
         private const int BarOrder = 6;
+        private const int PhaseSteps = 1024;
 
         private readonly List<UnitSprites> _creatureSprites = new List<UnitSprites>();
         private readonly List<UnitSprites> _minionSprites = new List<UnitSprites>();
@@ -66,15 +72,73 @@ namespace DigitalStory.View
         private void DrawOne(Fighter fighter, UnitSprites unit)
         {
             FighterLook look = fighter.Look;
-            Sprite sprite = SpriteOf(look.Shape);
+            bool isWalking = fighter.SecondsSinceStep < _art.StillSeconds;
+            Sprite sprite = PictureOf(fighter, isWalking);
+            Quaternion turn = Quaternion.Euler(0f, 0f, fighter.Facing);
 
             unit.Body.enabled = true;
             unit.Body.sprite = sprite;
-            unit.Body.color = look.Color * TintOf(fighter);
-            unit.Body.transform.SetPositionAndRotation(fighter.Position, Quaternion.Euler(0f, 0f, fighter.Facing));
-            unit.Body.transform.localScale = Vector3.one * (look.Size / sprite.bounds.size.x);
+            unit.Body.color = Color.Lerp(look.Color * TintOf(fighter), _art.HurtColor, FighterPose.Flash(fighter.SecondsSinceHurt, _art.HurtSeconds));
+            unit.Body.transform.SetPositionAndRotation(fighter.Position + LungeOf(fighter), turn);
+            unit.Body.transform.localScale = Vector3.one * (look.Size / sprite.bounds.size.x * GrowthOf(fighter, isWalking));
 
+            DrawShadow(fighter, unit.Shadow, turn);
             DrawBar(fighter, unit);
+        }
+
+        // A fighter with no walk pictures glides on its standing one.
+        private Sprite PictureOf(Fighter fighter, bool isWalking)
+        {
+            FighterLook look = fighter.Look;
+
+            if (look.Sprite == null)
+            {
+                return SpriteOf(look.Shape);
+            }
+
+            IReadOnlyList<Sprite> frames = look.WalkFrames;
+
+            if (!isWalking || frames.Count == 0)
+            {
+                return look.Sprite;
+            }
+
+            return frames[FighterPose.WalkFrame(fighter.DistanceWalked, look.Size * _art.StrideBodyLengths, frames.Count)];
+        }
+
+        // Healers never hit, so instead of lunging they swell as they heal.
+        private Vector2 LungeOf(Fighter fighter)
+        {
+            if (fighter.Stats.Traits.Heals)
+            {
+                return Vector2.zero;
+            }
+
+            float reach = FighterPose.Lunge(fighter.SecondsSinceStrike, _art.LungeSeconds) * _art.LungeBodyLengths * fighter.Look.Size;
+            float angle = fighter.Facing * Mathf.Deg2Rad;
+            return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * reach;
+        }
+
+        private float GrowthOf(Fighter fighter, bool isWalking)
+        {
+            float swell = fighter.Stats.Traits.Heals ? FighterPose.Lunge(fighter.SecondsSinceStrike, _art.LungeSeconds) * _art.HealPulseShare : 0f;
+            float breath = isWalking ? 0f : FighterPose.Breath(_battle.ElapsedSeconds, PhaseOf(fighter), _art.BreathSeconds) * _art.BreathShare;
+            return (1f + swell) * (1f + breath);
+        }
+
+        // Each fighter's own number keeps its breath steady from frame to frame, without remembering anything.
+        private static float PhaseOf(Fighter fighter)
+        {
+            return (RuntimeHelpers.GetHashCode(fighter) & (PhaseSteps - 1)) / (float)PhaseSteps;
+        }
+
+        // The shadow turns with its fighter, but always falls the same way, because the light does not move.
+        private void DrawShadow(Fighter fighter, SpriteRenderer shadow, Quaternion turn)
+        {
+            float length = fighter.Look.Size;
+            shadow.enabled = true;
+            shadow.transform.SetPositionAndRotation(fighter.Position + (_art.ShadowOffset * length), turn);
+            shadow.transform.localScale = new Vector3(_art.ShadowBodyLengths.x * length, _art.ShadowBodyLengths.y * length, 1f) / shadow.sprite.bounds.size.x;
         }
 
         private Color TintOf(Fighter fighter)
@@ -122,11 +186,13 @@ namespace DigitalStory.View
 
         private UnitSprites NewUnit(int order, Color barColor)
         {
+            SpriteRenderer shadow = NewSprite("Shadow", ShadowOrder, _art.ShadowColor);
             SpriteRenderer back = NewSprite("Bar Back", BarOrder, _art.BarBackColor);
             SpriteRenderer fill = NewSprite("Bar Fill", BarOrder + 1, barColor);
+            shadow.sprite = _art.ShadowSprite;
             back.sprite = _sprites.BlockSprite;
             fill.sprite = _sprites.BlockSprite;
-            return new UnitSprites(NewSprite("Fighter", order, Color.white), back, fill);
+            return new UnitSprites(NewSprite("Fighter", order, Color.white), shadow, back, fill);
         }
 
         private SpriteRenderer NewSprite(string spriteName, int order, Color color)
@@ -140,20 +206,23 @@ namespace DigitalStory.View
 
         private sealed class UnitSprites
         {
-            public UnitSprites(SpriteRenderer body, SpriteRenderer back, SpriteRenderer fill)
+            public UnitSprites(SpriteRenderer body, SpriteRenderer shadow, SpriteRenderer back, SpriteRenderer fill)
             {
                 Body = body;
+                Shadow = shadow;
                 Back = back;
                 Fill = fill;
             }
 
             public SpriteRenderer Body { get; }
+            public SpriteRenderer Shadow { get; }
             public SpriteRenderer Back { get; }
             public SpriteRenderer Fill { get; }
 
             public void Hide()
             {
                 Body.enabled = false;
+                Shadow.enabled = false;
                 Back.enabled = false;
                 Fill.enabled = false;
             }

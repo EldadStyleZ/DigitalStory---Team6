@@ -37,9 +37,15 @@ MonoBehaviour:
           _guardTiles: 0
           _armour: 0
       _look:
-        _color: {r: 0.7882353, g: 0.7372549, b: 0.65882355, a: 1}
+        _color: {r: 1, g: 1, b: 1, a: 1}
         _size: 0.8
         _shape: 0
+        _sprite: {fileID: 21300000, guid: 0e80ee3fe73044a77871619f01ffc6fb, type: 3}
+        _walkFrames:
+        - {fileID: 21300000, guid: a04be0914e1f34827a57af704753b635, type: 3}
+        - {fileID: 21300000, guid: 41c85690a1a4143028b426ff31688e1d, type: 3}
+        - {fileID: 21300000, guid: f8997c073aae84ae483af5cfa9de0382, type: 3}
+        - {fileID: 21300000, guid: 026b4f8bf1a0a40c7ab698040082301e, type: 3}
       _style:
         _beatsPerMinute: 200
         _lead: 1
@@ -100,9 +106,15 @@ MonoBehaviour:
             _guardTiles: 0
             _armour: 0
         _look:
-          _color: {r: 0.60784316, g: 0.48235294, b: 0.35686275, a: 1}
+          _color: {r: 1, g: 1, b: 1, a: 1}
           _size: 1.1
           _shape: 0
+          _sprite: {fileID: 21300000, guid: f1f57326c973b452cb2d86e25b02fae8, type: 3}
+          _walkFrames:
+          - {fileID: 21300000, guid: 24dfa67b528134075bd8942110e325d2, type: 3}
+          - {fileID: 21300000, guid: 31be26395e53e46bcaf34af052220cc9, type: 3}
+          - {fileID: 21300000, guid: e1610b932c2ce4554a98e1b36e673852, type: 3}
+          - {fileID: 21300000, guid: 3dcc05cce243b479d98c23e834a98fde, type: 3}
         _style:
           _beatsPerMinute: 120
           _lead: 0
@@ -159,9 +171,15 @@ MonoBehaviour:
             _guardTiles: 4
             _armour: 0.4
         _look:
-          _color: {r: 0.30980393, g: 0.47843137, b: 0.35686275, a: 1}
+          _color: {r: 1, g: 1, b: 1, a: 1}
           _size: 1
           _shape: 2
+          _sprite: {fileID: 21300000, guid: 0132b4b4406c04c62a967375f8aa6afc, type: 3}
+          _walkFrames:
+          - {fileID: 21300000, guid: 7ba019d22c4e24b9ca3821f0d8d342de, type: 3}
+          - {fileID: 21300000, guid: dc27a2c7744114c34aa691f5c87df2fe, type: 3}
+          - {fileID: 21300000, guid: 5476ba2c73b634707b8d752bb62c3cf4, type: 3}
+          - {fileID: 21300000, guid: 6840c094407ac4527ac38836e3ed3ccf, type: 3}
         _style:
           _beatsPerMinute: 96
           _lead: 1
@@ -221,9 +239,15 @@ MonoBehaviour:
             _guardTiles: 0
             _armour: 0
         _look:
-          _color: {r: 0.8784314, g: 0.6039216, b: 0.23529412, a: 1}
+          _color: {r: 1, g: 1, b: 1, a: 1}
           _size: 1.5
           _shape: 1
+          _sprite: {fileID: 21300000, guid: cd010d75e2d894a5cbdf95ab377966db, type: 3}
+          _walkFrames:
+          - {fileID: 21300000, guid: 6362188f91b3b4185a1aa128f74aec65, type: 3}
+          - {fileID: 21300000, guid: 5d1cb603dc7c84cdab342d52dfabbebd, type: 3}
+          - {fileID: 21300000, guid: 7c0cb1fa3f0b0488b89e7960480624ca, type: 3}
+          - {fileID: 21300000, guid: 221147bd82197481d94cfe685a4c530d, type: 3}
         _style:
           _beatsPerMinute: 170
           _lead: 2
@@ -280,9 +304,15 @@ MonoBehaviour:
             _guardTiles: 0
             _armour: 0
         _look:
-          _color: {r: 0.78431374, g: 0.7137255, b: 1, a: 1}
+          _color: {r: 1, g: 1, b: 1, a: 1}
           _size: 1
           _shape: 2
+          _sprite: {fileID: 21300000, guid: d357b7fbe3ffd440f954fc810b9a5b16, type: 3}
+          _walkFrames:
+          - {fileID: 21300000, guid: d513b1975868e46f69ab497b0fc135f3, type: 3}
+          - {fileID: 21300000, guid: ac720b0b251de4e499b6cf8a6de575aa, type: 3}
+          - {fileID: 21300000, guid: 5348179b1541e4814835e1a31fd36bab, type: 3}
+          - {fileID: 21300000, guid: 2aa11c28f7aec44f1bdcb75f7fa96e22, type: 3}
         _style:
           _beatsPerMinute: 132
           _lead: 0
@@ -342,9 +372,15 @@ MonoBehaviour:
             _guardTiles: 0
             _armour: 0
         _look:
-          _color: {r: 0.5568628, g: 0.8784314, b: 0.41960785, a: 1}
+          _color: {r: 1, g: 1, b: 1, a: 1}
           _size: 1.4
           _shape: 1
+          _sprite: {fileID: 21300000, guid: 4b11f5c26966d4a1a9b7320e2ea87d8f, type: 3}
+          _walkFrames:
+          - {fileID: 21300000, guid: 2ac7f7b64c0be4411affe2ed7a0428ff, type: 3}
+          - {fileID: 21300000, guid: 6d06690ac34e44af8aef14d46302499a, type: 3}
+          - {fileID: 21300000, guid: 406790021d8b342ab93d7059af501eeb, type: 3}
+          - {fileID: 21300000, guid: 331b6b7e9c9b342f98c5bc8b0ff06c4b, type: 3}
         _style:
           _beatsPerMinute: 100
           _lead: 3
@@ -401,9 +437,15 @@ MonoBehaviour:
             _guardTiles: 0
             _armour: 0
         _look:
-          _color: {r: 0.9490196, g: 0.8352941, b: 0.26666668, a: 1}
+          _color: {r: 1, g: 1, b: 1, a: 1}
           _size: 0.9
           _shape: 0
+          _sprite: {fileID: 21300000, guid: 04fba93fca3f148e39a6af06785fd440, type: 3}
+          _walkFrames:
+          - {fileID: 21300000, guid: a59dd55ffb02f4b61938daefe4fac864, type: 3}
+          - {fileID: 21300000, guid: 029ccb299af7d418ea34e39f3e6f3df7, type: 3}
+          - {fileID: 21300000, guid: dc5ff8ea04fed4e6486a058a2b7414bd, type: 3}
+          - {fileID: 21300000, guid: 04d1c3660468a45f397c8e5d248c61ce, type: 3}
         _style:
           _beatsPerMinute: 210
           _lead: 3
@@ -463,9 +505,15 @@ MonoBehaviour:
             _guardTiles: 8
             _armour: 0.5
         _look:
-          _color: {r: 0.47843137, g: 0.30588236, b: 0.1764706, a: 1}
+          _color: {r: 1, g: 1, b: 1, a: 1}
           _size: 2.2
           _shape: 1
+          _sprite: {fileID: 21300000, guid: 054329a7efe824c03bc72961fe530e85, type: 3}
+          _walkFrames:
+          - {fileID: 21300000, guid: 39699a35051ab4850b4f8e3ea20f4593, type: 3}
+          - {fileID: 21300000, guid: 0764a66ea9ab24d23b1986e01998b104, type: 3}
+          - {fileID: 21300000, guid: 4d63989fd7cec44b895c13c0391beb71, type: 3}
+          - {fileID: 21300000, guid: 5dd31c07b101e491f93630ae22c94b65, type: 3}
         _style:
           _beatsPerMinute: 90
           _lead: 3
@@ -522,9 +570,15 @@ MonoBehaviour:
             _guardTiles: 0
             _armour: 0
         _look:
-          _color: {r: 0.6039216, g: 0.64705884, b: 0.69411767, a: 1}
+          _color: {r: 1, g: 1, b: 1, a: 1}
           _size: 1.7
           _shape: 1
+          _sprite: {fileID: 21300000, guid: 0ab8f308dc81245b79ebb9d06cbe2a36, type: 3}
+          _walkFrames:
+          - {fileID: 21300000, guid: 6d773f2cf9f1f433e8b8c49c86247ed5, type: 3}
+          - {fileID: 21300000, guid: 432148da8388b4e49916a078875932a0, type: 3}
+          - {fileID: 21300000, guid: b9551929820cd4a28880101f07522120, type: 3}
+          - {fileID: 21300000, guid: a82fa27b46eb14f47b57bd9fe019aaa9, type: 3}
         _style:
           _beatsPerMinute: 140
           _lead: 3

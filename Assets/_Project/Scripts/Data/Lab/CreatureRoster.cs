@@ -5,7 +5,8 @@ namespace DigitalStory.Data
 {
     /// <summary>
     /// The creature every run starts with, and the choices that bring the rest. Add a choice here to add
-    /// two creatures and their songs, with no new code.
+    /// two creatures and their songs, with no new code. Each creature's pictures are the files in Art/Animals
+    /// with its name, standing and Walk1 to Walk4, and rebuilding the lab links them.
     /// </summary>
     [CreateAssetMenu(menuName = "DigitalStory/Lab/Creature Roster", fileName = "CreatureRoster")]
     public sealed class CreatureRoster : ScriptableObject
@@ -29,7 +30,7 @@ namespace DigitalStory.Data
             new CreatureType(
                 "Mouse", 1, new[] { H, J }, 10f, 1f,
                 new FighterStats(14f, 6.5f, 3f, 0.7f, 0.5f, 0f, new FighterTraits(packBonus: 0.3f)),
-                new FighterLook(new Color32(0xC9, 0xBC, 0xA8, 0xFF), 0.8f, FighterShape.Rat),
+                new FighterLook(Color.white, 0.8f, FighterShape.Rat),
                 "Swarm: stronger together",
                 new SongStyle(200f, ToneShape.Triangle, 2f, 0.5f, 3, 0.5f)),
             new BattleSong(
@@ -47,7 +48,7 @@ namespace DigitalStory.Data
                     new CreatureType(
                         "Rat", 2, SecondCreature, 15f, 2f,
                         new FighterStats(24f, 6f, 0f, 1f, 4f, 0f, new FighterTraits(healing: 6f)),
-                        new FighterLook(new Color32(0x9B, 0x7B, 0x5B, 0xFF), 1.1f, FighterShape.Rat),
+                        new FighterLook(Color.white, 1.1f, FighterShape.Rat),
                         "Healer: mends allies and you",
                         new SongStyle(120f, ToneShape.Sine, 2f, 1f, 1, 0f)),
                     new BattleSong(
@@ -58,7 +59,7 @@ namespace DigitalStory.Data
                     new CreatureType(
                         "Beetle", 2, SecondCreature, 15f, 2f,
                         new FighterStats(70f, 4.5f, 2f, 1f, 0.6f, 0f, new FighterTraits(guardTiles: 4f, armour: 0.4f)),
-                        new FighterLook(new Color32(0x4F, 0x7A, 0x5B, 0xFF), 1f, FighterShape.Dot),
+                        new FighterLook(Color.white, 1f, FighterShape.Dot),
                         "Shield: tough, draws nearby attacks",
                         new SongStyle(96f, ToneShape.Triangle, 1f, 0.5f, 2, 0.6f)),
                     new BattleSong(
@@ -72,7 +73,7 @@ namespace DigitalStory.Data
                     new CreatureType(
                         "Cat", 3, ThirdCreature, 25f, 4f,
                         new FighterStats(36f, 8f, 11f, 0.6f, 0.6f, 0f, new FighterTraits(huntsBackline: true)),
-                        new FighterLook(new Color32(0xE0, 0x9A, 0x3C, 0xFF), 1.5f, FighterShape.Cat),
+                        new FighterLook(Color.white, 1.5f, FighterShape.Cat),
                         "Hunter: runs in, hits hard, dies fast",
                         new SongStyle(170f, ToneShape.Square, 1f, 0.5f, 2, 0.8f)),
                     new BattleSong(
@@ -83,7 +84,7 @@ namespace DigitalStory.Data
                     new CreatureType(
                         "Owl", 3, ThirdCreature, 25f, 4f,
                         new FighterStats(28f, 7f, 11f, 0.8f, 6f, 0f, new FighterTraits(huntsBackline: true)),
-                        new FighterLook(new Color32(0xC8, 0xB6, 0xFF, 0xFF), 1f, FighterShape.Dot),
+                        new FighterLook(Color.white, 1f, FighterShape.Dot),
                         "Sniper: hits the back line from afar",
                         new SongStyle(132f, ToneShape.Sine, 2f, 0.5f, 1, 0.3f)),
                     new BattleSong(
@@ -97,7 +98,7 @@ namespace DigitalStory.Data
                     new CreatureType(
                         "Skunk", 4, FourthCreature, 35f, 7f,
                         new FighterStats(45f, 5f, 6f, 1.2f, 1.5f, 3.5f, new FighterTraits(slowShare: 0.5f, slowSeconds: 2.5f)),
-                        new FighterLook(new Color32(0x8E, 0xE0, 0x6B, 0xFF), 1.4f, FighterShape.Cat),
+                        new FighterLook(Color.white, 1.4f, FighterShape.Cat),
                         "Cloud: slows a whole group",
                         new SongStyle(100f, ToneShape.Sawtooth, 1f, 0.5f, 1, 0.5f)),
                     new BattleSong(
@@ -108,7 +109,7 @@ namespace DigitalStory.Data
                     new CreatureType(
                         "Hornet", 4, FourthCreature, 35f, 7f,
                         new FighterStats(26f, 6.5f, 12f, 1.1f, 1.5f, 3.5f),
-                        new FighterLook(new Color32(0xF2, 0xD5, 0x44, 0xFF), 0.9f, FighterShape.Rat),
+                        new FighterLook(Color.white, 0.9f, FighterShape.Rat),
                         "Burst: heavy area hits, very frail",
                         new SongStyle(210f, ToneShape.Sawtooth, 2f, 0.5f, 1, 0.8f)),
                     new BattleSong(
@@ -122,7 +123,7 @@ namespace DigitalStory.Data
                     new CreatureType(
                         "Bear", 5, FifthCreature, 50f, 12f,
                         new FighterStats(180f, 5.5f, 8f, 1.2f, 1f, 0f, new FighterTraits(guardTiles: 8f, armour: 0.5f)),
-                        new FighterLook(new Color32(0x7A, 0x4E, 0x2D, 0xFF), 2.2f, FighterShape.Cat),
+                        new FighterLook(Color.white, 2.2f, FighterShape.Cat),
                         "Guardian: draws every attack",
                         new SongStyle(90f, ToneShape.Sawtooth, 0.5f, 0.5f, 1, 1f)),
                     new BattleSong(
@@ -133,7 +134,7 @@ namespace DigitalStory.Data
                     new CreatureType(
                         "Wolf", 5, FifthCreature, 50f, 12f,
                         new FighterStats(70f, 7f, 30f, 0.9f, 1f),
-                        new FighterLook(new Color32(0x9A, 0xA5, 0xB1, 0xFF), 1.7f, FighterShape.Cat),
+                        new FighterLook(Color.white, 1.7f, FighterShape.Cat),
                         "Slayer: huge damage to one target",
                         new SongStyle(140f, ToneShape.Sawtooth, 1f, 0.5f, 1, 1f)),
                     new BattleSong(

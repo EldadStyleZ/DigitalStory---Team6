@@ -20,6 +20,7 @@ namespace DigitalStory.View
         private const float LineGap = 6f;
         private const float ButtonFontSize = 14f;
         private const float ButtonPadding = 8f;
+        private const float PictureSize = 96f;
 
         private static readonly string[] OptionButtons = { "chooseFirst", "chooseSecond" };
 
@@ -151,12 +152,22 @@ namespace DigitalStory.View
             panel.style.borderBottomRightRadius = OptionRadius;
             panel.style.backgroundColor = _hud.BreathTrackColor;
 
+            panel.Add(NewPicture(offer.Creature));
             panel.Add(NewLine(offer.Creature.Name, NameFontSize, _hud.GlowColor));
             panel.Add(NewLine(offer.Creature.Role, BodyFontSize, _hud.TextColor));
             panel.Add(NewLine(offer.Song.Name, BodyFontSize, _hud.GlowColor));
             panel.Add(NewLine(offer.Song.Role, BodyFontSize, _hud.CaptionColor));
             panel.Add(NewOptionButton(offer, option));
             return panel;
+        }
+
+        private static Image NewPicture(CreatureType creature)
+        {
+            var picture = new Image { sprite = creature.Look.Sprite };
+            picture.style.width = PictureSize;
+            picture.style.height = PictureSize;
+            picture.style.alignSelf = Align.Center;
+            return picture;
         }
 
         private Button NewOptionButton(CreatureOffer offer, int option)

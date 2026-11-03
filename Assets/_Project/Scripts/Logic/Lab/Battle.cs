@@ -64,6 +64,9 @@ namespace DigitalStory.Logic
 
         public bool HasRoomForACreature => _creatures.Count < _config.MaxCreatures;
 
+        /// <summary>Seconds of game time the battle has run. It stops while the game is paused.</summary>
+        public float ElapsedSeconds { get; private set; }
+
         /// <summary>The battle songs still working.</summary>
         public SongEffects Songs { get; } = new SongEffects();
 
@@ -114,6 +117,9 @@ namespace DigitalStory.Logic
 
         public void Tick(float deltaTime)
         {
+            ElapsedSeconds += deltaTime;
+            PassTime(_creatures, deltaTime);
+            PassTime(_minions, deltaTime);
             Songs.Tick(deltaTime);
             UpdateRoutes(deltaTime);
             UpdateAlertness();
@@ -148,6 +154,14 @@ namespace DigitalStory.Logic
             }
 
             _routesAreStale = true;
+        }
+
+        private static void PassTime<T>(List<T> fighters, float deltaTime) where T : Fighter
+        {
+            foreach (T fighter in fighters)
+            {
+                fighter.PassTime(deltaTime);
+            }
         }
 
         private void HealEveryone(float amount)
@@ -385,6 +399,7 @@ namespace DigitalStory.Logic
 
         private void Heal(Fighter healer, Health health, Vector2 position)
         {
+            healer.TurnToward(position);
             healer.MarkHit();
             health.Heal(healer.Stats.Traits.Healing);
             Healed?.Invoke(position);
@@ -469,6 +484,7 @@ namespace DigitalStory.Logic
 
             if (CanStrike(minion))
             {
+                minion.TurnToward(piper);
                 minion.MarkHit();
                 _piperHealth.Damage(DamageOf(minion, _awake));
                 Struck?.Invoke(new StrikeReport(piper, 0f, false));
@@ -524,6 +540,7 @@ namespace DigitalStory.Logic
         {
             if (CanStrike(attacker))
             {
+                attacker.TurnToward(target.Position);
                 attacker.MarkHit();
                 float damage = DamageOf(attacker, _creatures) * Songs.DamageMultiplier * FinisherOn(target);
                 Land(attacker.Stats, damage, target, _minions, true);
@@ -534,6 +551,7 @@ namespace DigitalStory.Logic
         {
             if (CanStrike(attacker))
             {
+                attacker.TurnToward(target.Position);
                 attacker.MarkHit();
                 float damage = DamageOf(attacker, _awake) * (1f - Songs.ShieldShare);
                 Land(attacker.Stats, damage, target, _creatures, false);
@@ -671,6 +689,8 @@ namespace DigitalStory.Logic
         // never hit, so a fight only they are left in could never end and counts as no fight at all.
         private void SendQuietCreaturesHome(float deltaTime)
         {
+            bool isFighting = IsInBattle && HasAStriker();
+
             for (int index = _creatures.Count - 1; index >= 0; index--)
             {
                 Creature creature = _creatures[index];
@@ -689,12 +709,8 @@ namespace DigitalStory.Logic
                     _routesAreStale = true;
                     CreatureLeft?.Invoke(creature);
                 }
-            bool isFighting = IsInBattle && HasAStriker();
-
             }
         }
-    }
-}
 
         private bool HasAStriker()
         {
@@ -708,3 +724,5 @@ namespace DigitalStory.Logic
 
             return false;
         }
+    }
+}

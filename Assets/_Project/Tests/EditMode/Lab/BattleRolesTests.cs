@@ -140,6 +140,67 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(kills, Is.EqualTo(0));
         }
 
+        [Test]
+        public void Tick_CountsTheBattlesTime()
+        {
+            Build(Corridor(4));
+
+            Run(1f);
+
+            Assert.That(_battle.ElapsedSeconds, Is.EqualTo(1f).Within(StepSeconds));
+        }
+
+        // A sleeping minion is never rested, yet a lunge or a flash it started still has to end.
+        [Test]
+        public void Tick_PassesTimeForSleepingMinionsToo()
+        {
+            Build(Corridor(4));
+            Minion sleeper = _battle.AddMinion(Minion(Statue, 0.1f), Cell(3));
+            sleeper.MarkHit();
+
+            Run(0.5f);
+
+            Assert.That(sleeper.IsAwake, Is.False, "The minion has to sleep for this test to mean anything.");
+            Assert.That(sleeper.SecondsSinceStrike, Is.EqualTo(0.5f).Within(StepSeconds));
+        }
+
+        [Test]
+        public void Creature_StrikingAMinionBehindIt_TurnsToFaceIt()
+        {
+            Build(Corridor(4));
+            _battle.AddMinion(Minion(Statue, 30f), Cell(0) + Vector2.left);
+            Creature creature = _battle.AddCreature(Creature(StillHitter));
+
+            Run(StepSeconds);
+
+            Assert.That(Mathf.DeltaAngle(creature.Facing, 180f), Is.EqualTo(0f).Within(Tolerance));
+        }
+
+        [Test]
+        public void Minion_StrikingThePiper_TurnsToFaceIt()
+        {
+            Build(Corridor(4));
+            Minion minion = _battle.AddMinion(Minion(StillHitter, 30f), Cell(0) + Vector2.right);
+
+            Run(StepSeconds);
+
+            Assert.That(Mathf.DeltaAngle(minion.Facing, 180f), Is.EqualTo(0f).Within(Tolerance));
+        }
+
+        [Test]
+        public void Healer_Healing_TurnsToFaceWhoItHeals()
+        {
+            Build(Corridor(4));
+            Minion hurt = _battle.AddMinion(Minion(Statue, 30f), Cell(0) + Vector2.left);
+            Minion healer = _battle.AddMinion(Minion(Healer, 30f), Cell(0) + Vector2.right);
+            hurt.Health.Damage(50f);
+
+            Run(StepSeconds);
+
+            Assert.That(hurt.Health.Current, Is.GreaterThan(hurt.Health.Max - 50f), "The healer has to heal for this test to mean anything.");
+            Assert.That(Mathf.DeltaAngle(healer.Facing, 180f), Is.EqualTo(0f).Within(Tolerance));
+        }
+
         // Healers never hit, so a fight that only they are left in could never end.
         [Test]
         public void Creature_OnlyHealersInAFight_GoHomeAfterTheQuietTime()

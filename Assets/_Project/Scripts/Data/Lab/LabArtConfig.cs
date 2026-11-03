@@ -47,6 +47,47 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("How thick a health bar is, in tiles.")]
         public float BarThickness { get; private set; } = 0.14f;
 
+        [field: Header("Moving")]
+        [field: SerializeField, Min(0.05f), Tooltip("How far one whole walk cycle carries a fighter, in its own body lengths.")]
+        public float StrideBodyLengths { get; private set; } = 0.9f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds without a step before a fighter shows its standing picture.")]
+        public float StillSeconds { get; private set; } = 0.15f;
+
+        [field: SerializeField, Min(0.01f), Tooltip("Seconds a lunge takes, out and back.")]
+        public float LungeSeconds { get; private set; } = 0.2f;
+
+        [field: SerializeField, Min(0f), Tooltip("How far a lunge reaches, in the fighter's body lengths.")]
+        public float LungeBodyLengths { get; private set; } = 0.22f;
+
+        [field: SerializeField, Min(0f), Tooltip("How much bigger a healer swells as it heals, as a share of its size.")]
+        public float HealPulseShare { get; private set; } = 0.12f;
+
+        [field: SerializeField, Min(0.01f), Tooltip("Seconds a hurt fighter flashes.")]
+        public float HurtSeconds { get; private set; } = 0.18f;
+
+        [field: SerializeField, Tooltip("The color a hurt fighter flashes.")]
+        public Color HurtColor { get; private set; } = new Color(1f, 0.35f, 0.35f, 1f);
+
+        [field: SerializeField, Min(0.1f), Tooltip("Seconds of one breath of a fighter standing still.")]
+        public float BreathSeconds { get; private set; } = 1.8f;
+
+        [field: SerializeField, Min(0f), Tooltip("How much a breath changes a fighter's size, as a share of it.")]
+        public float BreathShare { get; private set; } = 0.025f;
+
+        [field: Header("Shadows")]
+        [field: SerializeField, Tooltip("The soft round shadow under every fighter.")]
+        public Sprite ShadowSprite { get; private set; }
+
+        [field: SerializeField, Tooltip("The color of the shadows.")]
+        public Color ShadowColor { get; private set; } = new Color(0f, 0f, 0f, 0.4f);
+
+        [field: SerializeField, Tooltip("A shadow's length and width, in the fighter's body lengths.")]
+        public Vector2 ShadowBodyLengths { get; private set; } = new Vector2(0.85f, 0.6f);
+
+        [field: SerializeField, Tooltip("Where a shadow falls from its fighter, in body lengths. It stays put as the fighter turns.")]
+        public Vector2 ShadowOffset { get; private set; } = new Vector2(0.05f, -0.07f);
+
         [field: Header("Effects")]
         [field: SerializeField, Tooltip("The flash of a hit on one target.")]
         public Color HitColor { get; private set; } = new Color32(0xFF, 0xF0, 0xC0, 0xFF);

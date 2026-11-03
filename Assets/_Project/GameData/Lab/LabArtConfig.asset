@@ -25,6 +25,19 @@ MonoBehaviour:
   <CreatureBarColor>k__BackingField: {r: 0.41960785, g: 0.8784314, b: 0.47843137, a: 1}
   <MinionBarColor>k__BackingField: {r: 1, g: 0.3529412, b: 0.3529412, a: 1}
   <BarThickness>k__BackingField: 0.14
+  <StrideBodyLengths>k__BackingField: 0.9
+  <StillSeconds>k__BackingField: 0.15
+  <LungeSeconds>k__BackingField: 0.2
+  <LungeBodyLengths>k__BackingField: 0.22
+  <HealPulseShare>k__BackingField: 0.12
+  <HurtSeconds>k__BackingField: 0.18
+  <HurtColor>k__BackingField: {r: 1, g: 0.35, b: 0.35, a: 1}
+  <BreathSeconds>k__BackingField: 1.8
+  <BreathShare>k__BackingField: 0.025
+  <ShadowSprite>k__BackingField: {fileID: 21300000, guid: 81db52aaab36643a49253be9ce883391, type: 3}
+  <ShadowColor>k__BackingField: {r: 0, g: 0, b: 0, a: 0.4}
+  <ShadowBodyLengths>k__BackingField: {x: 0.85, y: 0.6}
+  <ShadowOffset>k__BackingField: {x: 0.05, y: -0.07}
   <HitColor>k__BackingField: {r: 1, g: 0.9411765, b: 0.7529412, a: 1}
   <CreatureAreaColor>k__BackingField: {r: 0.5568628, g: 0.8784314, b: 0.41960785, a: 1}
   <MinionAreaColor>k__BackingField: {r: 0.8784314, g: 0.41960785, b: 0.8784314, a: 1}

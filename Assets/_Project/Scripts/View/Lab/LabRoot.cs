@@ -126,7 +126,7 @@ namespace DigitalStory.View
         {
             bool isComplete = _maze != null && _player != null && _stamina != null && _combos != null && _levels != null
                 && _battle != null && _roster != null && _population != null && _ambush != null && _sprites != null && _art != null
-                && _hud != null && _texts != null && _sound != null && _art.ArrowSprite != null
+                && _hud != null && _texts != null && _sound != null && _art.ArrowSprite != null && _art.ShadowSprite != null
                 && _runner != null && _mazeView != null && _piperView != null && _camera != null
                 && _unitsView != null && _effectsView != null && _hudView != null && _balloonView != null
                 && _screensView != null && _soundView != null;

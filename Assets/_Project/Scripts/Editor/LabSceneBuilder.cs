@@ -22,8 +22,14 @@ namespace DigitalStory.Editor
         private const string PanelPath = Root + "/UI/GamePanelSettings.asset";
         private const string ScenePath = Root + "/Scenes/eldad-lab-scene.unity";
         private const string ArrowPath = Root + "/Art/Placeholders/Arrow.png";
+        private const string AnimalFolder = Root + "/Art/Animals";
+        private const string ShadowPath = Root + "/Art/Placeholders/Shadow.png";
         private const int PiperOrder = 5;
+        private const int AnimalPixels = 512;
+        private const int WalkFrameCount = 4;
         private const int ArrowPixels = 64;
+        private const int ShadowPixels = 64;
+        private const float ShadowSolidShare = 0.45f;
         private const float ArrowShaftThickness = 0.3f;
         private const float ArrowShaftEnd = 0.45f;
         private const float ArrowStart = 0.05f;
@@ -86,7 +92,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_combos", LoadOrCreate<ComboConfig>("ComboConfig"));
             SetObject(serialized, "_levels", LoadOrCreate<LevelConfig>("LevelConfig"));
             SetObject(serialized, "_battle", LoadOrCreate<BattleConfig>("BattleConfig"));
-            SetObject(serialized, "_roster", LoadOrCreate<CreatureRoster>("CreatureRoster"));
+            SetObject(serialized, "_roster", LoadRoster());
             SetObject(serialized, "_population", LoadOrCreate<PopulationConfig>("PopulationConfig"));
             SetObject(serialized, "_ambush", LoadOrCreate<AmbushConfig>("AmbushConfig"));
             SetObject(serialized, "_sprites", sprites);
@@ -107,13 +113,97 @@ namespace DigitalStory.Editor
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        // Walks the whole roster rather than naming its rows, so a new choice only needs its pictures:
+        // Bear.png standing, and BearWalk1.png to BearWalk4.png in step order.
+        private static CreatureRoster LoadRoster()
+        {
+            var roster = LoadOrCreate<CreatureRoster>("CreatureRoster");
+            var serialized = new SerializedObject(roster);
+            SerializedProperty property = serialized.GetIterator();
+
+            while (property.Next(true))
+            {
+                if (property.type == nameof(CreatureType))
+                {
+                    string creature = property.FindPropertyRelative("_name").stringValue;
+                    property.FindPropertyRelative("_look._sprite").objectReferenceValue = LoadAnimal(creature);
+                    LinkWalkFrames(property.FindPropertyRelative("_look._walkFrames"), creature);
+                }
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            return roster;
+        }
+
+        private static void LinkWalkFrames(SerializedProperty frames, string creature)
+        {
+            frames.arraySize = WalkFrameCount;
+
+            for (int step = 0; step < WalkFrameCount; step++)
+            {
+                frames.GetArrayElementAtIndex(step).objectReferenceValue = LoadAnimal($"{creature}Walk{step + 1}");
+            }
+        }
+
+        private static Sprite LoadAnimal(string picture)
+        {
+            string path = $"{AnimalFolder}/{picture}.png";
+
+            if (!(AssetImporter.GetAtPath(path) is TextureImporter importer))
+            {
+                throw new InvalidOperationException($"There is no picture at {path}.");
+            }
+
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spritePixelsPerUnit = AnimalPixels;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.alphaIsTransparency = true;
+
+            // The pictures are drawn far smaller than they are, and without mipmaps they would shimmer as they turn.
+            importer.mipmapEnabled = true;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        }
+
         private static LabArtConfig LoadArt()
         {
             var art = LoadOrCreate<LabArtConfig>("LabArtConfig");
             var serialized = new SerializedObject(art);
             SetObject(serialized, $"<{nameof(LabArtConfig.ArrowSprite)}>k__BackingField", SaveArrow());
+            SetObject(serialized, $"<{nameof(LabArtConfig.ShadowSprite)}>k__BackingField", SaveShadow());
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return art;
+        }
+
+        // A white disc, solid in the middle and fading to nothing at its edge. The view colors it.
+        private static Sprite SaveShadow()
+        {
+            var texture = new Texture2D(ShadowPixels, ShadowPixels, TextureFormat.RGBA32, false);
+            float middle = ShadowPixels / 2f;
+
+            for (int y = 0; y < ShadowPixels; y++)
+            {
+                for (int x = 0; x < ShadowPixels; x++)
+                {
+                    float fromMiddle = new Vector2(x + 0.5f - middle, y + 0.5f - middle).magnitude / middle;
+                    float strength = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(ShadowSolidShare, 1f, fromMiddle));
+                    texture.SetPixel(x, y, new Color(1f, 1f, 1f, strength));
+                }
+            }
+
+            File.WriteAllBytes(ShadowPath, texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(ShadowPath);
+
+            var importer = (TextureImporter)AssetImporter.GetAtPath(ShadowPath);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spritePixelsPerUnit = ShadowPixels;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.alphaIsTransparency = true;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Sprite>(ShadowPath);
         }
 
         private static Sprite SaveArrow()
