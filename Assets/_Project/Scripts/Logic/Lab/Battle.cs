@@ -516,7 +516,9 @@ namespace DigitalStory.Logic
             return nearest;
         }
 
-        private static bool CanStrike(Fighter attacker) => attacker.CanHitNow && !attacker.Stats.Traits.Heals;
+        private static bool IsStriker(Fighter fighter) => !fighter.Stats.Traits.Heals;
+
+        private static bool CanStrike(Fighter attacker) => attacker.CanHitNow && IsStriker(attacker);
 
         private void HitMinions(Creature attacker, Minion target)
         {
@@ -665,14 +667,15 @@ namespace DigitalStory.Logic
             }
         }
 
-        // Summoning works anywhere, so this is what stops a full army walking the maze for free.
+        // Summoning works anywhere, so this is what stops a full army walking the maze for free. Healers
+        // never hit, so a fight only they are left in could never end and counts as no fight at all.
         private void SendQuietCreaturesHome(float deltaTime)
         {
             for (int index = _creatures.Count - 1; index >= 0; index--)
             {
                 Creature creature = _creatures[index];
 
-                if (IsInBattle)
+                if (isFighting)
                 {
                     creature.KeepBusy();
                     continue;
@@ -686,7 +689,22 @@ namespace DigitalStory.Logic
                     _routesAreStale = true;
                     CreatureLeft?.Invoke(creature);
                 }
+            bool isFighting = IsInBattle && HasAStriker();
+
             }
         }
     }
 }
+
+        private bool HasAStriker()
+        {
+            foreach (Creature creature in _creatures)
+            {
+                if (IsStriker(creature))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }

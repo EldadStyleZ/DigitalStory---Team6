@@ -34,6 +34,8 @@ namespace DigitalStory.Tests.PlayMode
         private LabSoundConfig _soundConfig;
         private LabTextConfig _texts;
         private AmbushConfig _ambush;
+        private LevelConfig _levels;
+        private BattleConfig _battle;
 
         private LabSession Session => _root.Session;
 
@@ -55,6 +57,8 @@ namespace DigitalStory.Tests.PlayMode
             _soundConfig = Resources.FindObjectsOfTypeAll<LabSoundConfig>()[0];
             _texts = Resources.FindObjectsOfTypeAll<LabTextConfig>()[0];
             _ambush = Resources.FindObjectsOfTypeAll<AmbushConfig>()[0];
+            _levels = Resources.FindObjectsOfTypeAll<LevelConfig>()[0];
+            _battle = Resources.FindObjectsOfTypeAll<BattleConfig>()[0];
         }
 
         private Minion StartBattle(FighterStats stats, float xp = 10f)
@@ -114,6 +118,31 @@ namespace DigitalStory.Tests.PlayMode
                 press.target = button;
                 button.SendEvent(press);
             }
+        }
+
+        // A field full of Rats once held a fight nobody could win, with no room left to summon a fighter.
+        [UnityTest]
+        public IEnumerator Battle_AFieldFullOfRats_MakesRoomForAFighter()
+        {
+            LevelUpAndChoose(_levels.XpToReach[1]);
+            CreatureType rat = Session.Party.Select(offer => offer.Creature).Single(creature => creature.Name == "Rat");
+            Assert.That(rat.Stats.Traits.Heals, Is.True, "The test is about a creature that only heals.");
+            StartBattle(Statue);
+
+            while (Session.Battle.HasRoomForACreature)
+            {
+                Session.Battle.AddCreature(rat);
+            }
+
+            PassGameTime(_battle.QuietSecondsBeforeLeaving + 1f);
+            Assert.That(Session.Battle.IsInBattle, Is.True, "The fight has to go on for this test to mean anything.");
+            Assert.That(Session.Battle.Creatures, Is.Empty);
+
+            Session.Press(H);
+            Session.Press(J);
+            yield return null;
+
+            Assert.That(Session.Battle.Creatures.Single().Type.Name, Is.EqualTo("Mouse"));
         }
 
         [Test]

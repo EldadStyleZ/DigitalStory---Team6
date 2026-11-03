@@ -50,6 +50,8 @@ namespace DigitalStory.Tests.EditMode
             return new FighterStats(1000f, 0f, damage, seconds, reach, area, traits);
         }
 
+        private static FighterStats Healer => With(new FighterTraits(healing: 7f), reach: 4f, damage: 0f);
+
         private static BattleSong Boost(float multiplier, float seconds)
         {
             return Song(new SongBuff(seconds: seconds, damageMultiplier: multiplier));
@@ -136,6 +138,51 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(left, Is.EqualTo(new[] { creature }));
             Assert.That(kills, Is.EqualTo(0));
+        }
+
+        // Healers never hit, so a fight that only they are left in could never end.
+        [Test]
+        public void Creature_OnlyHealersInAFight_GoHomeAfterTheQuietTime()
+        {
+            Build(Corridor(4));
+            AwakeStatue(1, Statue);
+            _battle.AddCreature(Creature(Healer));
+            _battle.AddCreature(Creature(Healer));
+
+            Run(_config.QuietSecondsBeforeLeaving + 0.1f);
+
+            Assert.That(_battle.IsInBattle, Is.True, "The fight has to go on for this test to mean anything.");
+            Assert.That(_battle.Creatures, Is.Empty);
+        }
+
+        [Test]
+        public void Creature_AHealerBesideAStriker_StaysThroughTheFight()
+        {
+            Build(Corridor(4));
+            AwakeStatue(1, Statue);
+            _battle.AddCreature(Creature(Healer));
+            _battle.AddCreature(Creature(Statue));
+
+            Run(_config.QuietSecondsBeforeLeaving + 1f);
+
+            Assert.That(_battle.Creatures.Count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Creature_AHealerWhoseStrikerFalls_GetsTheWholeQuietTime()
+        {
+            Build(Corridor(4));
+            AwakeStatue(1, Statue);
+            Creature healer = _battle.AddCreature(Creature(Healer));
+            Creature striker = _battle.AddCreature(Creature(Statue));
+            Run(_config.QuietSecondsBeforeLeaving - 1f);
+
+            striker.Health.Damage(striker.Health.Max);
+            Run(_config.QuietSecondsBeforeLeaving - 1f);
+            Assert.That(_battle.Creatures, Is.EqualTo(new[] { healer }));
+
+            Run(2f);
+            Assert.That(_battle.Creatures, Is.Empty);
         }
 
         [Test]

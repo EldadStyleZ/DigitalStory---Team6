@@ -27,7 +27,7 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(1f), Tooltip("A minion gives up past this many times its detection range.")]
         public float GiveUpMultiplier { get; private set; } = 1.6f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds without a fight before a creature goes home, so nobody walks the maze with a full army.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds without a fight before a creature goes home, so nobody walks the maze with a full army. A fight with only healers left counts as none.")]
         public float QuietSecondsBeforeLeaving { get; private set; } = 20f;
 
         [field: SerializeField, Min(0f), Tooltip("How close fighters must stand to count as a pack, in tiles.")]
