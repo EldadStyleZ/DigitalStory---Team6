@@ -1,8 +1,0 @@
-{
-    "name": "DigitalStory.Logic",
-    "rootNamespace": "DigitalStory.Logic",
-    "references": [
-        "DigitalStory.Data"
-    ],
-    "autoReferenced": false
-}
