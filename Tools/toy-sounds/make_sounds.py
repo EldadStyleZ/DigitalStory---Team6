@@ -1,10 +1,9 @@
 """
-Makes the toy's sound files: the six flute notes and one short tune per song, as WAV files in
+Makes the toy's sound files: one short tune per song and the balloon pop, as WAV files in
 Assets/_Project/Audio. Run it again after changing a sound, then return to Unity so it imports them.
 
-The notes follow the old game's flute: D5 and five notes up a pentatonic scale, with vibrato, a soft
-overtone and a little breath. Each note loops, so the flute can hold it for as long as a key is down.
-The song tunes copy the old game's jingles where it had one.
+The song tunes copy the old game's jingles where it had one. The flute's own notes are not files: the
+Flute Voice plays them live with the old game's synthesizer, so they fade out instead of stopping dead.
 """
 import math
 import os
@@ -19,9 +18,6 @@ OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "..", "Asse
 
 BASE_HERTZ = 587.33
 SEMITONES = [0, 2, 5, 7, 9, 12]
-LOOP_SECONDS = 2.0
-VIBRATO_HERTZ = 5.0
-VIBRATO_DEPTH = 6.0
 
 
 def save(path, samples):
@@ -33,21 +29,6 @@ def save(path, samples):
         out.setsampwidth(2)
         out.setframerate(RATE)
         out.writeframes(b"".join(struct.pack("<h", int(max(-1.0, min(1.0, s * scale)) * 32767)) for s in samples))
-
-
-def flute_note(hertz, rng):
-    """A held flute note that loops cleanly: whole cycles of both the note and its vibrato fit the loop."""
-    hertz = round(hertz * LOOP_SECONDS) / LOOP_SECONDS
-    count = int(RATE * LOOP_SECONDS)
-    samples, phase = [], 0.0
-    for i in range(count):
-        t = i / RATE
-        wobble = VIBRATO_DEPTH * math.sin(2 * math.pi * VIBRATO_HERTZ * t)
-        phase += 2 * math.pi * (hertz + wobble) / RATE
-        tone = math.sin(phase) + 0.25 * math.sin(2 * phase)
-        breath = (rng.random() * 2 - 1) * 0.06
-        samples.append(0.5 * tone + breath)
-    return samples
 
 
 def tone(samples, start, seconds, start_hertz, end_hertz, volume, shape="sine"):
@@ -145,10 +126,8 @@ def pop_sound(rng):
 
 if __name__ == "__main__":
     rng = random.Random(7)
-    for key in range(1, 7):
-        save(os.path.join(OUT, "Notes", f"Note{key}.wav"), flute_note(note_hertz(key), rng))
     tunes = song_tunes(rng)
     for name, samples in tunes.items():
         save(os.path.join(OUT, "Songs", f"{name}.wav"), samples)
     save(os.path.join(OUT, "Pop.wav"), pop_sound(rng))
-    print("made", 7 + len(tunes), "sounds in", os.path.normpath(OUT))
+    print("made", 1 + len(tunes), "sounds in", os.path.normpath(OUT))

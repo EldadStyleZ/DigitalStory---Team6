@@ -17,6 +17,9 @@ namespace PiperToy
         /// <summary>The way the Piper last walked, so marching rats know which way is ahead.</summary>
         public Vector2 Facing { get; private set; } = Vector2.right;
 
+        /// <summary>How fast and which way the Piper is moving, so a crowd carrying it can keep up.</summary>
+        public Vector2 Velocity => _body.linearVelocity;
+
         private void Awake()
         {
             _body = GetComponent<Rigidbody2D>();

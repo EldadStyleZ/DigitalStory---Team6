@@ -32,5 +32,8 @@ namespace PiperToy
 
         /// <summary>Lies on its back, playing dead.</summary>
         Faint,
+
+        /// <summary>Crowd Surf: one of the crowd under the Piper, carrying it wherever the player steers.</summary>
+        Carry,
     }
 }

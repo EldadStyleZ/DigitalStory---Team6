@@ -5,12 +5,13 @@ using UnityEngine;
 namespace PiperToy
 {
     /// <summary>
-    /// The Piper's flute with six holes. Holding a hole plays its note, and what the rats do depends on the hole:
+    /// The Piper's flute with six holes. Holding a hole sounds its note, and what the rats do depends on the hole:
     /// 1 and 2 call them, 3 and 4 march them, 5 and 6 scare them. A few notes in a row can spell a song.
     /// </summary>
     /// <remarks>
     /// The flute does not read the keyboard; PiperInput does that and calls <see cref="Press"/> and
-    /// <see cref="Release"/>. Other objects learn what happened through the two events, without the flute
+    /// <see cref="Release"/>. It does not make the note's sound either: the FluteVoice plays
+    /// <see cref="SoundingKey"/>. Other objects learn what happened through the two events, without the flute
     /// knowing who listens.
     /// </remarks>
     [DisallowMultipleComponent]
@@ -19,14 +20,8 @@ namespace PiperToy
         public const int HoleCount = 6;
 
         [Header("Sound")]
-        [SerializeField, Tooltip("Plays the held note, over and over.")]
-        private AudioSource _noteSpeaker;
-
         [SerializeField, Tooltip("Plays each song's tune once.")]
         private AudioSource _songSpeaker;
-
-        [SerializeField, Tooltip("Each hole's note, from hole 1 to hole 6.")]
-        private AudioClip[] _notes = new AudioClip[HoleCount];
 
         [Header("Music")]
         [SerializeField, Min(0f), Tooltip("How far the rats hear the held notes, in units.")]
@@ -59,7 +54,10 @@ namespace PiperToy
         /// <summary>The notes that could still become a song, oldest first.</summary>
         public IReadOnlyList<int> RecentKeys => _combo.Keys;
 
-        /// <summary>What the held note does to the rats. The note pressed last wins.</summary>
+        /// <summary>The key, from 1 to 6, whose note sounds now, or 0 for silence. The note pressed last wins.</summary>
+        public int SoundingKey => _soundingKey;
+
+        /// <summary>What the held note does to the rats.</summary>
         public FluteMode Mode => _soundingKey == 0 ? FluteMode.Silent : ModeOf(_soundingKey);
 
         private void Awake()
@@ -100,7 +98,7 @@ namespace PiperToy
             }
 
             _isHeld[key - 1] = true;
-            Sound(key);
+            _soundingKey = key;
             NotePlayed?.Invoke(key);
 
             _combo.Add(key, Time.time);
@@ -124,7 +122,7 @@ namespace PiperToy
 
             if (key == _soundingKey)
             {
-                Sound(HighestHeldKey());
+                _soundingKey = HighestHeldKey();
             }
         }
 
@@ -159,21 +157,6 @@ namespace PiperToy
             }
 
             SongPlayed?.Invoke(song);
-        }
-
-        // Key 0 means silence.
-        private void Sound(int key)
-        {
-            _soundingKey = key;
-
-            if (key == 0)
-            {
-                _noteSpeaker.Stop();
-                return;
-            }
-
-            _noteSpeaker.clip = _notes[key - 1];
-            _noteSpeaker.Play();
         }
 
         private int HighestHeldKey()

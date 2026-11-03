@@ -23,6 +23,9 @@ namespace PiperToy
         [SerializeField, Tooltip("The flute the rats listen to.")]
         private Flute _flute;
 
+        [SerializeField, Tooltip("The edge of the field, which floating rats stay inside: the Ground's Edge Collider 2D.")]
+        private Collider2D _field;
+
         [Header("Songs")]
         [SerializeField, Min(0f), Tooltip("Floating and fainting rats stop up to this many seconds apart, so they do not all pop or wake at once.")]
         private float _staggerSeconds = 2f;
@@ -36,6 +39,9 @@ namespace PiperToy
         [SerializeField, Min(0f), Tooltip("The biggest heart, in units.")]
         private float _biggestHeart = 4.5f;
 
+        [SerializeField, Min(0f), Tooltip("How far apart the rats stand in the Crowd Surf crowd, in units.")]
+        private float _crowdSpacing = 0.22f;
+
         private readonly List<Rat> _rats = new List<Rat>();
         private readonly List<Rat> _listeners = new List<Rat>();
 
@@ -43,6 +49,9 @@ namespace PiperToy
 
         private void Awake()
         {
+            // Without a field, nothing stops a floating rat from rising, so the field is as big as can be.
+            Bounds field = _field != null ? _field.bounds : new Bounds(Vector3.zero, Vector3.positiveInfinity);
+
             for (int index = 0; index < _ratCount; index++)
             {
                 Vector2 spot = (Vector2)transform.position + new Vector2(
@@ -52,7 +61,7 @@ namespace PiperToy
                 // Instantiate copies the prefab into the scene, as a child of this object so the Hierarchy stays tidy.
                 Rat rat = Instantiate(_ratPrefab, spot, Quaternion.identity, transform);
                 rat.name = $"Rat {index + 1}";
-                rat.Listen(_flute);
+                rat.Listen(_flute, field);
                 _rats.Add(rat);
             }
         }
@@ -74,12 +83,14 @@ namespace PiperToy
             switch (song.Effect)
             {
                 case SongEffect.Dance:
-                case SongEffect.CrowdSurf:
                     foreach (Rat rat in _listeners)
                     {
                         rat.Charm(song.Seconds);
                     }
 
+                    break;
+                case SongEffect.CrowdSurf:
+                    GatherACrowd(song);
                     break;
                 case SongEffect.Conga:
                     LineUp(song);
@@ -145,6 +156,20 @@ namespace PiperToy
             {
                 rat.JoinConga(leader, song.Seconds, song.Color);
                 leader = rat.transform;
+            }
+        }
+
+        // Each rat gets a spot under the Piper, spiralling out from the middle, so the crowd is a tight round bunch.
+        private void GatherACrowd(Song song)
+        {
+            const float GoldenAngle = 2.39996f;
+
+            for (int index = 0; index < _listeners.Count; index++)
+            {
+                float angle = index * GoldenAngle;
+                float distance = Mathf.Sqrt(index) * _crowdSpacing;
+                var spot = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance;
+                _listeners[index].JoinCrowd(spot, song.Seconds, song.Color);
             }
         }
 

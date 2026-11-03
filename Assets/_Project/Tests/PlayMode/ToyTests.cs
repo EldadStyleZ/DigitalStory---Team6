@@ -95,6 +95,43 @@ namespace PiperToy.Tests
             Assert.That(movement.Facing, Is.EqualTo(Vector2.left));
         }
 
+        // The Piper walks through the crowd; only the rats bump into each other.
+        [UnityTest]
+        public IEnumerator Piper_WalkingIntoARat_DoesNotPushIt()
+        {
+            var movement = _flute.GetComponent<PiperMovement>();
+            _flute.GetComponent<PiperInput>().enabled = false;
+            ClearTheField();
+            Rat rat = _herd.Rats[0];
+            Place(rat, Piper + new Vector2(1f, 0f));
+            Vector2 start = rat.transform.position;
+
+            movement.Direction = Vector2.right;
+            yield return new WaitForSeconds(0.6f);
+
+            Assert.That(Piper.x, Is.GreaterThan(start.x), "The Piper has to walk past the rat for this test to mean anything.");
+            Assert.That(Vector2.Distance(rat.transform.position, start), Is.LessThan(0.6f));
+        }
+
+        [UnityTest]
+        public IEnumerator Piper_Turning_EasesIntoItsNewHeading()
+        {
+            var movement = _flute.GetComponent<PiperMovement>();
+            _flute.GetComponent<PiperInput>().enabled = false;
+            Transform body = _flute.transform.Find("Body");
+            yield return null;
+            Assert.That(Mathf.DeltaAngle(body.eulerAngles.z, 0f), Is.EqualTo(0f).Within(1f), "It starts facing right.");
+
+            // Frames in the test runner can be very short, so this waits a set time rather than one frame.
+            movement.Direction = Vector2.up;
+            yield return new WaitForSeconds(0.05f);
+            float soon = Mathf.DeltaAngle(0f, body.eulerAngles.z);
+            Assert.That(soon, Is.GreaterThan(5f).And.LessThan(85f), "Partway round soon after.");
+
+            yield return new WaitForSeconds(1f);
+            Assert.That(Mathf.DeltaAngle(body.eulerAngles.z, 90f), Is.EqualTo(0f).Within(1f), "Facing up in the end.");
+        }
+
         [UnityTest]
         public IEnumerator Piper_AtTheEdgeOfTheField_CannotLeaveIt()
         {
@@ -210,7 +247,7 @@ namespace PiperToy.Tests
                 { SongEffect.Disco, RatMood.Disco },
                 { SongEffect.Balloons, RatMood.Float },
                 { SongEffect.Choir, RatMood.Sing },
-                { SongEffect.CrowdSurf, RatMood.Follow },
+                { SongEffect.CrowdSurf, RatMood.Carry },
                 { SongEffect.Faint, RatMood.Faint },
             };
             Assert.That(_herd.Rats.Count, Is.GreaterThanOrEqualTo(_flute.Songs.Count * 2), "Each song needs two rats of its own.");
@@ -241,17 +278,109 @@ namespace PiperToy.Tests
         }
 
         [UnityTest]
-        public IEnumerator Song_Balloons_FloatsRatsOverTheOthersUntilTheyPop()
+        public IEnumerator Song_CrowdSurf_GathersTheRatsUnderThePiper()
+        {
+            ClearTheField();
+            Rat[] crowd = { RatNearThePiper(0), RatNearThePiper(1), RatNearThePiper(2) };
+
+            yield return Play(SongNamed("Crowd Surf").Keys);
+            yield return new WaitForSeconds(1.5f);
+
+            foreach (Rat rat in crowd)
+            {
+                Assert.That(rat.Mood, Is.EqualTo(RatMood.Carry));
+                Assert.That(Vector2.Distance(rat.transform.position, Piper), Is.LessThan(1f));
+            }
+        }
+
+        // The player steers the Piper, and the crowd under it goes the same way.
+        [UnityTest]
+        public IEnumerator Song_CrowdSurf_TheCrowdMovesWhereThePlayerSteers()
+        {
+            var movement = _flute.GetComponent<PiperMovement>();
+            _flute.GetComponent<PiperInput>().enabled = false;
+            ClearTheField();
+            Rat[] crowd = { RatNearThePiper(0), RatNearThePiper(1), RatNearThePiper(2) };
+            yield return Play(SongNamed("Crowd Surf").Keys);
+            yield return new WaitForSeconds(1.5f);
+            Vector2 start = Piper;
+
+            movement.Direction = Vector2.left;
+            yield return new WaitForSeconds(1f);
+
+            Assert.That(Piper.x, Is.LessThan(start.x - 2f), "The Piper has to travel for this test to mean anything.");
+
+            foreach (Rat rat in crowd)
+            {
+                Assert.That(Vector2.Distance(rat.transform.position, Piper), Is.LessThan(1.3f));
+            }
+        }
+
+        // A balloon rat stops walking and waddling, and drifts up the screen and a little to the right.
+        [UnityTest]
+        public IEnumerator Song_Balloons_FloatRatsSlowlyUpAndALittleRight()
         {
             ClearTheField();
             Rat rat = RatNearThePiper();
+            Transform body = rat.transform.Find("Body");
 
             yield return Play(SongNamed("Balloons").Keys);
-            yield return new WaitForSeconds(1f);
+            yield return null;
+            Vector2 start = rat.transform.position;
+            float heading = body.eulerAngles.z;
+
+            yield return new WaitForSeconds(1.5f);
+            Vector2 moved = (Vector2)rat.transform.position - start;
 
             Assert.That(rat.Mood, Is.EqualTo(RatMood.Float));
             Assert.That(rat.GetComponent<Collider2D>().enabled, Is.False, "It floats over the others.");
-            Assert.That(rat.transform.position.x, Is.GreaterThan(Piper.x + Near + 0.5f), "The wind carries it east.");
+            Assert.That(moved.y, Is.GreaterThan(0.4f), "Upwards.");
+            Assert.That(moved.x, Is.GreaterThan(0f).And.LessThan(moved.y), "A little to the right.");
+            Assert.That(moved.magnitude, Is.LessThan(2f), "Slowly.");
+            Assert.That(Mathf.DeltaAngle(body.eulerAngles.z, heading), Is.EqualTo(0f).Within(1f), "It stops turning to walk.");
+            Assert.That(rat.GetComponent<Animator>().GetFloat("Speed"), Is.EqualTo(0f), "It stops waddling.");
+        }
+
+        [UnityTest]
+        public IEnumerator Song_Balloons_NeverFloatOffTheField()
+        {
+            ClearTheField();
+            Rat rat = RatNearThePiper();
+            float top = Object.FindAnyObjectByType<EdgeCollider2D>().bounds.max.y;
+            Place(rat, new Vector2(Piper.x + Near, top - 1f));
+            _flute.transform.position = new Vector3(Piper.x, top - 1f, 0f);
+            _flute.GetComponent<Rigidbody2D>().position = _flute.transform.position;
+            yield return new WaitForFixedUpdate();
+
+            yield return Play(SongNamed("Balloons").Keys);
+            yield return new WaitForSeconds(3f);
+
+            Assert.That(rat.Mood, Is.EqualTo(RatMood.Float));
+            Assert.That(rat.transform.position.y, Is.LessThan(top));
+        }
+
+        [UnityTest]
+        public IEnumerator FluteVoice_HoldingAHole_PlaysThatHole()
+        {
+            var voice = Object.FindAnyObjectByType<FluteVoice>();
+
+            _flute.Press(4);
+            yield return null;
+            Assert.That(voice.KeyPlaying, Is.EqualTo(4));
+
+            _flute.Release(4);
+            yield return null;
+            Assert.That(voice.KeyPlaying, Is.EqualTo(FluteSynth.Silent));
+        }
+
+        [UnityTest]
+        public IEnumerator Hud_HasNoHowToPlayText()
+        {
+            yield return null;
+            VisualElement root = Object.FindAnyObjectByType<ComboRow>().GetComponent<UIDocument>().rootVisualElement;
+
+            Assert.That(root.Q("hint"), Is.Null);
+            Assert.That(root.Query<Label>().ToList().Any(label => label.text.Contains("WASD")), Is.False);
         }
 
         [UnityTest]

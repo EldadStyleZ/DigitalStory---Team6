@@ -1,13 +1,6 @@
 .hud {
     flex-grow: 1;
-    justify-content: space-between;
-}
-
-.hint {
-    margin: 10px;
-    color: rgb(170, 167, 187);
-    font-size: 13px;
-    -unity-text-align: upper-center;
+    justify-content: flex-end;
 }
 
 .bottom {

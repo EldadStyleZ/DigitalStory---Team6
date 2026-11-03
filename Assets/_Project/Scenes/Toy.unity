@@ -237,7 +237,6 @@ GameObject:
   - component: {fileID: 511048050}
   - component: {fileID: 511048057}
   - component: {fileID: 511048056}
-  - component: {fileID: 511048052}
   - component: {fileID: 511048051}
   - component: {fileID: 511048055}
   - component: {fileID: 511048049}
@@ -262,15 +261,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ec18ff093c3f04a68a7a710b8826db2b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Toy::PiperToy.Flute
-  _noteSpeaker: {fileID: 511048052}
   _songSpeaker: {fileID: 511048051}
-  _notes:
-  - {fileID: 8300000, guid: 2aab257d9ae0b4b30a67d5ee8628cce3, type: 3}
-  - {fileID: 8300000, guid: 26283d6ffea334ee1b3e4a7194507cc4, type: 3}
-  - {fileID: 8300000, guid: 26ced09dacf254f46b7c207060e4c594, type: 3}
-  - {fileID: 8300000, guid: b58ae2865e0c54936aa2ef12a3474509, type: 3}
-  - {fileID: 8300000, guid: 440581011bd46410f875f9b10f3c2a1e, type: 3}
-  - {fileID: 8300000, guid: 3fcd17198f82140d1887947b6b2a8982, type: 3}
   _hearingRadius: 4
   _musicRing: {fileID: 885989662}
   _songs:
@@ -298,6 +289,7 @@ Transform:
   m_Children:
   - {fileID: 1359738304}
   - {fileID: 885989664}
+  - {fileID: 930629609}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!82 &511048051
@@ -313,106 +305,9 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
-  m_Volume: 0.8
+  m_Volume: 0.2
   m_Pitch: 1
   Loop: 0
-  Mute: 0
-  Spatialize: 0
-  SpatializePostEffects: 0
-  Priority: 128
-  DopplerLevel: 1
-  MinDistance: 1
-  MaxDistance: 500
-  Pan2D: 0
-  rolloffMode: 0
-  BypassEffects: 0
-  BypassListenerEffects: 0
-  BypassReverbZones: 0
-  rolloffCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    - serializedVersion: 3
-      time: 1
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  panLevelCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  spreadCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  reverbZoneMixCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
---- !u!82 &511048052
-AudioSource:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 511048048}
-  m_Enabled: 1
-  serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 0}
-  m_Resource: {fileID: 0}
-  m_PlayOnAwake: 0
-  m_Volume: 0.45
-  m_Pitch: 1
-  Loop: 1
   Mute: 0
   Spatialize: 0
   SpatializePostEffects: 0
@@ -509,6 +404,7 @@ MonoBehaviour:
   _body: {fileID: 1359738304}
   _movement: {fileID: 511048055}
   _flute: {fileID: 511048049}
+  _turnSharpness: 10
   _liftHeight: 0.45
   _bobHeight: 0.08
   _bobsPerSecond: 1.5
@@ -782,6 +678,166 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Toy::PiperToy.FluteBar
   _flute: {fileID: 511048049}
+--- !u!1 &930629608
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 930629609}
+  - component: {fileID: 930629611}
+  - component: {fileID: 930629610}
+  m_Layer: 0
+  m_Name: Flute Voice
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &930629609
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 930629608}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 511048050}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &930629610
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 930629608}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb56ebcad3c0449ecb61a2577f088afa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Toy::PiperToy.FluteVoice
+  _flute: {fileID: 511048049}
+  _sound:
+    _baseHertz: 587.33
+    _semitones: 00000000020000000500000007000000090000000c000000i
+    _vibratoHertz: 5.3
+    _vibratoDepthHertz: 6
+    _overtoneShare: 0.25
+    _brightnessHertz: 2800
+    _breathHertz: 1900
+    _breathWidth: 0.3
+    _breathShare: 0.12
+    _volume: 0.13
+    _noteStartVolume: 0.06
+    _noteStartSeconds: 0.035
+    _noteDipSeconds: 0.006
+    _noteRecoverSeconds: 0.02
+    _glideSeconds: 0.012
+    _fadeSeconds: 0.05
+--- !u!82 &930629611
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 930629608}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1 &1359738303
 GameObject:
   m_ObjectHideFlags: 0
@@ -1046,10 +1102,12 @@ MonoBehaviour:
   _ratCount: 20
   _startArea: {x: 24, y: 14}
   _flute: {fileID: 511048049}
+  _field: {fileID: 1400892530}
   _staggerSeconds: 2
   _heartSizePerRat: 0.25
   _smallestHeart: 2.2
   _biggestHeart: 4.5
+  _crowdSpacing: 0.22
 --- !u!4 &1636785000
 Transform:
   m_ObjectHideFlags: 0

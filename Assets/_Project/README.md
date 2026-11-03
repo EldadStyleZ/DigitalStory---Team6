@@ -25,9 +25,9 @@ far the music reaches while you hold a note.
 | Conga | 2 1 1 2 | They walk in a line behind you |
 | Heart | 4 1 4 | They stand in a heart around you |
 | Disco | 6 1 6 | They spin round in flashing colors |
-| Balloons | 2 4 6 | They swell up, float away on the wind and pop |
+| Balloons | 2 4 6 | They swell up, float slowly up the screen and a little right, and pop |
 | Choir | 1 2 3 4 | They follow you, hopping and singing |
-| Crowd Surf | 3 3 6 | They follow you and lift you up |
+| Crowd Surf | 3 3 6 | They gather under you and lift you up, and the crowd carries you wherever you steer |
 | Faint | 6 4 2 | They roll over and play dead |
 
 A song rests for about ten seconds after you play it, and its chip fades until it is ready again.
@@ -40,10 +40,11 @@ Everything in the scene is a GameObject with components. Click one to see its co
 Toy
 ├── Main Camera     Camera, Audio Listener, CameraFollow
 ├── Ground          Sprite Renderer, Edge Collider 2D (the invisible edge of the field)
-├── Piper           Rigidbody 2D, Circle Collider 2D, 2 Audio Sources,
+├── Piper           Rigidbody 2D, Circle Collider 2D, Audio Source (the song tunes),
 │   │               PiperMovement, Flute, PiperInput, PiperLook
 │   ├── Body        Sprite Renderer (the Piper's picture, which turns and lifts)
-│   └── Music Ring  Sprite Renderer (shown while a note is held)
+│   ├── Music Ring  Sprite Renderer (shown while a note is held)
+│   └── Flute Voice Audio Source, FluteVoice (plays the held note)
 ├── Rats            RatHerd (creates the rats when the game starts)
 │   └── Rat 1..20   copies of the Rat prefab, made in Play Mode
 └── HUD             UI Document, ComboRow, FluteBar
@@ -68,7 +69,7 @@ Rat             Rigidbody 2D, Circle Collider 2D, Animator, Rat
 | `Songs` | One asset per song. Select one to change its keys, reach, length, rest or color |
 | `Art` | The sprites, and the material of the floating notes |
 | `Animation` | The rat's Animator Controller and its Idle and Walk clips |
-| `Audio` | The six flute notes, one tune per song, and the balloon pop |
+| `Audio` | One tune per song, and the balloon pop. The flute's notes are played live by `FluteVoice` |
 | `UI` | The HUD's layout (`ToyHud.uxml`), its style (`ToyHud.uss`) and one combo chip (`ComboChip.uxml`) |
 | `Tests` | EditMode and PlayMode tests |
 
@@ -80,8 +81,11 @@ Each script does one job. The Unity ideas they use are explained in `docs/FUNDAM
 |---|---|---|---|
 | `PiperInput` | Piper | Reads the keyboard and passes it on to `PiperMovement` and `Flute` | `Update`, `Input.GetKey`, `GetComponent` in `Awake` |
 | `PiperMovement` | Piper | Walks the Piper with physics | `Rigidbody2D`, `FixedUpdate` |
-| `PiperLook` | Piper | Turns the Body the way the Piper walks, and lifts it in Crowd Surf | Moving a child object, listening to an event |
-| `Flute` | Piper | Plays the held note, decides call, march or scare, and spots songs | `AudioSource`, C# events, `OnValidate` |
+| `PiperLook` | Piper | Eases the Body round to face the way the Piper walks, and lifts it in Crowd Surf | Moving a child object, `Quaternion.Lerp`, listening to an event |
+| `Flute` | Piper | Decides call, march or scare from the held hole, and spots songs | C# events, `OnValidate` |
+| `FluteVoice` | Flute Voice | Plays the held note with the old game's synthesizer | `OnAudioFilterRead`, the audio thread |
+| `FluteSynth` | (none) | Makes the flute's sound sample by sample: it glides between notes and fades out | A plain C# class |
+| `FluteSound` | (none) | The flute's pitches, vibrato, breath and fades, shown in the Flute Voice's Inspector | `[Serializable]` |
 | `ComboReader` | (none) | Remembers the last notes and finds the song they spell | A plain C# class, created with `new` |
 | `Song` | (asset) | One song's keys, reach, length, rest, color and tune | `ScriptableObject`, `CreateAssetMenu` |
 | `RatHerd` | Rats | Creates the rats, then gives each song's part to the rats that hear it | Prefabs and `Instantiate`, events |
@@ -104,6 +108,7 @@ flowchart LR
     Flute -- "SongPlayed event" --> Herd["RatHerd"]
     Flute -- "SongPlayed event" --> Row["ComboRow"]
     Flute -- "SongPlayed event" --> Look["PiperLook"]
+    Voice["FluteVoice"] -- "reads SoundingKey" --> Flute
     Herd -- "Charm, JoinHeart, StartDisco..." --> Rat["Rat (×20)"]
     Rat -- "reads Mode and HearingRadius" --> Flute
 ```
@@ -114,6 +119,8 @@ flowchart LR
   `SongPlayed` event in `OnEnable` and unsubscribe in `OnDisable`.
 - **Moods:** every rat checks the flute in `Update` and moves in `FixedUpdate`. While a song is in charge of a rat,
   the flute's held notes cannot interrupt it.
+- **Walking through the rats:** each rat tells physics to ignore the Piper's collider, so the Piper never shoves
+  the rats it walks into. The rats still bump into each other and the edge of the field.
 
 ## Changing the toy
 
@@ -124,6 +131,8 @@ Everything below is a field in the Inspector; no code needs to change.
 | The Piper's speed | Piper | `PiperMovement` › Speed |
 | The keys | Piper | `PiperInput` › Up, Down, Left, Right and Hole Keys |
 | How far the music reaches | Piper | `Flute` › Hearing Radius (the ring follows it) |
+| How the flute sounds | Piper › Flute Voice | `FluteVoice` › Sound |
+| How quickly the Piper turns | Piper | `PiperLook` › Turn Sharpness |
 | How many rats there are | Rats | `RatHerd` › Rat Count |
 | The rats' speed, colors or charm time | `Prefabs/Rat` | `Rat` › Wander Speed, Run Speed and the rest |
 | A song | Its asset in `Songs` | Keys, Radius, Seconds, Rest Seconds, Color, Sound |
@@ -138,6 +147,8 @@ The sounds come from `Tools/toy-sounds/make_sounds.py`. Run it to make them agai
 
 Open **Window › General › Test Runner**.
 
-- **EditMode:** `ComboReaderTests` check that notes spell the right song, within three seconds.
-- **PlayMode:** `ToyTests` load the Toy scene. They check walking, the edge of the field, calling, marching and
-  scaring, every song, resting, Crowd Surf, Balloons, the combos row and the flute bar.
+- **EditMode:** `ComboReaderTests` check that notes spell the right song, within three seconds, and
+  `FluteSynthTests` check the flute's pitches and that a released note fades out instead of stopping.
+- **PlayMode:** `ToyTests` load the Toy scene. They check walking, turning, the edge of the field, walking through
+  rats, calling, marching and scaring, every song, resting, Crowd Surf, Balloons, the flute's voice, the combos row
+  and the flute bar.

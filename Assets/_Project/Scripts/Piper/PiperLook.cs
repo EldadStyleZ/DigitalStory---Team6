@@ -17,6 +17,9 @@ namespace PiperToy
         [SerializeField]
         private Flute _flute;
 
+        [SerializeField, Min(0f), Tooltip("How quickly the Piper turns to face where it walks. Higher turns faster.")]
+        private float _turnSharpness = 10f;
+
         [SerializeField, Min(0f), Tooltip("How high the rats lift the Piper, in units.")]
         private float _liftHeight = 0.45f;
 
@@ -43,8 +46,11 @@ namespace PiperToy
 
         private void Update()
         {
+            // Each frame the body turns part of the way to its new heading, so a turn eases in instead of snapping.
+            // The share depends on the frame's length, so the turn takes the same time at any frame rate.
             float angle = Mathf.Atan2(_movement.Facing.y, _movement.Facing.x) * Mathf.Rad2Deg;
-            _body.localRotation = Quaternion.Euler(0f, 0f, angle);
+            float share = 1f - Mathf.Exp(-_turnSharpness * Time.deltaTime);
+            _body.localRotation = Quaternion.Lerp(_body.localRotation, Quaternion.Euler(0f, 0f, angle), share);
 
             float bob = Mathf.Sin(Time.time * _bobsPerSecond * 2f * Mathf.PI) * _bobHeight;
             _body.localPosition = IsLifted ? new Vector3(0f, _liftHeight + bob, 0f) : Vector3.zero;

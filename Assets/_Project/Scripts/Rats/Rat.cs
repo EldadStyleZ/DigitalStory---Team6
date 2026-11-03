@@ -46,11 +46,20 @@ namespace PiperToy
         private float _afterSongSeconds = 0.5f;
 
         [Header("Songs")]
-        [SerializeField, Min(0f), Tooltip("How fast the wind carries a floating rat.")]
-        private float _windSpeed = 1.3f;
+        [SerializeField, Min(0f), Tooltip("How fast a balloon rat rises up the screen.")]
+        private float _floatRiseSpeed = 0.45f;
 
-        [SerializeField, Min(0f), Tooltip("How fast a floating rat bobs up and down.")]
-        private float _floatBobSpeed = 0.6f;
+        [SerializeField, Min(0f), Tooltip("How fast the breeze pushes a balloon rat to the right.")]
+        private float _floatDriftSpeed = 0.15f;
+
+        [SerializeField, Min(0f), Tooltip("How fast a balloon rat sways from side to side.")]
+        private float _floatSwaySpeed = 0.1f;
+
+        [SerializeField, Min(0f), Tooltip("How far from the edge of the field a balloon rat stops rising.")]
+        private float _fieldMargin = 0.5f;
+
+        [SerializeField, Min(0f), Tooltip("How strongly a rat in the Crowd Surf crowd closes the gap to its spot under the Piper.")]
+        private float _carryCatchUp = 6f;
 
         [SerializeField, Min(0f), Tooltip("How fast a disco rat spins along its circle.")]
         private float _spinSpeed = 2.5f;
@@ -91,8 +100,11 @@ namespace PiperToy
 
         private Rigidbody2D _rigidbody;
         private Collider2D _collider;
+        private Collider2D _piperCollider;
         private Flute _flute;
         private PiperMovement _piper;
+        private Bounds _field;
+        private Vector2 _crowdSpot;
         private float _moodSecondsLeft;
         private Vector2 _wanderDirection;
         private float _wanderSecondsLeft;
@@ -118,14 +130,19 @@ namespace PiperToy
             _phase = Random.value * FullTurn;
         }
 
-        /// <summary>Tells the rat which flute to listen to. The RatHerd calls it for every rat.</summary>
-        public void Listen(Flute flute)
+        /// <summary>
+        /// Tells the rat which flute to listen to and how big the field is. The RatHerd calls it for every rat.
+        /// </summary>
+        public void Listen(Flute flute, Bounds field)
         {
             _flute = flute;
             _piper = flute.GetComponent<PiperMovement>();
+            _piperCollider = flute.GetComponent<Collider2D>();
+            _field = field;
+            IgnoreThePiper();
         }
 
-        /// <summary>Dance and Crowd Surf: charmed, it follows the Piper.</summary>
+        /// <summary>Dance: charmed, it follows the Piper.</summary>
         public void Charm(float seconds)
         {
             EndSong();
@@ -163,6 +180,13 @@ namespace PiperToy
         }
 
         public void Faint(float seconds, Color color) => StartSong(RatMood.Faint, seconds, color);
+
+        /// <summary>Crowd Surf: joins the crowd under the Piper, at its spot measured from the Piper.</summary>
+        public void JoinCrowd(Vector2 spot, float seconds, Color color)
+        {
+            StartSong(RatMood.Carry, seconds, color);
+            _crowdSpot = spot;
+        }
 
         private void Update()
         {
@@ -248,6 +272,7 @@ namespace PiperToy
 
             RatMood finished = Mood;
             _collider.enabled = true;
+            IgnoreThePiper();
             _songNotes.Stop();
 
             if (finished == RatMood.Float && _popSound != null)
@@ -277,7 +302,9 @@ namespace PiperToy
                 case RatMood.Disco:
                     return Spin();
                 case RatMood.Float:
-                    return new Vector2(_windSpeed, Mathf.Sin((Time.time * 2f) + _phase) * _floatBobSpeed);
+                    return Float();
+                case RatMood.Carry:
+                    return Carry();
                 case RatMood.Faint:
                     return _rigidbody.linearVelocity * 0.9f;
                 default:
@@ -313,6 +340,44 @@ namespace PiperToy
             return _wanderDirection * _wanderSpeed;
         }
 
+        // A balloon rises slowly up the screen and the breeze nudges it right, until it nears the edge of the field.
+        private Vector2 Float()
+        {
+            float sway = Mathf.Sin((Time.time * 2f) + _phase) * _floatSwaySpeed;
+            var velocity = new Vector2(_floatDriftSpeed + sway, _floatRiseSpeed);
+
+            if (Position.y >= _field.max.y - _fieldMargin)
+            {
+                velocity.y = 0f;
+            }
+
+            if (Position.x >= _field.max.x - _fieldMargin)
+            {
+                velocity.x = Mathf.Min(0f, velocity.x);
+            }
+
+            return velocity;
+        }
+
+        // The rat moves exactly as the Piper does, plus a pull back to its spot, so the whole crowd goes wherever
+        // the player steers.
+        private Vector2 Carry()
+        {
+            Vector2 spot = PiperPosition + _crowdSpot;
+            Vector2 velocity = _piper.Velocity + ((spot - Position) * _carryCatchUp);
+            return Vector2.ClampMagnitude(velocity, _runSpeed * 2f);
+        }
+
+        // Without this the Piper would shove every rat it walks into. Unity can forget it when a collider is
+        // switched off, so it is set again whenever the rat's collider comes back.
+        private void IgnoreThePiper()
+        {
+            if (_piperCollider != null)
+            {
+                Physics2D.IgnoreCollision(_collider, _piperCollider);
+            }
+        }
+
         private Vector2 Spin()
         {
             float angle = (Time.time * _spinsPerSecond * FullTurn) + _phase;
@@ -322,7 +387,10 @@ namespace PiperToy
         private void ShowMood()
         {
             Vector2 velocity = _rigidbody.linearVelocity;
-            _animator.SetFloat(SpeedParameter, velocity.magnitude);
+            bool isFloating = Mood == RatMood.Float;
+
+            // A balloon rat neither waddles nor turns: it just drifts.
+            _animator.SetFloat(SpeedParameter, isFloating ? 0f : velocity.magnitude);
             _sprite.color = ColorOf(Mood);
             _sprite.sortingOrder = Mood == RatMood.Float ? 6 : 3;
 
@@ -330,7 +398,7 @@ namespace PiperToy
             {
                 _body.localRotation = Quaternion.Euler(0f, 0f, Time.time * 720f);
             }
-            else if (velocity.sqrMagnitude > Slowest && Mood != RatMood.Faint)
+            else if (velocity.sqrMagnitude > Slowest && Mood != RatMood.Faint && !isFloating)
             {
                 _body.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(velocity.y, velocity.x) * Mathf.Rad2Deg);
             }
