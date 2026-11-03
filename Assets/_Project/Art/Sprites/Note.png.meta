@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: fd6a3e40fa64c4477828e29c2939aa4e
+guid: 593534474d4c8451d86721d20dea99f1
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -3578019587575532720
-    second: Rat_0
+      213: -4841720520028814253
+    second: Note_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -46,12 +46,12 @@ TextureImporter:
   nPOTScale: 0
   lightmap: 0
   compressionQuality: 50
-  spriteMode: 2
+  spriteMode: 1
   spriteExtrude: 1
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 200
+  spritePixelsToUnits: 128
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -154,13 +154,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Rat_0
+      name: Note_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 48
-        height: 24
+        width: 32
+        height: 32
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -169,8 +169,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 053bb2b6422585ec0800000000000000
-      internalID: -3578019587575532720
+      spriteID: 35486fde6d0ceccb0800000000000000
+      internalID: -4841720520028814253
       vertices: []
       indices: 
       edges: []
@@ -179,7 +179,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 5e97eb03825dee720800000000000000
     internalID: 0
     vertices: []
     indices: 
@@ -189,7 +189,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Rat_0: -3578019587575532720
+      Note_0: -4841720520028814253
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

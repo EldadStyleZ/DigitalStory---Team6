@@ -1,0 +1,32 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="ToyHud.uss" />
+    <ui:VisualElement name="hud" class="hud" picking-mode="Ignore">
+        <ui:Label name="hint" class="hint" picking-mode="Ignore" text="Walk: WASD or arrows  •  Play the flute: hold keys 1-6 or press its holes  •  Play a combo for a song" />
+        <ui:VisualElement name="bottom" class="bottom" picking-mode="Ignore">
+            <ui:VisualElement name="combo-row" class="combo-row" picking-mode="Ignore" />
+            <ui:VisualElement name="flute" class="flute">
+                <ui:VisualElement class="hole-group">
+                    <ui:Label class="group-name" text="Call" picking-mode="Ignore" />
+                    <ui:VisualElement class="hole-row">
+                        <ui:Label name="hole-1" class="hole" text="1" />
+                        <ui:Label name="hole-2" class="hole" text="2" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="hole-group">
+                    <ui:Label class="group-name" text="March" picking-mode="Ignore" />
+                    <ui:VisualElement class="hole-row">
+                        <ui:Label name="hole-3" class="hole" text="3" />
+                        <ui:Label name="hole-4" class="hole" text="4" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="hole-group">
+                    <ui:Label class="group-name" text="Scare" picking-mode="Ignore" />
+                    <ui:VisualElement class="hole-row">
+                        <ui:Label name="hole-5" class="hole" text="5" />
+                        <ui:Label name="hole-6" class="hole" text="6" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

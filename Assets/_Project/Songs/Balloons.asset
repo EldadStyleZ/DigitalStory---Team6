@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5405b057d3efd48988eef78deecc2830, type: 3}
+  m_Name: Balloons
+  m_EditorClassIdentifier: Toy::PiperToy.Song
+  _title: Balloons
+  _description: Rats swell up and float
+  _keys: 020000000400000006000000i
+  _effect: 4
+  _radius: 6
+  _seconds: 6
+  _restSeconds: 10
+  _color: {r: 0.6, g: 0.85, b: 1, a: 1}
+  _sound: {fileID: 8300000, guid: f4e8537b85c5c45f192f5a45f4f87a67, type: 3}

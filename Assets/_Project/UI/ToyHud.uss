@@ -1,0 +1,105 @@
+.hud {
+    flex-grow: 1;
+    justify-content: space-between;
+}
+
+.hint {
+    margin: 10px;
+    color: rgb(170, 167, 187);
+    font-size: 13px;
+    -unity-text-align: upper-center;
+}
+
+.bottom {
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.combo-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0 10px 4px 10px;
+}
+
+.flute {
+    flex-direction: row;
+    padding: 3px 22px;
+    border-radius: 14px;
+    background-color: rgb(189, 132, 67);
+}
+
+.hole-group {
+    align-items: center;
+    margin: 0 7px;
+}
+
+.group-name {
+    padding: 0;
+    color: rgb(29, 20, 10);
+    font-size: 11px;
+}
+
+.hole-row {
+    flex-direction: row;
+}
+
+.hole {
+    width: 30px;
+    height: 30px;
+    margin: 0 2px;
+    padding: 0;
+    border-radius: 15px;
+    background-color: rgb(29, 20, 10);
+    color: rgba(255, 236, 200, 0.5);
+    font-size: 12px;
+    -unity-text-align: middle-center;
+}
+
+.hole--held {
+    background-color: rgb(255, 214, 102);
+    color: rgb(29, 20, 10);
+}
+
+.chip {
+    flex-direction: row;
+    align-items: center;
+    margin: 3px;
+    padding: 3px 8px;
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: 8px;
+    background-color: rgba(18, 20, 34, 0.84);
+}
+
+.chip--resting {
+    opacity: 0.35;
+}
+
+.chip--glowing {
+    background-color: rgba(40, 42, 60, 0.95);
+}
+
+.chip-title {
+    margin-right: 6px;
+    padding: 0;
+    color: rgb(243, 234, 214);
+    font-size: 13px;
+}
+
+.chip-keys {
+    flex-direction: row;
+}
+
+.key {
+    width: 17px;
+    height: 17px;
+    margin-left: 2px;
+    padding: 0;
+    border-radius: 4px;
+    background-color: rgb(232, 197, 71);
+    color: rgb(35, 28, 12);
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
