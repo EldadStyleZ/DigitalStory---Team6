@@ -15,6 +15,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | F-005 | Menus and HUD | Done | EldadStyleZ | `feature/F-005-menus-and-hud` | – | 224 EditMode and 61 PlayMode tests in the Editor; the owner played it with real keys and mouse and the screens, pause, retry, flute and minimap all worked |
 | F-006 | Night, effects and sound | Done | EldadStyleZ | `feature/F-006-night-effects-sound` | – | 247 EditMode and 156 PlayMode tests in the Editor; the owner played and listened and the flute, effects, mute and night look all worked; Profiler at 170 rats with all effects on: 1.32 ms average and 2.35 ms worst per frame in the Editor, 0.197 ms per rule tick |
 | F-007 | Eldad's lab: summoner in a maze | In progress | EldadStyleZ | `eldad-lab` | `Assets/_Project/Scenes/eldad-lab-scene.unity` | – |
+| F-008 | The toy for the course showing | In progress | EldadStyleZ | `toy-final` | `Assets/_Project/Scenes/Toy.unity` | 9 EditMode and 17 PlayMode tests in the Editor; 7 deliberate rule breakages were all caught; calling, the heart, disco and balloons seen in Play Mode with the combos row and flute. The owner has not played it yet |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
 - **Holding:** the scenes and prefabs the owner is changing. Nobody else edits them until this cell is cleared, because Unity scenes merge badly.
@@ -112,6 +113,14 @@ flowchart LR
 - **Layers:** Data holds effect and audio configs. Logic only exposes the dawn value. View holds the darkness overlay, pooled effects and generated flute sound.
 - **Tests:** the dawn value, plus a Profiler check at the full rat count.
 - **Notes:** the prototype's mute button and its moving moon-and-sun bar ship here, because they need sound and the dawn value. Changing audio device stops every source and empties clips made in code, so the flute restarts and the effects bake again. Unity's first read of the listener is blank even with sound playing, so PlayMode tests read it through `ListenerMeter`. Disco lights keep orbiting during Pause, as in the prototype. Left out on purpose: cobblestones, roof detail, water flow lines, a detailed Piper, rat tails and eye glints, and the March target line. Touch is not tested.
+
+### F-008: The toy for the course showing
+
+- **Goal:** show the course the toy at the heart of The Piper: the Piper's flute and the rats that listen to it, with no goal, timer or counter.
+- **Done when:** in `Toy.unity` the Piper walks a plain field, holding 1 and 2 calls rats, 3 and 4 marches them and 5 and 6 scares them, the eight rat songs from the old game work from their combos, and the combos row and the on-screen flute show it all.
+- **Layers:** on purpose, this branch does not use the `Data`, `Logic` and `View` layers. The team asked for the standard Unity way it can follow: GameObjects with components wired in the Inspector, a Rat prefab, one ScriptableObject per song, and real sprite, sound, animation and UI files. `Assets/_Project/README.md` explains every object and script.
+- **Tests:** combos find the right song in time; walking and the field's edge; calling, marching and scaring near rats but not far ones; every song gives the rats in reach its mood; songs rest; Crowd Surf lifts the Piper; Balloons float over the others; the combos row and the flute bar.
+- **Notes:** `toy-final` holds only the toy; the old game, its scene and its 115 scripts stay on `main`. Lullaby is left out because it only puts cats to sleep and the toy has no cats. A song's last note is often a scare hole, so rats ignore the flute for half a second after a song, or Dance and Crowd Surf would scare away the rats they just charmed. The sounds come from `Tools/toy-sounds/make_sounds.py`, which copies the old game's flute pitches and song jingles.
 
 ## Ideas
 
