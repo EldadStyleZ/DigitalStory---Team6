@@ -15,44 +15,60 @@
     margin: 0 10px 4px 10px;
 }
 
+/* The team's flute, upright on the right. FluteBar swaps its picture to show the hole being played. */
 .flute {
-    flex-direction: row;
-    padding: 3px 22px;
-    border-radius: 14px;
-    background-color: rgb(189, 132, 67);
+    position: absolute;
+    right: 24px;
+    top: 105px;
+    width: 52px;
+    height: 310px;
+    -unity-background-scale-mode: scale-to-fit;
 }
 
-.hole-group {
-    align-items: center;
-    margin: 0 7px;
+/* Each hole is a see-through button over a hole in the picture, at the spot measured from the team's drawings. */
+.hole {
+    position: absolute;
+    left: 43.3%;
+    width: 24px;
+    height: 24px;
+    margin-left: -12px;
+    margin-top: -12px;
+    border-radius: 12px;
 }
 
-.group-name {
+.hole-1 { top: 30.8%; }
+.hole-2 { top: 39%; }
+.hole-3 { top: 52.7%; }
+.hole-4 { top: 60.3%; }
+.hole-5 { top: 74.1%; }
+.hole-6 { top: 81.1%; }
+
+.hole--held {
+    background-color: rgba(255, 214, 102, 0.3);
+}
+
+.hole-number {
+    position: absolute;
+    left: -16px;
+    top: 4px;
     padding: 0;
-    color: rgb(29, 20, 10);
+    color: rgba(243, 234, 214, 0.75);
     font-size: 11px;
 }
 
-.hole-row {
-    flex-direction: row;
-}
-
-.hole {
-    width: 30px;
-    height: 30px;
-    margin: 0 2px;
+.group-name {
+    position: absolute;
+    right: 64px;
+    width: 60px;
     padding: 0;
-    border-radius: 15px;
-    background-color: rgb(29, 20, 10);
-    color: rgba(255, 236, 200, 0.5);
+    color: rgb(243, 234, 214);
     font-size: 12px;
-    -unity-text-align: middle-center;
+    -unity-text-align: middle-right;
 }
 
-.hole--held {
-    background-color: rgb(255, 214, 102);
-    color: rgb(29, 20, 10);
-}
+.group-call { top: 32%; }
+.group-march { top: 53.5%; }
+.group-scare { top: 74.6%; }
 
 .chip {
     flex-direction: row;

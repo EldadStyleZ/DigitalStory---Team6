@@ -24,11 +24,8 @@ namespace PiperToy
         private AudioSource _songSpeaker;
 
         [Header("Music")]
-        [SerializeField, Min(0f), Tooltip("How far the rats hear the held notes, in units.")]
+        [SerializeField, Min(0f), Tooltip("How far the rats hear the held notes, in units. The Music Ring shows it.")]
         private float _hearingRadius = 4f;
-
-        [SerializeField, Tooltip("The ring that shows how far the music reaches. It shows while a hole is held.")]
-        private GameObject _musicRing;
 
         [Header("Songs")]
         [SerializeField, Tooltip("Every song the flute can play.")]
@@ -63,30 +60,6 @@ namespace PiperToy
         private void Awake()
         {
             _combo = new ComboReader(_comboSeconds);
-            FitTheRing();
-        }
-
-        // Unity calls OnValidate when a value changes in the Inspector, so the ring follows the range as you edit it.
-        private void OnValidate()
-        {
-            FitTheRing();
-        }
-
-        private void FitTheRing()
-        {
-            if (_musicRing != null && _musicRing.TryGetComponent(out SpriteRenderer ring) && ring.sprite != null)
-            {
-                float across = _hearingRadius * 2f / ring.sprite.bounds.size.x;
-                _musicRing.transform.localScale = new Vector3(across, across, 1f);
-            }
-        }
-
-        private void Update()
-        {
-            if (_musicRing != null)
-            {
-                _musicRing.SetActive(Mode != FluteMode.Silent);
-            }
         }
 
         /// <summary>Opens a hole: plays its note, and the song it finishes if there is one.</summary>
