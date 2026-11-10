@@ -111,3 +111,11 @@ Relative sizes: the astronaut is about 2.9 times a vermin's height and 1.7 times
 - Created `Sprites/Source/`, with the seven originals under their Hebrew names, and `Sprites/`, with 13 English sprites: 7 trimmed copies and the 6 cages cut from `Cages.png`.
 - Cages are named by their measured hue: orange 29, pink 333, green 98, blue 214, teal 146 and violet 236 degrees.
 - PPU 100 for every sprite, with no resizing. Checked side by side in the scene, and the temporary objects were removed.
+
+### Step 2
+
+- `Input/SpacePartyControls.inputactions`, with schemes `Keyboard&Mouse` and `Gamepad`. Generated class `SpacePartyGame.SpacePartyControls` in `Input/SpacePartyControls.cs`.
+- Maps: `Join` (Join), `Player` (Move, NoteRoot, NoteUp, NoteLeft, NoteRight, NoteLT, NoteRT, Pause), `UI` (Navigate, Submit, Cancel, Point, Click, ScrollWheel) and `Global` (ResetGame, Ctrl+R).
+- Shared keys and buttons, so enable only the maps a moment needs: Esc is Pause and Cancel; Start is Join and Pause; A is NoteRoot and Submit; B is NoteRight and Cancel.
+- The generated class compiles into `Assembly-CSharp`, because `SpacePartyGame/` has no assembly definition yet. Decide one before the scripts grow.
+- Blocked: the EventSystem prefab needs the uGUI package (`com.unity.ugui`), which the project does not have. Waiting on the user's decision.
