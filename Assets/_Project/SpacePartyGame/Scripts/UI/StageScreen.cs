@@ -3,8 +3,9 @@ using UnityEngine;
 namespace SpacePartyGame
 {
     /// <summary>
-    /// A screen that is shown during one stage of the game and hidden otherwise. Subclasses fill in what the screen
-    /// does while shown.
+    /// A screen that is shown during one stage of the game and hidden otherwise, without the menu backdrop, such as
+    /// the countdown. Menus use <see cref="MenuScreen"/> instead. Subclasses fill in what the screen does while
+    /// shown.
     /// </summary>
     public abstract class StageScreen : MonoBehaviour
     {

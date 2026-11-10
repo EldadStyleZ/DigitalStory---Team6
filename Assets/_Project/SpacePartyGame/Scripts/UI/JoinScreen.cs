@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 namespace SpacePartyGame
 {
     /// <summary>The join screen: four slot cards, filled in as players join, and how to start.</summary>
-    public sealed class JoinScreen : StageScreen
+    public sealed class JoinScreen : MenuScreen
     {
         [SerializeField, Tooltip("Reports each player who joins.")]
         private PlayerJoinController _joining;
@@ -19,17 +19,15 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("Tells the players how to start.")]
         private TMP_Text _hint;
 
-        protected override GameState ShownIn => GameState.Join;
+        public override MenuId Id => MenuId.Join;
 
-        protected override void OnEnable()
+        private void OnEnable()
         {
-            base.OnEnable();
             _joining.PlayerJoined += HandlePlayerJoined;
         }
 
-        protected override void OnDisable()
+        private void OnDisable()
         {
-            base.OnDisable();
             _joining.PlayerJoined -= HandlePlayerJoined;
         }
 
@@ -65,8 +63,8 @@ namespace SpacePartyGame
             int needed = Flow.AllowSinglePlayer ? 1 : 2;
             int joined = _joining.Players.Count;
             _hint.text = joined >= needed
-                ? "Press join again to start"
-                : $"Waiting for players: {joined} of {needed} needed";
+                ? "PRESS JOIN AGAIN TO LAUNCH"
+                : $"WAITING FOR PLAYERS  {joined} / {needed}";
         }
     }
 }

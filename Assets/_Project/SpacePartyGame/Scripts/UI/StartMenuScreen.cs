@@ -8,22 +8,20 @@ namespace SpacePartyGame
     /// The title and the Start button. The button is selected when the menu appears, so gamepad A (Submit) presses
     /// it as well as a mouse click; Start and Space are not Submit, so they do not.
     /// </summary>
-    public sealed class StartMenuScreen : StageScreen
+    public sealed class StartMenuScreen : MenuScreen
     {
         [SerializeField, Tooltip("Opens the join screen.")]
         private Button _startButton;
 
-        protected override GameState ShownIn => GameState.StartMenu;
+        public override MenuId Id => MenuId.StartMenu;
 
-        protected override void OnEnable()
+        private void OnEnable()
         {
-            base.OnEnable();
             _startButton.onClick.AddListener(Flow.OpenJoin);
         }
 
-        protected override void OnDisable()
+        private void OnDisable()
         {
-            base.OnDisable();
             _startButton.onClick.RemoveListener(Flow.OpenJoin);
         }
 
