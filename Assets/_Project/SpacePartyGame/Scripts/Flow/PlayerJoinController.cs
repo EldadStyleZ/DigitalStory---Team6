@@ -114,9 +114,11 @@ namespace SpacePartyGame
             }
         }
 
+        // The four-player limit is kept here rather than by PlayerInputManager's max player count, which logs a
+        // warning every time the last slot fills.
         private void SetJoining(bool on)
         {
-            if (on)
+            if (on && _players.Count < GameFlow.MaxPlayers)
             {
                 _manager.EnableJoining();
             }
@@ -136,6 +138,7 @@ namespace SpacePartyGame
             player.actions.FindAction("Join/Join", true).performed += HandleJoinPressed;
             _players.Add(player);
             ApplyInputMode(player, _flow.State);
+            SetJoining(_flow.State == GameState.Join);
             PlayerJoined?.Invoke(player);
         }
 
