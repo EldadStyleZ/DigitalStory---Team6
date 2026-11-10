@@ -1,0 +1,11 @@
+{
+    "name": "SpacePartyGame",
+    "rootNamespace": "SpacePartyGame",
+    "references": [
+        "Toy",
+        "Unity.InputSystem",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
+    ],
+    "autoReferenced": true
+}

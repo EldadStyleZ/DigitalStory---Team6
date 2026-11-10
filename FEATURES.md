@@ -154,3 +154,4 @@ Add a row when the team decides something that future work must follow.
 | 2026-10-31 | The game is The Piper, rebuilt from the team's HTML prototype to our standards. | The prototype already defines the rules, so we keep them and replace the structure. |
 | 2026-10-31 | The game is one night, with no levels, unlocks or saved progress. | The team does not want levels. |
 | 2026-11-10 | Add the Input System package (`com.unity.inputsystem`) and set Active Input Handling to Both. Decided by oisin for F-009. | The Space Party Game uses the new Input System, and Both keeps existing scenes on the old input working. |
+| 2026-11-10 | Add uGUI (`com.unity.ugui`, which brings TextMeshPro) for F-009. Decided by oisin. | The Space Party Game needs an EventSystem with `InputSystemUIInputModule` bound to its own UI actions, and TextMeshPro for name tags. Existing scenes keep UI Toolkit. |

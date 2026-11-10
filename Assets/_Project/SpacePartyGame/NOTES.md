@@ -117,5 +117,6 @@ Relative sizes: the astronaut is about 2.9 times a vermin's height and 1.7 times
 - `Input/SpacePartyControls.inputactions`, with schemes `Keyboard&Mouse` and `Gamepad`. Generated class `SpacePartyGame.SpacePartyControls` in `Input/SpacePartyControls.cs`.
 - Maps: `Join` (Join), `Player` (Move, NoteRoot, NoteUp, NoteLeft, NoteRight, NoteLT, NoteRT, Pause), `UI` (Navigate, Submit, Cancel, Point, Click, ScrollWheel) and `Global` (ResetGame, Ctrl+R).
 - Shared keys and buttons, so enable only the maps a moment needs: Esc is Pause and Cancel; Start is Join and Pause; A is NoteRoot and Submit; B is NoteRight and Cancel.
-- The generated class compiles into `Assembly-CSharp`, because `SpacePartyGame/` has no assembly definition yet. Decide one before the scripts grow.
-- Blocked: the EventSystem prefab needs the uGUI package (`com.unity.ugui`), which the project does not have. Waiting on the user's decision.
+- The EventSystem was blocked until the user chose to add uGUI (`com.unity.ugui` 2.6.0, with TextMeshPro). Recorded under Decisions in `FEATURES.md`.
+- `Prefabs/EventSystem.prefab`: EventSystem plus `InputSystemUIInputModule`, using `SpacePartyControls`' UI map (Point, Click, ScrollWheel, Navigate, Submit, Cancel; middle and right click unbound). It is in the scene at the root.
+- `SpacePartyGame.asmdef` (namespace `SpacePartyGame`) holds every script under `SpacePartyGame/`, including the generated controls. It references `Toy` (for the flute), `Unity.InputSystem`, `UnityEngine.UI` and `Unity.TextMeshPro`.
