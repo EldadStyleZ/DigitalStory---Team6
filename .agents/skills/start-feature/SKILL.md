@@ -29,6 +29,7 @@ Build everything that lives in new files: scripts, data assets and new prefabs. 
 - Connects systems through an event channel asset or an instance reference, not a `static` event or singleton.
 - Uses explicit `private`, `_camelCase` fields, braces and XML docs on public types.
 - Uses real game UI, not `OnGUI`.
+- Every scene object you add follows `docs/SCENE_STRUCTURE.md`.
 
 ## What people say, and what to do
 

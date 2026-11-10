@@ -8,6 +8,7 @@ Rules for everyone working in this repo: people, Claude Code and Gemini CLI. `CL
 - The repo is public. Anyone can read everything we commit.
 - `docs/CODING_STANDARDS.md` holds the code rules. Read it before writing C#.
 - `docs/FUNDAMENTALS.md` explains OOP, game programming and Unity basics.
+- `docs/SCENE_STRUCTURE.md` holds the scene and Hierarchy rules, including UI under `Canvas`. Read it before changing a scene or prefab.
 - `FEATURES.md` holds who is doing what. Read it before starting work.
 
 ## How we work
@@ -22,7 +23,7 @@ Every change follows these steps, except typo fixes and single tuning values.
 6. **Verify.** Run it in Unity, as described under [Verification](#verification).
 7. **Pull request.** One feature per pull request, reviewed by a teammate before merging to `main`.
 
-Skills cover these steps: `start-feature` for steps 1 to 5, `finish-feature` for steps 6 and 7, and `debug-unity` for anything broken. `unity-rql` explains how to query and change the Editor.
+Skills cover these steps: `start-feature` for steps 1 to 5, `finish-feature` for steps 6 and 7, `debug-unity` for anything broken, and `build-scene` for any change to a scene or prefab. `unity-rql` explains how to query and change the Editor.
 
 ## Hard rules
 
