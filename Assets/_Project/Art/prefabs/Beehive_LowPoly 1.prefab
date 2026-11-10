@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1001 &4140960011606697775
+--- !u!1001 &221255884190732810
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -22,15 +22,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: cd3fb084a248e4ed3a48f7a95e0a474f, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -1.5633565
+      value: 3.547945
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: cd3fb084a248e4ed3a48f7a95e0a474f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 7.3183
+      value: -0.00000003200569
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: cd3fb084a248e4ed3a48f7a95e0a474f, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 12.216901
+      value: -3.2613058
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: cd3fb084a248e4ed3a48f7a95e0a474f, type: 3}
       propertyPath: m_LocalRotation.w
@@ -62,10 +62,39 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: cd3fb084a248e4ed3a48f7a95e0a474f, type: 3}
       propertyPath: m_Name
-      value: Beehive_LowPoly
+      value: Beehive_LowPoly 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cd3fb084a248e4ed3a48f7a95e0a474f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 491272216824901693}
   m_SourcePrefab: {fileID: 100100000, guid: cd3fb084a248e4ed3a48f7a95e0a474f, type: 3}
+--- !u!1 &1140368225895870299 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: cd3fb084a248e4ed3a48f7a95e0a474f, type: 3}
+  m_PrefabInstance: {fileID: 221255884190732810}
+  m_PrefabAsset: {fileID: 0}
+--- !u!65 &491272216824901693
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1140368225895870299}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.48000032, y: 0.6713775, z: 0.9650005}
+  m_Center: {x: 0.0000018506587, y: -0.04568864, z: 0.4825002}
