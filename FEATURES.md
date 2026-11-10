@@ -16,6 +16,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | F-006 | Night, effects and sound | Done | EldadStyleZ | `feature/F-006-night-effects-sound` | – | 247 EditMode and 156 PlayMode tests in the Editor; the owner played and listened and the flute, effects, mute and night look all worked; Profiler at 170 rats with all effects on: 1.32 ms average and 2.35 ms worst per frame in the Editor, 0.197 ms per rule tick |
 | F-007 | Eldad's lab: summoner in a maze | In progress | EldadStyleZ | `eldad-lab` | `Assets/_Project/Scenes/eldad-lab-scene.unity` | – |
 | F-008 | The toy for the course showing | In progress | EldadStyleZ | `toy-final` | `Assets/_Project/Scenes/Toy.unity` | 29 EditMode and 48 PlayMode tests in the Editor, PlayMode passing three runs in a row; 30 deliberate rule breakages were all caught; the music's glow and waves and the disco lights checked in captured Play Mode frames; the team's art seen in Play Mode: the field and its edge, ten obstacles, frogs, the Piper, musical notes in each hole's colour and the flute showing each hole; with all 20 frogs in Play Mode the conga line formed 1.8 seconds after the song, 0.63 to 0.74 apart, and danced 9 seconds from then, and the heart formed after 2.7 seconds with 4 frogs stuck against obstacles and held 7 seconds from then, with no console errors. The R restart was checked through the method the key calls and the key setting; a real key press was not simulated |
+| F-009 | Space Party Game | In progress | oisin | `feature/F-009-space-party-game` | `Assets/_Project/SpacePartyGame/Scenes/Space Party Game.unity` | – |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
 - **Holding:** the scenes and prefabs the owner is changing. Nobody else edits them until this cell is cleared, because Unity scenes merge badly.
@@ -126,6 +127,13 @@ flowchart LR
 - **Team notes, round four:** disco rats used to run round a small circle while their body spun, so they seemed to whirl round a point beside them; now they stand still and spin round their own middle, half of them each way. Under each one a soft light (`Rat` › Disco Light) holds one of the flute's six hole colours for half a second, then fades into the next (`DiscoPalette`), each rat starting on its own colour, and the rat takes on a little of it, instead of the old rainbow flicker. The gold ring is replaced by `MusicRing`: a soft glow in the held hole's colour, the same as the notes, whose drawn edge sits exactly at the hearing radius, with waves rolling out to it, fading in and out instead of popping. `Tools/toy-art/make_glows.py` draws the glow, the wave and the disco light. Once every Crowd Surf rat is inside the crowd's circle under the Piper, or stuck, the Piper and its crowd move at twice the walking speed (`PiperMovement` › Carried Speed Factor) until the crowd lets go. R restarts the toy by loading the scene again (`Game` › `RestartKey`).
 - **Notes:** `toy-final` holds only the toy; the old game, its scene and its 115 scripts stay on `main`. Lullaby is left out because it only puts cats to sleep and the toy has no cats. A song's last note is often a scare hole, so rats ignore the flute for half a second after a song, or Dance and Crowd Surf would scare away the rats they just charmed. The sounds come from `Tools/toy-sounds/make_sounds.py`, which copies the old game's flute pitches and song jingles.
 
+### F-009: Space Party Game
+
+- **Goal:** a new scene, Space Party Game, built from the team's `inGameSprites.zip` art: an astronaut with a flute, vermin and six coloured cages.
+- **Done when:** to be planned step by step; `Assets/_Project/SpacePartyGame/NOTES.md` holds the ground rules and decisions.
+- **Layers:** everything new lives under `Assets/_Project/SpacePartyGame/`. The flute reuses the toy's `FluteSynth` and `FluteVoice` by reference, without copying or changing them.
+- **Notes:** built on `Oisin-prototype`, which holds the toy, not on `main`. Adds `com.unity.inputsystem` with Active Input Handling set to Both, so existing scenes keep the old input.
+
 ## Ideas
 
 Not approved work. Do not build on these until they move to the board.
@@ -145,3 +153,4 @@ Add a row when the team decides something that future work must follow.
 | 2026-10-30 | Inject dependencies by hand, with one composition root per scene. No DI container for now. | Keeps Logic testable without adding a package. |
 | 2026-10-31 | The game is The Piper, rebuilt from the team's HTML prototype to our standards. | The prototype already defines the rules, so we keep them and replace the structure. |
 | 2026-10-31 | The game is one night, with no levels, unlocks or saved progress. | The team does not want levels. |
+| 2026-11-10 | Add the Input System package (`com.unity.inputsystem`) and set Active Input Handling to Both. Decided by oisin for F-009. | The Space Party Game uses the new Input System, and Both keeps existing scenes on the old input working. |
