@@ -71,6 +71,32 @@ There are six cage colours. Which four are used for P1 to P4 is still to be deci
 - There is no AudioMixer.
 - There is no ambient or pad audio that could serve as background music. The song clips are short jingles, not loops.
 
+## Sprites
+
+Use only the English sprites in `Assets/_Project/SpacePartyGame/Sprites/`. `Sprites/Source/` keeps the zip's originals, under their Hebrew names, untouched. Make them again with `python Tools/space-party-art/prepare_art.py Assets/inGameSprites.zip`.
+
+- **Import:** Sprite (2D and UI), Single, **100 Pixels Per Unit**, Bilinear, no mipmaps, high-quality compression, Clamp, max size 2048.
+- **Scale:** nothing is resized. All the art was drawn on one 1920 by 1080 canvas, so at 100 PPU the background is 19.2 by 10.8 units, which an orthographic camera of size 5.4 fills exactly, and every other sprite keeps the size it was drawn at against it.
+- **Placing:** a sprite drawn centred at canvas pixel (x, y) goes at ((x - 960) / 100, (540 - y) / 100). The tool prints each centre.
+
+| Sprite | What it is | Size in units | Drawn centre (px) |
+|---|---|---|---|
+| `Background` | The crater floor and rim, with no cages | 19.20 x 10.80 | (960, 540) |
+| `BackgroundWithCages` | The same, with the six cages painted in | 19.20 x 10.80 | (960, 540) |
+| `Astronaut` | The player: an astronaut playing a flute, facing right | 1.35 x 1.72 | (904, 534) |
+| `Vermin` | One vermin: a purple segmented bug | 0.79 x 0.60 | (1116, 504) |
+| `VerminGroup` | About 10 vermin, as drawn. For reference, not for gameplay | 2.59 x 4.28 | (1194, 662) |
+| `CallRing` | A mint glow with a dashed edge, such as a hearing range | 4.47 x 4.25 | (878, 520) |
+| `Cages` | All six cages on one sheet. For reference | 14.13 x 8.50 | (908, 540) |
+| `CageOrange` | Orange fill, yellow frame. Top left | 2.36 x 2.48 | (686, 264) |
+| `CagePink` | Pink. Top right | 2.38 x 2.48 | (1147, 240) |
+| `CageGreen` | Green. Left | 2.35 x 2.48 | (322, 508) |
+| `CageBlue` | Blue. Right | 2.38 x 2.48 | (1495, 500) |
+| `CageTeal` | Teal, which earlier notes called mint. Bottom left | 2.37 x 2.49 | (574, 840) |
+| `CageViolet` | Violet. Bottom right | 2.41 x 2.52 | (1208, 818) |
+
+Relative sizes: the astronaut is about 2.9 times a vermin's height and 1.7 times its width. A cage is about 1.4 times the astronaut's height, and fits about 3 vermin across and 4 down.
+
 ## Decisions and created assets
 
 ### Step 0
@@ -78,3 +104,10 @@ There are six cage colours. Which four are used for P1 to P4 is still to be deci
 - Claimed F-009 in `FEATURES.md`, with the Input System decision.
 - Created `Assets/_Project/SpacePartyGame/` with this file and `Scenes/Space Party Game.unity`, an empty scene.
 - Added `com.unity.inputsystem` and set Active Input Handling to Both.
+
+### Step 1
+
+- Added `Tools/space-party-art/prepare_art.py`, which needs only the Python standard library. The toy's tool needs macOS and hard-codes the toy's names, so it did not fit.
+- Created `Sprites/Source/`, with the seven originals under their Hebrew names, and `Sprites/`, with 13 English sprites: 7 trimmed copies and the 6 cages cut from `Cages.png`.
+- Cages are named by their measured hue: orange 29, pink 333, green 98, blue 214, teal 146 and violet 236 degrees.
+- PPU 100 for every sprite, with no resizing. Checked side by side in the scene, and the temporary objects were removed.
