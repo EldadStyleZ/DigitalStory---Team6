@@ -11,6 +11,7 @@ Feature F-009 in `FEATURES.md`, on branch `feature/F-009-space-party-game`, whic
 - Gameplay vermin come from an object pool. No `Instantiate` or `Destroy` during gameplay.
 - Commit and push at the end of every step, on `feature/F-009-space-party-game` only. Stage only our own paths, never `git add -A` or `git add .`. Never commit the stray files already in the working folder: `Assets/_Project/Scenes/Town.unity`, `ProjectSettings/SceneTemplateSettings.json` and `ProjectSettings/ProjectAuditorSettings.asset`.
 - Nothing goes to `main` except a commit that changes only `FEATURES.md`.
+- At the end of every step, fast-forward `Oisin-prototype` to `feature/F-009-space-party-game` (`git branch -f Oisin-prototype feature/F-009-space-party-game`, only if it is a fast-forward). If `Oisin-prototype` has moved, stop and report instead of merging or rebasing. The user pushes both branches through Rider.
 - Each step adds at most 10 lines to "Decisions and created assets" at the bottom.
 - `AGENTS.md` and `docs/CODING_STANDARDS.md` still apply.
 
@@ -130,3 +131,12 @@ Relative sizes: the astronaut is about 2.9 times a vermin's height and 1.7 times
 - `Prefabs/MapWall.prefab`: a 1 by 1 `BoxCollider2D` on `MapBorder`, for extra walls.
 - `Main Camera`: orthographic, size 5.4, at (0, 0, -10), background #7B534C (the rim's colour). It shows the whole map at 16:9; narrower screens need a bigger size. This becomes the overview camera later.
 - Checked: 48 bouncing test bodies (Player and Vermin, 15 units/s, continuous collision) stayed inside for 300 physics steps, then were removed. The loop, drawn in the scene, sits on the rim edge with no gaps.
+
+### Step 4
+
+- `Prefabs/Player.prefab` on the `Player` layer. The root is the feet: `Rigidbody2D` (dynamic, no gravity, rotation frozen, interpolated, continuous), `CircleCollider2D` (radius 0.3), `PlayerInput` (`SpacePartyControls`, default map Player, C# events), `PlayerIdentity`, `PlayerMovement` (speed 4) and `PlayerNotes`. Children: `Body` (`Astronaut`, order 10, 0.78 up, flips) and `Name Tag` (TextMeshPro, 1.9 up, never flips).
+- `PlayerMovement.Facing` (1 right, -1 left) and `FacingDirection`, plus a `FacingChanged` event, for the attack wave. Rules in `FacingRule` and `PlayerMotion`, with 13 EditMode tests (23 in all).
+- `PlayerIdentity.Initialize(slot, colour)` sets P1 to P4 and the colour. `NameTag` follows its `Changed` event.
+- Note hooks: `PlayerNotes.NotePressed` and `NoteReleased` (`Note`: Root, Up, Left, Right, LT, RT) and `IsHeld(note)`. No instruments yet.
+- TMP Essential Resources were imported and moved to `SpacePartyGame/TextMesh Pro/` (TMP finds `Resources/TMP Settings` anywhere). `Materials/NameTag.mat` gives the tag a dark outline and shadow.
+- Testing tip: with Unity not focused, keyboard input does not reach Play Mode and time does not pass. Click the Game view first.
