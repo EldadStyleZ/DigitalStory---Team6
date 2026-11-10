@@ -120,3 +120,13 @@ Relative sizes: the astronaut is about 2.9 times a vermin's height and 1.7 times
 - The EventSystem was blocked until the user chose to add uGUI (`com.unity.ugui` 2.6.0, with TextMeshPro). Recorded under Decisions in `FEATURES.md`.
 - `Prefabs/EventSystem.prefab`: EventSystem plus `InputSystemUIInputModule`, using `SpacePartyControls`' UI map (Point, Click, ScrollWheel, Navigate, Submit, Cancel; middle and right click unbound). It is in the scene at the root.
 - `SpacePartyGame.asmdef` (namespace `SpacePartyGame`) holds every script under `SpacePartyGame/`, including the generated controls. It references `Toy` (for the flute), `Unity.InputSystem`, `UnityEngine.UI` and `Unity.TextMeshPro`.
+
+### Step 3
+
+- Layers 8 to 11: `Player`, `Vermin`, `MapBorder` and `CageWall`. Collisions: Player with MapBorder only; Vermin with MapBorder and CageWall only (Vermin-vs-Vermin off, so crowds don't jam in cage doors; spacing belongs in code); CageWall with Vermin only. Only pairs that involve these new layers changed. Existing content uses Default, which is untouched.
+- `Prefabs/Map.prefab`: `Map` (`MapBounds`), with child `Floor` (`Background` sprite, order -100) and child `Border` (`MapBorder` layer, one closed `EdgeCollider2D` loop of 96 points, edge radius 0.05). It sits in the scene at (0, 0). An edge loop keeps bodies inside it, where a polygon collider would push them out.
+- The border is traced from the dark rim by `Tools/space-party-art/trace_floor.py` (`--overlay` draws it for checking), 12 px inside the dark paint. Darker patches inside the floor are walkable, as the user decided, so there are no inner colliders.
+- `MapBounds` (`Scripts/Map/`): `Rect`, for cameras, and `Contains(worldPoint)`, for spawners, both read from the Border loop through `PolygonArea`, a plain class with 10 EditMode tests.
+- `Prefabs/MapWall.prefab`: a 1 by 1 `BoxCollider2D` on `MapBorder`, for extra walls.
+- `Main Camera`: orthographic, size 5.4, at (0, 0, -10), background #7B534C (the rim's colour). It shows the whole map at 16:9; narrower screens need a bigger size. This becomes the overview camera later.
+- Checked: 48 bouncing test bodies (Player and Vermin, 15 units/s, continuous collision) stayed inside for 300 physics steps, then were removed. The loop, drawn in the scene, sits on the rim edge with no gaps.
