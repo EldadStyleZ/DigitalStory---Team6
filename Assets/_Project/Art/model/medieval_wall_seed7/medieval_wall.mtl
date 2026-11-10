@@ -1,0 +1,9 @@
+newmtl stone
+Kd 1 1 1
+map_Kd stone_albedo.png
+newmtl mortar
+Kd 0.32 0.30 0.27
+map_Kd stone_albedo.png
+newmtl moss
+Kd 1 1 1
+map_Kd moss_albedo.png

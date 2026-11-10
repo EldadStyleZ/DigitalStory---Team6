@@ -1,0 +1,8 @@
+﻿<Solution>
+  <Project Path="DigitalStory.Data.csproj" />
+  <Project Path="DigitalStory.Logic.csproj" />
+  <Project Path="DigitalStory.View.csproj" />
+  <Project Path="DigitalStory.Tests.EditMode.csproj" />
+  <Project Path="DigitalStory.Tests.PlayMode.csproj" />
+  <Project Path="DigitalStory.Editor.csproj" />
+</Solution>
