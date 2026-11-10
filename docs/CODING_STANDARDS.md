@@ -361,12 +361,15 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Prefab to reuse.")]
         private GameObject _prefab;
 
+        [SerializeField, Tooltip("Parent for the instances, such as Spawned.")]
+        private Transform _parent;
+
         private ObjectPool<GameObject> _pool;
 
         private void Awake()
         {
             _pool = new ObjectPool<GameObject>(
-                createFunc: () => Instantiate(_prefab),
+                createFunc: () => Instantiate(_prefab, _parent),
                 actionOnGet: instance => instance.SetActive(true),
                 actionOnRelease: instance => instance.SetActive(false),
                 actionOnDestroy: instance => Destroy(instance));

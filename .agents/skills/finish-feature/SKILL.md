@@ -13,6 +13,7 @@ description: Use when a feature or fix in this Unity project seems finished, bef
    - No temporary logs remain.
    - Only expected scenes and prefabs changed, and new assets have their `.meta` files.
    - No secrets or personal paths.
+   - Scene changes pass the checklist in `docs/SCENE_STRUCTURE.md`.
 3. **Update `FEATURES.md` on your branch.** Set the status to `Done`, fill in `Verified by` and clear `Holding`. Merging the pull request makes that true and releases your scenes. If part of the feature still waits on a held file, keep the status `In progress` and note what is left.
 4. **Open the pull request** into `main`. State what changed, why, how it was verified and what was not verified. A teammate reviews and merges it.
 5. **Report** the checks you ran and what they showed, the link, and anything unverified.
