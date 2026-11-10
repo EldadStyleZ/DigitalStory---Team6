@@ -11,7 +11,7 @@ Feature F-009 in `FEATURES.md`, on branch `feature/F-009-space-party-game`, whic
 - Gameplay vermin come from an object pool. No `Instantiate` or `Destroy` during gameplay.
 - Commit and push at the end of every step, on `feature/F-009-space-party-game` only. Stage only our own paths, never `git add -A` or `git add .`. Never commit the stray files already in the working folder: `Assets/_Project/Scenes/Town.unity`, `ProjectSettings/SceneTemplateSettings.json` and `ProjectSettings/ProjectAuditorSettings.asset`.
 - Nothing goes to `main` except a commit that changes only `FEATURES.md`.
-- At the end of every step, fast-forward `Oisin-prototype` to `feature/F-009-space-party-game` (`git branch -f Oisin-prototype feature/F-009-space-party-game`, only if it is a fast-forward). If `Oisin-prototype` has moved, stop and report instead of merging or rebasing. The user pushes both branches through Rider.
+- At the end of every step, `git fetch`. If `origin/Oisin-prototype` has moved, merge it into `feature/F-009-space-party-game` (a normal merge; stop and report on any conflict). Then fast-forward `Oisin-prototype` to the feature branch. The user pushes both branches through Rider.
 - Each step adds at most 10 lines to "Decisions and created assets" at the bottom.
 - `AGENTS.md` and `docs/CODING_STANDARDS.md` still apply.
 
@@ -140,3 +140,13 @@ Relative sizes: the astronaut is about 2.9 times a vermin's height and 1.7 times
 - Note hooks: `PlayerNotes.NotePressed` and `NoteReleased` (`Note`: Root, Up, Left, Right, LT, RT) and `IsHeld(note)`. No instruments yet.
 - TMP Essential Resources were imported and moved to `SpacePartyGame/TextMesh Pro/` (TMP finds `Resources/TMP Settings` anywhere). `Materials/NameTag.mat` gives the tag a dark outline and shadow.
 - Testing tip: with Unity not focused, keyboard input does not reach Play Mode and time does not pass. Click the Game view first.
+
+### Step 5
+
+- Flow: `GameFlow` (states StartMenu, Join, Countdown, Playing, Paused, RoundEnd, NameEntry, Leaderboard, with an allowed-moves table), `CountdownTimer` and `PlayerInputModes` (the map per state: Join in Join; Player in Playing; UI in Paused, NameEntry and Leaderboard; input off otherwise). 45 EditMode tests (68 in all).
+- `Game` (scene root): `GameFlowManager` (`allowSinglePlayer` debug flag, 3-second countdown; events `StateChanged`, `OnMatchStart`, `OnCountdownFinished`, `CountdownChanged`; `TryMoveTo` for later steps), `PlayerInputManager` (Player.prefab, at most 4) and `PlayerJoinController`. Joined players go under `Players`.
+- Joining opens only on the join screen. The manager's join action copies the Join/Join bindings, because the first player's PlayerInput uses the shared asset and limits it to its own devices. A joined player presses Join again, on their own Join map, to start; it needs 2 players, or 1 with `allowSinglePlayer`. Spawn points (-2, 1), (2, 1), (-2, -1.5) and (2, -1.5) are checked against `MapBounds`.
+- `GameData/PlayerPalette.asset`: P1 CageOrange #D6BF66, P2 CageBlue #6389CD, P3 CageGreen #74CC67, P4 CageViolet #7F72CF, measured from each cage's frame band with the corner knobs left out. The orange cage's frame is painted yellow, so P1 is sandy yellow, not orange; change it here if wanted.
+- `Canvas` (Screen Space Overlay, 1920x1080 scaling): `Start Menu` (title, tagline, the teal cage as the Start button, selected so A submits), `Join Screen` (four slot cards: cage, name in colour, device) and `Countdown`. Text uses `Materials/UIText.mat` (outline and shadow). Each screen is a `StageScreen` that shows itself in one state.
+- Checked with virtual gamepads, input fed in and the loop stepped by hand: Start on the menu does nothing; the Start button opens Join; each pad joins once; one player cannot start; two can; the countdown blocks movement and notes, shows 3-2-1, ends in Playing, and fires its events once; in Playing the stick moves and all six notes fire. `allowSinglePlayer` lets one player start.
+- Not checked without the Game view focused: gamepad A or mouse on the Start button, keyboard Space to join, and how the screens look. The UI module and keyboard ignore an unfocused Game view.
