@@ -38,6 +38,15 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("The paint dabs dropped behind the player while running.")]
         private SpeedTrail _speedTrail;
 
+        [Header("Blow (hold Left, let go when the bar is full)")]
+        [SerializeField, Tooltip("The blow's numbers, shared by both players.")]
+        private BlowSettings _blowSettings;
+
+        [SerializeField, Tooltip("The charge bar under the player's feet.")]
+        private BlowBar _blowBar;
+
+        private BlowCharge _blow;
+
         private readonly List<Collider2D> _heard = new List<Collider2D>();
         private PlayerInstrument _instrument;
         private PlayerIdentity _identity;
@@ -56,6 +65,12 @@ namespace SpacePartyGame
         /// <summary>Sets what the player may do: walk, play notes, call, run and blow.</summary>
         public void Apply(PlayerPermissions permissions)
         {
+            // Stop charging first: switching notes off below releases Left, which must not fire the blow.
+            if (!permissions.CanBlow)
+            {
+                CancelBlow();
+            }
+
             Permissions = permissions;
             _movement.CanMove = permissions.CanMove;
             _notes.CanPlay = permissions.CanPlay;
@@ -75,6 +90,15 @@ namespace SpacePartyGame
         /// <summary>How hard the player is running: 0 walking, 1 flat out.</summary>
         public float RunBoost => _run.Boost;
 
+        /// <summary>Whether the blow is charging now.</summary>
+        public bool IsChargingBlow => _blow != null && _blow.IsCharging;
+
+        /// <summary>How full the blow's charge is, 0 to 1.</summary>
+        public float BlowProgress => _blow != null ? _blow.Progress(Time.time) : 0f;
+
+        /// <summary>Raised when the blow fires, with the way the player aims.</summary>
+        public event System.Action<Vector2> Blew;
+
         private void Awake()
         {
             _instrument = GetComponent<PlayerInstrument>();
@@ -82,6 +106,17 @@ namespace SpacePartyGame
             _notes = GetComponent<PlayerNotes>();
             _movement = GetComponent<PlayerMovement>();
             _run = new RunRhythm(_movement.WalkSpeed, _runSpeedMax, _speedPerSwitch, _switchWindow, _easeBackPerSecond);
+
+            if (_blowSettings == null || _blowBar == null)
+            {
+                Debug.LogError($"{name}: PlayerAbilities is missing its blow settings or blow bar.", this);
+            }
+            else
+            {
+                _blow = new BlowCharge(_blowSettings.ChargeSeconds);
+                _blowBar.Initialize(_blowSettings);
+                _blowBar.HideNow();
+            }
 
             if (_speedTrail == null)
             {
@@ -107,6 +142,7 @@ namespace SpacePartyGame
             _instrument.NoteStarted += HandleNoteStarted;
             _instrument.NoteEnded += HandleNoteEnded;
             _notes.NotePressed += HandleNotePressed;
+            _notes.NoteReleased += HandleNoteReleased;
         }
 
         private void OnDisable()
@@ -114,11 +150,14 @@ namespace SpacePartyGame
             _instrument.NoteStarted -= HandleNoteStarted;
             _instrument.NoteEnded -= HandleNoteEnded;
             _notes.NotePressed -= HandleNotePressed;
+            _notes.NoteReleased -= HandleNoteReleased;
         }
 
         // Every press counts toward the run, even a quick tap of a note already playing.
         private void HandleNotePressed(Note note)
         {
+            PressForBlow(note);
+
             if (!Permissions.CanRun)
             {
                 return;
@@ -127,8 +166,56 @@ namespace SpacePartyGame
             _run.Press(note, Time.time);
         }
 
+        // Left starts the charge; any other note cancels it.
+        private void PressForBlow(Note note)
+        {
+            if (_blow == null)
+            {
+                return;
+            }
+
+            if (BlowCharge.Charges(note) && Permissions.CanBlow)
+            {
+                _blow.Begin(Time.time);
+            }
+            else if (_blow.IsCharging)
+            {
+                CancelBlow();
+            }
+        }
+
+        private void HandleNoteReleased(Note note)
+        {
+            if (_blow == null || !_blow.IsCharging || !BlowCharge.Charges(note))
+            {
+                return;
+            }
+
+            bool fires = _blow.Release(Time.time);
+            _blowBar.Hide();
+
+            if (fires)
+            {
+                Blew?.Invoke(_movement.AimDirection);
+            }
+        }
+
+        private void CancelBlow()
+        {
+            if (_blow != null && _blow.IsCharging)
+            {
+                _blow.Cancel();
+                _blowBar.Hide();
+            }
+        }
+
         private void Update()
         {
+            if (_blow != null && _blow.IsCharging)
+            {
+                _blowBar.Show(_blow.Progress(Time.time), _identity.Colour);
+            }
+
             _run.Tick(Time.time, Time.deltaTime);
             _movement.TopSpeed = _run.Speed;
 
