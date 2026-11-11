@@ -33,8 +33,11 @@ namespace SpacePartyGame
         [SerializeField, Range(10f, 180f), Tooltip("How wide the blow's cone is, in degrees, centred on the way the player aims.")]
         private float _coneAngle = 90f;
 
-        [SerializeField, Min(0.1f), Tooltip("How far the blow reaches from the player's feet, in units.")]
+        [SerializeField, Min(0.1f), Tooltip("How far the blow reaches from the middle of the player's body, in units.")]
         private float _reach = 4.5f;
+
+        [SerializeField, Min(0f), Tooltip("The gap around the player the blow leaves out, from the middle of the body, in units. The blow's area (and the sector shown) runs from here to the reach.")]
+        private float _innerRadius = 0.7f;
 
         [SerializeField, Min(0f), Tooltip("How fast vermin are blown away at first, in units per second (at the player; weaker at the edge).")]
         private float _verminPushSpeed = 20f;
@@ -54,14 +57,49 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("Which layers the blow pushes: Vermin and Player.")]
         private LayerMask _pushLayers;
 
+        [Header("Effect: hand-drawn wave")]
+        [SerializeField, Range(0f, 1f), Tooltip("How much the wave is stretched to fill the cone's width: 0 keeps the drawing's own shape, 1 stretches it over the whole cone.")]
+        private float _waveStretch = 1f;
+
+        [Header("Effect: sector (the blow's area)")]
+        [SerializeField, Range(0f, 1f), Tooltip("How solid the sector is at its strongest (multiplies the wash and the blotches).")]
+        private float _sectorAlpha = 1f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("How solid the sector's see-through wash is.")]
+        private float _sectorWashAlpha = 0.3f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("How uneven the sector's wash is: 0 is one even colour.")]
+        private float _sectorWashVariation;
+
+        [SerializeField, Range(0f, 1f), Tooltip("How solid the sector's darker paint blotches are: 0 leaves them out.")]
+        private float _sectorBlotchAlpha;
+
+        [SerializeField, Min(0.05f), Tooltip("Roughly how big the sector's paint blotches are, in units.")]
+        private float _sectorBlotchSize = 0.9f;
+
+        [SerializeField, Min(0f), Tooltip("How soft the sector's edges are, in units.")]
+        private float _sectorFeather = 0.06f;
+
+        [SerializeField, Min(10f), Tooltip("How sharp the sector picture is, in pixels per unit (it is drawn when play starts and when its shape changes).")]
+        private float _sectorPixelsPerUnit = 110f;
+
+        [SerializeField, Min(0f), Tooltip("How long the sector takes to appear, in seconds.")]
+        private float _sectorFadeInSeconds = 0.06f;
+
+        [SerializeField, Min(0f), Tooltip("How long the sector stays fully shown, in seconds.")]
+        private float _sectorHoldSeconds = 0.2f;
+
+        [SerializeField, Min(0.01f), Tooltip("How long the sector takes to fade away, in seconds.")]
+        private float _sectorFadeOutSeconds = 0.5f;
+
         [Header("Effect: paint burst")]
         [SerializeField, Tooltip("Where the effect starts, from the player's feet, in units (the middle of the body).")]
         private Vector2 _effectOffset = new Vector2(0f, 0.45f);
 
-        [SerializeField, Min(0f), Tooltip("How far in front of the player the effect starts, along the aim, in units.")]
+        [SerializeField, Min(0f), Tooltip("Old paint burst and arc only (switched off): how far in front of the player they start, along the aim, in units. The wave fits the blow's area instead.")]
         private float _effectForward = 0.55f;
 
-        [SerializeField, Min(0.1f), Tooltip("How far the paint burst and arc reach, in units (the push reach is under Push).")]
+        [SerializeField, Min(0.1f), Tooltip("Old paint burst and arc only (switched off): how far they reach, in units. The wave and sector use the push reach and inner radius.")]
         private float _effectReach = 4.5f;
 
         [SerializeField, Min(0), Tooltip("How many paint dabs one blow throws.")]
@@ -104,7 +142,7 @@ namespace SpacePartyGame
 
         [Header("Bar (under the player's feet)")]
         [SerializeField, Min(0.05f), Tooltip("The bar's width, in units.")]
-        private float _barWidth = 0.9f;
+        private float _barWidth = 0.675f;
 
         [SerializeField, Min(0.02f), Tooltip("The bar's height, in units.")]
         private float _barHeight = 0.065f;
@@ -133,6 +171,18 @@ namespace SpacePartyGame
         public float PushedPlayerControl => _pushedPlayerControl;
         public LayerMask PushLayers => _pushLayers;
         public Vector2 EffectOffset => _effectOffset;
+        public float WaveStretch => _waveStretch;
+        public float SectorAlpha => _sectorAlpha;
+        public float SectorWashAlpha => _sectorWashAlpha;
+        public float SectorBlotchAlpha => _sectorBlotchAlpha;
+        public float SectorWashVariation => _sectorWashVariation;
+        public float SectorBlotchSize => _sectorBlotchSize;
+        public float SectorFeather => _sectorFeather;
+        public float SectorPixelsPerUnit => _sectorPixelsPerUnit;
+        public float InnerRadius => _innerRadius;
+        public float SectorFadeInSeconds => _sectorFadeInSeconds;
+        public float SectorHoldSeconds => _sectorHoldSeconds;
+        public float SectorFadeOutSeconds => _sectorFadeOutSeconds;
         public float EffectForward => _effectForward;
         public float EffectReach => _effectReach;
         public int DabCount => _dabCount;

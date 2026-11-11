@@ -25,6 +25,30 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("The painted arc; its sprite's pivot is the cone's tip and it points right.")]
         private SpriteRenderer _arc;
 
+        [Header("Wave (replaces the burst and arc)")]
+        [SerializeField, Tooltip("Plays the hand-drawn wave frames (Animations/BlowWave.controller); edit its timing in the Animation window.")]
+        private Animator _wave;
+
+        [SerializeField, Tooltip("The wave's picture, tinted the player's colour. Its frames are white and point right from their pivot.")]
+        private SpriteRenderer _waveSprite;
+
+        [SerializeField, Tooltip("The Animator state that plays the wave once.")]
+        private string _waveState = "Play";
+
+        [SerializeField, Tooltip("Where the drawing starts in the wave frames, from their pivot, in units at scale 1 (measured from the frames).")]
+        private float _waveContentStart = 0.04f;
+
+        [SerializeField, Tooltip("Where the drawing ends in the wave frames, from their pivot, in units at scale 1 (measured from the frames).")]
+        private float _waveContentEnd = 7.72f;
+
+        [Header("Sector (shown with the wave)")]
+        [SerializeField, Tooltip("The see-through sector showing the blow's area; its white picture points right from its tip, drawn for 90° with a radius of 1 unit.")]
+        private SpriteRenderer _sector;
+
+        private float _sectorStartedAt = float.NegativeInfinity;
+        private string _sectorShape;
+        private Sprite _sectorPicture;
+
         private float _arcStartedAt = float.NegativeInfinity;
         private Color _arcColour;
 
@@ -36,7 +60,7 @@ namespace SpacePartyGame
 
         private void Awake()
         {
-            if (_abilities == null || _identity == null || _settings == null || _burst == null || _arc == null)
+            if (_abilities == null || _identity == null || _settings == null || _wave == null || _waveSprite == null)
             {
                 Debug.LogError($"{name}: BlowEffect is missing a reference.", this);
                 return;
@@ -69,7 +93,7 @@ namespace SpacePartyGame
         /// <summary>Plays the effect toward <paramref name="aim"/>.</summary>
         public void Play(Vector2 aim)
         {
-            if (_settings == null || _burst == null || _arc == null)
+            if (_settings == null || _wave == null || _waveSprite == null)
             {
                 return;
             }
@@ -77,9 +101,139 @@ namespace SpacePartyGame
             Vector2 direction = aim.sqrMagnitude > 1e-6f ? aim.normalized : Vector2.right;
             // Starts in front of the player, not inside them.
             // Vector2 origin = (Vector2)_abilities.transform.position + _settings.EffectOffset;
-            Vector2 origin = (Vector2)_abilities.transform.position + _settings.EffectOffset + direction * _settings.EffectForward;
-            ThrowDabs(origin, direction);
-            StartArc(origin, direction);
+            // Vector2 origin = (Vector2)_abilities.transform.position + _settings.EffectOffset + direction * _settings.EffectForward;
+            // The wave now fits the blow's area exactly, from the body's centre (see PlayWave).
+            Vector2 origin = (Vector2)_abilities.transform.position + _settings.EffectOffset;
+            // The hand-drawn wave replaces the paint burst and arc (their objects are switched off).
+            // ThrowDabs(origin, direction);
+            // StartArc(origin, direction);
+            PlayWave(origin, direction);
+            ShowSector((Vector2)_abilities.transform.position + _settings.EffectOffset, direction);
+        }
+
+        /// <summary>Whether the sector is on screen now.</summary>
+        public bool IsSectorShowing => _sector != null && _sector.enabled;
+
+        // The sector covers the blow's real area, from the middle of the body out to the push reach.
+        private void ShowSector(Vector2 origin, Vector2 direction)
+        {
+            if (_sector == null)
+            {
+                return;
+            }
+
+            Transform sector = _sector.transform;
+            sector.position = new Vector3(origin.x, origin.y, sector.position.z);
+            sector.rotation = Quaternion.Euler(0f, 0f, Vector2.SignedAngle(Vector2.right, direction));
+            // The picture is drawn to the blow's exact area, so it is shown at its own size.
+            // float reach = _settings.Reach;
+            // float widen = Mathf.Tan(Mathf.Clamp(_settings.ConeAngle, 10f, 170f) * 0.5f * Mathf.Deg2Rad);
+            // sector.localScale = new Vector3(reach, reach * widen, 1f);
+            sector.localScale = Vector3.one;
+            _sector.sprite = SectorPicture();
+            _sectorStartedAt = Time.time;
+            _sector.enabled = true;
+            DrawSector();
+        }
+
+        // Draws the sector picture again only when the blow's shape or look has changed.
+        private Sprite SectorPicture()
+        {
+            string shape = $"{_settings.ConeAngle}|{_settings.InnerRadius}|{_settings.Reach}|{_settings.SectorWashAlpha}|{_settings.SectorBlotchAlpha}|{_settings.SectorBlotchSize}|{_settings.SectorFeather}|{_settings.SectorWashVariation}|{_settings.SectorPixelsPerUnit}";
+
+            if (_sectorPicture != null && shape == _sectorShape)
+            {
+                return _sectorPicture;
+            }
+
+            if (_sectorPicture != null)
+            {
+                Destroy(_sectorPicture.texture);
+                Destroy(_sectorPicture);
+            }
+
+            var look = new BlowSectorPicture.Look
+            {
+                PixelsPerUnit = _settings.SectorPixelsPerUnit,
+                WashAlpha = _settings.SectorWashAlpha,
+                BlotchAlpha = _settings.SectorBlotchAlpha,
+                BlotchSize = _settings.SectorBlotchSize,
+                Feather = _settings.SectorFeather,
+                WashVariation = _settings.SectorWashVariation,
+            };
+
+            _sectorPicture = BlowSectorPicture.Create(_settings.ConeAngle, _settings.InnerRadius, _settings.Reach, look);
+            _sectorShape = shape;
+            return _sectorPicture;
+        }
+
+        private void Start()
+        {
+            // Drawn once up front, so the first blow does not stall.
+            if (_settings != null && _sector != null)
+            {
+                SectorPicture();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (_sectorPicture != null)
+            {
+                Destroy(_sectorPicture.texture);
+                Destroy(_sectorPicture);
+            }
+        }
+
+        private void DrawSector()
+        {
+            float t = Time.time - _sectorStartedAt;
+            float fadeIn = _settings.SectorFadeInSeconds;
+            float hold = _settings.SectorHoldSeconds;
+            float fadeOut = _settings.SectorFadeOutSeconds;
+            float strength = t < fadeIn ? (fadeIn > 0f ? t / fadeIn : 1f)
+                : t < fadeIn + hold ? 1f
+                : 1f - (t - fadeIn - hold) / fadeOut;
+
+            // Hidden only once fully faded out (at the very start the fade-in is also at 0).
+            if (t >= fadeIn + hold + fadeOut)
+            {
+                _sector.enabled = false;
+                return;
+            }
+
+            Color colour = _identity.Colour;
+            colour.a = _settings.SectorAlpha * Mathf.Clamp01(strength);
+            _sector.color = colour;
+        }
+
+        /// <summary>Whether the wave is on screen now.</summary>
+        public bool IsWaveShowing => _waveSprite != null && _waveSprite.enabled;
+
+        // Turns the wave to the aim, stretches it over the whole cone (its length to the reach, its height to the
+        // cone's width at the reach), tints it and plays it from the first frame.
+        private void PlayWave(Vector2 origin, Vector2 direction)
+        {
+            Transform wave = _wave.transform;
+            // wave.position = new Vector3(origin.x, origin.y, wave.position.z);
+            wave.rotation = Quaternion.Euler(0f, 0f, Vector2.SignedAngle(Vector2.right, direction));
+
+            Sprite frame = _waveSprite.sprite;
+            Vector2 size = frame != null ? (Vector2)frame.bounds.size : Vector2.one;
+            // float length = _settings.EffectReach;
+            float length = _settings.Reach;
+            float width = 2f * length * Mathf.Tan(Mathf.Clamp(_settings.ConeAngle, 10f, 170f) * 0.5f * Mathf.Deg2Rad);
+            // wave.localScale = new Vector3(length / size.x, width / size.y, 1f);
+            // Along the aim, the drawing runs exactly from the inner radius to the reach: the blow's area.
+            // float keepShape = length / size.x;
+            float keepShape = BlowCone.FitAlong(_waveContentStart, _waveContentEnd, _settings.InnerRadius, _settings.Reach, out float shift);
+            Vector2 start = origin + direction * shift;
+            wave.position = new Vector3(start.x, start.y, wave.position.z);
+            float stretched = width / size.y;
+            wave.localScale = new Vector3(keepShape, Mathf.Lerp(keepShape, stretched, _settings.WaveStretch), 1f);
+
+            _waveSprite.color = _identity.Colour;
+            _wave.Play(_waveState, 0, 0f);
         }
 
         private void ThrowDabs(Vector2 origin, Vector2 direction)
@@ -127,6 +281,11 @@ namespace SpacePartyGame
 
         private void Update()
         {
+            if (_sector != null && _sector.enabled && _settings != null)
+            {
+                DrawSector();
+            }
+
             if (_arc == null || !_arc.enabled)
             {
                 return;

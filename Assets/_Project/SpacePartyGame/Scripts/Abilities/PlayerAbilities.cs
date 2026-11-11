@@ -212,7 +212,9 @@ namespace SpacePartyGame
         // Pushes every vermin and other player in the cone, from the player's feet, along the aim.
         private void BlowAway(Vector2 aim)
         {
-            Vector2 origin = transform.position;
+            // The blow's area is a ring sector from the middle of the body, the same shape the sector shows.
+            // Vector2 origin = transform.position;
+            Vector2 origin = (Vector2)transform.position + _blowSettings.EffectOffset;
             var filter = new ContactFilter2D { useLayerMask = true, layerMask = _blowSettings.PushLayers, useTriggers = false };
             Physics2D.OverlapCircle(origin, _blowSettings.Reach, filter, _blowHits);
             _blowBodies.Clear();
@@ -226,7 +228,8 @@ namespace SpacePartyGame
                     continue;
                 }
 
-                if (!BlowCone.Contains(origin, aim, body.position, _blowSettings.ConeAngle, _blowSettings.Reach))
+                // if (!BlowCone.Contains(origin, aim, body.position, _blowSettings.ConeAngle, _blowSettings.Reach))
+                if (!BlowCone.Contains(origin, aim, body.position, _blowSettings.ConeAngle, _blowSettings.InnerRadius, _blowSettings.Reach))
                 {
                     continue;
                 }

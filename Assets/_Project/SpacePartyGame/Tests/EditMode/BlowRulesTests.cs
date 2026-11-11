@@ -184,6 +184,34 @@ namespace SpacePartyGame.Tests
         }
 
         [Test]
+        public void Contains_WithInnerRadius_LeavesOutTheGapByThePlayer()
+        {
+            Assert.That(BlowCone.Contains(Origin, Right, new Vector2(0.5f, 0f), 90f, 0.7f, 4.5f), Is.False);
+            Assert.That(BlowCone.Contains(Origin, Right, new Vector2(0.8f, 0f), 90f, 0.7f, 4.5f), Is.True);
+            Assert.That(BlowCone.Contains(Origin, Right, new Vector2(4.4f, 0f), 90f, 0.7f, 4.5f), Is.True);
+            Assert.That(BlowCone.Contains(Origin, Right, new Vector2(4.6f, 0f), 90f, 0.7f, 4.5f), Is.False);
+        }
+
+        [Test]
+        public void Contains_WithInnerRadius_StillKeepsTheAngle()
+        {
+            Vector2 at44 = Quaternion.Euler(0f, 0f, 44f) * Vector2.right * 2f;
+            Vector2 at46 = Quaternion.Euler(0f, 0f, 46f) * Vector2.right * 2f;
+
+            Assert.That(BlowCone.Contains(Origin, Right, at44, 90f, 0.7f, 4.5f), Is.True);
+            Assert.That(BlowCone.Contains(Origin, Right, at46, 90f, 0.7f, 4.5f), Is.False);
+        }
+
+        [Test]
+        public void FitAlong_MapsTheDrawingOntoTheArea()
+        {
+            float scale = BlowCone.FitAlong(0.04f, 7.72f, 0.7f, 4.5f, out float pivot);
+
+            Assert.That(pivot + 0.04f * scale, Is.EqualTo(0.7f).Within(0.0001f));
+            Assert.That(pivot + 7.72f * scale, Is.EqualTo(4.5f).Within(0.0001f));
+        }
+
+        [Test]
         public void Push_AlongTheAim_WeakerAtTheEdge()
         {
             Vector2 near = BlowCone.Push(Origin, Vector2.up, new Vector2(0f, 0f), 3f, 10f, 0.4f);

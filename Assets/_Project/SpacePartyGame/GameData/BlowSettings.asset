@@ -23,6 +23,7 @@ MonoBehaviour:
   _chordVolume: 0.9
   _coneAngle: 90
   _reach: 4.5
+  _innerRadius: 0.7
   _verminPushSpeed: 20
   _playerPushSpeed: 18
   _edgeStrength: 0.45
@@ -31,8 +32,19 @@ MonoBehaviour:
   _pushLayers:
     serializedVersion: 2
     m_Bits: 768
-  _effectOffset: {x: 0, y: 0.45}
-  _effectForward: 0.55
+  _waveStretch: 1
+  _sectorAlpha: 1
+  _sectorWashAlpha: 0.5
+  _sectorWashVariation: 0
+  _sectorBlotchAlpha: 0
+  _sectorBlotchSize: 0.9
+  _sectorFeather: 0.06
+  _sectorPixelsPerUnit: 110
+  _sectorFadeInSeconds: 0.06
+  _sectorHoldSeconds: 0.2
+  _sectorFadeOutSeconds: 0.5
+  _effectOffset: {x: 0, y: 0.59}
+  _effectForward: 0.35
   _effectReach: 4.5
   _dabCount: 110
   _dabSize: {x: 0.35, y: 0.8}
@@ -46,7 +58,7 @@ MonoBehaviour:
   _arcAlpha: 1
   _shakeAmplitude: 0.22
   _shakeSeconds: 0.25
-  _barWidth: 0.9
+  _barWidth: 0.675
   _barHeight: 0.065
   _barOffset: {x: 0, y: -0.22}
   _barBackColour: {r: 0.231, g: 0.129, b: 0.114, a: 0.75}

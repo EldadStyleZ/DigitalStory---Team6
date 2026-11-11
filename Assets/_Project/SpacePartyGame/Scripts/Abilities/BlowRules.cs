@@ -87,6 +87,28 @@ namespace SpacePartyGame
         }
 
         /// <summary>
+        /// Whether a point is inside the blow's area: the cone between <paramref name="innerRadius"/> and
+        /// <paramref name="reach"/> from the origin (a ring sector, so the space right by the player is left out).
+        /// </summary>
+        public static bool Contains(Vector2 origin, Vector2 aim, Vector2 point, float angle, float innerRadius, float reach)
+        {
+            float distance = Vector2.Distance(origin, point);
+            return distance >= innerRadius && distance <= reach && Contains(origin, aim, point, angle, reach);
+        }
+
+        /// <summary>
+        /// The scale that makes a drawing running from <paramref name="contentStart"/> to
+        /// <paramref name="contentEnd"/> (from its pivot, at scale 1) cover exactly <paramref name="innerRadius"/>
+        /// to <paramref name="reach"/>; <paramref name="pivotDistance"/> is where its pivot must go, from the origin.
+        /// </summary>
+        public static float FitAlong(float contentStart, float contentEnd, float innerRadius, float reach, out float pivotDistance)
+        {
+            float scale = (reach - innerRadius) / Mathf.Max(0.0001f, contentEnd - contentStart);
+            pivotDistance = innerRadius - contentStart * scale;
+            return scale;
+        }
+
+        /// <summary>
         /// The push at a point, along the aim: full <paramref name="speed"/> at the origin, falling to
         /// <paramref name="edgeStrength"/> of it at the edge of the reach.
         /// </summary>

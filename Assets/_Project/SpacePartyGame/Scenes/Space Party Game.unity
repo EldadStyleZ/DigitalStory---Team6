@@ -378,7 +378,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12285e5f2ecdd074f97da6da381a298b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.FollowCamera
-  _zoom: 2.25
+  _zoom: 2.8125
   _smoothTime: 0.15
   _map: {fileID: 5191656445928249103}
 --- !u!20 &94830139
@@ -3078,7 +3078,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12285e5f2ecdd074f97da6da381a298b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.FollowCamera
-  _zoom: 2.25
+  _zoom: 2.8125
   _smoothTime: 0.15
   _map: {fileID: 5191656445928249103}
 --- !u!20 &1038507290
@@ -3924,7 +3924,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12285e5f2ecdd074f97da6da381a298b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.FollowCamera
-  _zoom: 2.25
+  _zoom: 2.8125
   _smoothTime: 0.15
   _map: {fileID: 5191656445928249103}
 --- !u!20 &1322770859
@@ -5035,6 +5035,7 @@ MonoBehaviour:
   _warningFrom: 5
   _tickFrom: 10
   _highTickFrom: 5
+  _hideAfterZeroSeconds: 1
 --- !u!1 &1628774481
 GameObject:
   m_ObjectHideFlags: 0
@@ -5080,7 +5081,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12285e5f2ecdd074f97da6da381a298b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.FollowCamera
-  _zoom: 2.25
+  _zoom: 2.8125
   _smoothTime: 0.15
   _map: {fileID: 5191656445928249103}
 --- !u!20 &1628774484
