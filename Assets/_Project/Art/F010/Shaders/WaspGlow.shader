@@ -42,7 +42,7 @@ Shader "DigitalStory/WaspGlow"
                 float height01;
                 float level01;
                 float phase01;
-                float unused;
+                float squad;        // which slot's squad the wasp joins; only WaspSwarm.compute reads it
             };
 
             // 48 bytes, the same layout as WaspDynamic in WaspSwarm.compute and WaspInstanced.shader.
@@ -76,10 +76,15 @@ Shader "DigitalStory/WaspGlow"
             // Share of the quad's size it sits behind its wasp, away from the camera.
             static const float PushBack = 0.4;
 
-            // A calm wasp glows GlowBase times _GlowStrength; a wasp at full heat (a sting, a diving meteor) glows
-            // GlowBase plus GlowHeat times it.
+            // A calm wasp glows GlowBase times _GlowStrength; a wasp at full heat (an impact) glows GlowBase plus GlowHeat
+            // times it.
             static const float GlowBase = 0.7;
             static const float GlowHeat = 0.6;
+
+            // An impact (ImpactHeat, 1, in WaspSwarm.compute) whitens the glow for its few frames, as WaspInstanced.shader
+            // whitens the wasp, so the flash shows around it too. Lower heats keep the wasp's colour.
+            static const float FlashStart = 0.95;
+            static const float FlashWhiten = 0.6;
 
             struct VertexInput
             {
@@ -135,11 +140,12 @@ Shader "DigitalStory/WaspGlow"
 
                 float heat = saturate(body.tint.a);
                 float strength = _GlowStrength * life * (GlowBase + GlowHeat * heat);
+                float flash = saturate((heat - FlashStart) / (1.0 - FlashStart));
 
                 FragmentInput output;
                 output.position = UnityViewToClipPos(viewCorner);
                 output.corner = input.position.xy * 2.0;
-                output.color = body.tint.rgb * strength;
+                output.color = lerp(body.tint.rgb, float3(1.0, 1.0, 1.0), flash * FlashWhiten) * strength;
                 UNITY_TRANSFER_FOG(output, output.position);
                 return output;
             }

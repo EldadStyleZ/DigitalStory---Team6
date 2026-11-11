@@ -1,6 +1,6 @@
 // Draws every wasp in one Graphics.RenderMeshIndirect call. WaspSwarm.compute has already moved them;
 // this shader reads both wasp buffers by instance id, points each wasp along its velocity and flaps its wings,
-// and stretches a meteor wasp into a streak.
+// and stretches a striking wasp (a sting's comet, a diving meteor) into a streak.
 // The wasps glow at night, like the artist's pictures: the light bands are mostly emissive, in the colour the compute
 // shader blends for each wasp, and whiter where a facet faces the camera, so each wasp has a bright core. A little
 // moonlight shows the facets. The dark stripes and the head stay dark. WaspGlow.shader draws the soft glow around each.
@@ -43,7 +43,7 @@ Shader "DigitalStory/WaspInstanced"
                 float height01;
                 float level01;
                 float phase01;
-                float unused;
+                float squad;        // which slot's squad the wasp joins; only WaspSwarm.compute reads it
             };
 
             // 48 bytes, the same layout as WaspDynamic in WaspSwarm.compute and WaspGlow.shader.
@@ -76,8 +76,9 @@ Shader "DigitalStory/WaspInstanced"
             // Below this speed a wasp faces its resting heading instead, so it never spins when it hovers.
             static const float StillSpeed = 0.05;
 
-            // Only a climbing or diving meteor flies faster than the swarm's speed cap (MaxSpeed, 25 m/s, in
-            // WaspSwarm.compute). Such a wasp draws stretched back along its flight, so the dive reads as streaks.
+            // Only a strike (a sting's comet, a climbing or diving meteor) flies faster than the swarm's speed cap
+            // (MaxSpeed, 25 m/s, in WaspSwarm.compute). Such a wasp draws stretched back along its flight, so it reads as
+            // a streak.
             static const float StreakSpeed = 26.0;
             static const float StreakPerSpeed = 0.15;   // extra body lengths per metre per second above StreakSpeed
             static const float MostStreak = 5.0;        // extra body lengths at most
@@ -107,6 +108,11 @@ Shader "DigitalStory/WaspInstanced"
             static const float HeatGlow = 0.25;
             static const float EdgeGlow = 0.55;
             static const float CoreWhiten = 0.45;
+
+            // An impact (ImpactHeat, 1, in WaspSwarm.compute) whitens the light bands for its few frames, so a hit reads
+            // on the frame it lands. A sting's tick (0.9) and every lower heat stay in their colour.
+            static const float FlashStart = 0.95;
+            static const float FlashWhiten = 0.7;
             static const float ShapeLight = 0.2;        // share of the moonlight and ambient light added, so the facets show
 
             // The eyes are dark on a calm wasp and burn in its colour as it heats up, like the red wasps in the pictures.
@@ -227,7 +233,8 @@ Shader "DigitalStory/WaspInstanced"
             float3 GlowingBand(float3 tint, float heat, float facing, float3 light)
             {
                 float level = (BandGlow + HeatGlow * heat) * lerp(EdgeGlow, 1.0, facing);
-                float core = saturate(facing * facing * CoreWhiten);
+                float flash = saturate((heat - FlashStart) / (1.0 - FlashStart));
+                float core = saturate(facing * facing * CoreWhiten + flash * FlashWhiten);
                 float3 glowing = lerp(tint * level, float3(1.0, 1.0, 1.0), core);
                 return glowing + tint * light * ShapeLight;
             }

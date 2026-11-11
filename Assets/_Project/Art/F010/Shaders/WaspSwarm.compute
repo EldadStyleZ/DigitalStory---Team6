@@ -1,6 +1,14 @@
-// Moves every wasp of the swarm, one thread per wasp. Spec: docs/specs/F-010-wasp-swarm.md, sections 9.2 to 9.4.
+// Moves every wasp of the swarm, one thread per wasp. Spec: docs/specs/F-010-wasp-swarm.md, sections 9.2 to 9.4, and
+// docs/specs/F-010-songs-v2.md, sections B and C (the song slots).
 // SwarmGpuView sets every uniform and buffer below by name, so keep the names and layouts in step with it.
-// The CPU never reads this data back. Gameplay only feeds in counts, the form and a few positions.
+// The CPU never reads this data back. Gameplay only feeds in counts, the forms, the slots and a few positions.
+//
+// Two layers decide where a wasp flies:
+// - The whole-swarm form (_Form): River, Hive Call, Colossus or Collapsed. It sweeps through the swarm as a wave.
+// - Three song slots (Post, Guard, Strike). A live slot's squad, the wasps whose squad value lies in its [low, high),
+//   flies that slot's song; every other wasp flies the whole-swarm form. A Gust pulse is then added on top of both.
+// Adding a song: a form id below, one target function that returns a Steer from a SlotContext, and one case in
+// SlotSteer. Nothing else in this file or in SwarmGpuView changes.
 
 #pragma kernel Simulate
 #pragma kernel ResetWasps
@@ -8,19 +16,24 @@
 // Matches SwarmGpuView.ThreadsPerGroup.
 #define THREAD_GROUP_SIZE 64
 
+// Matches SwarmGpuView.SlotCount (one per DigitalStory.Logic.SongSlot: Post 0, Guard 1, Strike 2) and
+// SwarmGpuView.VectorsPerSlot.
+#define SLOT_COUNT 3
+#define SLOT_VECTORS 3
+
 // 48 bytes, the same layout as SwarmGpuView.WaspStatic and the struct in WaspInstanced.shader. Written once by the CPU.
 struct WaspStatic
 {
-    float seed;          // 0..1: picks the stingers and phases the wings
+    float seed;          // 0..1: phases the wings and spreads the halo
     float lane;          // 0..1: place along the river (0 at the Piper) and order in a form wave
     float ringAngle;     // radians: place around the river's cross-section
     float ringRadius;    // 0..1: share of the river radius
     float3 boneOffset;   // the wasp's point on the Colossus, in its bone's space
     float boneIndex;     // the Colossus bone, as a whole number
     float height01;      // 0 at the Colossus's feet, 1 at its head: order of the Colossus wave
-    float level01;       // 0..1: height in the tornado and latitude on the sting orbit
+    float level01;       // 0..1: height in the tornado and latitude on spheres
     float phase01;       // 0..1: spreads timings and directions
-    float unused;        // pads the struct to 48 bytes
+    float squad;         // 0..1: frac(0.5 + index x 0.7548777). Which slot's squad the wasp joins, and its rank there
 };
 
 // 48 bytes, the same layout as the struct in WaspInstanced.shader. Only this shader writes it.
@@ -42,7 +55,7 @@ int _MaxWasps;
 int _ActiveCount;
 int _TrailCount;
 int _BoneCount;                           // 0 until the Colossus has bones and samples
-int _Form;                                // DigitalStory.Logic.SwarmForm
+int _Form;                                // the whole-swarm DigitalStory.Logic.SwarmForm: River, HiveCall, Colossus or Collapsed
 int _PreviousForm;
 
 float _SimTime;
@@ -53,18 +66,25 @@ float _PreviousFormStartTime;
 float4 _PiperPosition;
 float4 _PiperForward;                     // flat and unit length
 float _StandingShare;                     // 0 while the Piper walks, easing to 1 once they have stood still a moment
-float4 _Sting;                            // xyz target, w share of the swarm that stings
 float4 _HiveA;                            // xyz position, w 1 while it stands
 float4 _HiveB;
 float4 _LastHit;
-float4 _Meteor;                           // xyz impact point, w share of the swarm that flies the meteor
-float _MeteorRiseSeconds;                 // from the cast to the top of the climb
-float _MeteorDiveSeconds;                 // from the top of the climb to the impact
-float _MeteorHeight;                      // metres above the Piper the meteor climbs to
+
+// The song slots, SLOT_VECTORS float4s per slot, in the order of DigitalStory.Logic.SongSlot:
+//   [0] header: x the SwarmForm id, or -1 while the slot is empty; y the cast, in _SimTime; z low; w high (the squad range)
+//   [1] p0: SlotState.ParamA, the song's own numbers (see each target function)
+//   [2] p1: SlotState.ParamB, except w: the release, in _SimTime, or -1 while the song runs
+float4 _Slots[SLOT_COUNT * SLOT_VECTORS];
+
+// Each slot's colour, in the colour space the draw expects: the category colour of the song it holds.
+float4 _SlotColors[SLOT_COUNT];
+
+// The Gust pulse: xy the centre on the ground (world x and z), z its start in _SimTime, w its radius (0: no gust yet).
+float4 _Pulse;
 
 // Colours, already in the colour space the draw expects. A wasp in the river (or the collapsed swarm) shows the river's
-// colour; in any other form it shows the colour of the last song cast. A form change sweeps through the swarm as a
-// wave, so a wasp the wave has not reached yet still shows the colour of the form before.
+// colour; in Hive Call or the Colossus it shows the cast colour. A form change sweeps through the swarm as a wave, so a
+// wasp the wave has not reached yet still shows the colour of the form before.
 float4 _RiverColor;
 float4 _CastColor;
 float4 _PreviousCastColor;
@@ -85,14 +105,8 @@ float _StandingTrailMeters;
 float _TorusRadius;
 float _DyingSeconds;
 
-// From the song assets, or 0 to use the defaults below.
-float _DomeRadius;
-float _TornadoRadius;
-float _MeteorRadius;                      // the reach of the impact, MeteorSong.Radius: the burst's ring
-
 static const float FullTurn = 6.28318530718;
 static const float HalfTurn = 3.14159265359;
-static const float GoldenAngle = 2.39996322973;
 static const float3 Up = float3(0.0, 1.0, 0.0);
 static const float3 Still = float3(0.0, 0.0, 0.0);
 static const float Tiny = 0.0001;
@@ -102,7 +116,8 @@ static const int StateAlive = 0;
 static const int StateDying = 1;
 static const int StateDead = 2;
 
-// Form ids, the same numbers as DigitalStory.Logic.SwarmForm.
+// Form ids, the same numbers as DigitalStory.Logic.SwarmForm. River, HiveCall, Colossus and Collapsed are whole-swarm
+// forms; the rest run in a slot.
 static const int FormRiver = 0;
 static const int FormDome = 1;
 static const int FormSting = 2;
@@ -113,11 +128,14 @@ static const int FormColossus = 6;
 static const int FormCollapsed = 7;
 static const int FormMeteor = 8;
 
+static const int NoSlot = -1;
+static const float NoFloor = -100000.0;  // a Steer's floor when the wasp may fly as low as it likes
+
 // Enough halving steps for a trail of 4,096 points.
 static const int TrailSearchSteps = 12;
 
-// The look of each form, from spec 9.3. SwarmConfig does not hold these yet; move one there if it needs tuning.
-// The shapes are sized for at most 4,000 wasps of 0.24 m: wide and thick enough that the wasps keep apart.
+// The look of each form, from spec 9.3 and songs-v2 section B. SwarmConfig does not hold these; move one there if it
+// needs tuning. The shapes are sized for at most 4,000 wasps of 0.24 m: wide and thick enough that the wasps keep apart.
 static const float FlyHeight = 1.0;              // metres above the ground the river flows
 static const float CrossSectionHeight = 0.45;    // the river's and the ring's height as a share of their width. Flat, so
                                                  // the wasps spread out where the camera above sees them one by one
@@ -125,57 +143,146 @@ static const float CrossSectionHeight = 0.45;    // the river's and the ring's h
 static const float RiverSwirl = 0.6;             // radians per second the river's cross-section turns
 static const float MeanderWaveNumber = 1.4;      // radians per metre along the river, a wave about 4.5 m long
 static const float MeanderSpeed = 0.9;           // radians per second
-static const float DefaultDomeRadius = 2.2;
-static const float DomeSpin = 0.25;              // radians per second
-static const float DomeShellThickness = 0.3;     // metres the dome's shell spreads across its radius, so it reads as a
-                                                 // swarm in depth rather than wasps pressed into one surface
-static const float StingFlightSeconds = 0.6;
-static const float StingStaggerSeconds = 0.35;
-static const float StingArcHeight = 1.2;         // metres the arc rises, plus StingArcRise per metre of distance
-static const float StingArcRise = 0.25;
-static const float StingTargetHeight = 1.0;      // metres above the target's feet
-static const float StingOrbitRadius = 1.0;       // wraps a beekeeper from the feet to the head
-static const float StingOrbitSpin = 5.0;         // radians per second
 static const float RiverHeadGap = 1.2;           // metres behind the Piper where the river starts, so it never hides them
-static const float TornadoInnerRadius = 1.5;
-static const float DefaultTornadoRadius = 5.0;
-static const float TornadoFunnelBottom = 0.8;    // the column's radius at the bottom and top, as a share
-static const float TornadoFunnelTop = 1.25;
-static const float TornadoWallShare = 0.75;      // share of the wasps in the column's wall; the rest are flung out
-static const float TornadoWallThickness = 0.7;   // metres
-static const float TornadoBaseHeight = 0.2;
-static const float TornadoHeight = 3.0;
-static const float TornadoSpin = 6.0;            // radians per second
-static const float TornadoTwist = 3.0;           // radians the spiral turns from bottom to top
-static const float GustSeconds = 0.8;
-static const float GustStartRadius = 0.6;
-static const float GustRadius = 6.0;
 static const float HaloRadius = 0.9;
 static const float HaloHeight = 2.2;             // over the Piper's head, clear of it by more than HaloThickness
 static const float HaloThickness = 0.25;
 static const float HaloSpin = 2.5;               // radians per second
-static const float MeteorClimbStagger = 0.3;     // share of the rise over which the climbers set off, lowest seed first
+
+// Every slot song launches and returns with the same two blends (songs-v2 B). Peel: a wasp leaves the base form over
+// PeelSeconds, starting PeelStagger later the further back along the river it was at the cast, so the river's head
+// leaves first and a launch is a ribbon, never a pop. Home: after the release it eases back over HomeSeconds, starting
+// HomeStagger later the higher its order. The plan's Home is 0.5 s plus 0.25 s; it is shortened so the last wasp is home
+// when the slot's 0.6 s return beat ends and the slot empties, instead of springing the last fifth of the way.
+static const float PeelSeconds = 0.3;
+static const float PeelStagger = 0.25;
+static const float HomeSeconds = 0.4;
+static const float HomeStagger = 0.2;
+
+// Strikes fly on a stiff spring so a fast wasp keeps to its path; held shapes use SwarmConfig's shape spring.
+static const float StrikeSpring = 400.0;         // stable to dt 1/30
+static const float StrikeDamping = 0.8;
+static const float StrikeMaxSpeed = 70.0;        // metres per second, enough for an 18 m dive from 12 m up in 0.5 s
+static const float MaxSpeed = 25.0;              // metres per second, so a far target never fires a wasp across the map.
+                                                 // WaspInstanced.shader draws a wasp faster than this as a streak.
+
+// The heat curve of a strike (songs-v2 B): from WindUpStartHeat to WindUpHeat through the wind-up, ImpactHeat for
+// ImpactSeconds from the impact, then HoldHeat. ImpactHeat is the only heat that turns a wasp white in the draw.
+static const float WindUpStartHeat = 0.4;
+static const float WindUpHeat = 0.8;
+static const float ImpactHeat = 1.0;
+static const float ImpactSeconds = 0.15;
+static const float HoldHeat = 0.5;
+
+// The heat of the whole-swarm forms and the held shapes, 0 to 1: how much brighter than the calm river the wasps and
+// their glow burn, and how much their eyes light up.
+static const float RiverGlow = 0.1;
+static const float RiverQuietGlow = 0.05;        // while any slot holds a song, so the squads stand out
+static const float DomeGlow = 0.4;
+static const float GustGlow = 0.4;
+static const float HiveCallGlow = 0.6;
+static const float ColossusGlow = 0.4;
+
+// Sting (Strike slot). p0.xyz: the target's feet, live. p1.xyz: a second target, read by the Twin Sting duet later.
+static const float StingFlightSeconds = 0.6;     // the head arrives, and the damage starts, at this many seconds
+static const float StingArcHeight = 1.2;         // metres the arc rises, plus StingArcRise per metre of distance
+static const float StingArcRise = 0.25;
+static const float StingChestHeight = 1.0;       // metres above the target's feet
+static const float StingHeadWidth = 0.08;        // metres the comet's head spreads; the tail adds up to StingTailWidth
+static const float StingTailWidth = 0.6;
+static const float StingWrapStart = 0.75;        // share of its flight after which a wasp turns from the arc onto its ring
+// The plan's 0.8 m rings (squeezing to 0.55 m) read as one blob once 600 to 740 wasps of WaspLength sit on them, so
+// they are drawn wider and thinner here, in the same proportions.
+static const float StingRingRadius = 1.1;
+static const float StingSqueezeRadius = 0.75;
+static const float StingTickSeconds = 0.25;      // the rings squeeze and flare once per tick from the head's arrival
+static const float StingSqueezeSeconds = 0.2;    // seconds a squeeze takes to ease back out
+static const float StingTickHeat = 0.9;
+static const float StingRingTilt = 0.959931;     // 55 degrees up from the ground (35 from upright), so the rings cross like a gyroscope's
+static const float StingRingSpin = 5.0;          // radians per second, the two rings turning against each other
+static const float StingRingTube = 0.12;         // metres each ring's band is thick, so the wasps keep apart
+static const float StingPopRadius = 1.6;
+static const float StingPopSeconds = 0.15;
+static const float StingHomeSeconds = 0.3;       // the flight home along the reversed arc, after the pop
+static const float StingHomeStagger = 0.15;
+
+// Tornado (Strike slot). p0: (outer radius, height, spin, hit seconds). p1.x: the wall radius (Eye of the Storm moves it).
+static const float DefaultTornadoRadius = 5.0;
+static const float TornadoInnerRadius = 1.5;
+static const float TornadoHeight = 3.0;
+static const float TornadoSpin = 6.0;            // radians per second until the hit
+static const float TornadoHitSeconds = 0.3;
+static const float TornadoSpinUp = 1.5;          // the spin after the hit, as a share of the spin before: 6 to 9 rad/s
+static const float TornadoSpinUpSeconds = 0.3;
+static const float TornadoFunnelBottom = 0.8;    // the column's radius at the bottom and top, as a share
+static const float TornadoFunnelTop = 1.25;
+static const float TornadoWallShare = 0.75;      // share of the wasps in the column's wall; the rest, the river's head
+                                                 // at the cast, are flung out, since they reach the Piper first
+static const float TornadoWallThickness = 0.7;   // metres
+static const float TornadoBaseHeight = 0.2;
+static const float TornadoTwist = 3.0;           // radians the spiral turns from bottom to top
+static const float TornadoSkirtRadius = 1.5;     // the skirt the wasps wait in until the growing top passes them
+static const float TornadoSkirtHeight = 0.3;
+static const float TornadoClimbBand = 0.6;       // metres below its place the top is when a wasp starts up the column
+static const float TornadoShockSeconds = 0.12;   // the flung share's goal takes this long to reach the outer radius
+static const float TornadoShockLead = 0.22;      // seconds before the hit it sets off, so with the strike spring's lag
+                                                 // the ring reaches the beekeepers on the hit's frame (stepped at 60 fps)
+static const float TornadoShockInner = 0.85;     // the shock ring's inner edge, as a share of the outer radius
+static const float TornadoShockHeight = 0.5;     // knee high
+static const float TornadoShockSpin = 1.0;       // radians per second the shock ring turns. At the column's spin its 5 m
+                                                 // ring would need 45 m/s, past MaxSpeed, and the wasps would cut inside it.
+static const float TornadoUnwind = 1.0;          // the radius grows by this share as the column unwinds into the river
+
+// Meteor (Strike slot). p0: (impact point xyz, live until the dive; height). p1.xyz: (rise, dive, radius) in seconds,
+// seconds and metres. The first diver lands at rise + dive, with the damage.
+static const float DefaultMeteorRadius = 3.0;    // the reach when p1.z is 0, MeteorSong.Radius's default
+static const float MeteorMarkerShare = 0.9;      // the wasps ranked from here up draw the target ring instead of diving
+static const float MeteorMarkDropSeconds = 0.3;  // they drop from the ball to the ring when their climb ends
+static const float MeteorMarkSpin = 1.2;         // radians per second the target ring turns
+static const float MeteorClimbStagger = 0.3;     // share of the rise over which the climbers set off, lowest rank first
 static const float MeteorClimbShare = 0.55;      // share of the rise one wasp's climb takes; the rest is the hang
 static const float MeteorGatherShare = 0.5;      // share of its climb a wasp takes to leave the river for the column
 static const float MeteorSpreadShare = 0.7;      // from this share of its climb the column opens into the ball
 static const float MeteorColumnRadius = 0.45;
 static const float MeteorColumnSpin = 4.0;       // radians per second
-static const float MeteorBallRadius = 1.9;
+static const float MeteorBallRadius = 1.6;
+static const float MeteorHeartRadius = 1.0;      // the ball tightens to this in the heartbeat before the dive
+static const float MeteorHeartbeatSeconds = 0.2;
 static const float MeteorBallSpin = 1.5;         // radians per second
 static const float MeteorDiveStagger = 0.15;     // seconds from the first diver to the last, so the dive draws streaks
 static const float MeteorDiveEase = 0.5;         // the dive's starting speed as a share of its mean; it ends at 2 minus this
 static const float MeteorLandingScatter = 1.0;   // metres from the impact point a wasp lands, at most
 static const float MeteorFloorHeight = 0.15;     // metres above the impact point a landed wasp skims
 static const float MeteorSkidKeep = 0.35;        // share of its ground speed a wasp keeps when it hits the floor
-static const float DefaultMeteorRadius = 3.0;    // the burst's ring when _MeteorRadius is 0, MeteorSong.Radius's default
-static const float MeteorRingInner = 0.7;        // the ring's inner edge, as a share of its radius
+static const float MeteorRingInner = 0.7;        // the burst ring's inner edge, as a share of its radius
 static const float MeteorRingHeight = 0.4;
-static const float MeteorBurstSeconds = 0.35;    // seconds a wasp flies out to the ring before it heads back to the river
-static const float MeteorSpring = 400.0;         // stiff, so a climbing or diving wasp keeps to its path; stable to dt 1/30
-static const float MeteorDamping = 0.8;
-static const float MeteorMaxSpeed = 70.0;        // metres per second, enough for an 18 m dive from 12 m up in 0.5 s
-static const float MaxSpeed = 25.0;              // metres per second, so a far target never fires a wasp across the map.
-                                                 // WaspInstanced.shader draws a wasp faster than this as a streak.
+// The rules let go as the meteor lands, so the burst and the flight home share the slot's 0.6 s return beat
+// (SquadConfig.ReturnSeconds): MeteorBurstSeconds + MeteorHomeSeconds + MeteorHomeStagger must not pass it.
+static const float MeteorBurstSeconds = 0.2;     // seconds after the release before the first wasp heads home
+static const float MeteorHomeSeconds = 0.3;
+static const float MeteorHomeStagger = 0.1;      // seconds from the first rank heading home to the last
+
+// Dome (Guard slot). p0.x: the radius. p0.yzw (hit direction and time) feed the ripple of a later milestone.
+static const float DefaultDomeRadius = 2.2;
+static const float DomeSpin = 0.25;              // radians per second
+static const float DomeShellThickness = 0.3;     // metres the shell spreads across its radius, so it reads as a swarm
+static const float DomeWeaveStagger = 0.35;      // seconds from the ground ring leaving to the crown leaving
+static const float DomeWeaveSeconds = 0.25;      // seconds one wasp's spiral into its place takes
+static const float DomeWeaveTurn = 1.5;          // radians a wasp turns about the Piper as it spirals in
+
+// Gust: a pulse added to every wasp within the radius, whatever it is doing. An inhale toward the centre, then a ring
+// whose front pushes the wasps out and up as it passes, slowing as it grows; then the swarm glides back.
+static const float GustInhaleSeconds = 0.12;
+static const float GustInhaleMeters = 0.5;
+static const float GustStartRadius = 0.6;
+static const float GustRingSeconds = 0.5;        // from the end of the inhale to the ring at its full radius
+static const float GustPushMeters = 1.2;
+static const float GustLiftMeters = 0.4;
+static const float GustPushRise = 0.4;           // metres the front travels past a wasp while it is pushed out
+static const float GustPushFall = 2.0;           // metres more while the push eases off
+static const float GustFadeStart = 0.55;
+static const float GustPulseSeconds = 0.8;       // GustSong.Seconds: the pulse is over by then
+
 static const float SpawnHeight = 1.2;            // metres above a hive's base
 static const float SpawnScatter = 0.5;
 static const float SpawnLift = 4.0;              // upward metres per second at birth, so newcomers arc in
@@ -187,47 +294,87 @@ static const float BurstSpreadRange = 0.8;
 static const float Gravity = 9.81;
 static const float FallDrag = 1.5;               // share of speed lost per second while falling
 static const float TintSharpness = 6.0;          // how fast a wasp takes on its form's colour, per second
-static const float MeteorTintSharpness = 14.0;   // faster, so the meteor's heat follows its short dive
+static const float SlotTintSharpness = 14.0;     // faster, so a song's colour and cooling follow its short beats
 
-// The heat of each form, 0 to 1: how much brighter than the calm river the wasps and their glow burn, and how much
-// their eyes light up. Attacks run hottest.
-static const float RiverGlow = 0.1;
-static const float DomeGlow = 0.4;
-static const float StingGlow = 0.9;
-static const float TornadoGlow = 0.5;
-static const float GustGlow = 0.4;
-static const float HiveCallGlow = 0.6;
-static const float ColossusGlow = 0.4;
-static const float MeteorGlow = 0.55;            // while it waits, climbs and hangs
-static const float MeteorDiveGlow = 1.0;         // hottest in the dive
-static const float MeteorBurstGlow = 0.75;
+// What one slot hands its target function for one wasp.
+struct SlotContext
+{
+    uint index;
+    WaspStatic wasp;
+    float3 baseGoal;     // where the whole-swarm form wants the wasp: every launch peels from it, every return goes to it
+    float u;             // 0..1: the wasp's rank in its squad, evenly spread
+    float lane;          // 0..1: its place along the river at the cast, 0 at the head
+    float seconds;       // since the cast
+    float released;      // seconds since the release, or -1 while the song runs
+    float4 p0;           // SlotState.ParamA
+    float4 p1;           // SlotState.ParamB; w is the release time, already turned into `released`
+};
+
+// What a target function decides for one wasp.
+struct Steer
+{
+    float3 goal;
+    float share;         // 0: flies, glows and is coloured like the base form; 1: like the song
+    float heat;          // the song's heat
+    float floorY;        // a wasp below this skims along it, or NoFloor
+    bool isFast;         // on the strike spring and the strike speed cap
+};
 
 int StateOf(WaspDynamic body)
 {
     return (int)(body.state + 0.5);
 }
 
+// The header of a slot: x form or -1, y cast time, z low, w high.
+float4 SlotHeader(int slot)
+{
+    return _Slots[slot * SLOT_VECTORS];
+}
+
+bool IsSlotLive(float4 header)
+{
+    return header.x >= 0.0;
+}
+
+bool IsAnySlotLive()
+{
+    bool isLive = false;
+
+    [unroll]
+    for (int slot = 0; slot < SLOT_COUNT; slot++)
+    {
+        if (IsSlotLive(SlotHeader(slot)))
+        {
+            isLive = true;
+        }
+    }
+
+    return isLive;
+}
+
+// The slot whose squad holds this wasp, or NoSlot. The bands never overlap, so at most one matches.
+int SlotOf(WaspStatic wasp)
+{
+    int found = NoSlot;
+
+    [unroll]
+    for (int slot = 0; slot < SLOT_COUNT; slot++)
+    {
+        float4 header = SlotHeader(slot);
+        if (IsSlotLive(header) && wasp.squad >= header.z && wasp.squad < header.w)
+        {
+            found = slot;
+        }
+    }
+
+    return found;
+}
+
 // One exit with the result set first, so the compiler sees it initialised on every path.
 float GlowOf(int look)
 {
-    float glow = RiverGlow;
-    if (look == FormDome)
-    {
-        glow = DomeGlow;
-    }
-    else if (look == FormSting)
-    {
-        glow = StingGlow;
-    }
-    else if (look == FormTornado)
-    {
-        glow = TornadoGlow;
-    }
-    else if (look == FormGust)
-    {
-        glow = GustGlow;
-    }
-    else if (look == FormHiveCall)
+    float glow = IsAnySlotLive() ? RiverQuietGlow : RiverGlow;
+    if (look == FormHiveCall)
     {
         glow = HiveCallGlow;
     }
@@ -235,16 +382,12 @@ float GlowOf(int look)
     {
         glow = ColossusGlow;
     }
-    else if (look == FormMeteor)
-    {
-        glow = MeteorGlow;
-    }
 
     return glow;
 }
 
-// The colour and heat a wasp heads for. hasSwitched says whether the current form's wave has reached the wasp, the
-// same test that picks its form, so the colour flows through the swarm with the motion.
+// The colour and heat a wasp of the whole-swarm form heads for. hasSwitched says whether the form's wave has reached the
+// wasp, the same test that picks its form, so the colour flows through the swarm with the motion.
 float4 TintOf(int look, bool hasSwitched)
 {
     float3 color = hasSwitched ? _CastColor.rgb : _PreviousCastColor.rgb;
@@ -259,6 +402,42 @@ float4 TintOf(int look, bool hasSwitched)
 float3 RingOffset(float angle, float radius)
 {
     return float3(cos(angle) * radius, 0.0, sin(angle) * radius);
+}
+
+// A point on the unit sphere, spread by two of the wasp's random numbers.
+float3 SphereDirection(WaspStatic wasp)
+{
+    float latitude = 1.0 - 2.0 * wasp.level01;
+    float spread = sqrt(saturate(1.0 - latitude * latitude));
+    return RingOffset(wasp.phase01 * FullTurn, spread) + Up * latitude;
+}
+
+// The flat, unit direction from one point to another, or the Piper's facing when they stand on the same spot.
+float3 FlatDirection(float3 from, float3 to)
+{
+    float3 along = to - from;
+    along.y = 0.0;
+    float alongLength = length(along);
+    return alongLength > Tiny ? along / alongLength : _PiperForward.xyz;
+}
+
+float3 Bezier(float3 start, float3 control, float3 end, float progress)
+{
+    float rest = 1.0 - progress;
+    return rest * rest * start + 2.0 * rest * progress * control + progress * progress * end;
+}
+
+// The Bezier's rate of change per unit of progress.
+float3 BezierSlope(float3 start, float3 control, float3 end, float progress)
+{
+    return 2.0 * (1.0 - progress) * (control - start) + 2.0 * progress * (end - control);
+}
+
+// How far the strike spring lags a goal moving at one metre per second. Setting the goal that far ahead along a fast
+// path lets the wasp keep to the path instead of trailing it, so it lands on time.
+float StrikeLeadSeconds()
+{
+    return 2.0 * StrikeDamping / sqrt(StrikeSpring);
 }
 
 // The point `distance` metres back along the Piper's trail, and the way the trail runs there (toward the Piper).
@@ -320,6 +499,12 @@ float TrailLength()
     return _TrailCount > 0 ? _Trail[_TrailCount - 1].w : 0.0;
 }
 
+// The wasp's place along the river at a moment: 0 at the head, by the Piper, 1 at the tail.
+float FlowLaneAt(WaspStatic wasp, float time)
+{
+    return frac(wasp.lane + time * _FlowSpeed);
+}
+
 // While the Piper stands, the river curls into a lazy ring around them.
 float3 TorusTarget(WaspStatic wasp, float flowLane)
 {
@@ -333,7 +518,7 @@ float3 TorusTarget(WaspStatic wasp, float flowLane)
 
 float3 RiverTarget(WaspStatic wasp)
 {
-    float flowLane = frac(wasp.lane + _SimTime * _FlowSpeed);
+    float flowLane = FlowLaneAt(wasp, _SimTime);
     float trailLength = TrailLength();
     float along = lerp(RiverHeadGap, max(min(_RiverLength, trailLength), RiverHeadGap), flowLane);
 
@@ -352,71 +537,6 @@ float3 RiverTarget(WaspStatic wasp)
     float trailShare = saturate(trailLength / max(_StandingTrailMeters, Tiny));
     float riverShare = trailShare * (1.0 - saturate(_StandingShare));
     return lerp(TorusTarget(wasp, flowLane), river, riverShare);
-}
-
-// A Fibonacci hemisphere: every active wasp gets its own evenly spread point, at any count. The shell has some depth
-// about the song's radius, so 4,000 big wasps on it overlap less.
-float3 DomeTarget(uint index, WaspStatic wasp)
-{
-    float count = max((float)_ActiveCount, 1.0);
-    float slot = (float)index + 0.5;
-    float height = 1.0 - saturate(slot / count);
-    float spread = sqrt(saturate(1.0 - height * height));
-    float around = slot * GoldenAngle + _SimTime * DomeSpin;
-    float radius = _DomeRadius > 0.0 ? _DomeRadius : DefaultDomeRadius;
-    radius += (wasp.ringRadius - 0.5) * DomeShellThickness;
-    return _PiperPosition.xyz + (RingOffset(around, spread) + Up * height) * radius;
-}
-
-bool IsStinger(WaspStatic wasp)
-{
-    return wasp.seed < _Sting.w;
-}
-
-float3 Bezier(float3 start, float3 control, float3 end, float progress)
-{
-    float rest = 1.0 - progress;
-    return rest * rest * start + 2.0 * rest * progress * control + progress * progress * end;
-}
-
-// Along an arc from the Piper to the target, then round a sphere about it.
-float3 StingTarget(WaspStatic wasp, float formSeconds)
-{
-    float3 start = _PiperPosition.xyz + Up * FlyHeight;
-    float3 end = _Sting.xyz + Up * StingTargetHeight;
-    float3 control = (start + end) * 0.5 + Up * (StingArcHeight + StingArcRise * distance(start, end));
-    float progress = saturate((formSeconds - wasp.phase01 * StingStaggerSeconds) / StingFlightSeconds);
-    float3 arc = Bezier(start, control, end, progress);
-
-    float latitude = 1.0 - 2.0 * wasp.level01;
-    float spread = sqrt(saturate(1.0 - latitude * latitude));
-    float spin = wasp.phase01 < 0.5 ? StingOrbitSpin : -StingOrbitSpin;
-    float around = wasp.phase01 * FullTurn + _SimTime * spin;
-    float3 orbit = end + (RingOffset(around, spread) + Up * latitude) * StingOrbitRadius;
-    return lerp(arc, orbit, smoothstep(0.75, 1.0, progress));
-}
-
-// A spinning spiral column, a little wider at the top. Most wasps make its wall at the inner radius, so it reads as a
-// column from the game camera; the rest are flung out to the outer radius, the reach of the song's knockback.
-float3 TornadoTarget(WaspStatic wasp)
-{
-    float outer = _TornadoRadius > 0.0 ? _TornadoRadius : DefaultTornadoRadius;
-    float funnel = lerp(TornadoFunnelBottom, TornadoFunnelTop, wasp.level01);
-    float wall = (TornadoInnerRadius + (wasp.ringRadius - 0.5) * TornadoWallThickness) * funnel;
-    float flung = lerp(TornadoInnerRadius, outer, wasp.ringRadius);
-    float radius = wasp.phase01 < TornadoWallShare ? wall : flung;
-    float around = wasp.ringAngle + wasp.level01 * TornadoTwist + _SimTime * TornadoSpin;
-    float height = TornadoBaseHeight + wasp.level01 * TornadoHeight;
-    return _PiperPosition.xyz + RingOffset(around, radius) + Up * height;
-}
-
-// A ring that bursts out and comes back over GustSeconds.
-float3 GustTarget(WaspStatic wasp, float formSeconds)
-{
-    float burst = saturate(formSeconds / GustSeconds);
-    float radius = lerp(GustStartRadius, GustRadius, sin(burst * HalfTurn));
-    float lift = FlyHeight + sin(wasp.ringAngle) * wasp.ringRadius * _RiverRadius * CrossSectionHeight;
-    return _PiperPosition.xyz + RingOffset(wasp.seed * FullTurn, radius) + Up * lift;
 }
 
 // A tight halo over the Piper's head.
@@ -445,180 +565,21 @@ float3 ColossusTarget(WaspStatic wasp)
     return mul(_Bones[BoneOf(wasp)], float4(wasp.boneOffset, 1.0)).xyz;
 }
 
-bool IsMeteor(WaspStatic wasp)
-{
-    return wasp.seed < _Meteor.w;
-}
-
-// 0 for the first meteor wasp to climb and to dive, 1 for the last: its seed spread over the share that flies.
-float MeteorOrderOf(WaspStatic wasp)
-{
-    return saturate(wasp.seed / max(_Meteor.w, Tiny));
-}
-
-// The meteor's times, in seconds from the cast. Each climb ends by MeteorClimbStagger + MeteorClimbShare of the rise,
-// so every wasp hangs a moment in the ball. The first diver lands at the rise plus the dive, with the damage.
-float MeteorClimbStart(WaspStatic wasp)
-{
-    return MeteorOrderOf(wasp) * MeteorClimbStagger * _MeteorRiseSeconds;
-}
-
-float MeteorDiveStart(WaspStatic wasp)
-{
-    return _MeteorRiseSeconds + MeteorOrderOf(wasp) * MeteorDiveStagger;
-}
-
-float MeteorLandTime(WaspStatic wasp)
-{
-    return MeteorDiveStart(wasp) + _MeteorDiveSeconds;
-}
-
-float MeteorReturnTime(WaspStatic wasp)
-{
-    return MeteorLandTime(wasp) + MeteorBurstSeconds;
-}
-
-// How far the meteor spring lags a goal moving at one metre per second. Setting the goal that far ahead along a fast
-// path lets the wasp keep to the path instead of trailing it.
-float MeteorLeadSeconds()
-{
-    return 2.0 * MeteorDamping / sqrt(MeteorSpring);
-}
-
-// A loose ball at the top of the climb, turning slowly.
-float3 MeteorBallPoint(WaspStatic wasp)
-{
-    float latitude = 1.0 - 2.0 * wasp.level01;
-    float spread = sqrt(saturate(1.0 - latitude * latitude));
-    float around = wasp.phase01 * FullTurn + _SimTime * MeteorBallSpin;
-    float3 offset = (RingOffset(around, spread) + Up * latitude) * (wasp.ringRadius * MeteorBallRadius);
-    return _PiperPosition.xyz + Up * _MeteorHeight + offset;
-}
-
-// Out of the river into a tight column over the Piper, up it, and out into the ball at the top.
-float3 MeteorClimbTarget(WaspStatic wasp, float formSeconds)
-{
-    float climbSeconds = max(MeteorClimbShare * _MeteorRiseSeconds, Tiny);
-    float progress = saturate((formSeconds - MeteorClimbStart(wasp)) / climbSeconds);
-    float climb = smoothstep(0.0, 1.0, progress);
-    float climbRate = 6.0 * progress * (1.0 - progress) / climbSeconds;
-    float lead = (_MeteorHeight - FlyHeight) * climbRate * MeteorLeadSeconds();
-
-    float around = wasp.ringAngle + _SimTime * MeteorColumnSpin;
-    float height = lerp(FlyHeight, _MeteorHeight, climb) + lead;
-    float3 column = _PiperPosition.xyz + RingOffset(around, wasp.ringRadius * MeteorColumnRadius) + Up * height;
-    float3 lifted = lerp(RiverTarget(wasp), column, smoothstep(0.0, MeteorGatherShare, progress));
-    return lerp(lifted, MeteorBallPoint(wasp), smoothstep(MeteorSpreadShare, 1.0, progress));
-}
-
-// Where a meteor wasp lands, within MeteorLandingScatter of the impact point.
-float3 MeteorLandingPoint(WaspStatic wasp)
-{
-    float reach = sqrt(wasp.level01) * MeteorLandingScatter;
-    return _Meteor.xyz + RingOffset(wasp.phase01 * FullTurn, reach) + Up * MeteorFloorHeight;
-}
-
-// A steep line from the ball to the wasp's landing point, faster as it falls. The divers set off one after another,
-// so the ball stretches into streaks. The line is worked out each frame from _Meteor as it is now, never from where it
-// was at the cast, so a target that moves during the climb is where the dive goes.
-float3 MeteorDiveTarget(WaspStatic wasp, float formSeconds)
-{
-    float diveSeconds = max(_MeteorDiveSeconds, Tiny);
-    float progress = saturate((formSeconds - MeteorDiveStart(wasp)) / diveSeconds);
-    float travelled = progress * (MeteorDiveEase + (1.0 - MeteorDiveEase) * progress);
-    float rate = (MeteorDiveEase + 2.0 * (1.0 - MeteorDiveEase) * progress) / diveSeconds;
-
-    float3 start = MeteorBallPoint(wasp);
-    float3 path = MeteorLandingPoint(wasp) - start;
-    return start + path * (travelled + rate * MeteorLeadSeconds());
-}
-
-// After it lands, each wasp bursts straight out from its landing point to a ring around the impact, low over the ground.
-// The ring's outer edge is the song's reach, so the burst shows which beekeepers the impact hit.
-float3 MeteorBurstTarget(WaspStatic wasp)
-{
-    float radius = _MeteorRadius > 0.0 ? _MeteorRadius : DefaultMeteorRadius;
-    float reach = lerp(MeteorRingInner, 1.0, wasp.ringRadius) * radius;
-    return _Meteor.xyz + RingOffset(wasp.phase01 * FullTurn, reach) + Up * MeteorRingHeight;
-}
-
-// Waits in the river for its turn, climbs, hangs in the ball, dives and bursts out. The river spring holds it while it
-// waits; the stiff meteor spring flies the climb, the hang and the dive (isFast); the shape spring flies the burst.
-float3 MeteorTarget(WaspStatic wasp, float formSeconds, out bool isShape, out bool isFast)
-{
-    isShape = formSeconds >= MeteorClimbStart(wasp);
-    isFast = isShape && formSeconds < MeteorLandTime(wasp);
-    float3 goal = MeteorBurstTarget(wasp);
-
-    if (!isShape)
-    {
-        goal = RiverTarget(wasp);
-    }
-    else if (formSeconds < MeteorDiveStart(wasp))
-    {
-        goal = MeteorClimbTarget(wasp, formSeconds);
-    }
-    else if (formSeconds < MeteorLandTime(wasp))
-    {
-        goal = MeteorDiveTarget(wasp, formSeconds);
-    }
-
-    return goal;
-}
-
-// Warm while it waits, climbs and hangs, hottest in the dive, cooler as it bursts out.
-float MeteorGlowOf(WaspStatic wasp, float formSeconds)
-{
-    float glow = MeteorGlow;
-    if (formSeconds >= MeteorLandTime(wasp))
-    {
-        glow = MeteorBurstGlow;
-    }
-    else if (formSeconds >= MeteorDiveStart(wasp))
-    {
-        glow = MeteorDiveGlow;
-    }
-
-    return glow;
-}
-
-// Where a wasp wants to be in a form, which colour it shows, whether the stiff shape spring holds it and whether it
-// flies a fast meteor path (isFast). Every case that does not apply (the non-stingers, a finished gust, a Colossus
-// without bones, Collapsed, a meteor wasp back from its burst and the wasps that stay out of it) is the river.
-float3 GoalOf(int form, float formSeconds, uint index, WaspStatic wasp, out int look, out bool isShape, out bool isFast)
+// Where a wasp wants to be in a whole-swarm form, which look it shows and whether the stiff shape spring holds it.
+// A Colossus without bones, Collapsed and the River itself are the river.
+float3 GoalOf(int form, WaspStatic wasp, out int look, out bool isShape)
 {
     look = form;
     isShape = true;
-    isFast = false;
     float3 goal = _PiperPosition.xyz;
 
-    if (form == FormDome)
-    {
-        goal = DomeTarget(index, wasp);
-    }
-    else if (form == FormSting && IsStinger(wasp))
-    {
-        goal = StingTarget(wasp, formSeconds);
-    }
-    else if (form == FormTornado)
-    {
-        goal = TornadoTarget(wasp);
-    }
-    else if (form == FormGust && formSeconds < GustSeconds)
-    {
-        goal = GustTarget(wasp, formSeconds);
-    }
-    else if (form == FormHiveCall)
+    if (form == FormHiveCall)
     {
         goal = HaloTarget(wasp);
     }
     else if (form == FormColossus && HasColossusPlace(wasp))
     {
         goal = ColossusTarget(wasp);
-    }
-    else if (form == FormMeteor && IsMeteor(wasp) && formSeconds < MeteorReturnTime(wasp))
-    {
-        goal = MeteorTarget(wasp, formSeconds, isShape, isFast);
     }
     else
     {
@@ -630,6 +591,412 @@ float3 GoalOf(int form, float formSeconds, uint index, WaspStatic wasp, out int 
     return goal;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// The helpers every slot song shares (songs-v2 B).
+
+Steer SteerOf(float3 goal, float share, float heat)
+{
+    Steer steer;
+    steer.goal = goal;
+    steer.share = saturate(share);
+    steer.heat = heat;
+    steer.floorY = NoFloor;
+    steer.isFast = false;
+    return steer;
+}
+
+// 0 while the wasp still flies the base form, easing to 1 as it leaves it for the song. The river's head leaves first.
+float Peel(float seconds, float lane)
+{
+    return smoothstep(0.0, PeelSeconds, seconds - lane * PeelStagger);
+}
+
+// 0 while the song holds the wasp, easing to 1 once it is back in the base form. Order 0 leaves first.
+float Home(float released, float order)
+{
+    return released < 0.0 ? 0.0 : smoothstep(0.0, HomeSeconds, released - order * HomeStagger);
+}
+
+// The heat of a strike: the wind-up while windUp goes from 0 to 1, then the impact flash and the hold once
+// sinceImpact is 0 or more.
+float StrikeHeat(float windUp, float sinceImpact)
+{
+    float heat = lerp(WindUpStartHeat, WindUpHeat, saturate(windUp));
+    if (sinceImpact >= 0.0)
+    {
+        heat = sinceImpact < ImpactSeconds ? ImpactHeat : HoldHeat;
+    }
+
+    return heat;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Sting: a comet along an arc to the target, two gyroscope rings that wrap it, then a pop and the arc home.
+
+// A point on one of the two rings round the target's chest. The first half of the squad makes one ring, level along the
+// line to the target and tilted up across it, turning one way; the second half the other ring, level across the line and
+// tilted along it, turning the other way. Seen from any side the two cross like a gyroscope's. Each ring is a band
+// StingRingTube thick, so the wasps keep apart.
+float3 StingRingPoint(SlotContext context, float3 center, float3 toward, float radius)
+{
+    bool isFirstRing = context.u < 0.5;
+    float spin = isFirstRing ? StingRingSpin : -StingRingSpin;
+    float3 side = cross(Up, toward);
+    float3 level = isFirstRing ? toward : side;
+    float3 flat = isFirstRing ? side : toward;
+
+    float tiltSin;
+    float tiltCos;
+    sincos(isFirstRing ? StingRingTilt : -StingRingTilt, tiltSin, tiltCos);
+    float3 lifted = flat * tiltCos + Up * tiltSin;
+    float3 normal = cross(level, lifted);
+
+    float aroundSin;
+    float aroundCos;
+    sincos(frac(context.u * 2.0) * FullTurn + context.seconds * spin, aroundSin, aroundCos);
+    float3 radial = level * aroundCos + lifted * aroundSin;
+
+    float tubeSin;
+    float tubeCos;
+    sincos(context.wasp.lane * FullTurn, tubeSin, tubeCos);
+    float tube = context.wasp.ringRadius * StingRingTube;
+    return center + radial * (radius + tubeCos * tube) + normal * (tubeSin * tube);
+}
+
+Steer StingSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float3 start = _PiperPosition.xyz + Up * FlyHeight;
+    float3 center = context.p0.xyz + Up * StingChestHeight;
+    float3 control = (start + center) * 0.5 + Up * (StingArcHeight + StingArcRise * distance(start, center));
+    float3 toward = FlatDirection(_PiperPosition.xyz, context.p0.xyz);
+
+    // Launch: the comet. Its rank is the wasp's place in the river at the cast, so the river's head is the comet's tight,
+    // bright head and the tail widens behind it. The goal leads the arc by the strike spring's lag, so the head lands
+    // on the arc's end at StingFlightSeconds, when the damage starts.
+    float leave = context.lane * PeelStagger;
+    float progress = saturate((context.seconds - leave) / StingFlightSeconds);
+    float rate = progress > 0.0 && progress < 1.0 ? 1.0 / StingFlightSeconds : 0.0;
+    float3 slope = BezierSlope(start, control, center, progress);
+    float3 across = cross(Up, toward) * cos(wasp.ringAngle) + Up * sin(wasp.ringAngle);
+    float width = (StingHeadWidth + context.lane * StingTailWidth) * wasp.ringRadius;
+    float3 comet = Bezier(start, control, center, progress) + slope * (rate * StrikeLeadSeconds()) + across * width;
+
+    // Peak: the rings, squeezing and flaring once a tick from the head's arrival.
+    float sinceHead = context.seconds - StingFlightSeconds;
+    float tick = frac(max(sinceHead, 0.0) / StingTickSeconds) * StingTickSeconds;
+    float squeeze = sinceHead >= 0.0 ? 1.0 - smoothstep(0.0, StingSqueezeSeconds, tick) : 0.0;
+    float3 ring = StingRingPoint(context, center, toward, lerp(StingRingRadius, StingSqueezeRadius, squeeze));
+    float3 shape = lerp(comet, ring, smoothstep(StingWrapStart, 1.0, progress));
+
+    float sinceArrival = context.seconds - leave - StingFlightSeconds;
+    float heat = StrikeHeat(progress, sinceArrival);
+    if (sinceArrival >= ImpactSeconds)
+    {
+        heat = lerp(HoldHeat, StingTickHeat, squeeze);
+    }
+
+    float peel = Peel(context.seconds, context.lane);
+    float3 goal = lerp(context.baseGoal, shape, peel);
+    float share = peel;
+    bool isFast = rate > 0.0;
+
+    // Return: the cocoon pops to a sphere, then streams home on the reversed arc and into the base form.
+    if (context.released >= 0.0)
+    {
+        float pop = smoothstep(0.0, StingPopSeconds, context.released);
+        float3 burst = lerp(goal, center + SphereDirection(wasp) * StingPopRadius, pop);
+        float back = smoothstep(0.0, StingHomeSeconds, context.released - StingPopSeconds - context.u * StingHomeStagger);
+        float home = smoothstep(0.5, 1.0, back);
+        goal = lerp(Bezier(burst, control, start, back), context.baseGoal, home);
+        share = peel * (1.0 - home);
+        heat = context.released < StingPopSeconds ? ImpactHeat : HoldHeat;
+        isFast = back > 0.0 && back < 1.0;
+    }
+
+    Steer steer = SteerOf(goal, share, heat);
+    steer.isFast = isFast;
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Tornado: it grows from the ground up, the flung share bursts out into a knee-high shock ring at the hit, and it
+// collapses from the top down, unwinding outward into the river.
+
+// Radians turned since the cast: spin per second, easing up to TornadoSpinUp times it over TornadoSpinUpSeconds after
+// the hit. Worked out whole each frame, so it needs nothing from the frame before.
+float TornadoTurn(float seconds, float spin, float hit)
+{
+    float ramp = clamp(seconds - hit, 0.0, TornadoSpinUpSeconds);
+    float beyond = max(seconds - hit - TornadoSpinUpSeconds, 0.0);
+    float extra = (TornadoSpinUp - 1.0) * spin * (ramp * ramp / (2.0 * TornadoSpinUpSeconds) + beyond);
+    return spin * seconds + extra;
+}
+
+Steer TornadoSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float outer = context.p0.x > 0.0 ? context.p0.x : DefaultTornadoRadius;
+    float height = context.p0.y > 0.0 ? context.p0.y : TornadoHeight;
+    float spin = context.p0.z > 0.0 ? context.p0.z : TornadoSpin;
+    float hit = context.p0.w > 0.0 ? context.p0.w : TornadoHitSeconds;
+    float wall = context.p1.x > 0.0 ? context.p1.x : TornadoInnerRadius;
+    float seconds = context.seconds;
+
+    // Launch: the top climbs from the ground to full height by the hit. A wasp waits in the skirt until the top
+    // reaches its place, then spirals up to it.
+    float place = TornadoBaseHeight + wasp.level01 * height;
+    float top = TornadoBaseHeight + height * smoothstep(0.0, hit, seconds);
+    float climbed = smoothstep(place - TornadoClimbBand, place, top);
+    float funnel = lerp(TornadoFunnelBottom, TornadoFunnelTop, wasp.level01);
+    float wallRadius = (wall + (wasp.ringRadius - 0.5) * TornadoWallThickness) * funnel;
+    float skirtRadius = TornadoSkirtRadius + (wasp.ringRadius - 0.5) * TornadoWallThickness;
+    float radius = lerp(skirtRadius, wallRadius, climbed);
+    float lift = lerp(TornadoSkirtHeight, place, climbed);
+
+    // Peak: the flung share shoots out flat to the reach, a knee-high ring that lands on the beekeepers at the hit.
+    float sinceHit = seconds - hit;
+    float sinceShock = sinceHit + TornadoShockLead;
+    bool isFlung = context.lane < 1.0 - TornadoWallShare;
+    float shock = isFlung ? smoothstep(0.0, TornadoShockSeconds, sinceShock) : 0.0;
+    radius = lerp(radius, lerp(TornadoShockInner, 1.0, wasp.ringRadius) * outer, shock);
+    lift = lerp(lift, TornadoShockHeight, shock);
+
+    // Return: the top leaves first, swinging outward and down as it pours into the base form.
+    float home = Home(context.released, 1.0 - wasp.level01);
+    radius *= 1.0 + home * TornadoUnwind;
+    lift *= 1.0 - home;
+
+    // The flung share leaves the column's spin as it is flung, and the shock ring turns slowly.
+    float turn = TornadoTurn(seconds, spin, hit);
+    if (isFlung)
+    {
+        float shockStart = hit - TornadoShockLead;
+        float flungTurn = TornadoTurn(min(seconds, shockStart), spin, hit) + max(seconds - shockStart, 0.0) * TornadoShockSpin;
+        turn = lerp(turn, flungTurn, shock);
+    }
+
+    float around = wasp.ringAngle + wasp.level01 * TornadoTwist + turn;
+    float3 shape = _PiperPosition.xyz + RingOffset(around, radius) + Up * lift;
+    float peel = Peel(seconds, context.lane);
+    float3 goal = lerp(lerp(context.baseGoal, shape, peel), context.baseGoal, home);
+
+    Steer steer = SteerOf(goal, peel * (1.0 - home), StrikeHeat(seconds / hit, sinceHit));
+    steer.isFast = isFlung && sinceShock >= 0.0 && sinceShock < 2.0 * TornadoShockSeconds && home <= 0.0;
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Meteor: a spiral climb into a ball high over the Piper while the top tenth drops early to draw the target ring; a
+// heartbeat; a streaked dive; the ring burst; then home.
+
+// A loose ball at the top of the climb, turning slowly.
+float3 MeteorBallPoint(WaspStatic wasp, float seconds, float height, float radius)
+{
+    float latitude = 1.0 - 2.0 * wasp.level01;
+    float spread = sqrt(saturate(1.0 - latitude * latitude));
+    float around = wasp.phase01 * FullTurn + seconds * MeteorBallSpin;
+    float3 offset = (RingOffset(around, spread) + Up * latitude) * (wasp.ringRadius * radius);
+    return _PiperPosition.xyz + Up * height + offset;
+}
+
+// Out of the base form into a tight column over the Piper, up it, and out into the ball at the top.
+float3 MeteorClimbPoint(SlotContext context, float progress, float climbSeconds, float height, float3 ball)
+{
+    WaspStatic wasp = context.wasp;
+    float climb = smoothstep(0.0, 1.0, progress);
+    float climbRate = 6.0 * progress * (1.0 - progress) / climbSeconds;
+    float lead = (height - FlyHeight) * climbRate * StrikeLeadSeconds();
+
+    float around = wasp.ringAngle + context.seconds * MeteorColumnSpin;
+    float lift = lerp(FlyHeight, height, climb) + lead;
+    float3 column = _PiperPosition.xyz + RingOffset(around, wasp.ringRadius * MeteorColumnRadius) + Up * lift;
+    float3 lifted = lerp(context.baseGoal, column, smoothstep(0.0, MeteorGatherShare, progress));
+    return lerp(lifted, ball, smoothstep(MeteorSpreadShare, 1.0, progress));
+}
+
+// A steep line from the ball to the wasp's landing point, faster as it falls. The divers set off one after another,
+// so the ball stretches into streaks. The line runs to p0 as it is now, so the dive goes where the rules land it.
+float3 MeteorDivePoint(WaspStatic wasp, float progress, float dive, float3 ball, float3 impact)
+{
+    float travelled = progress * (MeteorDiveEase + (1.0 - MeteorDiveEase) * progress);
+    float rate = (MeteorDiveEase + 2.0 * (1.0 - MeteorDiveEase) * progress) / dive;
+    float reach = sqrt(wasp.level01) * MeteorLandingScatter;
+    float3 landing = impact + RingOffset(wasp.phase01 * FullTurn, reach) + Up * MeteorFloorHeight;
+    return ball + (landing - ball) * (travelled + rate * StrikeLeadSeconds());
+}
+
+Steer MeteorSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float3 impact = context.p0.xyz;
+    float height = context.p0.w;
+    float rise = context.p1.x;
+    float dive = max(context.p1.y, Tiny);
+    float radius = context.p1.z > 0.0 ? context.p1.z : DefaultMeteorRadius;
+    float seconds = context.seconds;
+
+    bool isMarker = context.u >= MeteorMarkerShare;
+    float order = saturate(context.u / MeteorMarkerShare);
+    float climbStart = order * MeteorClimbStagger * rise;
+    float climbSeconds = max(MeteorClimbShare * rise, Tiny);
+    float climbEnd = climbStart + climbSeconds;
+    float diveStart = rise + order * MeteorDiveStagger;
+    float landTime = diveStart + context.p1.y;
+    float impactTime = rise + context.p1.y;
+
+    float heartbeat = smoothstep(rise - MeteorHeartbeatSeconds, rise, seconds);
+    float3 ball = MeteorBallPoint(wasp, seconds, height, lerp(MeteorBallRadius, MeteorHeartRadius, heartbeat));
+    float climbProgress = saturate((seconds - climbStart) / climbSeconds);
+    float3 climb = MeteorClimbPoint(context, climbProgress, climbSeconds, height, ball);
+    float share = smoothstep(0.0, MeteorGatherShare, climbProgress);
+    float floorY = NoFloor;
+    bool isFast = seconds >= climbStart && seconds < landTime;
+    float3 shape = climb;
+    float heat = StrikeHeat(heartbeat, seconds - landTime);
+
+    if (isMarker)
+    {
+        // The top tenth leaves the ball as its climb ends and drops to the target ring, turning, ahead of the dive.
+        float drop = saturate((seconds - climbEnd) / MeteorMarkDropSeconds);
+        float around = frac((context.u - MeteorMarkerShare) / (1.0 - MeteorMarkerShare)) * FullTurn + seconds * MeteorMarkSpin;
+        float3 mark = impact + RingOffset(around, radius) + Up * MeteorFloorHeight;
+        shape = lerp(climb, mark, drop * drop);
+        isFast = seconds >= climbStart && seconds < climbEnd + MeteorMarkDropSeconds;
+        floorY = seconds >= climbEnd ? impact.y + MeteorFloorHeight : NoFloor;
+        heat = StrikeHeat(drop, seconds - impactTime);
+    }
+    else if (seconds >= landTime)
+    {
+        // Each wasp bursts straight out from its landing point to a ring whose outer edge is the reach.
+        float reach = lerp(MeteorRingInner, 1.0, wasp.ringRadius) * radius;
+        shape = impact + RingOffset(wasp.phase01 * FullTurn, reach) + Up * MeteorRingHeight;
+        floorY = impact.y + MeteorFloorHeight;
+    }
+    else if (seconds >= diveStart)
+    {
+        float diveProgress = saturate((seconds - diveStart) / dive);
+        shape = MeteorDivePoint(wasp, diveProgress, dive, ball, impact);
+        floorY = impact.y + MeteorFloorHeight;
+        heat = WindUpHeat;
+    }
+
+    // Home after the burst, which starts at the release: the rules let go on the impact frame.
+    float home = context.released < 0.0
+        ? 0.0
+        : smoothstep(0.0, MeteorHomeSeconds, context.released - MeteorBurstSeconds - context.u * MeteorHomeStagger);
+    Steer steer = SteerOf(lerp(shape, context.baseGoal, home), share * (1.0 - home), heat);
+    steer.floorY = home < 1.0 ? floorY : NoFloor;
+    steer.isFast = isFast;
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Dome: woven ring by ring from the ground, a turning shell, then it unzips from the top down.
+
+// The squad's rank u is the height on the shell and the wasp's lane its angle. The two are spread evenly and
+// independently, so the shell is evenly covered at any squad size.
+Steer DomeSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float radius = context.p0.x > 0.0 ? context.p0.x : DefaultDomeRadius;
+    float height = 1.0 - context.u;
+    float spread = sqrt(saturate(1.0 - height * height));
+    float woven = smoothstep(0.0, DomeWeaveSeconds, context.seconds - height * DomeWeaveStagger);
+    float around = wasp.lane * FullTurn + context.seconds * DomeSpin - (1.0 - woven) * DomeWeaveTurn;
+    float shell = radius + (wasp.ringRadius - 0.5) * DomeShellThickness;
+    float3 seat = _PiperPosition.xyz + (RingOffset(around, spread) + Up * height) * shell;
+
+    // The crown has rank 0, so it leaves first.
+    float home = Home(context.released, context.u);
+    float3 goal = lerp(lerp(context.baseGoal, seat, woven), context.baseGoal, home);
+    return SteerOf(goal, woven * (1.0 - home), DomeGlow);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The slot dispatch.
+
+SlotContext ContextOf(int slot, uint index, WaspStatic wasp, float3 baseGoal)
+{
+    float4 header = SlotHeader(slot);
+    float4 p1 = _Slots[slot * SLOT_VECTORS + 2];
+
+    SlotContext context;
+    context.index = index;
+    context.wasp = wasp;
+    context.baseGoal = baseGoal;
+    context.u = saturate((wasp.squad - header.z) / max(header.w - header.z, Tiny));
+    context.lane = FlowLaneAt(wasp, header.y);
+    context.seconds = max(_SimTime - header.y, 0.0);
+    context.released = p1.w >= 0.0 ? max(_SimTime - p1.w, 0.0) : -1.0;
+    context.p0 = _Slots[slot * SLOT_VECTORS + 1];
+    context.p1 = p1;
+    return context;
+}
+
+// One case per slot song. A form this file does not know yet leaves its squad in the base form.
+Steer SlotSteer(int form, SlotContext context)
+{
+    Steer steer = SteerOf(context.baseGoal, 0.0, RiverGlow);
+    if (form == FormSting)
+    {
+        steer = StingSteer(context);
+    }
+    else if (form == FormTornado)
+    {
+        steer = TornadoSteer(context);
+    }
+    else if (form == FormMeteor)
+    {
+        steer = MeteorSteer(context);
+    }
+    else if (form == FormDome)
+    {
+        steer = DomeSteer(context);
+    }
+
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The Gust pulse, added on top of whatever a wasp is doing. Its time test reads uniforms only, so every thread takes the
+// same branch.
+
+float3 GustPush(float3 goal, WaspStatic wasp, out float heat)
+{
+    heat = 0.0;
+    float3 push = Still;
+    float age = _SimTime - _Pulse.z;
+    float radius = _Pulse.w;
+
+    if (radius > 0.0 && age >= 0.0 && age < GustPulseSeconds)
+    {
+        float2 away = goal.xz - _Pulse.xy;
+        float reach = length(away);
+        float2 direction = float2(cos(wasp.seed * FullTurn), sin(wasp.seed * FullTurn));
+        if (reach > Tiny)
+        {
+            direction = away / reach;
+        }
+
+        float inside = reach <= radius ? 1.0 : 0.0;
+        float inhale = smoothstep(0.0, GustInhaleSeconds, age) * (1.0 - smoothstep(GustInhaleSeconds, 2.0 * GustInhaleSeconds, age));
+        float grown = saturate((age - GustInhaleSeconds) / GustRingSeconds);
+        float front = lerp(GustStartRadius, radius, 1.0 - (1.0 - grown) * (1.0 - grown));
+        float passed = age >= GustInhaleSeconds ? front - reach : -1.0;
+        float wave = saturate(passed / GustPushRise) * (1.0 - saturate((passed - GustPushRise) / GustPushFall));
+        wave *= (1.0 - smoothstep(GustFadeStart, GustPulseSeconds, age)) * inside;
+
+        float outward = wave * GustPushMeters - inhale * inside * GustInhaleMeters;
+        push = float3(direction.x, 0.0, direction.y) * outward + Up * (wave * GustLiftMeters);
+        heat = wave * GustGlow;
+    }
+
+    return push;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
 // True in the one frame a wasp's river lane wraps from the tail (1) back to the Piper (0).
 bool HasLaneWrapped(WaspStatic wasp)
 {
@@ -638,21 +1005,10 @@ bool HasLaneWrapped(WaspStatic wasp)
     return floor(now) != floor(before);
 }
 
-// The Colossus builds from the feet up. The meteor starts in every wasp at once, so its timing runs from the cast and
-// its first diver lands with the damage; the meteor wasps stagger themselves. Every other form sweeps along the river.
+// The Colossus builds from the feet up. Every other whole-swarm form sweeps along the river.
 float WaveOrderOf(int form, WaspStatic wasp)
 {
-    float order = wasp.lane;
-    if (form == FormColossus)
-    {
-        order = wasp.height01;
-    }
-    else if (form == FormMeteor)
-    {
-        order = 0.0;
-    }
-
-    return order;
+    return form == FormColossus ? wasp.height01 : wasp.lane;
 }
 
 float3 LimitSpeed(float3 velocity, float maxSpeed)
@@ -661,20 +1017,20 @@ float3 LimitSpeed(float3 velocity, float maxSpeed)
     return speed > maxSpeed ? velocity * (maxSpeed / speed) : velocity;
 }
 
-// A diving meteor wasp that reaches the ground skims along it instead of going through, and loses most of its speed.
-void Skim(inout WaspDynamic body)
+// A wasp that reaches its floor skims along it instead of going through, and loses most of its speed.
+void Skim(float floorY, inout WaspDynamic body)
 {
-    float ground = _Meteor.y + MeteorFloorHeight;
-    if (body.position.y < ground)
+    if (body.position.y < floorY)
     {
-        body.position.y = ground;
+        body.position.y = floorY;
         body.velocity.y = max(body.velocity.y, 0.0);
         body.velocity.xz *= MeteorSkidKeep;
     }
 }
 
-// The spring of spec 9.4, stepped with semi-implicit Euler. Each wasp takes up a new form at
-// formStartTime + order x FormWaveSeconds, so a change sweeps along the river (or up the Colossus).
+// The spring of spec 9.4, stepped with semi-implicit Euler. Each wasp takes up a new whole-swarm form at
+// formStartTime + order x FormWaveSeconds, so a change sweeps along the river (or up the Colossus). A wasp in a live
+// slot's squad flies that slot's song instead, starting from and returning to where the whole-swarm form wants it.
 void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
 {
     float switchTime = _FormStartTime + WaveOrderOf(_Form, wasp) * _FormWaveSeconds;
@@ -685,52 +1041,72 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
 
     int look;
     bool isShape;
-    bool isFast;
-    float3 goal = GoalOf(form, formSeconds, index, wasp, look, isShape, isFast);
+    float3 goal = GoalOf(form, wasp, look, isShape);
+    float4 tint = TintOf(look, hasSwitched);
+    float stiffness = isShape ? _ShapeSpring : _RiverSpring;
+    float damping = isShape ? _ShapeDamping : _RiverDamping;
+    bool isWobbling = hasSwitched && formSeconds < _WobbleSeconds;
+    bool isFlowing = !isShape;
+    float maxSpeed = MaxSpeed;
+    float floorY = NoFloor;
+    float tintSharpness = TintSharpness;
+
+    int slot = SlotOf(wasp);
+    if (slot != NoSlot)
+    {
+        SlotContext context = ContextOf(slot, index, wasp, goal);
+        Steer steer = SlotSteer((int)(SlotHeader(slot).x + 0.5), context);
+        goal = steer.goal;
+        tint = lerp(tint, float4(_SlotColors[slot].rgb, steer.heat), steer.share);
+        stiffness = lerp(stiffness, _ShapeSpring, steer.share);
+        damping = lerp(damping, _ShapeDamping, steer.share);
+        isWobbling = steer.share > 0.0 && context.seconds < _WobbleSeconds;
+        isFlowing = isFlowing && steer.share <= 0.0;
+        floorY = steer.floorY;
+        tintSharpness = SlotTintSharpness;
+
+        // On the usual springs and speed cap a fast strike would trail metres behind its path and land late.
+        if (steer.isFast)
+        {
+            stiffness = StrikeSpring;
+            damping = StrikeDamping;
+            maxSpeed = StrikeMaxSpeed;
+            isWobbling = false;
+        }
+    }
+
+    float gustHeat;
+    goal += GustPush(goal, wasp, gustHeat);
+    tint.a = max(tint.a, gustHeat);
 
     // A wasp that leaves the river's tail starts again at its head. Flying there would draw a straight, sparse
     // second river across every curve of the path, so it jumps instead; in the crowd at the head nobody sees it.
-    if (!isShape && HasLaneWrapped(wasp))
+    if (isFlowing && HasLaneWrapped(wasp))
     {
         body.position = goal;
         body.velocity = Still;
     }
 
-    float stiffness = isShape ? _ShapeSpring : _RiverSpring;
-    float damping = isShape ? _ShapeDamping : _RiverDamping;
-    float maxSpeed = MaxSpeed;
-    if (hasSwitched && formSeconds < _WobbleSeconds)
+    if (isWobbling)
     {
         damping = _WobbleDamping;
-    }
-
-    // On the usual springs and speed cap a climbing or diving meteor would trail metres behind its path and land late.
-    if (isFast)
-    {
-        stiffness = MeteorSpring;
-        damping = MeteorDamping;
-        maxSpeed = MeteorMaxSpeed;
     }
 
     float3 acceleration = stiffness * (goal - body.position) - 2.0 * damping * sqrt(stiffness) * body.velocity;
     body.velocity = LimitSpeed(body.velocity + acceleration * _DeltaTime, maxSpeed);
     body.position += body.velocity * _DeltaTime;
-    if (look == FormMeteor && formSeconds >= MeteorDiveStart(wasp))
-    {
-        Skim(body);
-    }
+    Skim(floorY, body);
 
     body.stateTime += _DeltaTime;
 
-    float4 tint = TintOf(look, hasSwitched);
-    float tintSharpness = TintSharpness;
-    if (look == FormMeteor)
+    // A song's heat rises at once and cools at the tint's pace, so an impact flashes on the frame it lands.
+    float4 blended = lerp(body.tint, tint, saturate(_DeltaTime * tintSharpness));
+    if (slot != NoSlot)
     {
-        tint.a = MeteorGlowOf(wasp, formSeconds);
-        tintSharpness = MeteorTintSharpness;
+        blended.a = max(blended.a, tint.a);
     }
 
-    body.tint = lerp(body.tint, tint, saturate(_DeltaTime * tintSharpness));
+    body.tint = blended;
 }
 
 float DistanceOnGround(float3 from, float3 to)

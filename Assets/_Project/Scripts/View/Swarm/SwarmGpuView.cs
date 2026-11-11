@@ -10,7 +10,7 @@ namespace DigitalStory.View
     /// <summary>
     /// Moves and draws every wasp of the swarm on the GPU, with one compute dispatch and two indirect draws a frame:
     /// the wasps, then the soft glow around each. Gameplay never touches a wasp. It feeds this view the live count, the
-    /// form, the colour of the last song cast and a few positions.
+    /// whole-swarm form and its colour, the three song slots, the Gust and a few positions.
     /// </summary>
     /// <remarks>
     /// Why the GPU and not Jobs: docs/CODING_STANDARDS.md says "profile first, then Jobs and Burst". We go to the GPU
@@ -37,6 +37,22 @@ namespace DigitalStory.View
         private const float StandsFlag = 1f;
         private const float FallenFlag = 0f;
 
+        // Each wasp's squad value is frac(SquadStart + index x SquadStep) (songs-v2, section C). The step is not the
+        // golden ratio the lanes use, so every band of squad values is spread evenly along the whole river.
+        private const double SquadStart = 0.5;
+        private const double SquadStep = 0.7548777;
+
+        // One slot per DigitalStory.Logic.SongSlot, and three float4s per slot. Match SLOT_COUNT and SLOT_VECTORS in
+        // WaspSwarm.compute.
+        private const int SlotCount = (int)SongSlot.Strike + 1;
+        private const int VectorsPerSlot = 3;
+        private const int ParamAOffset = 1;
+        private const int ParamBOffset = 2;
+
+        // The compute shader reads these as "no song in the slot" and "the song has not been released".
+        private const float EmptySlotForm = -1f;
+        private const float NotReleased = -1f;
+
         // Bytes per element. Each matches a struct in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.
         private const int StaticStride = sizeof(float) * 12;
         private const int DynamicStride = sizeof(float) * 12;
@@ -59,14 +75,12 @@ namespace DigitalStory.View
         private static readonly int PreviousFormStartTimeId = Shader.PropertyToID("_PreviousFormStartTime");
         private static readonly int PiperPositionId = Shader.PropertyToID("_PiperPosition");
         private static readonly int PiperForwardId = Shader.PropertyToID("_PiperForward");
-        private static readonly int StingId = Shader.PropertyToID("_Sting");
         private static readonly int HiveAId = Shader.PropertyToID("_HiveA");
         private static readonly int HiveBId = Shader.PropertyToID("_HiveB");
         private static readonly int LastHitId = Shader.PropertyToID("_LastHit");
-        private static readonly int MeteorId = Shader.PropertyToID("_Meteor");
-        private static readonly int MeteorRiseSecondsId = Shader.PropertyToID("_MeteorRiseSeconds");
-        private static readonly int MeteorDiveSecondsId = Shader.PropertyToID("_MeteorDiveSeconds");
-        private static readonly int MeteorHeightId = Shader.PropertyToID("_MeteorHeight");
+        private static readonly int SlotsId = Shader.PropertyToID("_Slots");
+        private static readonly int SlotColorsId = Shader.PropertyToID("_SlotColors");
+        private static readonly int PulseId = Shader.PropertyToID("_Pulse");
         private static readonly int RiverColorId = Shader.PropertyToID("_RiverColor");
         private static readonly int CastColorId = Shader.PropertyToID("_CastColor");
         private static readonly int PreviousCastColorId = Shader.PropertyToID("_PreviousCastColor");
@@ -85,9 +99,6 @@ namespace DigitalStory.View
         private static readonly int StandingShareId = Shader.PropertyToID("_StandingShare");
         private static readonly int TorusRadiusId = Shader.PropertyToID("_TorusRadius");
         private static readonly int DyingSecondsId = Shader.PropertyToID("_DyingSeconds");
-        private static readonly int DomeRadiusId = Shader.PropertyToID("_DomeRadius");
-        private static readonly int TornadoRadiusId = Shader.PropertyToID("_TornadoRadius");
-        private static readonly int MeteorRadiusId = Shader.PropertyToID("_MeteorRadius");
         private static readonly int WaspLengthId = Shader.PropertyToID("_WaspLength");
         private static readonly int BuzzAmplitudeId = Shader.PropertyToID("_BuzzAmplitude");
         private static readonly int BuzzFrequencyId = Shader.PropertyToID("_BuzzFrequency");
@@ -146,30 +157,47 @@ namespace DigitalStory.View
         private Vector3 _standingAnchor;
         private float _standingSeconds;
         private float _standingShare;
-        private Vector3 _stingTarget;
-        private float _stingFraction;
         private Vector4 _firstHive;
         private Vector4 _secondHive;
         private Vector3 _lastHit;
-        private Vector3 _meteorTarget;
-        private float _meteorFraction;
-        private float _meteorRiseSeconds;
-        private float _meteorDiveSeconds;
-        private float _meteorHeight;
-        private float _domeRadius;
-        private float _tornadoRadius;
-        private float _meteorRadius;
         private int _boneCount;
         private bool _hasColossusSamples;
+
+        // The song slots as WaspSwarm.compute reads them (_Slots and _SlotColors), made once and refilled in place.
+        // SetSlot keeps the rules' clocks (seconds since the cast and the release) until LateUpdate has stepped this
+        // view's clock, and only then turns them into its times, so a song's beats land on the frame the rules say.
+        private readonly Vector4[] _slotVectors = new Vector4[SlotCount * VectorsPerSlot];
+        private readonly Vector4[] _slotColorVectors = new Vector4[SlotCount];
+        private readonly Color[] _slotColors = new Color[SlotCount];
+        private readonly float[] _slotSeconds = new float[SlotCount];
+        private readonly float[] _slotReleasedSeconds = new float[SlotCount];
+        private readonly bool[] _isSlotFresh = new bool[SlotCount];
+
+        // The Gust pulse, kept the same way: the rules' seconds since the Gust until LateUpdate turns them into a start.
+        private Vector3 _gustCenter;
+        private float _gustRadius;
+        private float _gustSeconds;
+        private float _gustStartTime;
+        private bool _isGustFresh;
 
         /// <summary>True while the buffers exist and the swarm is moved and drawn each frame, for tests and debugging.</summary>
         public bool IsRunning => _staticBuffer != null;
 
-        /// <summary>The colour of the last song cast, which every form but the River shows, for tests and debugging.</summary>
+        /// <summary>The colour last given to <see cref="SetCastColor"/>, which Hive Call and the Colossus show, for tests and debugging.</summary>
         public Color CastColor => _castColor;
 
         /// <summary>How far the river has curled into the ring around the standing Piper: 0 while it flows behind them, 1 once it is a ring.</summary>
         public float StandingShare => _standingShare;
+
+        /// <summary>True while a song holds the slot (SongSlot as an int) as of the last <see cref="SetSlot"/>, for tests and debugging.</summary>
+        public bool IsSlotLive(int slot) => _slotVectors[SlotHeaderIndex(slot)].x >= 0f;
+
+        /// <summary>The colour last given to <see cref="SetSlot"/> for the slot (SongSlot as an int), for tests and debugging.</summary>
+        public Color SlotColor(int slot)
+        {
+            SlotHeaderIndex(slot);
+            return _slotColors[slot];
+        }
 
         private void OnEnable()
         {
@@ -189,6 +217,8 @@ namespace DigitalStory.View
             float deltaTime = Mathf.Min(Time.deltaTime, _config.MaxDeltaTime);
             _simTime += deltaTime;
             TrackStanding(deltaTime);
+            TimeSlots();
+            TimeGust();
 
             int trailCount = _trail.CopyTo(_trailPoints);
             if (trailCount > 0)
@@ -291,6 +321,7 @@ namespace DigitalStory.View
             _castColor = config.RiverColor;
             _formColor = config.RiverColor;
             _previousFormColor = config.RiverColor;
+            ClearSongs();
             _config = config;
 
             if (isActiveAndEnabled)
@@ -302,9 +333,20 @@ namespace DigitalStory.View
         /// <summary>How many wasps are alive. Wasps above it die where they are, and dead ones below it come back at a hive.</summary>
         public void SetActiveCount(int count) => _activeCount = Mathf.Max(0, count);
 
-        /// <summary>Changes the swarm's form. The change sweeps through the swarm as a wave.</summary>
+        /// <summary>
+        /// Changes the whole-swarm form: River, HiveCall, Colossus or Collapsed, the form every wasp outside a live song
+        /// slot flies. The change sweeps through the swarm as a wave. The slot songs come in through
+        /// <see cref="SetSlot"/>.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The form is a slot song's form, such as Dome or Sting.</exception>
         public void SetForm(SwarmForm form)
         {
+            if (!IsWholeSwarmForm(form))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(form), form, "Only River, HiveCall, Colossus and Collapsed are whole-swarm forms. Send slot songs through SetSlot.");
+            }
+
             if (form == _form)
             {
                 return;
@@ -318,11 +360,72 @@ namespace DigitalStory.View
         }
 
         /// <summary>
-        /// The colour every form but the River shows until the next call: the colour of the category of the song just
-        /// cast, from SwarmConfig.ColorOf. The River and the collapsed swarm always show SwarmConfig.RiverColor. Each wasp
-        /// takes the new colour as the form's wave reaches it, so the colour flows through the swarm with the motion.
+        /// The colour the whole-swarm forms Hive Call and Colossus show until the next call: the colour of the category of
+        /// the song that started the form, from SwarmConfig.ColorOf. The River and the collapsed swarm always show
+        /// SwarmConfig.RiverColor. Each wasp takes the new colour as the form's wave reaches it, so the colour flows through
+        /// the swarm with the motion. A slot's squad shows the colour given to <see cref="SetSlot"/> instead.
         /// </summary>
         public void SetCastColor(Color color) => _castColor = color;
+
+        /// <summary>
+        /// What one song slot holds this frame. Call it every frame for each <see cref="SongSlot"/>, after the rules have
+        /// ticked. While <c>state.IsActive</c>, the wasps whose squad value lies in [Low, High) fly the song
+        /// <c>state.Form</c>, using ParamA and ParamB as its numbers, and glow in <paramref name="color"/> (the song's
+        /// category colour, from SwarmConfig.ColorOf); every other wasp flies the whole-swarm form. Seconds and
+        /// ReleasedSeconds are read against this view's clock in this frame's LateUpdate, so the song's beats land on the
+        /// frames the rules say. ParamB.w is left to this view, which sends the release there.
+        /// </summary>
+        /// <param name="slot">The slot: (int)SongSlot.Post, Guard or Strike.</param>
+        /// <param name="state">The slot as the rules see it.</param>
+        /// <param name="color">The colour the slot's squad glows in.</param>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// The slot is not a SongSlot, or an active state's squad range is not 0 &lt;= Low &lt;= High &lt;= 1.
+        /// </exception>
+        public void SetSlot(int slot, in SlotState state, Color color)
+        {
+            int header = SlotHeaderIndex(slot);
+            if (!state.IsActive)
+            {
+                _slotVectors[header] = new Vector4(EmptySlotForm, 0f, 0f, 0f);
+                _isSlotFresh[slot] = false;
+                return;
+            }
+
+            if (state.Low < 0f || state.High > 1f || state.Low > state.High)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(state), $"Slot {slot}'s squad range [{state.Low}, {state.High}) must lie within [0, 1].");
+            }
+
+            _slotVectors[header] = new Vector4((int)state.Form, 0f, state.Low, state.High);
+            _slotVectors[header + ParamAOffset] = state.ParamA;
+            _slotVectors[header + ParamBOffset] = state.ParamB;
+            _slotSeconds[slot] = state.Seconds;
+            _slotReleasedSeconds[slot] = state.ReleasedSeconds;
+            _slotColors[slot] = color;
+            _isSlotFresh[slot] = true;
+
+            // Against this view's clock as it stands now; TimeSlots sets them again once LateUpdate has stepped it.
+            WriteSlotTimes(slot);
+        }
+
+        /// <summary>
+        /// The Gust: a pulse that runs through every wasp within <paramref name="radius"/> metres of
+        /// <paramref name="center"/> (on the ground), whatever it is doing. Call it every frame with the seconds since the
+        /// last Gust, or -1 when there is none or it is over; a pulse already under way then plays out its last moments.
+        /// </summary>
+        public void SetGust(Vector3 center, float radius, float seconds)
+        {
+            if (seconds < 0f)
+            {
+                return;
+            }
+
+            _gustCenter = center;
+            _gustRadius = Mathf.Max(0f, radius);
+            _gustSeconds = seconds;
+            _isGustFresh = true;
+        }
 
         /// <summary>Where the Piper stands and faces. Only the facing on the ground is used.</summary>
         public void SetPiper(Vector3 position, Vector3 forward)
@@ -333,27 +436,6 @@ namespace DigitalStory.View
             {
                 _piperForward = forward.normalized;
             }
-        }
-
-        /// <summary>What the sting wraps, and the share of the swarm (0 to 1) that flies there.</summary>
-        public void SetSting(Vector3 target, float fraction)
-        {
-            _stingTarget = target;
-            _stingFraction = Mathf.Clamp01(fraction);
-        }
-
-        /// <summary>
-        /// The meteor: where it lands, the share of the swarm (0 to 1) that flies it, the seconds from the cast to the
-        /// top of its climb, the seconds of its dive, and how many metres above the Piper it climbs. Read while the form
-        /// is Meteor, and timed from the moment the form changes to it.
-        /// </summary>
-        public void SetMeteor(Vector3 target, float fraction, float riseSeconds, float diveSeconds, float height)
-        {
-            _meteorTarget = target;
-            _meteorFraction = Mathf.Clamp01(fraction);
-            _meteorRiseSeconds = Mathf.Max(0f, riseSeconds);
-            _meteorDiveSeconds = Mathf.Max(0f, diveSeconds);
-            _meteorHeight = Mathf.Max(0f, height);
         }
 
         /// <summary>Where both hives are and whether each still stands. Revived wasps come from a standing hive.</summary>
@@ -434,16 +516,6 @@ namespace DigitalStory.View
             _staticBuffer?.SetData(_staticData);
         }
 
-        /// <summary>The dome's radius and the tornado's outer radius from the song assets, so the wasps match the rules. 0 keeps the shader's default.</summary>
-        public void SetFormRadii(float domeRadius, float tornadoRadius)
-        {
-            _domeRadius = Mathf.Max(0f, domeRadius);
-            _tornadoRadius = Mathf.Max(0f, tornadoRadius);
-        }
-
-        /// <summary>The meteor's reach from MeteorSong.Radius, so the ring the wasps burst out to after the impact matches the rule. 0 keeps the shader's default.</summary>
-        public void SetMeteorRadius(float radius) => _meteorRadius = Mathf.Max(0f, radius);
-
         private static WaspStatic[] BuildLayout(int count)
         {
             var random = new System.Random(LayoutSeed);
@@ -466,7 +538,7 @@ namespace DigitalStory.View
                     Height01 = NextFloat(random),
                     Level01 = NextFloat(random),
                     Phase01 = NextFloat(random),
-                    Unused = 0f,
+                    Squad = (float)((SquadStart + (index * SquadStep)) % 1.0),
                 };
             }
 
@@ -474,6 +546,20 @@ namespace DigitalStory.View
         }
 
         private static float NextFloat(System.Random random) => (float)random.NextDouble();
+
+        // Where the slot's header sits in _slotVectors. Fails loudly on a slot that is not a SongSlot.
+        private static int SlotHeaderIndex(int slot)
+        {
+            if (slot < 0 || slot >= SlotCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(slot), slot, $"A song slot is 0 to {SlotCount - 1} (SongSlot).");
+            }
+
+            return slot * VectorsPerSlot;
+        }
+
+        private static bool IsWholeSwarmForm(SwarmForm form) =>
+            form == SwarmForm.River || form == SwarmForm.HiveCall || form == SwarmForm.Colossus || form == SwarmForm.Collapsed;
 
         private static Vector4 ShaderColor(Color color, bool isLinear) => isLinear ? color.linear : color;
 
@@ -615,6 +701,58 @@ namespace DigitalStory.View
             _standingSeconds = 0f;
             _standingShare = 0f;
             _hasFormChanged = false;
+            ClearSongs();
+        }
+
+        // Empties every slot and forgets the Gust, as at the start of a run.
+        private void ClearSongs()
+        {
+            for (int slot = 0; slot < SlotCount; slot++)
+            {
+                int header = slot * VectorsPerSlot;
+                _slotVectors[header] = new Vector4(EmptySlotForm, 0f, 0f, 0f);
+                _slotVectors[header + ParamAOffset] = Vector4.zero;
+                _slotVectors[header + ParamBOffset] = new Vector4(0f, 0f, 0f, NotReleased);
+                _slotColors[slot] = Color.clear;
+                _isSlotFresh[slot] = false;
+            }
+
+            _gustRadius = 0f;
+            _gustStartTime = 0f;
+            _isGustFresh = false;
+        }
+
+        // Turns the rules' clocks from this frame's SetSlot calls into this view's times, now that _simTime holds this
+        // frame. A slot not fed this frame keeps its times, so its song plays on with this view's clock.
+        private void TimeSlots()
+        {
+            for (int slot = 0; slot < SlotCount; slot++)
+            {
+                if (_isSlotFresh[slot])
+                {
+                    WriteSlotTimes(slot);
+                    _isSlotFresh[slot] = false;
+                }
+            }
+        }
+
+        // The slot's cast time into its header's y and its release into ParamB's w, both in _simTime.
+        private void WriteSlotTimes(int slot)
+        {
+            int header = slot * VectorsPerSlot;
+            float released = _slotReleasedSeconds[slot];
+            _slotVectors[header].y = _simTime - _slotSeconds[slot];
+            _slotVectors[header + ParamBOffset].w = released < 0f ? NotReleased : Mathf.Max(_simTime - released, 0f);
+        }
+
+        // The same for the Gust. A Gust that is over keeps its start, so the shader's pulse finishes on its own.
+        private void TimeGust()
+        {
+            if (_isGustFresh)
+            {
+                _gustStartTime = _simTime - _gustSeconds;
+                _isGustFresh = false;
+            }
         }
 
         // Spec 9.3: while the Piper stands, the river curls into a torus around them. The PathTrail never shrinks while
@@ -707,17 +845,11 @@ namespace DigitalStory.View
             compute.SetVector(PiperPositionId, _piperPosition);
             compute.SetVector(PiperForwardId, _piperForward);
             compute.SetFloat(StandingShareId, _standingShare);
-            compute.SetVector(StingId, new Vector4(_stingTarget.x, _stingTarget.y, _stingTarget.z, _stingFraction));
             compute.SetVector(HiveAId, _firstHive);
             compute.SetVector(HiveBId, _secondHive);
             compute.SetVector(LastHitId, _lastHit);
-            compute.SetVector(MeteorId, new Vector4(_meteorTarget.x, _meteorTarget.y, _meteorTarget.z, _meteorFraction));
-            compute.SetFloat(MeteorRiseSecondsId, _meteorRiseSeconds);
-            compute.SetFloat(MeteorDiveSecondsId, _meteorDiveSeconds);
-            compute.SetFloat(MeteorHeightId, _meteorHeight);
-            compute.SetFloat(DomeRadiusId, _domeRadius);
-            compute.SetFloat(TornadoRadiusId, _tornadoRadius);
-            compute.SetFloat(MeteorRadiusId, _meteorRadius);
+            compute.SetVectorArray(SlotsId, _slotVectors);
+            compute.SetVector(PulseId, new Vector4(_gustCenter.x, _gustCenter.z, _gustStartTime, _gustRadius));
         }
 
         // Pushed every frame, so values tuned on the config asset in Play Mode show at once.
@@ -776,6 +908,13 @@ namespace DigitalStory.View
             compute.SetVector(RiverColorId, ShaderColor(_config.RiverColor, isLinear));
             compute.SetVector(CastColorId, ShaderColor(_formColor, isLinear));
             compute.SetVector(PreviousCastColorId, ShaderColor(_previousFormColor, isLinear));
+
+            for (int slot = 0; slot < SlotCount; slot++)
+            {
+                _slotColorVectors[slot] = ShaderColor(_slotColors[slot], isLinear);
+            }
+
+            compute.SetVectorArray(SlotColorsId, _slotColorVectors);
         }
 
         // 48 bytes, the same layout as WaspStatic in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.
@@ -791,7 +930,7 @@ namespace DigitalStory.View
             public float Height01;
             public float Level01;
             public float Phase01;
-            public float Unused;
+            public float Squad;
         }
     }
 }
