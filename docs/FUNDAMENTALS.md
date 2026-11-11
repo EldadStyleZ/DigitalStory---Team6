@@ -176,7 +176,7 @@ public sealed class Door
 | **Interface segregation** | No class should depend on methods it does not use | `IDamageable` has no movement methods, so an explosion never depends on them |
 | **Dependency inversion** | Rules and details both depend on an abstraction that the rules own | Logic owns `IRandomSource`, and View implements it with `UnityEngine.Random` |
 
-Dependency inversion is the principle. Dependency injection is the technique that hands a class its real or fake dependency, and `docs/CODING_STANDARDS.md` shows how we do it.
+Dependency inversion is the principle. Dependency injection is the technique that hands a class its real or fake dependency, and `docs/CODE_EXAMPLES.md` shows how we do it.
 
 ## Part 2: How a game runs
 

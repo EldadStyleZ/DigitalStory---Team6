@@ -11,7 +11,7 @@ description: Use when adding, moving, renaming, reparenting or scaling GameObjec
 4. **Build top down** with `rql-mutate`: group parents first, then roots, then children. One small step at a time, checking each.
 5. **Put UI under `Canvas`.** Create the `Canvas` empty at the root if the scene has none, then one child per screen with its UI Document.
 6. **Wire references** in the Inspector or through `Game`, the composition root. Never by name at runtime.
-7. **Check** with the queries in section 9 of `docs/SCENE_STRUCTURE.md`, then the console, then Play Mode.
+7. **Check** with the check queries in `docs/SCENE_STRUCTURE.md`, then the console, then Play Mode.
 8. **Save** the scene or prefab and report what changed, using its checklist.
 
 ## Common mistakes
