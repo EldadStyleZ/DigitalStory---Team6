@@ -7,9 +7,9 @@ namespace DigitalStory.Logic
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Dome", fileName = "DomeSong")]
     public sealed class DomeSong : SlotSongEffect
     {
-        // H K J: the Sting played backwards.
+        // H K J: the Sting played backwards. 40 wasps.
         public DomeSong()
-            : base(new SongDefinition("Dome", "A dome of wasps shields the core", 8f, 0, 2, 1), SongCategory.Defense, 0.35f)
+            : base(new SongDefinition("Dome", "A dome of wasps shields the core", 8f, 0, 2, 1), SongCategory.Defense, 0.35f, 40)
         {
         }
 

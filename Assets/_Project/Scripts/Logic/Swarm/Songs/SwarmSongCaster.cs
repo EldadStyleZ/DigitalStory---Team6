@@ -5,12 +5,17 @@ using DigitalStory.Data;
 namespace DigitalStory.Logic
 {
     /// <summary>
-    /// Turns flute notes into swarm songs. It wraps <see cref="SongBook"/>, adds the swarm's rules
-    /// and keeps what the HUD shows: recent notes and cooldowns.
+    /// Turns flute notes into swarm songs. It wraps <see cref="SongBook"/>, adds the swarm's rules and keeps what the HUD
+    /// shows: recent notes and cooldowns.
     /// </summary>
     /// <remarks>
-    /// Nothing is cast, or even remembered, while the swarm is collapsed. When a song's notes are completed but it cannot cast, <see cref="SongNotReady"/> is raised. While the Colossus stands no song is cast and none starts a cooldown. A song whose
-    /// <see cref="SwarmSongEffect.CanCast"/> is false still uses up the notes and starts its cooldown.
+    /// The book only matches notes: it is given the songs with no cooldown, and the caster keeps the cooldowns itself, so a
+    /// song is refused before any cooldown starts. When a song's notes are completed but it cannot cast,
+    /// <see cref="SongNotReady"/> is raised with the reason, in this order: the Colossus stands, the song cools down,
+    /// <see cref="SwarmSongEffect.CanCast"/> is false (it needs Fury), or its price would take the swarm below its collapse
+    /// line. A refused song still uses up its notes and starts no cooldown. A cast pays the song's price as it happens,
+    /// unless songs are free (<see cref="SwarmSongContext.AreSongsFree"/>). Nothing is cast, or even remembered, while the
+    /// swarm is collapsed.
     /// </remarks>
     public sealed class SwarmSongCaster
     {
@@ -49,7 +54,7 @@ namespace DigitalStory.Logic
                     throw new ArgumentException($"Song {i} is missing or has no definition.", nameof(songs));
                 }
 
-                definitions.Add(songs[i].Song);
+                definitions.Add(WithoutCooldown(songs[i].Song));
             }
 
             _book = new SongBook(definitions, config, holeCount);
@@ -70,16 +75,13 @@ namespace DigitalStory.Logic
         /// <summary>How many recent notes the flute remembers right now.</summary>
         public int RecentNoteCount => _noteCount;
 
-        /// <summary>Raised with the song's index when a song is cast.</summary>
+        /// <summary>Raised with the song's index when a song is cast, once its price is paid.</summary>
         public event Action<int> SongCast;
 
-        /// <summary>
-        /// Raised with the song's index when its notes were just completed but it could not cast: it is cooling down,
-        /// the swarm is collapsed, the Colossus stands or <see cref="SwarmSongEffect.CanCast"/> is false.
-        /// </summary>
-        public event Action<int> SongNotReady;
+        /// <summary>Raised with the song's index and the reason when its notes were just completed but it could not cast.</summary>
+        public event Action<int, SongRefusal> SongNotReady;
 
-        /// <summary>Raised with the hole when a note is played.</summary>
+        /// <summary>Raised with the hole when a note is played, before the note can complete a song.</summary>
         public event Action<int> NotePlayed;
 
         /// <summary>1 just after the song was cast, 0 when it is ready.</summary>
@@ -114,12 +116,12 @@ namespace DigitalStory.Logic
             if (context.Swarm.IsCollapsed || (context.Forms != null && context.Forms.Current == SwarmForm.Collapsed))
             {
                 RememberMissedNote(hole);
-                int missed = LongestTailMatch(_missedHoles, _missedAges, _missedCount, false);
+                int missed = LongestTailMatch(_missedHoles, _missedAges, _missedCount);
 
                 if (missed != SongBook.NoSong)
                 {
                     _missedCount = 0;
-                    SongNotReady?.Invoke(missed);
+                    SongNotReady?.Invoke(missed, SongRefusal.Collapsed);
                 }
 
                 return SongBook.NoSong;
@@ -134,29 +136,35 @@ namespace DigitalStory.Logic
 
             if (song == SongBook.NoSong)
             {
-                RaiseNotReady(LongestTailMatch(_noteHoles, _noteAges, _noteCount, true));
                 return SongBook.NoSong;
             }
 
             _noteCount = 0;
+            SwarmSongEffect effect = _songs[song];
 
-            // The giant stands until its time is up: a song cannot replace it, so it costs no cooldown.
+            // The giant stands until its time is up: a song cannot replace it.
             if (context.Forms != null && context.Forms.Current == SwarmForm.Colossus)
             {
-                SongNotReady?.Invoke(song);
-                return SongBook.NoSong;
+                return Refuse(song, SongRefusal.GiantStanding);
             }
 
-            _cooldownLeft[song] = _songs[song].Song.CooldownSeconds;
-
-            SwarmSongEffect effect = _songs[song];
+            if (_cooldownLeft[song] > 0f)
+            {
+                return Refuse(song, SongRefusal.CoolingDown);
+            }
 
             if (!effect.CanCast(in context))
             {
-                SongNotReady?.Invoke(song);
-                return SongBook.NoSong;
+                return Refuse(song, SongRefusal.NeedsFury);
             }
 
+            // Paid last, so a song refused for any other reason costs nothing. Paying never collapses the swarm.
+            if (!context.AreSongsFree && !context.Swarm.TrySpend(effect.WaspCost))
+            {
+                return Refuse(song, SongRefusal.NotEnoughWasps);
+            }
+
+            _cooldownLeft[song] = effect.Song.CooldownSeconds;
             effect.Cast(in context);
             SongCast?.Invoke(song);
             return song;
@@ -183,16 +191,27 @@ namespace DigitalStory.Logic
             }
         }
 
-        private void RaiseNotReady(int song)
+        // The book only matches notes; the caster keeps the cooldowns, so a refused song starts none.
+        private static SongDefinition WithoutCooldown(SongDefinition song)
         {
-            if (song != SongBook.NoSong)
+            var keys = new int[song.Keys.Count];
+
+            for (int key = 0; key < keys.Length; key++)
             {
-                SongNotReady?.Invoke(song);
+                keys[key] = song.Keys[key];
             }
+
+            return new SongDefinition(song.Title, song.Description, 0f, keys);
+        }
+
+        private int Refuse(int song, SongRefusal reason)
+        {
+            SongNotReady?.Invoke(song, reason);
+            return SongBook.NoSong;
         }
 
         // The longest song whose keys end the given notes. Notes that are too old are ignored. It does not allocate.
-        private int LongestTailMatch(int[] holes, float[] ages, int count, bool onlyCooling)
+        private int LongestTailMatch(int[] holes, float[] ages, int count)
         {
             int first = 0;
 
@@ -210,7 +229,7 @@ namespace DigitalStory.Logic
                 IReadOnlyList<int> keys = _songs[song].Song.Keys;
                 int length = keys.Count;
 
-                if (length > total || length <= bestLength || (onlyCooling && !_book.IsCoolingDown(song)))
+                if (length > total || length <= bestLength)
                 {
                     continue;
                 }

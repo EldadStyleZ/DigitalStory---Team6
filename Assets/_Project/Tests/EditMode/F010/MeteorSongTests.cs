@@ -140,7 +140,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(enemy);
             Cast();
 
-            _forms.Tick(1.29f, 2);
+            _forms.Tick(1.29f, _hives);
 
             Assert.That(Strike().ReleasedSeconds, Is.EqualTo(-1f), "still falling");
             Assert.That(enemy.DamageTaken, Is.EqualTo(0f));
@@ -164,8 +164,8 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(dead);
             Cast();
 
-            _forms.Tick(1.29f, 2);
-            _forms.Tick(0.02f, 2);
+            _forms.Tick(1.29f, _hives);
+            _forms.Tick(0.02f, _hives);
 
             Assert.That(near.DamageTaken, Is.EqualTo(60f));
             Assert.That(near.LastStunSeconds, Is.EqualTo(0.5f));
@@ -187,7 +187,7 @@ namespace DigitalStory.Tests.EditMode
                 _enemies.Add(pooled);
                 Cast();
 
-                _forms.Tick(1.32f, 2);
+                _forms.Tick(1.32f, _hives);
 
                 Assert.That(pooled.Health, Is.EqualTo(config.Health));
                 Assert.That(_fury.Value, Is.EqualTo(0f));
@@ -209,7 +209,7 @@ namespace DigitalStory.Tests.EditMode
             _aimPoint = new Vector3(10f, 0f, 0f);
             Cast();
 
-            _forms.Tick(1.32f, 2);
+            _forms.Tick(1.32f, _hives);
 
             Assert.That(atTarget.DamageTaken, Is.EqualTo(60f));
             Assert.That(atCore.DamageTaken, Is.EqualTo(0f));
@@ -223,7 +223,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(new FakeSwarmTarget { Position = new Vector3(30f, 0f, 0f) });
             Cast();
 
-            _forms.Tick(1.32f, 2);
+            _forms.Tick(1.32f, _hives);
 
             Assert.That(_fury.Value, Is.EqualTo(60f).Within(1e-3f), "two hits of 60 damage at 2 damage per Fury point");
         }
@@ -234,8 +234,8 @@ namespace DigitalStory.Tests.EditMode
             _aimPoint = new Vector3(4f, 0f, -3f);
             Cast();
 
-            _forms.Tick(1.32f, 2);
-            _forms.Tick(0.2f, 2);
+            _forms.Tick(1.32f, _hives);
+            _forms.Tick(0.2f, _hives);
 
             Assert.That(_landings, Is.EqualTo(new[] { new Vector3(4f, 0f, -3f) }));
         }
@@ -247,7 +247,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(enemy);
             Cast();
 
-            _forms.Tick(5f, 2);
+            _forms.Tick(5f, _hives);
 
             Assert.That(enemy.DamageTaken, Is.EqualTo(60f));
             Assert.That(_landings.Count, Is.EqualTo(1));
@@ -259,11 +259,11 @@ namespace DigitalStory.Tests.EditMode
         {
             Cast();
 
-            _forms.Tick(1.89f, 2);
+            _forms.Tick(1.89f, _hives);
             Assert.That(Strike().IsActive, Is.True, "1.9 s in all: rise, dive, then the burst and flow back, which is the slot's return beat");
             Assert.That(Strike().ReleasedSeconds, Is.GreaterThan(0f), "it let go when it landed");
 
-            _forms.Tick(0.02f, 2);
+            _forms.Tick(0.02f, _hives);
 
             Assert.That(Strike().IsActive, Is.False);
             Assert.That(Strike().High, Is.EqualTo(Strike().Low), "no wasps left in the squad");
@@ -343,12 +343,12 @@ namespace DigitalStory.Tests.EditMode
         {
             FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
 
-            _forms.Tick(0.4f, 2);
+            _forms.Tick(0.4f, _hives);
             walker.Position = new Vector3(7f, 0f, 0f);
-            _forms.Tick(0.39f, 2);
+            _forms.Tick(0.39f, _hives);
             walker.Position = new Vector3(8.4f, 0f, 0f);
-            _forms.Tick(0.02f, 2);
-            _forms.Tick(0.51f, 2);
+            _forms.Tick(0.02f, _hives);
+            _forms.Tick(0.51f, _hives);
 
             Assert.That(walker.DamageTaken, Is.EqualTo(60f));
             Assert.That(_landings, Is.EqualTo(new[] { new Vector3(8.4f, 0f, 0f) }));
@@ -360,11 +360,11 @@ namespace DigitalStory.Tests.EditMode
             FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
 
             walker.Position = new Vector3(6f, 0f, 1f);
-            _forms.Tick(0.2f, 2);
+            _forms.Tick(0.2f, _hives);
             Assert.That(Impact(), Is.EqualTo(new Vector3(6f, 0f, 1f)));
 
             walker.Position = new Vector3(7f, 0f, 2f);
-            _forms.Tick(0.2f, 2);
+            _forms.Tick(0.2f, _hives);
             Assert.That(Impact(), Is.EqualTo(new Vector3(7f, 0f, 2f)));
         }
 
@@ -372,14 +372,14 @@ namespace DigitalStory.Tests.EditMode
         public void Follow_AfterTheDiveStarts_ThePointDoesNotMove()
         {
             FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
-            _forms.Tick(0.81f, 2);
+            _forms.Tick(0.81f, _hives);
 
             walker.Position = new Vector3(12f, 0f, 0f);
-            _forms.Tick(0.2f, 2);
+            _forms.Tick(0.2f, _hives);
 
             Assert.That(Impact(), Is.EqualTo(new Vector3(5f, 0f, 0f)));
 
-            _forms.Tick(0.31f, 2);
+            _forms.Tick(0.31f, _hives);
 
             Assert.That(walker.DamageTaken, Is.EqualTo(0f), "it left the 3 m radius during the dive");
             Assert.That(_landings, Is.EqualTo(new[] { new Vector3(5f, 0f, 0f) }), "the landing reports the locked point");
@@ -389,10 +389,10 @@ namespace DigitalStory.Tests.EditMode
         public void Follow_ATargetThatStaysInTheRadiusDuringTheDive_IsStillHit()
         {
             FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
-            _forms.Tick(0.81f, 2);
+            _forms.Tick(0.81f, _hives);
 
             walker.Position = new Vector3(7.5f, 0f, 0f);
-            _forms.Tick(0.51f, 2);
+            _forms.Tick(0.51f, _hives);
 
             Assert.That(walker.DamageTaken, Is.EqualTo(60f));
         }
@@ -404,14 +404,14 @@ namespace DigitalStory.Tests.EditMode
             var bystander = new FakeSwarmTarget { Position = new Vector3(7f, 0f, 1f) };
             _enemies.Add(bystander);
             walker.Position = new Vector3(7f, 0f, 0f);
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
 
             walker.IsAlive = false;
             walker.Position = new Vector3(9f, 0f, 0f);
-            _forms.Tick(0.2f, 2);
+            _forms.Tick(0.2f, _hives);
             Assert.That(Impact(), Is.EqualTo(new Vector3(7f, 0f, 0f)));
 
-            _forms.Tick(0.62f, 2);
+            _forms.Tick(0.62f, _hives);
 
             Assert.That(_landings, Is.EqualTo(new[] { new Vector3(7f, 0f, 0f) }));
             Assert.That(bystander.DamageTaken, Is.EqualTo(60f));
@@ -424,7 +424,7 @@ namespace DigitalStory.Tests.EditMode
             FakeSwarmTarget walker = AimAtWalker(new Vector3(10f, 0f, 0f));
 
             walker.Position = new Vector3(30f, 0f, 0f);
-            _forms.Tick(0.3f, 2);
+            _forms.Tick(0.3f, _hives);
 
             Assert.That(Impact().x, Is.EqualTo(18f).Within(1e-3f));
             Assert.That(Impact().z, Is.EqualTo(0f).Within(1e-3f));
@@ -439,11 +439,11 @@ namespace DigitalStory.Tests.EditMode
             Cast();
 
             walker.Position = new Vector3(8.4f, 0f, 0f);
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
 
             Assert.That(Impact(), Is.EqualTo(new Vector3(5f, 0f, 0f)));
 
-            _forms.Tick(0.82f, 2);
+            _forms.Tick(0.82f, _hives);
 
             Assert.That(walker.DamageTaken, Is.EqualTo(0f));
             Assert.That(_landings, Is.EqualTo(new[] { new Vector3(5f, 0f, 0f) }));
@@ -482,10 +482,10 @@ namespace DigitalStory.Tests.EditMode
             var enemy = new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f) };
             _enemies.Add(enemy);
             Cast();
-            _forms.Tick(1f, 2);
+            _forms.Tick(1f, _hives);
 
             _body.Lose(_swarmConfig.StartingWasps - 100);
-            _forms.Tick(1f, 2);
+            _forms.Tick(1f, _hives);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(enemy.DamageTaken, Is.EqualTo(0f));

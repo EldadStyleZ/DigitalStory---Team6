@@ -18,6 +18,13 @@ namespace DigitalStory.Logic
     /// It is also the aim chooser of the songs it casts (<see cref="ISongAim"/>): an aimed song asks it for its target by the
     /// song's own rule, and the mouse wins while it is live. The marker's target, chosen every tick, uses the rule and reach
     /// of the aimed song the player knows from the start (the Sting), read from its asset, so the marker and that song agree.
+    /// A match is rounds of a farm phase and a survive phase (plan section L), and wasps are its one currency (section M):
+    /// songs cost wasps only in a survive phase, the hives' stores pay for Hive Call, the respawn and what the core collects
+    /// beside a hive, Give pays wasps into a hive's health, and calling a wave early earns wasps. The last hive starts hurt so
+    /// the first round's lesson (section N) has a hive to heal; once no standing hive is hurt, the lesson's heal step is done.
+    /// Each tick runs in this order: the core, the song caster and the aim, the notes pressed, the swarm's respawn, its form
+    /// (Hive Call), the giant, the hive the core stands at, the lesson's heal step, smoke, the hives' stores, the beekeepers,
+    /// the wave timeline, a wave called early, and last the state.
     /// </remarks>
     public sealed class HiveDefenseSession : ISongAim
     {
@@ -40,6 +47,7 @@ namespace DigitalStory.Logic
         private readonly IReadOnlyList<SwarmSongEffect> _songs;
         private readonly AutoAim _autoAim;
         private readonly SlotSongEffect _markerSong;
+        private readonly HiveExchange _exchange;
 
         private HiveDefenseState _state = HiveDefenseState.Playing;
         private Vector3 _corePosition;
@@ -96,20 +104,29 @@ namespace DigitalStory.Logic
             Fury = new FuryMeter(rules.Fury);
             Forms = new SwarmFormMachine(Swarm, Fury, rules.Squads);
 
+            // The last hive starts hurt, so the first round's lesson has a hive to heal.
             var hives = new List<Hive>(hivePositions.Count);
+            int lastHive = hivePositions.Count - 1;
             for (int index = 0; index < hivePositions.Count; index++)
             {
-                hives.Add(new Hive(rules.Hive, hivePositions[index]));
+                hives.Add(new Hive(rules.Hive, hivePositions[index], index == lastHive));
             }
 
             Hives = new HiveSet(hives);
+            _exchange = new HiveExchange(rules.Hive, Hives, Swarm);
             Waves = new WaveDirector(rules.Waves, spawnPoints.Count);
             Caster = new SwarmSongCaster(rules.Songs, rules.SongConfig, rules.HoleCount);
             Smoke = new SmokeField(rules.Smoke);
             _songs = rules.Songs;
             Discovery = new SongDiscovery(rules.Songs);
+            Tutorial = new Tutorial();
             Caster.SongCast += Discovery.NoteCast;
+            Caster.SongCast += OnSongCast;
+            Caster.NotePlayed += OnNotePlayed;
             Fury.Changed += OnFuryChanged;
+            Waves.PhaseChanged += OnPhaseChanged;
+            _exchange.Collected += OnCollected;
+            _exchange.Gave += OnGave;
 
             int sticks = 0;
             int smokers = 0;
@@ -161,17 +178,50 @@ namespace DigitalStory.Logic
         /// <summary>The hives.</summary>
         public HiveSet Hives { get; }
 
-        /// <summary>The wave timeline.</summary>
+        /// <summary>The rounds: each a farm phase and then a wave.</summary>
         public WaveDirector Waves { get; }
+
+        /// <summary>Farm or Survive, as of the last tick (plan section L).</summary>
+        public MatchPhase Phase => Waves.Phase;
+
+        /// <summary>Seconds until the farm phase ends and the wave comes. 0 in a survive phase.</summary>
+        public float FarmSecondsLeft => Waves.FarmSecondsLeft;
+
+        /// <summary>The round being played, from 1 to <see cref="RoundCount"/>.</summary>
+        public int Round => Waves.Round;
+
+        /// <summary>How many rounds the match has.</summary>
+        public int RoundCount => Waves.RoundCount;
+
+        /// <summary>True while songs cost no wasps: in a farm phase, so trying phrases is always free.</summary>
+        public bool AreSongsFree => Waves.Phase == MatchPhase.Farm;
 
         /// <summary>The song caster, for the HUD.</summary>
         public SwarmSongCaster Caster { get; }
 
-        /// <summary>Which songs the player knows. A cast makes a song known, and the first full Fury reveals the songs that wait for it.</summary>
+        /// <summary>
+        /// Which songs the player knows, and how much of each song's beginning was played (the song table). A cast makes a
+        /// song known, and the first full Fury reveals the songs that wait for it.
+        /// </summary>
         public SongDiscovery Discovery { get; }
+
+        /// <summary>The first round's lesson: the prompt to show, one at a time.</summary>
+        public Tutorial Tutorial { get; }
 
         /// <summary>The smoke grenades and clouds.</summary>
         public SmokeField Smoke { get; }
+
+        /// <summary>The standing hive within its collect radius of the core as of the last tick, or -1 when none is.</summary>
+        public int NearHive => _exchange.NearHive;
+
+        /// <summary>True while the nearby hive's store flows into the swarm.</summary>
+        public bool IsCollecting => _exchange.IsCollecting;
+
+        /// <summary>True while Give is held beside a hurt hive and wasps flow from the swarm into its health.</summary>
+        public bool IsGiving => _exchange.IsGiving;
+
+        /// <summary>Raised with the wasps given for calling a wave early, when any were (the swarm may be full).</summary>
+        public event Action<int> WaspsGranted;
 
         /// <summary>
         /// Where the core is as of the last tick: where the View moved it, or, while the giant stands, the giant's place on
@@ -296,15 +346,20 @@ namespace DigitalStory.Logic
             Choose(_markerSong.AimRule, _markerSong.AimRange);
             PressHoles(frame.PressedHoleMask);
 
-            int standing = Hives.StandingCount;
-            Swarm.Tick(dt, standing);
-            Forms.Tick(dt, standing);
+            Swarm.Tick(dt, Hives);
+            Forms.Tick(dt, Hives);
 
             TickColossus(frame, dt);
+            _exchange.Tick(dt, _corePosition, frame.Give, Forms.Current == SwarmForm.HiveCall);
+            TickLesson();
             Smoke.Tick(dt, Hives, Swarm, _corePosition, Forms);
             Hives.Tick(dt);
             TickBeekeepers(dt);
             Waves.Tick(dt, _activeCount);
+            if (frame.CallWave)
+            {
+                CallWaveEarly();
+            }
 
             if (Hives.AllDestroyed)
             {
@@ -313,6 +368,67 @@ namespace DigitalStory.Logic
             else if (Waves.AllWavesCleared)
             {
                 SetState(HiveDefenseState.Won);
+            }
+        }
+
+        // In a farm phase only: the wave comes now, and the seconds skipped earn wasps, as many as the swarm has room for.
+        private void CallWaveEarly()
+        {
+            float skipped = Waves.CallWave();
+            int earned = Mathf.FloorToInt(skipped * _rules.Waves.EarlyBonusPerSecond);
+            if (earned <= 0)
+            {
+                return;
+            }
+
+            int granted = Swarm.Gain(earned);
+            if (granted > 0)
+            {
+                WaspsGranted?.Invoke(granted);
+            }
+        }
+
+        private void OnSongCast(int song)
+        {
+            if (ReferenceEquals(_songs[song], _markerSong))
+            {
+                Tutorial.Complete(TutorialStep.PlaySting);
+            }
+        }
+
+        // The song table fills in from every note the flute hears, before the note can cast a song and use the notes up.
+        private void OnNotePlayed(int hole)
+        {
+            Discovery.RecordNotes(Caster);
+        }
+
+        private void OnPhaseChanged(MatchPhase phase)
+        {
+            if (phase == MatchPhase.Survive)
+            {
+                Tutorial.Finish();
+            }
+        }
+
+        private void OnCollected(int hive)
+        {
+            Tutorial.Complete(TutorialStep.VisitHive);
+        }
+
+        private void OnGave(int hive)
+        {
+            Tutorial.Complete(TutorialStep.HealHive);
+        }
+
+        // Gave is raised only while a hive is hurt, and a full hive stays full in the first farm phase, so a hurt hive healed
+        // before the heal step came (or one that fell) would leave that step's prompt up until the first wave. With no
+        // standing hive hurt the step has nothing to teach, so it is done. Checked each tick, not when the step changes, so
+        // StepChanged is never raised from inside itself.
+        private void TickLesson()
+        {
+            if (Tutorial.Current == TutorialStep.HealHive && !Hives.HasDamagedHive)
+            {
+                Tutorial.Complete(TutorialStep.HealHive);
             }
         }
 
@@ -353,9 +469,9 @@ namespace DigitalStory.Logic
         // While the giant stands the core rides inside it, so the View's core is ignored and TickColossus moves it. Otherwise
         // the core is where the View moved it, held inside the play area, and faces the way it moved; only the step on the
         // ground counts, and a step too short to turn it keeps the last facing. The core is held in place while it is rooted,
-        // so asking to move counts as moving: it ends Hive Call. The first read after the giant ends is the core settling
-        // where it was put, which can be inside a hive or a wall that the controller pushes it out of, so it neither turns
-        // the core nor counts as a move.
+        // so asking to move counts as moving: it ends Hive Call, and it is the lesson's first step. The first read after the
+        // giant ends is the core settling where it was put, which can be inside a hive or a wall that the controller pushes
+        // it out of, so it neither turns the core nor counts as a move.
         private void ReadCore(in HiveDefenseFrame frame)
         {
             if (_isColossusActive)
@@ -377,6 +493,7 @@ namespace DigitalStory.Logic
             if (stepSqr > MovedSqrMetres || frame.Move.sqrMagnitude > 0f)
             {
                 Forms.NotifyCoreMoved();
+                Tutorial.Complete(TutorialStep.Move);
             }
 
             if (stepSqr > TurnSqrMetres)
@@ -439,7 +556,8 @@ namespace DigitalStory.Logic
                     return;
                 }
 
-                var context = new SwarmSongContext(_corePosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke, this);
+                var context = new SwarmSongContext(
+                    _corePosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke, this, AreSongsFree);
                 Caster.Press(hole, context);
             }
         }

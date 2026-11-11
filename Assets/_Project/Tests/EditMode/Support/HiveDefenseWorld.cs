@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using DigitalStory.Data;
 using DigitalStory.Logic;
@@ -8,14 +9,16 @@ using UnityEngine;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// A small match for tests: default configs, a short first-wave delay and the waves, hives and spawn points a test chooses.
-    /// The core stands still at <see cref="Core"/> unless a test moves it. After each tick the world puts the core where the
-    /// session says it is, as the View does, so it rides inside the giant and stays where the giant stood.
+    /// A small match for tests: default configs, a short first farm phase (1 s unless a test says) and the waves, hives and
+    /// spawn points a test chooses. The core stands still at <see cref="Core"/> unless a test moves it. After each tick the
+    /// world puts the core where the session says it is, as the View does, so it rides inside the giant and stays where the
+    /// giant stood.
     /// </summary>
     internal sealed class HiveDefenseWorld : IDisposable
     {
         public const float Step = 1f / 60f;
         public const int HoleCount = 4;
+        public const float ShortFirstFarmSeconds = 1f;
 
         /// <summary>
         /// The song indices when the world is built with songs: Dome H K J, Colossus L J K J L and Sting J K H; with all songs,
@@ -39,7 +42,8 @@ namespace DigitalStory.Tests.EditMode
             Vector3 core = default,
             bool smokerForSecondKind = true,
             bool withSongs = false,
-            bool withAllSongs = false)
+            bool withAllSongs = false,
+            float firstFarmSeconds = ShortFirstFarmSeconds)
         {
             Core = core;
             Swarm = Make<SwarmConfig>();
@@ -58,7 +62,7 @@ namespace DigitalStory.Tests.EditMode
                 + "\"<CooldownSeconds>k__BackingField\":4.5,\"<HiveDamage>k__BackingField\":0,\"<WaspsKnockedOff>k__BackingField\":0}",
                 Smoker);
             WaveConfig = Make<WaveConfig>();
-            JsonUtility.FromJsonOverwrite(WaveJson(waves ?? new[] { new WaveEntry(1, 0) }), WaveConfig);
+            JsonUtility.FromJsonOverwrite(WaveJson(waves ?? new[] { new WaveEntry(1, 0) }, firstFarmSeconds), WaveConfig);
 
             Sting = Make<StingSong>();
             SongConfig = Make<SongConfig>();
@@ -107,11 +111,18 @@ namespace DigitalStory.Tests.EditMode
         public HiveDefenseSession Session { get; }
         public Vector3 Core { get; set; }
 
-        /// <summary>A frame with the core where it is, the mouse idle unless a test says, and nothing pressed.</summary>
+        /// <summary>A frame with the core where it is, the mouse idle unless a test says, and nothing pressed or held.</summary>
         public HiveDefenseFrame Frame(
-            Vector2 move = default, int holes = 0, bool punch = false, bool kick = false, Vector3? aim = null, bool isMouseLive = false)
+            Vector2 move = default,
+            int holes = 0,
+            bool punch = false,
+            bool kick = false,
+            Vector3? aim = null,
+            bool isMouseLive = false,
+            bool give = false,
+            bool callWave = false)
         {
-            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, punch, kick, isMouseLive);
+            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, punch, kick, isMouseLive, give, callWave);
         }
 
         /// <summary>Ticks with idle frames for the given seconds.</summary>
@@ -174,7 +185,7 @@ namespace DigitalStory.Tests.EditMode
         private void Tick(HiveDefenseFrame frame)
         {
             var now = new HiveDefenseFrame(
-                Core, frame.AimPoint, frame.Move, frame.PressedHoleMask, frame.Punch, frame.Kick, frame.IsMouseLive);
+                Core, frame.AimPoint, frame.Move, frame.PressedHoleMask, frame.Punch, frame.Kick, frame.IsMouseLive, frame.Give, frame.CallWave);
             Session.Tick(now, Step);
             Core = Session.CorePosition;
         }
@@ -194,9 +205,11 @@ namespace DigitalStory.Tests.EditMode
             return asset;
         }
 
-        private static string WaveJson(WaveEntry[] waves)
+        private static string WaveJson(WaveEntry[] waves, float firstFarmSeconds)
         {
-            var json = new StringBuilder("{\"<FirstWaveDelaySeconds>k__BackingField\":1,\"_waves\":[");
+            var json = new StringBuilder("{\"<FirstFarmSeconds>k__BackingField\":")
+                .Append(firstFarmSeconds.ToString("R", CultureInfo.InvariantCulture))
+                .Append(",\"_waves\":[");
             for (int index = 0; index < waves.Length; index++)
             {
                 if (index > 0)

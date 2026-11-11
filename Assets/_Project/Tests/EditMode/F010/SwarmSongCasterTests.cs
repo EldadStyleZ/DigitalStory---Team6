@@ -49,6 +49,8 @@ namespace DigitalStory.Tests.EditMode
         private readonly List<int> _cast = new List<int>();
         private readonly List<int> _played = new List<int>();
         private readonly List<int> _notReady = new List<int>();
+        private readonly List<SongRefusal> _reasons = new List<SongRefusal>();
+        private bool _areSongsFree;
 
         [SetUp]
         public void SetUp()
@@ -75,7 +77,13 @@ namespace DigitalStory.Tests.EditMode
             _cast.Clear();
             _played.Clear();
             _notReady.Clear();
-            _caster.SongNotReady += song => _notReady.Add(song);
+            _reasons.Clear();
+            _areSongsFree = false;
+            _caster.SongNotReady += (song, reason) =>
+            {
+                _notReady.Add(song);
+                _reasons.Add(reason);
+            };
             _caster.SongCast += song => _cast.Add(song);
             _caster.NotePlayed += hole => _played.Add(hole);
         }
@@ -304,7 +312,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _body.Lose(_swarmConfig.StartingWasps - 100);
             PlayAll(SongKeys[0]);
-            _body.Tick(3f, 2);
+            _body.Tick(3f, _hives);
 
             int result = PlayAll(SongKeys[0]);
 
@@ -314,7 +322,7 @@ namespace DigitalStory.Tests.EditMode
         // SongNotReady
 
         [Test]
-        public void SongNotReady_NotesCompletedWhileCoolingDown_IsRaisedWithThatSong()
+        public void SongNotReady_NotesCompletedWhileCoolingDown_IsRaisedWithThatSongAndCoolingDown()
         {
             PlayAll(SongKeys[0]);
             _notReady.Clear();
@@ -322,17 +330,33 @@ namespace DigitalStory.Tests.EditMode
             PlayAll(SongKeys[0]);
 
             Assert.That(_notReady, Is.EqualTo(new[] { 0 }));
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.CoolingDown }));
             Assert.That(_cast, Is.EqualTo(new[] { 0 }), "only the first cast");
         }
 
+        // Changed with the cost rule: the caster owns the cooldowns now, so the song book (given no cooldowns) matches the
+        // cooling song and uses up its notes, as every other refusal does. It still proves the refused song casts nothing.
         [Test]
-        public void SongNotReady_NotesCompletedWhileCoolingDown_AreNotUsedUp()
+        public void SongNotReady_NotesCompletedWhileCoolingDown_AreUsedUpAndCastNothing()
         {
             PlayAll(SongKeys[0]);
+            _cast.Clear();
 
             PlayAll(SongKeys[0]);
 
-            Assert.That(_caster.RecentNoteCount, Is.EqualTo(3));
+            Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
+            Assert.That(_cast, Is.Empty);
+        }
+
+        [Test]
+        public void SongNotReady_RefusedWhileCoolingDown_DoesNotRestartTheCooldown()
+        {
+            PlayAll(SongKeys[0]);
+            _caster.Tick(4f);
+
+            PlayAll(SongKeys[0]);
+
+            Assert.That(_caster.CooldownFraction(0), Is.EqualTo(0.5f).Within(1e-4f), "4 s of the Dome's 8 s are left, as before the refusal");
         }
 
         [Test]
@@ -343,6 +367,7 @@ namespace DigitalStory.Tests.EditMode
             PlayAll(SongKeys[0]);
 
             Assert.That(_notReady, Is.EqualTo(new[] { 0 }));
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.Collapsed }));
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
             Assert.That(_played, Is.Empty);
         }
@@ -380,6 +405,7 @@ namespace DigitalStory.Tests.EditMode
             PlayAll(SongKeys[0]);
 
             Assert.That(_notReady, Is.EqualTo(new[] { 0 }));
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.GiantStanding }));
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
         }
 
@@ -393,13 +419,123 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void SongNotReady_ColossusWithoutFullFury_IsRaisedWithTheColossus()
+        public void SongNotReady_ColossusWithoutFullFury_IsRaisedWithTheColossusAndNeedsFury()
         {
             _fury.AddDamage(199.8f);
 
             PlayAll(SongKeys[5]);
 
             Assert.That(_notReady, Is.EqualTo(new[] { 5 }));
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.NeedsFury }));
+        }
+
+        // ---- Costs (plan section M) ----
+
+        // The song at each index costs the plan's price: Dome 40, Sting 10, Tornado 60, Gust 20, Hive Call 0, Colossus 0 (Fury is its price), Meteor 90.
+        [TestCase(0, 40)]
+        [TestCase(1, 10)]
+        [TestCase(2, 60)]
+        [TestCase(3, 20)]
+        [TestCase(4, 0)]
+        [TestCase(5, 0)]
+        [TestCase(6, 90)]
+        public void Press_InASurvivePhase_LowersTheCountByTheSongsCostAtTheCast(int song, int cost)
+        {
+            _fury.AddDamage(1000f);
+            int countAtTheCast = -1;
+            _caster.SongCast += _ => countAtTheCast = _body.Count;
+
+            PlayAll(SongKeys[song]);
+
+            Assert.That(_songs[song].WaspCost, Is.EqualTo(cost));
+            Assert.That(_cast, Is.EqualTo(new[] { song }));
+            Assert.That(countAtTheCast, Is.EqualTo(_swarmConfig.StartingWasps - cost), "paid by the time the cast is reported");
+        }
+
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(6)]
+        public void Press_SongsAreFree_CostsNothing(int song)
+        {
+            _areSongsFree = true;
+
+            PlayAll(SongKeys[song]);
+
+            Assert.That(_cast, Is.EqualTo(new[] { song }));
+            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.StartingWasps));
+        }
+
+        [Test]
+        public void Press_CostWouldLeaveFewerThanTheCollapseLine_IsRefusedWithNotEnoughWasps()
+        {
+            LeaveAboveTheCollapseLine(39);
+
+            int result = PlayAll(SongKeys[0]);
+
+            Assert.That(result, Is.EqualTo(SongBook.NoSong));
+            Assert.That(_cast, Is.Empty);
+            Assert.That(_notReady, Is.EqualTo(new[] { 0 }));
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.NotEnoughWasps }));
+            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.CollapseBelow + 39), "nothing is paid");
+            Assert.That(_body.IsCollapsed, Is.False);
+            Assert.That(_caster.CooldownFraction(0), Is.EqualTo(0f), "a refused cast starts no cooldown");
+            Assert.That(_forms.IsDomed, Is.False);
+            Assert.That(_caster.RecentNoteCount, Is.EqualTo(0), "the notes are used up, as for every refusal");
+        }
+
+        [Test]
+        public void Press_CostLeavesExactlyTheCollapseLine_CastsWithoutCollapsing()
+        {
+            LeaveAboveTheCollapseLine(40);
+
+            int result = PlayAll(SongKeys[0]);
+
+            Assert.That(result, Is.EqualTo(0));
+            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.CollapseBelow));
+            Assert.That(_body.IsCollapsed, Is.False);
+        }
+
+        [Test]
+        public void Press_RefusedForWasps_StartsNoCooldown_SoItCastsOnceTheWaspsAreBack()
+        {
+            LeaveAboveTheCollapseLine(39);
+            PlayAll(SongKeys[0]);
+
+            _body.Gain(1f);
+            int result = PlayAll(SongKeys[0]);
+
+            Assert.That(result, Is.EqualTo(0), "no cooldown to wait for");
+            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.CollapseBelow));
+        }
+
+        [Test]
+        public void Press_TooFewWaspsInAFarmPhase_StillCasts()
+        {
+            LeaveAboveTheCollapseLine(0);
+            _areSongsFree = true;
+
+            Assert.That(PlayAll(SongKeys[6]), Is.EqualTo(6));
+            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.CollapseBelow));
+        }
+
+        [Test]
+        public void Press_ASongThatCostsNothing_CastsAtTheCollapseLine()
+        {
+            LeaveAboveTheCollapseLine(0);
+
+            Assert.That(PlayAll(SongKeys[4]), Is.EqualTo(4), "Hive Call is free");
+        }
+
+        [Test]
+        public void Press_CoolingAndTooFewWasps_SaysCoolingDown()
+        {
+            PlayAll(SongKeys[0]);
+            LeaveAboveTheCollapseLine(1);
+            _reasons.Clear();
+
+            PlayAll(SongKeys[0]);
+
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.CoolingDown }));
         }
 
         [Test]
@@ -572,7 +708,15 @@ namespace DigitalStory.Tests.EditMode
 
         private SwarmSongContext Context()
         {
-            return new SwarmSongContext(Vector3.zero, _aim, Vector3.zero, _body, _forms, _fury, _hives, _enemies, new FakeSmokeClearer());
+            return new SwarmSongContext(
+                Vector3.zero, _aim, Vector3.zero, _body, _forms, _fury, _hives, _enemies, new FakeSmokeClearer(), null, _areSongsFree);
+        }
+
+        // Loses wasps until only the given number stand above the collapse line.
+        private void LeaveAboveTheCollapseLine(int wasps)
+        {
+            _body.Lose(_body.Count - _swarmConfig.CollapseBelow - wasps);
+            Assert.That(_body.Spendable, Is.EqualTo(wasps));
         }
     }
 }

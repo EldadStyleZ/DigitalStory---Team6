@@ -140,7 +140,7 @@ namespace DigitalStory.Tests.EditMode
             song.Cast(in context);
 
             Assert.That(_forms.IsDomed, Is.True);
-            _forms.Tick(5f, 2);
+            _forms.Tick(5f, _hives);
             Assert.That(_forms.IsDomed, Is.False);
         }
 
@@ -157,7 +157,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.WaspLossFraction, Is.EqualTo(0.4f).Within(1e-5f));
             Assert.That(_forms.CoreSpeedMultiplier, Is.EqualTo(0.7f).Within(1e-5f));
             Assert.That(_forms.SmokeSlowsCore, Is.True, "the dome does not keep the smoke off");
-            _forms.Tick(5f, 2);
+            _forms.Tick(5f, _hives);
             Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f), "its return beat shields nothing");
             Assert.That(_forms.CoreSpeedMultiplier, Is.EqualTo(1f));
         }
@@ -213,7 +213,7 @@ namespace DigitalStory.Tests.EditMode
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
             Cast(Make<StingSong>(), aim: target);
 
-            _forms.Tick(0.59f, 2);
+            _forms.Tick(0.59f, _hives);
 
             Assert.That(target.DamageTaken, Is.EqualTo(0f));
             Assert.That(_fury.Value, Is.EqualTo(0f));
@@ -224,9 +224,9 @@ namespace DigitalStory.Tests.EditMode
         {
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
             Cast(Make<StingSong>(), aim: target);
-            _forms.Tick(0.6f, 2);
+            _forms.Tick(0.6f, _hives);
 
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
 
             Assert.That(target.DamageTaken, Is.EqualTo(12.5f).Within(1e-3f));
         }
@@ -237,7 +237,7 @@ namespace DigitalStory.Tests.EditMode
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
             Cast(Make<StingSong>(), aim: target);
 
-            _forms.Tick(1.6f, 2);
+            _forms.Tick(1.6f, _hives);
 
             Assert.That(_fury.Value, Is.EqualTo(12.5f).Within(1e-3f), "25 damage at 2 damage per Fury point");
         }
@@ -248,7 +248,7 @@ namespace DigitalStory.Tests.EditMode
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
             Cast(Make<StingSong>(), aim: target);
 
-            _forms.Tick(10f, 2);
+            _forms.Tick(10f, _hives);
 
             Assert.That(target.DamageTaken, Is.EqualTo(85f).Within(1e-2f), "3.4 s at 25 a second, from 0.6 s to 4 s");
             Assert.That(Strike.IsActive, Is.False);
@@ -259,10 +259,10 @@ namespace DigitalStory.Tests.EditMode
         {
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
             Cast(Make<StingSong>(), aim: target);
-            _forms.Tick(1.1f, 2);
+            _forms.Tick(1.1f, _hives);
             target.IsAlive = false;
 
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
 
             Assert.That(target.DamageTaken, Is.EqualTo(12.5f).Within(1e-3f));
             Assert.That(Strike.ReleasedSeconds, Is.GreaterThanOrEqualTo(0f));
@@ -278,11 +278,11 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(Strike.Form, Is.EqualTo(SwarmForm.Sting));
             Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(6f, 0f, 0f)));
-            _forms.Tick(0.99f, 2);
+            _forms.Tick(0.99f, _hives);
             Assert.That(Strike.ReleasedSeconds, Is.EqualTo(-1f));
-            _forms.Tick(0.02f, 2);
+            _forms.Tick(0.02f, _hives);
             Assert.That(Strike.ReleasedSeconds, Is.GreaterThanOrEqualTo(0f));
-            _forms.Tick(1f, 2);
+            _forms.Tick(1f, _hives);
             Assert.That(bystander.DamageTaken, Is.EqualTo(0f), "the air is wrapped, not the beekeeper standing in it");
         }
 
@@ -294,7 +294,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(Make<StingSong>(), aim: dead, aimPoint: new Vector3(-5f, 0f, 0f));
 
             Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(-5f, 0f, 0f)));
-            _forms.Tick(4f, 2);
+            _forms.Tick(4f, _hives);
             Assert.That(dead.DamageTaken, Is.EqualTo(0f));
         }
 
@@ -307,7 +307,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(Strike.ParamA.x, Is.EqualTo(12f).Within(1e-3f));
             Assert.That(Strike.ParamA.z, Is.EqualTo(0f).Within(1e-3f));
-            _forms.Tick(4f, 2);
+            _forms.Tick(4f, _hives);
             Assert.That(far.DamageTaken, Is.EqualTo(0f));
             Assert.That(Strike.IsActive, Is.False, "the air is wrapped for one second, then the wasps fly home");
         }
@@ -318,7 +318,7 @@ namespace DigitalStory.Tests.EditMode
             var target = new FakeSwarmTarget { Position = new Vector3(0f, 0f, 12f) };
             Cast(Make<StingSong>(), aim: target);
 
-            _forms.Tick(1.6f, 2);
+            _forms.Tick(1.6f, _hives);
 
             Assert.That(target.DamageTaken, Is.EqualTo(25f).Within(1e-3f));
         }
@@ -341,7 +341,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(near);
             Cast(Make<TornadoSong>());
 
-            _forms.Tick(0.29f, 2);
+            _forms.Tick(0.29f, _hives);
 
             Assert.That(near.DamageTaken, Is.EqualTo(0f));
             Assert.That(near.LastKnockback, Is.EqualTo(Vector3.zero));
@@ -357,7 +357,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(far);
             Cast(Make<TornadoSong>());
 
-            _forms.Tick(0.3f, 2);
+            _forms.Tick(0.3f, _hives);
 
             Assert.That(near.DamageTaken, Is.EqualTo(30f));
             Assert.That(near.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f), "6 m/s straight away from the core");
@@ -373,7 +373,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(edge);
             Cast(Make<TornadoSong>());
 
-            _forms.Tick(0.3f, 2);
+            _forms.Tick(0.3f, _hives);
 
             Assert.That(edge.DamageTaken, Is.EqualTo(30f), "5 m on the ground counts, however high");
             Assert.That(edge.LastKnockback.y, Is.EqualTo(0f), "thrown along the ground");
@@ -386,7 +386,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(target);
             Cast(Make<TornadoSong>(), core: new Vector3(20f, 0f, 20f));
 
-            _forms.Tick(0.3f, 2);
+            _forms.Tick(0.3f, _hives);
 
             Assert.That(target.DamageTaken, Is.EqualTo(30f));
             Assert.That(target.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f));
@@ -402,7 +402,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(Make<TornadoSong>());
 
             _forms.SetCore(new Vector3(3f, 0f, 0f));
-            _forms.Tick(0.3f, 2);
+            _forms.Tick(0.3f, _hives);
 
             Assert.That(ahead.DamageTaken, Is.EqualTo(30f), "4 m from where the column stands when it hits");
             Assert.That(ahead.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f));
@@ -416,7 +416,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(dead);
             Cast(Make<TornadoSong>());
 
-            _forms.Tick(0.3f, 2);
+            _forms.Tick(0.3f, _hives);
 
             Assert.That(dead.DamageTaken, Is.EqualTo(0f));
             Assert.That(_fury.Value, Is.EqualTo(0f));
@@ -430,7 +430,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(new FakeSwarmTarget { Position = new Vector3(30f, 0f, 0f) });
             Cast(Make<TornadoSong>());
 
-            _forms.Tick(0.3f, 2);
+            _forms.Tick(0.3f, _hives);
 
             Assert.That(_fury.Value, Is.EqualTo(30f).Within(1e-3f), "60 damage at 2 damage per Fury point");
         }
@@ -442,8 +442,8 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(near);
             Cast(Make<TornadoSong>());
 
-            _forms.Tick(0.3f, 2);
-            _forms.Tick(1f, 2);
+            _forms.Tick(0.3f, _hives);
+            _forms.Tick(1f, _hives);
 
             Assert.That(near.DamageTaken, Is.EqualTo(30f));
         }
@@ -454,11 +454,11 @@ namespace DigitalStory.Tests.EditMode
             Cast(Make<TornadoSong>());
 
             Assert.That(Strike.Form, Is.EqualTo(SwarmForm.Tornado));
-            _forms.Tick(1.5f, 2);
+            _forms.Tick(1.5f, _hives);
             Assert.That(Strike.ReleasedSeconds, Is.EqualTo(0f).Within(1e-4f));
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
             Assert.That(Strike.IsActive, Is.True, "the 0.6 s return beat");
-            _forms.Tick(0.2f, 2);
+            _forms.Tick(0.2f, _hives);
             Assert.That(Strike.IsActive, Is.False);
         }
 
@@ -469,7 +469,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(onTop);
             Cast(Make<TornadoSong>(), core: new Vector3(2f, 0f, 2f));
 
-            _forms.Tick(0.3f, 2);
+            _forms.Tick(0.3f, _hives);
 
             Assert.That(onTop.LastKnockback.magnitude, Is.EqualTo(6f).Within(1e-3f));
             Assert.That(float.IsNaN(onTop.LastKnockback.x), Is.False);
@@ -482,9 +482,9 @@ namespace DigitalStory.Tests.EditMode
             _forms.Landed += (form, point) => landings.Add(point);
             Cast(Make<TornadoSong>(), core: new Vector3(2f, 0f, 2f));
 
-            _forms.Tick(0.29f, 2);
+            _forms.Tick(0.29f, _hives);
             Assert.That(landings, Is.Empty);
-            _forms.Tick(0.02f, 2);
+            _forms.Tick(0.02f, _hives);
 
             Assert.That(landings, Is.EqualTo(new[] { new Vector3(2f, 0f, 2f) }));
         }
@@ -505,7 +505,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.GustSeconds, Is.EqualTo(0f));
             Assert.That(_forms.GustCenter, Is.EqualTo(new Vector3(4f, 0f, 7f)));
             Assert.That(_forms.GustRadius, Is.EqualTo(6f));
-            _forms.Tick(0.8f, 2);
+            _forms.Tick(0.8f, _hives);
             Assert.That(_forms.GustSeconds, Is.EqualTo(-1f));
         }
 
@@ -533,7 +533,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(dead);
 
             Cast(Make<GustSong>(), core: new Vector3(1f, 0f, 1f));
-            _forms.Tick(0.8f, 2);
+            _forms.Tick(0.8f, _hives);
 
             Assert.That(near.LastKnockback.x, Is.EqualTo(4f).Within(1e-3f));
             Assert.That(near.LastKnockback.z, Is.EqualTo(0f).Within(1e-3f));
@@ -556,7 +556,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(Make<GustSong>());
             Assert.That(onTop.KnockbackCount, Is.EqualTo(0), "not on the cast frame");
 
-            _forms.Tick(0.11f, 2);
+            _forms.Tick(0.11f, _hives);
             Assert.That(onTop.KnockbackCount, Is.EqualTo(0), "the wasps are still drawn in");
         }
 
@@ -573,26 +573,26 @@ namespace DigitalStory.Tests.EditMode
             Cast(song);
 
             // The ring reaches 0.5 m as it starts at 0.12 s, 2 m at about 0.19 s and 3 m at about 0.25 s.
-            _forms.Tick(0.119f, 2);
+            _forms.Tick(0.119f, _hives);
             Assert.That(close.KnockbackCount + middle.KnockbackCount + edge.KnockbackCount, Is.EqualTo(0));
 
-            _forms.Tick(0.061f, 2);
+            _forms.Tick(0.061f, _hives);
             Assert.That(close.KnockbackCount, Is.EqualTo(1), "0.18 s: the ring has started");
             Assert.That(middle.KnockbackCount, Is.EqualTo(0), "the ring is at " + song.RingRadius(0.18f) + " m");
 
-            _forms.Tick(0.02f, 2);
+            _forms.Tick(0.02f, _hives);
             Assert.That(middle.KnockbackCount, Is.EqualTo(1), "0.20 s");
             Assert.That(middle.LastKnockback.z, Is.EqualTo(4f).Within(1e-3f));
             Assert.That(edge.KnockbackCount, Is.EqualTo(0), "the ring is at " + song.RingRadius(0.2f) + " m");
 
-            _forms.Tick(0.04f, 2);
+            _forms.Tick(0.04f, _hives);
             Assert.That(edge.KnockbackCount, Is.EqualTo(0), "0.24 s: just short of 3 m");
 
-            _forms.Tick(0.02f, 2);
+            _forms.Tick(0.02f, _hives);
             Assert.That(edge.KnockbackCount, Is.EqualTo(1), "0.26 s");
             Assert.That(edge.LastKnockback.x, Is.EqualTo(-4f).Within(1e-3f));
 
-            _forms.Tick(0.6f, 2);
+            _forms.Tick(0.6f, _hives);
             Assert.That(close.KnockbackCount + middle.KnockbackCount + edge.KnockbackCount, Is.EqualTo(3), "each is pushed once");
         }
 
@@ -615,10 +615,10 @@ namespace DigitalStory.Tests.EditMode
             var edge = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 0f) };
             _enemies.Add(edge);
             Cast(Make<GustSong>());
-            _forms.Tick(0.1f, 2);
+            _forms.Tick(0.1f, _hives);
 
             _body.Lose(_swarmConfig.StartingWasps - 100);
-            _forms.Tick(0.7f, 2);
+            _forms.Tick(0.7f, _hives);
 
             Assert.That(edge.KnockbackCount, Is.EqualTo(0));
         }
@@ -674,7 +674,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(Make<HiveCallSong>());
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
 
-            _forms.Tick(0.1f, 2);
+            _forms.Tick(0.1f, _hives);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
         }
@@ -705,9 +705,9 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(_fury.Value, Is.EqualTo(0f));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
-            _forms.Tick(11.5f, 2);
+            _forms.Tick(11.5f, _hives);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
         }
 

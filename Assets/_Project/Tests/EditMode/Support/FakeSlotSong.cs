@@ -12,7 +12,7 @@ namespace DigitalStory.Tests.EditMode
     internal sealed class FakeSlotSong : SlotSongEffect
     {
         public FakeSlotSong()
-            : base(new SongDefinition("Fake slot song", string.Empty, 0f, 0), SongCategory.Defense, 0.15f)
+            : base(new SongDefinition("Fake slot song", string.Empty, 0f, 0), SongCategory.Defense, 0.15f, 0)
         {
         }
 

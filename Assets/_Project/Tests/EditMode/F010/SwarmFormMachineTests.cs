@@ -92,10 +92,10 @@ namespace DigitalStory.Tests.EditMode
         {
             Start(form, 4f);
 
-            _forms.Tick(3.5f, 2);
+            _forms.Tick(3.5f, _hives);
             Assert.That(_forms.Slot(slot).ReleasedSeconds, Is.EqualTo(-1f), "still running before its duration");
 
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
             Assert.That(_forms.Slot(slot).ReleasedSeconds, Is.EqualTo(0f).Within(1e-4f));
             Assert.That(_forms.IsDomed, Is.False);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
@@ -106,10 +106,10 @@ namespace DigitalStory.Tests.EditMode
         {
             Start(SwarmForm.Gust, 4f);
 
-            _forms.Tick(3.5f, 2);
+            _forms.Tick(3.5f, _hives);
             Assert.That(_forms.GustSeconds, Is.EqualTo(3.5f).Within(1e-4f));
 
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
             Assert.That(_forms.GustSeconds, Is.EqualTo(-1f));
         }
 
@@ -118,10 +118,10 @@ namespace DigitalStory.Tests.EditMode
         {
             Start(SwarmForm.Colossus, 4f);
 
-            _forms.Tick(3.5f, 2);
+            _forms.Tick(3.5f, _hives);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus), "still standing before its duration");
 
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(0.5f, _hives);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_changes[_changes.Count - 1], Is.EqualTo(SwarmForm.River));
             Assert.That(_forms.IsCoreRooted, Is.False);
@@ -133,19 +133,20 @@ namespace DigitalStory.Tests.EditMode
             Start(SwarmForm.Colossus, 1f);
             _changes.Clear();
 
-            _forms.Tick(30f, 2);
+            _forms.Tick(30f, _hives);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.River }));
         }
 
+        // The Colossus, not Hive Call: Hive Call now ends once the hives' stores run dry, which they do within these 2 s.
         [Test]
         public void Tick_InAForm_CountsSecondsInForm()
         {
-            _forms.StartHiveCall();
+            _forms.StartColossus(12f);
 
-            _forms.Tick(1.5f, 2);
-            _forms.Tick(0.5f, 2);
+            _forms.Tick(1.5f, _hives);
+            _forms.Tick(0.5f, _hives);
 
             Assert.That(_forms.SecondsInForm, Is.EqualTo(2f).Within(1e-4f));
         }
@@ -153,7 +154,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_InTheRiver_CountsSecondsInForm()
         {
-            _forms.Tick(2f, 2);
+            _forms.Tick(2f, _hives);
 
             Assert.That(_forms.SecondsInForm, Is.EqualTo(2f).Within(1e-4f));
         }
@@ -161,14 +162,15 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_NegativeTime_Throws()
         {
-            Assert.That(() => _forms.Tick(-0.1f, 2), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+            Assert.That(() => _forms.Tick(-0.1f, _hives), Throws.TypeOf<System.ArgumentOutOfRangeException>());
         }
 
         [Test]
         public void SecondsInForm_FormChanges_StartsAgainFromZero()
         {
             _forms.StartHiveCall();
-            _forms.Tick(2f, 2);
+            _forms.Tick(0.2f, _hives);
+            Assert.That(_forms.SecondsInForm, Is.GreaterThan(0f));
 
             _forms.StartColossus(12f);
 
@@ -259,25 +261,89 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.IsCoreRooted, Is.True);
         }
 
+        // Plan section M: Hive Call calls every standing hive's store from anywhere, at the rate a store flows to a core
+        // beside it. Each default hive holds StartStore (100) and hands out CollectPerSecond (150) a second.
         [Test]
-        public void Tick_HiveCall_AddsWaspsPerStandingHive()
+        public void Tick_HiveCall_EveryStandingHivesStoreFlowsInAtTheCollectRate()
         {
             _forms.StartHiveCall();
 
-            _forms.Tick(1f, 2);
+            _forms.Tick(0.5f, _hives);
 
-            Assert.That(_body.Count, Is.EqualTo(_config.StartingWasps + (int)(2 * _config.HiveCallWaspsPerSecondPerHive)), "the hive rate a second for each of 2 hives");
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall), "no end before the swarm is full");
+            float each = 0.5f * _hiveConfig.CollectPerSecond;
+            Assert.That(_body.Count, Is.EqualTo(_config.StartingWasps + (int)(2f * each)), "the collect rate from each of 2 hives");
+            Assert.That(_hives[0].Store, Is.EqualTo(_hiveConfig.StartStore - each).Within(0.001f));
+            Assert.That(_hives[1].Store, Is.EqualTo(_hiveConfig.StartStore - each).Within(0.001f));
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall), "no end while the stores hold wasps and the swarm has room");
         }
 
         [Test]
-        public void Tick_HiveCallWithNoStandingHives_AddsNothing()
+        public void Tick_HiveCall_MakesNoWaspFromNothing()
+        {
+            _forms.StartHiveCall();
+            float stored = _hives[0].Store + _hives[1].Store;
+
+            _forms.Tick(0.3f, _hives);
+            _forms.Tick(0.3f, _hives);
+
+            float taken = stored - (_hives[0].Store + _hives[1].Store);
+            Assert.That(_body.Count - _config.StartingWasps, Is.EqualTo(Mathf.FloorToInt(taken + 0.001f)), "the swarm gains what the stores lose");
+        }
+
+        [Test]
+        public void Tick_HiveCallSkipsADestroyedHive()
+        {
+            _hives[0].Damage(10000f);
+            _forms.StartHiveCall();
+
+            _forms.Tick(0.5f, _hives);
+
+            Assert.That(_body.Count, Is.EqualTo(_config.StartingWasps + (int)(0.5f * _hiveConfig.CollectPerSecond)));
+        }
+
+        [Test]
+        public void Tick_HiveCallDrainsTheStores_EndsIt()
         {
             _forms.StartHiveCall();
 
-            _forms.Tick(1f, 0);
+            _forms.Tick(1f, _hives);
+
+            Assert.That(_body.Count, Is.EqualTo(_config.StartingWasps + (int)(2f * _hiveConfig.StartStore)), "all that both stores held");
+            Assert.That(_hives.HasStoredWasps, Is.False);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(_forms.IsCoreRooted, Is.False);
+        }
+
+        [Test]
+        public void Tick_HiveCallWithTheStoresAlreadyEmpty_EndsOnTheNextTickAndAddsNothing()
+        {
+            _hives[0].TakeFromStore(_hives[0].Store);
+            _hives[1].TakeFromStore(_hives[1].Store);
+
+            Assert.That(_forms.StartHiveCall(), Is.True, "it is never refused, so the player still finds it");
+            _forms.Tick(0.016f, _hives);
 
             Assert.That(_body.Count, Is.EqualTo(_config.StartingWasps));
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+        }
+
+        [Test]
+        public void Tick_HiveCallWithNoStandingHives_AddsNothingAndEnds()
+        {
+            _hives[0].Damage(10000f);
+            _hives[1].Damage(10000f);
+            _forms.StartHiveCall();
+
+            _forms.Tick(1f, _hives);
+
+            Assert.That(_body.Count, Is.EqualTo(_config.StartingWasps));
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+        }
+
+        [Test]
+        public void Tick_NullHives_Throws()
+        {
+            Assert.That(() => _forms.Tick(0.1f, null), Throws.ArgumentNullException);
         }
 
         [Test]
@@ -332,29 +398,31 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_changes, Is.Empty);
         }
 
+        // 30 wasps of room and 200 in the stores: the swarm fills, and the stores keep what it had no room for.
         [Test]
         public void Tick_HiveCallFillsTheSwarm_EndsAtTheMaximum()
         {
-            SetInt("StartingWasps", _config.MaxWasps - (int)_config.HiveCallWaspsPerSecondPerHive);
+            SetInt("StartingWasps", _config.MaxWasps - 30);
             Build();
             _forms.StartHiveCall();
 
-            _forms.Tick(1f, 1);
+            _forms.Tick(1f, _hives);
 
             Assert.That(_body.Count, Is.EqualTo(_config.MaxWasps), "capped at the maximum");
+            Assert.That(_hives[0].Store + _hives[1].Store, Is.EqualTo((2f * _hiveConfig.StartStore) - 30f).Within(0.001f));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
         }
 
         [Test]
         public void Tick_HiveCallJustBelowTheMaximum_KeepsCalling()
         {
-            SetInt("StartingWasps", _config.MaxWasps - (int)(2 * _config.HiveCallWaspsPerSecondPerHive));
+            SetInt("StartingWasps", _config.MaxWasps - 300);
             Build();
             _forms.StartHiveCall();
 
-            _forms.Tick(1f, 1);
+            _forms.Tick(0.5f, _hives);
 
-            Assert.That(_body.Count, Is.EqualTo(_config.MaxWasps - (int)_config.HiveCallWaspsPerSecondPerHive));
+            Assert.That(_body.Count, Is.EqualTo(_config.MaxWasps - 300 + (int)_hiveConfig.CollectPerSecond));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
         }
 
@@ -409,7 +477,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.Slot(SongSlot.Guard).IsActive, Is.False);
             Assert.That(_forms.Slot(SongSlot.Strike).IsActive, Is.False);
             Assert.That(_changes, Is.Empty);
-            _forms.Tick(1f, 2);
+            _forms.Tick(1f, _hives);
             Assert.That(_fury.Value, Is.EqualTo(0f), "a refused tornado fills no Fury");
         }
 
@@ -418,7 +486,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _body.Lose(_config.StartingWasps - 100);
 
-            _forms.Tick(1f, 2);
+            _forms.Tick(1f, _hives);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
         }
@@ -429,7 +497,7 @@ namespace DigitalStory.Tests.EditMode
             _body.Lose(_config.StartingWasps - 100);
             _changes.Clear();
 
-            _body.Tick(3f, 2);
+            _body.Tick(3f, _hives);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.River }));
@@ -443,10 +511,10 @@ namespace DigitalStory.Tests.EditMode
         public void Tick_StingAndHiveCall_AllocateNothing()
         {
             Start(SwarmForm.Sting, 100f);
-            Assert.That(() => _forms.Tick(0.016f, 2), Is.Not.AllocatingGCMemory());
+            Assert.That(() => _forms.Tick(0.016f, _hives), Is.Not.AllocatingGCMemory());
 
             _forms.StartHiveCall();
-            Assert.That(() => _forms.Tick(0.016f, 2), Is.Not.AllocatingGCMemory());
+            Assert.That(() => _forms.Tick(0.016f, _hives), Is.Not.AllocatingGCMemory());
         }
 
         private void Build()

@@ -16,7 +16,6 @@ namespace DigitalStory.Tests.EditMode
     public sealed class SongSlotsTests
     {
         private const float Tolerance = 1e-4f;
-        private const int StandingHives = 2;
 
         private readonly List<ISwarmTarget> _enemies = new List<ISwarmTarget>();
         private readonly List<Object> _assets = new List<Object>();
@@ -26,6 +25,7 @@ namespace DigitalStory.Tests.EditMode
         private SwarmConfig _swarmConfig;
         private FuryConfig _furyConfig;
         private SquadConfig _squads;
+        private HiveConfig _hiveConfig;
         private HiveSet _hives;
         private SwarmBody _body;
         private FuryMeter _fury;
@@ -54,8 +54,8 @@ namespace DigitalStory.Tests.EditMode
             _swarmConfig = Make<SwarmConfig>();
             _furyConfig = Make<FuryConfig>();
             _squads = Make<SquadConfig>();
-            HiveConfig hiveConfig = Make<HiveConfig>();
-            _hives = new HiveSet(new List<Hive> { new Hive(hiveConfig, new Vector3(-10f, 0f, 0f)), new Hive(hiveConfig, new Vector3(10f, 0f, 0f)) });
+            _hiveConfig = Make<HiveConfig>();
+            _hives = new HiveSet(new List<Hive> { new Hive(_hiveConfig, new Vector3(-10f, 0f, 0f)), new Hive(_hiveConfig, new Vector3(10f, 0f, 0f)) });
             _sting = Make<StingSong>();
             _tornado = Make<TornadoSong>();
             _meteor = Make<MeteorSong>();
@@ -434,9 +434,11 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
         }
 
+        // Hive Call now ends when the stores run dry, so they flow slowly here to outlast the Dome's 5 s.
         [Test]
         public void Hit_DuringHiveCallInTheGuardSongsReturnBeat_EndsHiveCall()
         {
+            JsonUtility.FromJsonOverwrite("{\"<CollectPerSecond>k__BackingField\":1}", _hiveConfig);
             Cast(_dome);
             Cast(_hiveCall);
             Tick(5.2f);
@@ -594,7 +596,7 @@ namespace DigitalStory.Tests.EditMode
         public void Respawn_AfterACollapse_SongsCastAgain()
         {
             Collapse();
-            _body.Tick(_swarmConfig.CollapseBlockSeconds, StandingHives);
+            _body.Tick(_swarmConfig.CollapseBlockSeconds, _hives);
             SwarmSongContext context = Context();
 
             Assert.That(_forms.StartSong(_dome, in context), Is.True);
@@ -896,7 +898,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(_sting);
             Cast(_gust);
 
-            Assert.That(() => { _forms.Tick(0.016f, StandingHives); }, Is.Not.AllocatingGCMemory());
+            Assert.That(() => { _forms.Tick(0.016f, _hives); }, Is.Not.AllocatingGCMemory());
             Assert.That(() => { _forms.Slot(SongSlot.Strike); }, Is.Not.AllocatingGCMemory());
         }
 
@@ -966,7 +968,7 @@ namespace DigitalStory.Tests.EditMode
 
         private void Tick(float seconds)
         {
-            _forms.Tick(seconds, StandingHives);
+            _forms.Tick(seconds, _hives);
         }
 
         private void Collapse()

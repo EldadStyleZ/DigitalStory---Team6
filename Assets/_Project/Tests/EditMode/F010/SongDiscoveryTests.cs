@@ -283,14 +283,16 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(1), "only 1 is left, and the Sting begins with 1");
         }
 
+        // Changed with the cost rule: the caster owns the cooldowns, so a song completed while it cools is refused and uses
+        // up its notes like any other refusal, where before its notes stayed. It still proves the hint never shows a whole song.
         [Test]
         public void HintNotes_WholeSongPlayedWhileItCools_NeverReturnsTheSongsLength()
         {
             Play(0, 2, 1);
             Play(0, 2, 1);
 
-            Assert.That(_caster.RecentNoteCount, Is.EqualTo(3), "the cooling song's notes stay");
-            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(1));
+            Assert.That(_caster.RecentNoteCount, Is.EqualTo(0), "the refused song's notes are used up");
+            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(0));
         }
 
         [Test]
@@ -305,6 +307,151 @@ namespace DigitalStory.Tests.EditMode
             Play(3, 1);
 
             Assert.That(() => { _discovery.HintNotes(_caster); }, Is.Not.AllocatingGCMemory());
+        }
+
+        // ---- The song table fills in (plan section N) ----
+
+        private const int Tornado = 2;
+        private const int Gust = 3;
+
+        // As the session does: after every note the flute hears, the discovery records how far each song's beginning got.
+        private void RecordEveryNote()
+        {
+            _caster.NotePlayed += _ => _discovery.RecordNotes(_caster);
+        }
+
+        [Test]
+        public void KnownNotes_New_IsZeroForHiddenSongsAndTheWholeSongForKnownOnes()
+        {
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(0));
+            Assert.That(_discovery.KnownNotes(Colossus), Is.EqualTo(0));
+            Assert.That(_discovery.KnownNotes(Sting), Is.EqualTo(3), "the Sting is known from the start");
+        }
+
+        [Test]
+        public void KnownNotes_TheBeginningPlayedInOrder_RisesNoteByNote()
+        {
+            RecordEveryNote();
+
+            Play(0);
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(1));
+            Assert.That(_discovery.KnownNotes(Gust), Is.EqualTo(1), "H begins both");
+
+            Play(2);
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(2));
+            Assert.That(_discovery.KnownNotes(Gust), Is.EqualTo(1), "H K is not how the Gust goes on");
+        }
+
+        [Test]
+        public void KnownNotes_LaterNotesThatLeadNowhere_NeverLowerIt()
+        {
+            RecordEveryNote();
+            Play(0, 2);
+
+            Play(3, 3, 3);
+            _caster.Tick(10f);
+
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(2), "kept for the whole match");
+        }
+
+        [Test]
+        public void KnownNotes_ABeginningReachedInsideALongerRun_Counts()
+        {
+            RecordEveryNote();
+
+            Play(3, 3, 0, 2);
+
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(2), "L L H K ends with the Dome's H K");
+        }
+
+        [Test]
+        public void KnownNotes_NotesOutOfOrder_CountOnlyWhatBeginsTheSong()
+        {
+            RecordEveryNote();
+
+            Play(2, 0);
+
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(1), "K H holds only the Dome's first note, the H at its end");
+        }
+
+        [Test]
+        public void KnownNotes_ABeginningSongsShare_FillsEachOfThem()
+        {
+            RecordEveryNote();
+
+            Play(1, 2);
+
+            Assert.That(_discovery.KnownNotes(Tornado), Is.EqualTo(2));
+            Assert.That(_discovery.KnownNotes(Meteor), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void KnownNotes_ASongOnceCast_IsTheWholeSong()
+        {
+            RecordEveryNote();
+            _caster.SongCast += _discovery.NoteCast;
+
+            Play(0, 2, 1);
+
+            Assert.That(_discovery.IsKnown(Dome), Is.True);
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(3));
+        }
+
+        // Plan section M: a refused cast teaches nothing false. The notes still fill in the table, but the song stays unknown.
+        [Test]
+        public void KnownNotes_AWholeSongRefused_FillsEveryNoteButTheSongStaysUnknown()
+        {
+            RecordEveryNote();
+            _caster.SongCast += _discovery.NoteCast;
+
+            Play(3, 1, 2, 1, 3);
+
+            Assert.That(_discovery.KnownNotes(Colossus), Is.EqualTo(5));
+            Assert.That(_discovery.IsKnown(Colossus), Is.False, "Fury is empty, so it was refused");
+        }
+
+        [Test]
+        public void KnownNotes_NotesTooFarApartToMakeASong_DoNotJoin()
+        {
+            RecordEveryNote();
+            Play(0);
+            _caster.Tick(3f);
+
+            Play(2);
+
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(1), "the H was forgotten before the K");
+        }
+
+        [Test]
+        public void KnownNotes_NotesPlayedWhileCollapsed_CountNothing()
+        {
+            RecordEveryNote();
+            _body.Lose(_swarmConfig.StartingWasps);
+
+            Play(0, 2);
+
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(0), "the flute hears nothing while the swarm is down");
+        }
+
+        [TestCase(-1)]
+        [TestCase(7)]
+        public void KnownNotes_OutOfRange_Throws(int song)
+        {
+            Assert.That(() => _discovery.KnownNotes(song), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+        }
+
+        [Test]
+        public void RecordNotes_Null_Throws()
+        {
+            Assert.That(() => _discovery.RecordNotes(null), Throws.ArgumentNullException);
+        }
+
+        [Test]
+        public void RecordNotes_AllocatesNothing()
+        {
+            Play(3, 1);
+
+            Assert.That(() => { _discovery.RecordNotes(_caster); }, Is.Not.AllocatingGCMemory());
         }
 
         private void Play(params int[] holes)

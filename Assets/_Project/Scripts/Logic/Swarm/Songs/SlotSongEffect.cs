@@ -12,9 +12,9 @@ namespace DigitalStory.Logic
         [SerializeField, Range(0f, 1f), Tooltip("The share of the living swarm the song takes, from the start of its slot's band. The rest of the band flies as river.")]
         private float _share;
 
-        /// <summary>Sets the song's keys, category and share. Pass the plan's numbers as the defaults.</summary>
-        protected SlotSongEffect(SongDefinition song, SongCategory category, float share, bool knownFromStart = false)
-            : base(song, category, knownFromStart)
+        /// <summary>Sets the song's keys, category, share and price. Pass the plan's numbers as the defaults.</summary>
+        protected SlotSongEffect(SongDefinition song, SongCategory category, float share, int waspCost, bool knownFromStart = false)
+            : base(song, category, waspCost, knownFromStart)
         {
             _share = share;
         }

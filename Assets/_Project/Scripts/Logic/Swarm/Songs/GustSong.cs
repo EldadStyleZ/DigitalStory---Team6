@@ -19,9 +19,9 @@ namespace DigitalStory.Logic
         // Not game tuning: the ring has not started while the pulse still draws the wasps in.
         private const float NoRing = -1f;
 
-        // H L K.
+        // H L K. 20 wasps.
         public GustSong()
-            : base(new SongDefinition("Gust", "A ring of wasps clears the smoke", 6f, 0, 3, 2), SongCategory.Defense)
+            : base(new SongDefinition("Gust", "A ring of wasps clears the smoke", 6f, 0, 3, 2), SongCategory.Defense, 20)
         {
         }
 

@@ -22,8 +22,8 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>
-        /// Makes a context. When <paramref name="aim"/> is set, an aimed song asks it for its target by its own aim rule
-        /// as it is cast, instead of taking <paramref name="aimTarget"/> and <paramref name="aimPoint"/>.
+        /// Makes a context in which songs cost their wasps. When <paramref name="aim"/> is set, an aimed song asks it for its
+        /// target by its own aim rule as it is cast, instead of taking <paramref name="aimTarget"/> and <paramref name="aimPoint"/>.
         /// </summary>
         public SwarmSongContext(
             Vector3 corePosition,
@@ -36,6 +36,26 @@ namespace DigitalStory.Logic
             IReadOnlyList<ISwarmTarget> enemies,
             ISmokeClearer smoke,
             ISongAim aim)
+            : this(corePosition, aimTarget, aimPoint, swarm, forms, fury, hives, enemies, smoke, aim, false)
+        {
+        }
+
+        /// <summary>
+        /// Makes a context. When <paramref name="aim"/> is set, an aimed song asks it for its target by its own aim rule as it
+        /// is cast. While <paramref name="areSongsFree"/> is true (a farm phase), a cast costs no wasps.
+        /// </summary>
+        public SwarmSongContext(
+            Vector3 corePosition,
+            ISwarmTarget aimTarget,
+            Vector3 aimPoint,
+            SwarmBody swarm,
+            SwarmFormMachine forms,
+            FuryMeter fury,
+            HiveSet hives,
+            IReadOnlyList<ISwarmTarget> enemies,
+            ISmokeClearer smoke,
+            ISongAim aim,
+            bool areSongsFree)
         {
             CorePosition = corePosition;
             AimTarget = aimTarget;
@@ -47,6 +67,7 @@ namespace DigitalStory.Logic
             Enemies = enemies;
             Smoke = smoke;
             Aim = aim;
+            AreSongsFree = areSongsFree;
         }
 
         /// <summary>Where the core stands.</summary>
@@ -82,10 +103,13 @@ namespace DigitalStory.Logic
         /// <summary>Chooses an aimed song's target by the song's aim rule as it is cast. May be null.</summary>
         public ISongAim Aim { get; }
 
+        /// <summary>True while a cast costs no wasps: in a farm phase (plan section L).</summary>
+        public bool AreSongsFree { get; }
+
         /// <summary>The same context, aimed at <paramref name="target"/> (or null) and <paramref name="point"/>.</summary>
         public SwarmSongContext AimedAt(ISwarmTarget target, Vector3 point)
         {
-            return new SwarmSongContext(CorePosition, target, point, Swarm, Forms, Fury, Hives, Enemies, Smoke, Aim);
+            return new SwarmSongContext(CorePosition, target, point, Swarm, Forms, Fury, Hives, Enemies, Smoke, Aim, AreSongsFree);
         }
     }
 }

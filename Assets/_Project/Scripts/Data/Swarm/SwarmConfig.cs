@@ -16,17 +16,17 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(1), Tooltip("Most wasps the swarm can hold. Also the size of the GPU buffers.")]
         public int MaxWasps { get; private set; } = 4000;
 
-        [field: SerializeField, Min(0), Tooltip("The swarm collapses when a loss leaves fewer wasps than this.")]
+        [field: SerializeField, Min(0), Tooltip("The swarm collapses when a loss leaves fewer wasps than this. A song or a gift to a hive that would leave fewer is refused, so paying never collapses it.")]
         public int CollapseBelow { get; private set; } = 240;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the swarm stays collapsed before it can respawn.")]
         public float CollapseBlockSeconds { get; private set; } = 3f;
 
-        [field: SerializeField, Min(0), Tooltip("Wasps the swarm comes back with when a hive still stands.")]
+        [field: SerializeField, Min(0), Tooltip("Most wasps the swarm takes from the hives' stores when it comes back after a collapse, while a hive still stands.")]
         public int RespawnWasps { get; private set; } = 1000;
 
-        [field: SerializeField, Min(0f), Tooltip("Wasps gained per second from each standing hive while Hive Call is held.")]
-        public float HiveCallWaspsPerSecondPerHive { get; private set; } = 100f;
+        [field: SerializeField, Min(0), Tooltip("Fewest wasps the swarm comes back with after a collapse, however little the stores hold, so the player can always act. Keep it from CollapseBelow to MaxWasps; the collapse line plus 60 by default.")]
+        public int MinRespawnWasps { get; private set; } = 300;
 
         [field: SerializeField, Min(0), Tooltip("The HUD warns that the swarm is low while it has fewer wasps than this.")]
         public int LowWasps { get; private set; } = 600;

@@ -2,11 +2,11 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>What the View tells the session each tick: where it moved the core, what the player aims at and presses.</summary>
+    /// <summary>What the View tells the session each tick: where it moved the core, what the player aims at, presses and holds.</summary>
     public readonly struct HiveDefenseFrame
     {
         /// <summary>
-        /// Makes a frame with the mouse idle, so auto-aim chooses what an aimed song strikes.
+        /// Makes a frame with the mouse idle, so auto-aim chooses what an aimed song strikes, and Give and Call Wave untouched.
         /// <paramref name="move"/> is x and z on the ground and steers the giant.
         /// </summary>
         public HiveDefenseFrame(
@@ -21,8 +21,8 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>
-        /// Makes a frame. <paramref name="move"/> is x and z on the ground and steers the giant. While
-        /// <paramref name="isMouseLive"/> is true the mouse aims: aimed songs strike at <paramref name="aimPoint"/>.
+        /// Makes a frame with Give and Call Wave untouched. <paramref name="move"/> is x and z on the ground and steers the
+        /// giant. While <paramref name="isMouseLive"/> is true the mouse aims: aimed songs strike at <paramref name="aimPoint"/>.
         /// </summary>
         public HiveDefenseFrame(
             Vector3 corePosition,
@@ -32,6 +32,25 @@ namespace DigitalStory.Logic
             bool punch,
             bool kick,
             bool isMouseLive)
+            : this(corePosition, aimPoint, move, pressedHoleMask, punch, kick, isMouseLive, false, false)
+        {
+        }
+
+        /// <summary>
+        /// Makes a frame. <paramref name="move"/> is x and z on the ground and steers the giant. While
+        /// <paramref name="isMouseLive"/> is true the mouse aims: aimed songs strike at <paramref name="aimPoint"/>.
+        /// <paramref name="give"/> is true while Give is held, and <paramref name="callWave"/> on the tick Call Wave is pressed.
+        /// </summary>
+        public HiveDefenseFrame(
+            Vector3 corePosition,
+            Vector3 aimPoint,
+            Vector2 move,
+            int pressedHoleMask,
+            bool punch,
+            bool kick,
+            bool isMouseLive,
+            bool give,
+            bool callWave)
         {
             CorePosition = corePosition;
             AimPoint = aimPoint;
@@ -40,6 +59,8 @@ namespace DigitalStory.Logic
             Punch = punch;
             Kick = kick;
             IsMouseLive = isMouseLive;
+            Give = give;
+            CallWave = callWave;
         }
 
         /// <summary>
@@ -65,6 +86,12 @@ namespace DigitalStory.Logic
 
         /// <summary>True when the kick was pressed this tick.</summary>
         public bool Kick { get; }
+
+        /// <summary>True while Give is held: beside a hurt hive the swarm pays wasps into its health, and the hive hands out nothing.</summary>
+        public bool Give { get; }
+
+        /// <summary>True on the tick Call Wave is pressed: in a farm phase the wave comes at once, for bonus wasps.</summary>
+        public bool CallWave { get; }
 
         /// <summary>The bit for a hole, counting from 0.</summary>
         public static int HoleBit(int hole) => 1 << hole;

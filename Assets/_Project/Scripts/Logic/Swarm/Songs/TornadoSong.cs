@@ -7,9 +7,9 @@ namespace DigitalStory.Logic
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Tornado", fileName = "TornadoSong")]
     public sealed class TornadoSong : SlotSongEffect
     {
-        // J K K H.
+        // J K K H. 60 wasps.
         public TornadoSong()
-            : base(new SongDefinition("Tornado", "A column of wasps throws beekeepers back", 10f, 1, 2, 2, 0), SongCategory.Attack, 0.37f)
+            : base(new SongDefinition("Tornado", "A column of wasps throws beekeepers back", 10f, 1, 2, 2, 0), SongCategory.Attack, 0.37f, 60)
         {
         }
 

@@ -4,7 +4,11 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>The swarm's health: how many wasps are alive, the collapse at too few, and the respawn after it.</summary>
+    /// <summary>
+    /// The swarm's health and its one currency (plan section M): how many wasps are alive, the collapse at too few, and the
+    /// respawn after it. Wasps never come from nothing: they arrive from the hives' stores, and a price is only paid while it
+    /// leaves the swarm at or above its collapse line.
+    /// </summary>
     public sealed class SwarmBody
     {
         // Float error must not hide a wasp that is due, for example 0.5 + 0.49999997.
@@ -35,6 +39,11 @@ namespace DigitalStory.Logic
                 throw new ArgumentException("SwarmConfig.RespawnWasps must be between 0 and MaxWasps.", nameof(config));
             }
 
+            if (config.MinRespawnWasps < config.CollapseBelow || config.MinRespawnWasps > config.MaxWasps)
+            {
+                throw new ArgumentException("SwarmConfig.MinRespawnWasps must be between CollapseBelow and MaxWasps.", nameof(config));
+            }
+
             _count = config.StartingWasps;
         }
 
@@ -46,6 +55,15 @@ namespace DigitalStory.Logic
 
         /// <summary>True from a collapse until the respawn.</summary>
         public bool IsCollapsed => _isCollapsed;
+
+        /// <summary>
+        /// How many more wasps can join before the swarm is full, less the part of a wasp already on its way. 0 while
+        /// collapsed: a collapsed swarm takes nothing in.
+        /// </summary>
+        public float Room => _isCollapsed ? 0f : Math.Max(0f, _config.MaxWasps - _count - _gainCarry);
+
+        /// <summary>How many wasps can be paid without taking the swarm below its collapse line. 0 while collapsed.</summary>
+        public int Spendable => _isCollapsed ? 0 : Math.Max(0, _count - _config.CollapseBelow);
 
         /// <summary>Raised when the count changes, with the new count.</summary>
         public event Action<int> CountChanged;
@@ -96,26 +114,30 @@ namespace DigitalStory.Logic
             Remove(whole);
         }
 
-        /// <summary>Hive Call: adds wasps at a rate per standing hive, carrying fractions, capped at Max, nothing while collapsed.</summary>
-        public void Gain(float deltaTime, int standingHives)
+        /// <summary>
+        /// Adds wasps that arrived (a hive's store flowing in, a bonus), capped at Max, and returns how many whole wasps
+        /// joined. Parts of a wasp, as a store flows in a little each tick, are carried to the next call. Nothing while
+        /// collapsed, and nothing for 0 or less.
+        /// </summary>
+        public int Gain(float wasps)
         {
-            if (_isCollapsed || standingHives <= 0 || !(deltaTime > 0f))
+            if (_isCollapsed || !(wasps > 0f))
             {
-                return;
+                return 0;
             }
 
             int room = _config.MaxWasps - _count;
             if (room <= 0)
             {
                 _gainCarry = 0f;
-                return;
+                return 0;
             }
 
-            _gainCarry += _config.HiveCallWaspsPerSecondPerHive * standingHives * deltaTime;
+            _gainCarry += wasps;
             int whole = (int)(_gainCarry + WholeEpsilon);
             if (whole <= 0)
             {
-                return;
+                return 0;
             }
 
             if (whole >= room)
@@ -130,11 +152,47 @@ namespace DigitalStory.Logic
 
             _count += whole;
             CountChanged?.Invoke(_count);
+            return whole;
         }
 
-        /// <summary>Counts the collapse block down, then respawns the swarm if a hive stands.</summary>
-        public void Tick(float deltaTime, int standingHives)
+        /// <summary>
+        /// Pays <paramref name="wasps"/> (a song's price, a gift to a hive) and returns true, but only while the swarm keeps at
+        /// least its collapse line: paying never collapses it. Refused, changing nothing, when it would leave fewer, or while
+        /// collapsed.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The price is negative.</exception>
+        public bool TrySpend(int wasps)
         {
+            if (wasps < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(wasps), wasps, "A price cannot be negative.");
+            }
+
+            if (_isCollapsed || wasps > Spendable)
+            {
+                return false;
+            }
+
+            if (wasps > 0)
+            {
+                _count -= wasps;
+                CountChanged?.Invoke(_count);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Counts the collapse block down, then respawns the swarm once a hive stands. It takes up to RespawnWasps from the
+        /// standing hives' stores, and never comes back with fewer than MinRespawnWasps, however little they hold.
+        /// </summary>
+        public void Tick(float deltaTime, HiveSet hives)
+        {
+            if (hives == null)
+            {
+                throw new ArgumentNullException(nameof(hives));
+            }
+
             if (!_isCollapsed)
             {
                 return;
@@ -145,13 +203,14 @@ namespace DigitalStory.Logic
                 _blockLeft = Math.Max(0f, _blockLeft - deltaTime);
             }
 
-            if (_blockLeft > 0f || standingHives <= 0)
+            if (_blockLeft > 0f || hives.StandingCount <= 0)
             {
                 return;
             }
 
+            int fromStores = hives.TakeFromStores(_config.RespawnWasps);
             _isCollapsed = false;
-            _count = _config.RespawnWasps;
+            _count = Math.Min(_config.MaxWasps, Math.Max(fromStores, _config.MinRespawnWasps));
             CountChanged?.Invoke(_count);
             Respawned?.Invoke();
         }

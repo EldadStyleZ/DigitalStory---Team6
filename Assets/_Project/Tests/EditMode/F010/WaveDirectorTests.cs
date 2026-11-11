@@ -1,29 +1,45 @@
+using System;
 using System.Collections.Generic;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using NUnit.Framework;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace DigitalStory.Tests.EditMode
 {
-    /// <summary>Uses the default WaveConfig: waves 3/0, 4/1, 4/3, 6/4, 8/5, first wave after FirstWaveDelaySeconds (20 s), 15 s breaks, 1.2 s spawn gaps.</summary>
+    /// <summary>
+    /// Plan section L, on the default WaveConfig: waves 3/0, 4/1, 4/3, 6/4, 8/5; each round a farm phase and then its wave;
+    /// the first farm phase lasts FirstFarmSeconds (45 s), later ones FarmSeconds (35 s); beekeepers 1.2 s apart.
+    /// </summary>
     public sealed class WaveDirectorTests
     {
         private const float Step = 0.1f;
         private const int SpawnPoints = 4;
         private static readonly int[] Sticks = { 3, 4, 4, 6, 8 };
         private static readonly int[] Smokers = { 0, 1, 3, 4, 5 };
-        private static readonly float FirstDelay = ReadFirstDelay();
+        private static readonly float FirstFarm = ReadDefault(config => config.FirstFarmSeconds);
+        private static readonly float Farm = ReadDefault(config => config.FarmSeconds);
 
         private sealed class Recorder
         {
             public readonly List<int> Started = new List<int>();
+            public readonly List<MatchPhase> Phases = new List<MatchPhase>();
+            public readonly List<float> CalledEarly = new List<float>();
             public readonly List<(BeekeeperKind Kind, int Point)> Spawns = new List<(BeekeeperKind, int)>();
             public int ClearedCount;
 
             public Recorder(WaveDirector director)
             {
-                director.WaveStarted += Started.Add;
+                director.PhaseChanged += phase =>
+                {
+                    Phases.Add(phase);
+                    if (phase == MatchPhase.Survive)
+                    {
+                        Started.Add(director.Round);
+                    }
+                };
+                director.WaveCalledEarly += CalledEarly.Add;
                 director.SpawnRequested += (kind, point) => Spawns.Add((kind, point));
                 director.Cleared += () => ClearedCount++;
             }
@@ -43,12 +59,12 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        private static float ReadFirstDelay()
+        private static float ReadDefault(Func<WaveConfig, float> read)
         {
             var config = ScriptableObject.CreateInstance<WaveConfig>();
-            float delay = config.FirstWaveDelaySeconds;
+            float value = read(config);
             Object.DestroyImmediate(config);
-            return delay;
+            return value;
         }
 
         private static WaveDirector MakeDirector()
@@ -65,30 +81,27 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        /// <summary>Runs until a wave has started.</summary>
-        private static void RunUntilStarted(WaveDirector director, int waveNumber, int alive)
+        /// <summary>Runs until the wave of a round has started.</summary>
+        private static void RunUntilWaveStarts(WaveDirector director, int round, int alive)
         {
             int guard = 0;
-            while (director.WaveNumber < waveNumber && guard++ < 10000)
+            while (!(director.Round == round && director.Phase == MatchPhase.Survive) && guard++ < 10000)
             {
                 director.Tick(Step, alive);
             }
 
-            Assert.That(director.WaveNumber, Is.EqualTo(waveNumber), "the wave never started");
+            Assert.That(director.Round, Is.EqualTo(round), "the wave never started");
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive), "the wave never started");
         }
 
         /// <summary>Plays one wave through: waits for its start, lets everything spawn while all of it lives, then kills everyone.</summary>
-        private static void PlayWave(WaveDirector director, Recorder recorder, int waveNumber)
+        private static void PlayWave(WaveDirector director, Recorder recorder, int round)
         {
-            int guard = 0;
-            while (director.WaveNumber < waveNumber && guard++ < 10000)
-            {
-                director.Tick(Step, 0);
-            }
+            RunUntilWaveStarts(director, round, 0);
 
-            int expected = Sticks[waveNumber - 1] + Smokers[waveNumber - 1];
-            int before = recorder.Spawns.Count;
-            guard = 0;
+            int expected = Sticks[round - 1] + Smokers[round - 1];
+            int before = recorder.Spawns.Count - 1;
+            int guard = 0;
             while (recorder.Spawns.Count - before < expected && guard++ < 10000)
             {
                 director.Tick(Step, 1);
@@ -104,42 +117,46 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void New_WaitsForTheFirstWave()
+        public void New_StartsInTheFirstFarmPhaseOfRoundOne()
         {
             var director = MakeDirector();
 
-            Assert.That(director.WaveNumber, Is.EqualTo(0));
-            Assert.That(director.WaveCount, Is.EqualTo(5));
-            Assert.That(director.IsWaveRunning, Is.False);
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(director.Round, Is.EqualTo(1));
+            Assert.That(director.RoundCount, Is.EqualTo(5));
             Assert.That(director.AllWavesCleared, Is.False);
-            Assert.That(director.SecondsToNextWave, Is.EqualTo(FirstDelay).Within(0.001f));
+            Assert.That(director.FarmSecondsLeft, Is.EqualTo(FirstFarm).Within(0.001f));
         }
 
         [Test]
-        public void Tick_BeforeTheFirstDelay_StartsNothing()
+        public void Tick_BeforeTheFirstFarmPhaseEnds_SpawnsNobody()
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            Run(director, FirstDelay - 0.5f, 0);
+            Run(director, FirstFarm - 0.5f, 0);
 
             Assert.That(recorder.Started, Is.Empty);
-            Assert.That(recorder.Spawns, Is.Empty);
-            Assert.That(director.SecondsToNextWave, Is.EqualTo(0.5f).Within(0.01f));
+            Assert.That(recorder.Phases, Is.Empty);
+            Assert.That(recorder.Spawns, Is.Empty, "no beekeeper comes in a farm phase");
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(director.FarmSecondsLeft, Is.EqualTo(0.5f).Within(0.01f));
         }
 
         [Test]
-        public void Tick_AfterTheFirstDelay_StartsWaveOne()
+        public void Tick_FirstFarmPhaseEnds_StartsWaveOneInASurvivePhase()
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            Run(director, FirstDelay + 0.2f, 0);
+            Run(director, FirstFarm + 0.2f, 0);
 
             Assert.That(recorder.Started, Is.EqualTo(new[] { 1 }));
-            Assert.That(director.WaveNumber, Is.EqualTo(1));
-            Assert.That(director.IsWaveRunning, Is.True);
-            Assert.That(director.SecondsToNextWave, Is.EqualTo(0f));
+            Assert.That(recorder.Phases, Is.EqualTo(new[] { MatchPhase.Survive }));
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive));
+            Assert.That(director.Round, Is.EqualTo(1));
+            Assert.That(director.FarmSecondsLeft, Is.EqualTo(0f));
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(1), "the first beekeeper comes with the wave");
         }
 
         [Test]
@@ -148,7 +165,7 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            Run(director, FirstDelay + 10f, 3);
+            Run(director, FirstFarm + 10f, 3);
 
             Assert.That(recorder.Count(BeekeeperKind.Stick), Is.EqualTo(3));
             Assert.That(recorder.Count(BeekeeperKind.Smoker), Is.EqualTo(0));
@@ -160,8 +177,8 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            // Wave one starts at the first delay. 0.5 s later only the first has spawned, 1.6 s later two, 2.9 s later three.
-            Run(director, FirstDelay + 0.5f, 1);
+            // Wave one starts when the first farm phase ends. 0.5 s later only the first has spawned, 1.6 s later two, 2.9 s later three.
+            Run(director, FirstFarm + 0.5f, 1);
             Assert.That(recorder.Spawns.Count, Is.EqualTo(1));
 
             Run(director, 1.1f, 1);
@@ -176,10 +193,11 @@ namespace DigitalStory.Tests.EditMode
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
-            RunUntilStarted(director, 1, 0);
+            RunUntilWaveStarts(director, 1, 0);
 
             Run(director, 40f, 1);
-            // Wave one has three, and the next wave only starts after a clear, which never happens with one alive.
+
+            // Wave one has three, and the next farm phase only starts after a clear, which never happens with one alive.
             Assert.That(recorder.Spawns.Count, Is.EqualTo(3));
             Assert.That(recorder.Spawns[0].Point, Is.EqualTo(0));
             Assert.That(recorder.Spawns[1].Point, Is.EqualTo(1));
@@ -192,10 +210,9 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            for (int wave = 1; wave <= 3; wave++)
+            for (int round = 1; round <= 3; round++)
             {
-                PlayWave(director, recorder, wave);
-                Run(director, 16f, 0);
+                PlayWave(director, recorder, round);
             }
 
             Assert.That(recorder.Spawns.Count, Is.GreaterThan(SpawnPoints));
@@ -211,7 +228,7 @@ namespace DigitalStory.Tests.EditMode
             var director = new WaveDirector(ScriptableObject.CreateInstance<WaveConfig>(), 2);
             var recorder = new Recorder(director);
 
-            Run(director, FirstDelay + 10f, 1);
+            Run(director, FirstFarm + 10f, 1);
 
             Assert.That(recorder.Spawns[0].Point, Is.EqualTo(0));
             Assert.That(recorder.Spawns[1].Point, Is.EqualTo(1));
@@ -226,7 +243,7 @@ namespace DigitalStory.Tests.EditMode
             PlayWave(director, recorder, 1);
             recorder.Spawns.Clear();
 
-            Run(director, 15.5f, 0);
+            Run(director, Farm + 0.5f, 0);
             int guard = 0;
             while (recorder.Spawns.Count < 5 && guard++ < 1000)
             {
@@ -247,13 +264,13 @@ namespace DigitalStory.Tests.EditMode
         public void Wave_NotClearedWhileBeekeepersAreAlive()
         {
             var director = MakeDirector();
-            RunUntilStarted(director, 1, 1);
+            RunUntilWaveStarts(director, 1, 1);
 
             Run(director, 60f, 1);
 
-            Assert.That(director.IsWaveRunning, Is.True);
-            Assert.That(director.WaveNumber, Is.EqualTo(1));
-            Assert.That(director.SecondsToNextWave, Is.EqualTo(0f));
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive));
+            Assert.That(director.Round, Is.EqualTo(1));
+            Assert.That(director.FarmSecondsLeft, Is.EqualTo(0f));
         }
 
         [Test]
@@ -263,43 +280,47 @@ namespace DigitalStory.Tests.EditMode
             var recorder = new Recorder(director);
 
             // The first stick spawned and was killed at once; two sticks are still to come.
-            Run(director, FirstDelay + 0.5f, 0);
+            Run(director, FirstFarm + 0.5f, 0);
 
             Assert.That(recorder.Spawns.Count, Is.EqualTo(1));
-            Assert.That(director.IsWaveRunning, Is.True);
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive));
         }
 
         [Test]
-        public void Wave_AllSpawnedAndNoneAlive_IsCleared()
+        public void Wave_AllSpawnedAndNoneAlive_ReturnsToAFarmPhaseOfTheNextRound()
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
-            RunUntilStarted(director, 1, 0);
+            RunUntilWaveStarts(director, 1, 0);
             Run(director, 5f, 3);
 
             director.Tick(Step, 0);
 
             Assert.That(recorder.Spawns.Count, Is.EqualTo(3));
-            Assert.That(director.IsWaveRunning, Is.False);
-            Assert.That(director.SecondsToNextWave, Is.GreaterThan(0f));
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(director.Round, Is.EqualTo(2));
+            Assert.That(director.FarmSecondsLeft, Is.EqualTo(Farm).Within(0.001f));
+            Assert.That(recorder.Phases, Is.EqualTo(new[] { MatchPhase.Survive, MatchPhase.Farm }));
         }
 
         [Test]
-        public void Break_LastsBreakSecondsAndThenStartsTheNextWave()
+        public void FarmPhase_AfterAWave_LastsFarmSecondsWithNobodyAndThenStartsTheNextWave()
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
             PlayWave(director, recorder, 1);
+            int spawned = recorder.Spawns.Count;
 
-            Assert.That(director.SecondsToNextWave, Is.EqualTo(15f).Within(0.3f));
+            Assert.That(director.FarmSecondsLeft, Is.EqualTo(Farm).Within(0.001f));
 
-            Run(director, 14f, 0);
-            Assert.That(director.WaveNumber, Is.EqualTo(1));
-            Assert.That(director.IsWaveRunning, Is.False);
+            Run(director, Farm - 1f, 0);
+            Assert.That(director.Round, Is.EqualTo(2));
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(spawned), "no beekeeper comes in a farm phase");
 
             Run(director, 1.5f, 0);
-            Assert.That(director.WaveNumber, Is.EqualTo(2));
-            Assert.That(director.IsWaveRunning, Is.True);
+            Assert.That(director.Round, Is.EqualTo(2));
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive));
             Assert.That(recorder.Started, Is.EqualTo(new[] { 1, 2 }));
         }
 
@@ -321,10 +342,14 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            for (int wave = 1; wave <= 5; wave++)
+            for (int round = 1; round <= 5; round++)
             {
-                PlayWave(director, recorder, wave);
-                Assert.That(director.WaveNumber, Is.EqualTo(wave));
+                PlayWave(director, recorder, round);
+                if (round < 5)
+                {
+                    Assert.That(director.Round, Is.EqualTo(round + 1));
+                    Assert.That(director.Phase, Is.EqualTo(MatchPhase.Farm));
+                }
             }
 
             Assert.That(recorder.Count(BeekeeperKind.Stick), Is.EqualTo(25));
@@ -332,8 +357,10 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(recorder.Started, Is.EqualTo(new[] { 1, 2, 3, 4, 5 }));
             Assert.That(recorder.ClearedCount, Is.EqualTo(1));
             Assert.That(director.AllWavesCleared, Is.True);
-            Assert.That(director.IsWaveRunning, Is.False);
-            Assert.That(director.SecondsToNextWave, Is.EqualTo(0f));
+            Assert.That(director.Round, Is.EqualTo(5));
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive), "no farm phase follows the last wave: the match is won");
+            Assert.That(recorder.Phases.Count, Is.EqualTo(9), "five waves and the four farm phases between them");
+            Assert.That(director.FarmSecondsLeft, Is.EqualTo(0f));
         }
 
         [Test]
@@ -341,32 +368,129 @@ namespace DigitalStory.Tests.EditMode
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
-            for (int wave = 1; wave <= 5; wave++)
+            for (int round = 1; round <= 5; round++)
             {
-                PlayWave(director, recorder, wave);
+                PlayWave(director, recorder, round);
             }
+
             int spawnsBefore = recorder.Spawns.Count;
+            int phasesBefore = recorder.Phases.Count;
 
             Run(director, 60f, 0);
 
             Assert.That(recorder.Spawns.Count, Is.EqualTo(spawnsBefore));
-            Assert.That(recorder.Started.Count, Is.EqualTo(5));
+            Assert.That(recorder.Phases.Count, Is.EqualTo(phasesBefore));
             Assert.That(recorder.ClearedCount, Is.EqualTo(1));
-            Assert.That(director.WaveNumber, Is.EqualTo(5));
+            Assert.That(director.Round, Is.EqualTo(5));
         }
 
         [Test]
-        public void WaveStarted_IsRaisedBeforeThatWavesFirstSpawn()
+        public void PhaseChanged_ToSurvive_IsRaisedBeforeThatWavesFirstSpawn()
         {
             var director = MakeDirector();
             var order = new List<string>();
-            director.WaveStarted += n => order.Add("start" + n);
+            director.PhaseChanged += phase => order.Add(phase + "" + director.Round);
             director.SpawnRequested += (_, __) => order.Add("spawn");
 
-            Run(director, FirstDelay + 1f, 1);
+            Run(director, FirstFarm + 1f, 1);
 
-            Assert.That(order[0], Is.EqualTo("start1"));
+            Assert.That(order[0], Is.EqualTo("Survive1"));
             Assert.That(order[1], Is.EqualTo("spawn"));
+        }
+
+        // ---- Calling the wave early ----
+
+        [Test]
+        public void CallWave_InTheFirstFarmPhase_StartsTheWaveAtOnceAndReturnsTheSecondsSkipped()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+            Run(director, 10f, 0);
+
+            float skipped = director.CallWave();
+
+            Assert.That(skipped, Is.EqualTo(FirstFarm - 10f).Within(0.01f));
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive));
+            Assert.That(director.Round, Is.EqualTo(1));
+            Assert.That(director.FarmSecondsLeft, Is.EqualTo(0f));
+            Assert.That(recorder.Started, Is.EqualTo(new[] { 1 }));
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(1), "the first beekeeper comes at once");
+        }
+
+        [Test]
+        public void CallWave_InAFarmPhase_RaisesWaveCalledEarlyWithTheSecondsSkipped()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+            Run(director, 10f, 0);
+
+            float skipped = director.CallWave();
+
+            Assert.That(recorder.CalledEarly, Is.EqualTo(new[] { skipped }));
+        }
+
+        [Test]
+        public void CallWave_ThenTicks_SpawnsTheRestOfTheWaveOnTime()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+            director.CallWave();
+
+            Run(director, 1.1f, 1);
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(1));
+
+            Run(director, 0.2f, 1);
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void CallWave_InALaterFarmPhase_StartsThatRoundsWave()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+            PlayWave(director, recorder, 1);
+            Run(director, 5f, 0);
+
+            float skipped = director.CallWave();
+
+            Assert.That(skipped, Is.EqualTo(Farm - 5f).Within(0.01f));
+            Assert.That(director.Round, Is.EqualTo(2));
+            Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive));
+            Assert.That(recorder.Started, Is.EqualTo(new[] { 1, 2 }));
+        }
+
+        [Test]
+        public void CallWave_InASurvivePhase_DoesNothing()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+            RunUntilWaveStarts(director, 1, 1);
+            int spawned = recorder.Spawns.Count;
+
+            float skipped = director.CallWave();
+
+            Assert.That(skipped, Is.EqualTo(0f));
+            Assert.That(recorder.CalledEarly, Is.Empty);
+            Assert.That(recorder.Phases, Is.EqualTo(new[] { MatchPhase.Survive }));
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(spawned));
+            Assert.That(director.Round, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void CallWave_AfterTheLastWave_DoesNothing()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+            for (int round = 1; round <= 5; round++)
+            {
+                PlayWave(director, recorder, round);
+            }
+
+            float skipped = director.CallWave();
+
+            Assert.That(skipped, Is.EqualTo(0f));
+            Assert.That(recorder.CalledEarly, Is.Empty);
+            Assert.That(recorder.Started.Count, Is.EqualTo(5));
         }
     }
 }

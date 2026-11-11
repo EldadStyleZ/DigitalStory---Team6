@@ -7,9 +7,9 @@ namespace DigitalStory.Logic
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Sting", fileName = "StingSong")]
     public sealed class StingSong : SlotSongEffect
     {
-        // J K H.
+        // J K H. 10 wasps: cheap on purpose, so the player always has a move.
         public StingSong()
-            : base(new SongDefinition("Sting", "Wasps wrap around the aimed beekeeper", 1.5f, 1, 2, 0), SongCategory.Attack, 0.3f, knownFromStart: true)
+            : base(new SongDefinition("Sting", "Wasps wrap around the aimed beekeeper", 1.5f, 1, 2, 0), SongCategory.Attack, 0.3f, 10, knownFromStart: true)
         {
         }
 

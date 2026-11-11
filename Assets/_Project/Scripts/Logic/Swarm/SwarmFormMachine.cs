@@ -11,8 +11,9 @@ namespace DigitalStory.Logic
     /// its own squad of wasps, and a Gust pulse may ripple through on top.
     /// </summary>
     /// <remarks>
-    /// The session ticks <see cref="SwarmBody"/> itself. While Hive Call lasts, this machine also calls
-    /// <see cref="SwarmBody.Gain"/> and ends the call when the swarm is at its maximum. Nothing starts while the swarm is
+    /// The session ticks <see cref="SwarmBody"/> itself. While Hive Call lasts, this machine calls every standing hive's store
+    /// into the swarm (<see cref="HiveSet.HandOutAll"/>, then <see cref="SwarmBody.Gain"/>), so the call makes no wasp from
+    /// nothing, and ends the call when the stores are empty or the swarm is full. Nothing starts while the swarm is
     /// collapsed or the Colossus stands: the Start methods then return false and change nothing.
     /// Hive Call ends the Strike song and keeps the Guard and Post songs; an Attack or Power cast ends Hive Call, and a
     /// Defense cast keeps it. The Colossus ends the Strike and Guard songs and Hive Call, and keeps the Post song. A collapse
@@ -180,8 +181,9 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>
-        /// Starts Hive Call, which lasts until the core moves, an Attack or Power song is cast, the swarm is full, or the core
-        /// is hit while no Guard song runs. It ends the Strike song at once and keeps the Guard and Post songs.
+        /// Starts Hive Call, which calls every standing hive's store to the core while the core stays rooted. It lasts until
+        /// the stores are empty, the swarm is full, the core moves, an Attack or Power song is cast, or the core is hit while
+        /// no Guard song runs. It ends the Strike song at once and keeps the Guard and Post songs.
         /// </summary>
         public bool StartHiveCall()
         {
@@ -250,16 +252,21 @@ namespace DigitalStory.Logic
             }
         }
 
-        /// <summary>Advances the whole swarm's form, every slot and the Gust.</summary>
-        public void Tick(float deltaTime, int standingHives)
+        /// <summary>Advances the whole swarm's form, every slot and the Gust. During Hive Call it calls the stores of <paramref name="hives"/>.</summary>
+        public void Tick(float deltaTime, HiveSet hives)
         {
             if (deltaTime < 0f)
             {
                 throw new ArgumentOutOfRangeException(nameof(deltaTime), deltaTime, "Time cannot run backwards.");
             }
 
+            if (hives == null)
+            {
+                throw new ArgumentNullException(nameof(hives));
+            }
+
             _secondsInForm += deltaTime;
-            TickForm(deltaTime, standingHives);
+            TickForm(deltaTime, hives);
             _slots.Tick(deltaTime, _core);
             TickGust(deltaTime);
         }
@@ -302,13 +309,13 @@ namespace DigitalStory.Logic
             _gustEnemies = null;
         }
 
-        private void TickForm(float deltaTime, int standingHives)
+        private void TickForm(float deltaTime, HiveSet hives)
         {
             if (_current == SwarmForm.HiveCall)
             {
-                _body.Gain(deltaTime, standingHives);
+                _body.Gain(hives.HandOutAll(deltaTime, _body.Room));
 
-                if (_body.Count >= _body.Max)
+                if (_body.Count >= _body.Max || !hives.HasStoredWasps)
                 {
                     SetForm(SwarmForm.River);
                 }
