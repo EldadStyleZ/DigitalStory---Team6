@@ -8,7 +8,7 @@ using UnityEngine.UIElements;
 namespace DigitalStory.View
 {
     /// <summary>
-    /// Shows the Wasp Piper's HUD: wasps, Fury, songs, recent notes, hives and waves. It also creates and
+    /// Shows the Wasp Piper's HUD: wasps, Fury, the songbook of found songs, recent notes, hives and waves. It also creates and
     /// initializes the <see cref="HiveOffscreenIndicatorView"/> and <see cref="EndScreenView"/> on this object.
     /// </summary>
     /// <remarks>The UIDocument's Visual Tree Asset must be HiveDefenseHud.uxml. Everything shown is a label or a bar width.</remarks>
@@ -20,18 +20,31 @@ namespace DigitalStory.View
         private const string LowClass = "wasp-count--low";
         private const string LowFillClass = "wasp-fill--low";
         private const string FuryFullClass = "fury-panel--full";
-        private const string RestingClass = "song--resting";
         private const string FlashClass = "hive-panel--flash";
         private const string DestroyedClass = "hive-panel--destroyed";
         private const string NoteShownClass = "note--shown";
+        private const string NoteHintClass = "note--hint";
+        private const string LineShownClass = "line--shown";
         private const string HoleClassPrefix = "hole-";
         private const int HoleColours = 6;
         private const float BarScale = 1000f;
 
-        [SerializeField, Min(0), Tooltip("The wasp count turns red below this.")]
-        private int _lowWaspThreshold = 1500;
+        [SerializeField, Tooltip("The swarm's look and numbers: the category colours and the low-wasps warning.")]
+        private SwarmConfig _swarmConfig;
 
-        [SerializeField, Min(0.05f), Tooltip("Seconds between red and normal while a hive is under attack.")]
+        [SerializeField, Tooltip("The line shown in the first seconds of a match.")]
+        private string _promptText = "Play notes with 1 to 6. Find the songs.";
+
+        [SerializeField, Min(0f), Tooltip("How long the first line stays, in seconds.")]
+        private float _promptSeconds = 8f;
+
+        [SerializeField, Min(0.1f), Tooltip("How long the 'New song' line stays, in seconds.")]
+        private float _discoverySeconds = 3f;
+
+        [SerializeField, Min(0.1f), Tooltip("How long the 'Not ready' line stays, in seconds.")]
+        private float _notReadySeconds = 1.2f;
+
+        [SerializeField, Min(0.05f), Tooltip("Seconds between the alarm colour and normal while a hive is under attack.")]
         private float _flashSeconds = 0.25f;
 
         [SerializeField, Min(1), Tooltip("How many recent notes there is room for. Match SongConfig.NotesRemembered.")]
@@ -51,11 +64,16 @@ namespace DigitalStory.View
         private VisualElement _furyFill;
         private Label _waveLabel;
         private Label _nextWaveLabel;
-        private VisualElement[] _songCells;
-        private VisualElement[] _songCooldowns;
-        private int[] _songCooldownShown;
-        private bool[] _songResting;
+        private SongbookView _songbook;
+        private Label _furyKeys;
+        private Label _promptLine;
+        private Label _messageLine;
+        private int _colossusSong = -1;
+        private bool _isFuryRevealed;
+        private float _promptLeft;
+        private float _messageLeft;
         private Label[] _noteCells;
+        private bool[] _noteHints;
         private int[] _noteHoles;
         private VisualElement[] _hivePanels;
         private VisualElement[] _hiveFills;
@@ -84,6 +102,7 @@ namespace DigitalStory.View
         public void Initialize(HiveDefenseSession session)
         {
             _isReady = false;
+            ReleaseSongs();
             _session = session ?? throw new ArgumentNullException(nameof(session));
 
             VisualElement root = GetComponent<UIDocument>().rootVisualElement
@@ -91,19 +110,35 @@ namespace DigitalStory.View
 
             _waspCount = Require<Label>(root, "wasp-count");
             _waspFill = Require<VisualElement>(root, "wasp-fill");
+            if (_swarmConfig == null)
+            {
+                throw new InvalidOperationException("The HUD needs the SwarmConfig. Set it on the HiveDefenseHudView.");
+            }
+
             _furyPanel = Require<VisualElement>(root, "fury-panel");
             _furyFill = Require<VisualElement>(root, "fury-fill");
-            Label furyKeys = Require<Label>(root, "fury-keys");
+            _furyKeys = Require<Label>(root, "fury-keys");
+            _promptLine = Require<Label>(root, "prompt-line");
+            _messageLine = Require<Label>(root, "message-line");
+            VisualElement songbook = Require<VisualElement>(root, "songbook");
             _waveLabel = Require<Label>(root, "wave-label");
             _nextWaveLabel = Require<Label>(root, "next-wave-label");
-            VisualElement songs = Require<VisualElement>(root, "songs");
             VisualElement notes = Require<VisualElement>(root, "notes");
             VisualElement hives = Require<VisualElement>(root, "hives");
             VisualElement offscreen = Require<VisualElement>(root, "offscreen-layer");
             VisualElement endScreen = Require<VisualElement>(root, "end-screen");
 
-            furyKeys.text = ColossusKeysText();
-            BuildSongs(songs);
+            _colossusSong = ColossusSongIndex();
+            _isFuryRevealed = false;
+            _furyKeys.text = string.Empty;
+            _songbook = new SongbookView(session, _swarmConfig, songbook);
+            session.Discovery.Discovered += OnDiscovered;
+            session.Caster.SongNotReady += OnSongNotReady;
+            _promptLine.text = _promptText;
+            _promptLeft = _promptSeconds;
+            _promptLine.EnableInClassList(LineShownClass, _promptSeconds > 0f);
+            _messageLeft = 0f;
+            _messageLine.RemoveFromClassList(LineShownClass);
             BuildNotes(notes);
             BuildHives(hives);
 
@@ -130,9 +165,30 @@ namespace DigitalStory.View
             ShowWasps();
             ShowFury();
             ShowWaves();
-            ShowSongs();
+            _songbook.Tick(Time.deltaTime);
             ShowNotes();
+            ShowLines(Time.deltaTime);
             ShowHives(Time.deltaTime);
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseSongs();
+        }
+
+        private void ReleaseSongs()
+        {
+            if (_songbook != null)
+            {
+                _songbook.Dispose();
+                _songbook = null;
+            }
+
+            if (_session != null)
+            {
+                _session.Discovery.Discovered -= OnDiscovered;
+                _session.Caster.SongNotReady -= OnSongNotReady;
+            }
         }
 
         private static T Require<T>(VisualElement root, string name) where T : VisualElement
@@ -147,18 +203,18 @@ namespace DigitalStory.View
         }
 
         // The Colossus song is found by its type, once, so the HUD never repeats the keys by hand.
-        private string ColossusKeysText()
+        private int ColossusSongIndex()
         {
             SwarmSongCaster caster = _session.Caster;
             for (int song = 0; song < caster.Count; song++)
             {
                 if (caster[song] is ColossusSong)
                 {
-                    return KeysText(caster[song].Song);
+                    return song;
                 }
             }
 
-            return string.Empty;
+            return -1;
         }
 
         private static string KeysText(SongDefinition song)
@@ -177,53 +233,11 @@ namespace DigitalStory.View
             return text.ToString();
         }
 
-        private void BuildSongs(VisualElement row)
-        {
-            SwarmSongCaster caster = _session.Caster;
-            _songCells = new VisualElement[caster.Count];
-            _songCooldowns = new VisualElement[caster.Count];
-            _songCooldownShown = new int[caster.Count];
-            _songResting = new bool[caster.Count];
-
-            for (int index = 0; index < caster.Count; index++)
-            {
-                SongDefinition song = caster[index].Song;
-                var cell = new VisualElement();
-                cell.AddToClassList("song");
-                cell.pickingMode = PickingMode.Ignore;
-
-                var title = new Label(song.Title);
-                title.AddToClassList("song-title");
-                cell.Add(title);
-
-                var keys = new VisualElement();
-                keys.AddToClassList("song-keys");
-                keys.pickingMode = PickingMode.Ignore;
-                for (int key = 0; key < song.Keys.Count; key++)
-                {
-                    var label = new Label((song.Keys[key] + 1).ToString(CultureInfo.InvariantCulture));
-                    label.AddToClassList("key");
-                    label.AddToClassList(HoleClassPrefix + HoleColour(song.Keys[key]));
-                    keys.Add(label);
-                }
-
-                cell.Add(keys);
-
-                var cooldown = new VisualElement();
-                cooldown.AddToClassList("song-cooldown");
-                cooldown.pickingMode = PickingMode.Ignore;
-                cell.Add(cooldown);
-
-                row.Add(cell);
-                _songCells[index] = cell;
-                _songCooldowns[index] = cooldown;
-            }
-        }
-
         private void BuildNotes(VisualElement row)
         {
             _noteCells = new Label[_noteSlots];
             _noteHoles = new int[_noteSlots];
+            _noteHints = new bool[_noteSlots];
             for (int index = 0; index < _noteSlots; index++)
             {
                 var note = new Label();
@@ -287,7 +301,7 @@ namespace DigitalStory.View
                     + " / " + max.ToString("N0", CultureInfo.InvariantCulture);
             }
 
-            bool isLow = count < _lowWaspThreshold;
+            bool isLow = count < _swarmConfig.LowWasps;
             if (!_isLowKnown || isLow != _isLow)
             {
                 _isLowKnown = true;
@@ -312,6 +326,12 @@ namespace DigitalStory.View
             {
                 _shownFuryBar = bar;
                 _furyFill.style.width = Length.Percent(bar / BarScale * 100f);
+            }
+
+            if (!_isFuryRevealed && _colossusSong >= 0 && _session.Discovery.IsRevealed(_colossusSong))
+            {
+                _isFuryRevealed = true;
+                _furyKeys.text = KeysText(_session.Caster[_colossusSong].Song);
             }
 
             if (fury.IsFull != _isFuryFull)
@@ -344,32 +364,12 @@ namespace DigitalStory.View
             }
         }
 
-        private void ShowSongs()
-        {
-            SwarmSongCaster caster = _session.Caster;
-            for (int song = 0; song < _songCells.Length; song++)
-            {
-                float fraction = caster.CooldownFraction(song);
-                int bar = BarValue(fraction);
-                if (bar != _songCooldownShown[song])
-                {
-                    _songCooldownShown[song] = bar;
-                    _songCooldowns[song].style.height = Length.Percent(bar / BarScale * 100f);
-                }
-
-                bool isResting = fraction > 0f;
-                if (isResting != _songResting[song])
-                {
-                    _songResting[song] = isResting;
-                    _songCells[song].EnableInClassList(RestingClass, isResting);
-                }
-            }
-        }
-
         private void ShowNotes()
         {
             SwarmSongCaster caster = _session.Caster;
             int count = Mathf.Min(caster.RecentNoteCount, _noteCells.Length);
+            int hint = _session.Discovery.HintNotes(caster);
+            int hintFrom = count - Mathf.Min(hint, count);
             for (int slot = 0; slot < _noteCells.Length; slot++)
             {
                 Label cell = _noteCells[slot];
@@ -380,6 +380,8 @@ namespace DigitalStory.View
                         _noteHoles[slot] = -1;
                         cell.RemoveFromClassList(NoteShownClass);
                     }
+
+                    SetHint(slot, false);
 
                     continue;
                 }
@@ -401,8 +403,73 @@ namespace DigitalStory.View
                     cell.text = (hole + 1).ToString(CultureInfo.InvariantCulture);
                 }
 
+                SetHint(slot, slot >= hintFrom && hint > 0);
                 cell.style.opacity = 1f - caster.RecentNoteAge01(slot);
             }
+        }
+
+        private void SetHint(int slot, bool isHint)
+        {
+            if (_noteHints[slot] != isHint)
+            {
+                _noteHints[slot] = isHint;
+                _noteCells[slot].EnableInClassList(NoteHintClass, isHint);
+            }
+        }
+
+        private void ShowLines(float deltaTime)
+        {
+            if (_promptLeft > 0f)
+            {
+                _promptLeft -= deltaTime;
+                if (_promptLeft <= 0f)
+                {
+                    _promptLine.RemoveFromClassList(LineShownClass);
+                }
+            }
+
+            if (_messageLeft > 0f)
+            {
+                _messageLeft -= deltaTime;
+                if (_messageLeft <= 0f)
+                {
+                    _messageLine.RemoveFromClassList(LineShownClass);
+                }
+            }
+        }
+
+        private void OnDiscovered(int song)
+        {
+            SwarmSongEffect effect = _session.Caster[song];
+            ShowMessage("New song: " + effect.Song.Title, _swarmConfig.ColorOf(effect.Category), _discoverySeconds);
+        }
+
+        // A known song is named, and its chip in the songbook nudges too. An unknown one is not named, so it stays hidden.
+        private void OnSongNotReady(int song)
+        {
+            if (_session.Discovery.IsKnown(song))
+            {
+                ShowMessage(_session.Caster[song].Song.Title + " not ready", Color.clear, _notReadySeconds);
+                return;
+            }
+
+            ShowMessage("Not ready", Color.clear, _notReadySeconds);
+        }
+
+        private void ShowMessage(string text, Color color, float seconds)
+        {
+            _messageLine.text = text;
+            if (color.a > 0f)
+            {
+                _messageLine.style.color = color;
+            }
+            else
+            {
+                _messageLine.style.color = StyleKeyword.Null;
+            }
+
+            _messageLeft = seconds;
+            _messageLine.AddToClassList(LineShownClass);
         }
 
         private void ShowHives(float deltaTime)
@@ -424,7 +491,7 @@ namespace DigitalStory.View
                     _hivePanels[index].EnableInClassList(DestroyedClass, hive.IsDestroyed);
                 }
 
-                // Red for one period, normal for the next, for as long as the attack lasts.
+                // The alarm colour for one period, normal for the next, for as long as the attack lasts.
                 bool isAttacked = hive.IsUnderAttack && !hive.IsDestroyed;
                 bool flashOn = false;
                 if (isAttacked)

@@ -17,3 +17,6 @@ MonoBehaviour:
     _description: The hives send wasps to the Piper
     _cooldownSeconds: 3
     _keys: 000000000500000000000000i
+  _category: 2
+  _knownFromStart: 0
+  _revealedWhenFuryFills: 0

@@ -17,4 +17,7 @@ MonoBehaviour:
     _description: 'Needs full Fury: the swarm becomes a giant'
     _cooldownSeconds: 0
     _keys: 0300000004000000050000000400000003000000i
+  _category: 0
+  _knownFromStart: 0
+  _revealedWhenFuryFills: 1
   <Seconds>k__BackingField: 12

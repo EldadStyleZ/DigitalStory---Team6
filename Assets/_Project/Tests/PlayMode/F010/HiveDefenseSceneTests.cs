@@ -1,8 +1,10 @@
 #if UNITY_EDITOR
 using System.Collections;
+using DigitalStory.Data;
 using DigitalStory.Logic;
 using DigitalStory.View;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -14,10 +16,11 @@ namespace DigitalStory.Tests.PlayMode
     public sealed class HiveDefenseSceneTests
     {
         private const string ScenePath = "Assets/_Project/Scenes/eldad-lab-2-scene.unity";
+        private const string SwarmConfigPath = "Assets/_Project/GameData/F010/SwarmConfig.asset";
         private const int FramesToSettle = 3;
         private const int FramesToRun = 60;
         private const int StandingHives = 2;
-        private const int StartingWasps = 5000;
+        private const int SongsKnownAtStart = 1;
         private const float FastTimeScale = 5f;
         private const int MaxFramesForWave = 300000;
         private const float MaxWaveSeconds = 40f;
@@ -29,8 +32,10 @@ namespace DigitalStory.Tests.PlayMode
 
         private static readonly int[] DomeHoles = { 0, 1, 0 };
         private static readonly int[] MeteorHoles = { 4, 2, 0 };
+        private static readonly int[] StingHoles = { 2, 3, 4 };
 
         private HiveDefenseRoot _root;
+        private SwarmConfig _swarmConfig;
         private float _savedTimeScale;
 
         [UnitySetUp]
@@ -45,6 +50,8 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             _root = Object.FindAnyObjectByType<HiveDefenseRoot>();
+            _swarmConfig = AssetDatabase.LoadAssetAtPath<SwarmConfig>(SwarmConfigPath);
+            Assert.That(_swarmConfig, Is.Not.Null, "There is no SwarmConfig at " + SwarmConfigPath + ". Rebuild the scene.");
         }
 
         [UnityTearDown]
@@ -72,8 +79,63 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(_root.Session, Is.Not.Null);
             Assert.That(_root.Session.State, Is.EqualTo(HiveDefenseState.Playing));
             Assert.That(_root.Session.Hives.StandingCount, Is.EqualTo(StandingHives));
-            Assert.That(_root.Session.Swarm.Count, Is.EqualTo(StartingWasps));
+            Assert.That(_root.Session.Swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps));
             yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Scene_OnLoad_KnowsOnlySting()
+        {
+            SongDiscovery discovery = _root.Session.Discovery;
+            SwarmSongCaster caster = _root.Session.Caster;
+            for (int song = 0; song < caster.Count; song++)
+            {
+                Assert.That(discovery.IsKnown(song), Is.EqualTo(caster[song] is StingSong), caster[song].Song.Title);
+            }
+
+            Assert.That(discovery.KnownCount, Is.EqualTo(SongsKnownAtStart));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_WithTheDomeKeys_MakesTheDomeKnown()
+        {
+            int dome = SongIndex<DomeSong>();
+            Assert.That(_root.Session.Discovery.IsKnown(dome), Is.False, "The Dome is known before it is played.");
+
+            yield return Play(DomeHoles);
+
+            Assert.That(_root.Session.Discovery.IsKnown(dome), Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_WithTheDomeKeys_ColoursTheSwarmInTheDefenseColour()
+        {
+            SwarmGpuView view = Object.FindAnyObjectByType<SwarmGpuView>();
+
+            yield return Play(DomeHoles);
+
+            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(view.CastColor, Is.EqualTo(_swarmConfig.DefenseColor));
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_WithTheStingKeys_ColoursTheSwarmInTheAttackColour()
+        {
+            SwarmGpuView view = Object.FindAnyObjectByType<SwarmGpuView>();
+            yield return Play(DomeHoles);
+            Assert.That(view.CastColor, Is.EqualTo(_swarmConfig.DefenseColor), "The Dome did not colour the swarm first.");
+
+            // The sting needs a beekeeper to aim at.
+            Time.timeScale = FastTimeScale;
+            yield return WaitForBeekeeper();
+            Time.timeScale = _savedTimeScale;
+            Assert.That(_root.Session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(1), "No beekeeper came to sting.");
+
+            yield return Play(StingHoles);
+
+            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Sting));
+            Assert.That(view.CastColor, Is.EqualTo(_swarmConfig.AttackColor));
         }
 
         [UnityTest]
@@ -202,6 +264,50 @@ namespace DigitalStory.Tests.PlayMode
             yield return WatchBone(leg, WatchSeconds, null, angle => swing = angle);
 
             Assert.That(swing, Is.GreaterThan(SmallestSwingDegrees));
+        }
+
+        private IEnumerator Play(int[] holes)
+        {
+            for (int index = 0; index < holes.Length; index++)
+            {
+                _root.PressHole(holes[index]);
+                for (int frame = 0; frame < FramesBetweenNotes; frame++)
+                {
+                    yield return null;
+                }
+            }
+
+            // The last note is read on the next tick.
+            yield return null;
+            yield return null;
+        }
+
+        // Batch mode runs thousands of frames a second, so count game time, not frames.
+        private IEnumerator WaitForBeekeeper()
+        {
+            int frames = 0;
+            float elapsed = 0f;
+            while (_root.Session.ActiveBeekeeperCount < 1 && elapsed < MaxWaveSeconds && frames < MaxFramesForWave)
+            {
+                elapsed += Time.deltaTime;
+                frames++;
+                yield return null;
+            }
+        }
+
+        private int SongIndex<T>() where T : SwarmSongEffect
+        {
+            SwarmSongCaster caster = _root.Session.Caster;
+            for (int song = 0; song < caster.Count; song++)
+            {
+                if (caster[song] is T)
+                {
+                    return song;
+                }
+            }
+
+            Assert.Fail("The scene has no " + typeof(T).Name + ".");
+            return -1;
         }
 
         private static Transform FindBone(Transform root, string boneName)

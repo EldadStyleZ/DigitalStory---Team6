@@ -39,6 +39,9 @@ namespace DigitalStory.Editor
         private const string ColossusControllerPath = ArtFolder + "/Colossus.controller";
         private const string ComputePath = ArtFolder + "/Shaders/WaspSwarm.compute";
         private const string WaspShaderPath = ArtFolder + "/Shaders/WaspInstanced.shader";
+        private const string GlowShaderPath = ArtFolder + "/Shaders/WaspGlow.shader";
+        private const string SkyShaderPath = ArtFolder + "/Shaders/NightSky.shader";
+        private const string SkyMaterialName = "NightSky";
         private const string PanelSettingsPath = Root + "/UI/GamePanelSettings.asset";
         private const string HudUxmlPath = Root + "/UI/F010/HiveDefenseHud.uxml";
         private const string SoundConfigPath = Root + "/GameData/SoundConfig.asset"; // The Town scene's, shared and never changed here.
@@ -64,7 +67,7 @@ namespace DigitalStory.Editor
         private const float HiveBarGap = 0.6f;
         private const float PiperRadius = 0.35f;
 
-        private const float GroundSize = 70f;
+        private const float GroundSize = 160f; // Past the scenery to the horizon, so a low camera never sees its edge.
         private const float PlaneBaseSize = 10f;
         private const float ClearHalfSize = 25f;
         private const float EdgeHalfSize = 34f;
@@ -78,15 +81,36 @@ namespace DigitalStory.Editor
         private const string RightHandName = "RightHand";
         private const string FluteName = "Flute";
 
-        private static readonly Color Grass = new Color(0.36f, 0.55f, 0.24f, 1f);
+        // The night look. Colours are in gamma space, as the project is.
+        private const float MoonlightIntensity = 0.6f;
+        private const float MoonlightShadowStrength = 0.6f;
+        private const float MoonSize = 0.13f;
+        private const float StarDensity = 90f;
+        private const float SkyHorizonWidth = 0.3f;
+        private const float HiveLightHeight = HiveHeight * 0.75f;
+        private const float HiveLightFront = 1.6f; // Metres toward the camera, which looks along +Z, so the hive's near side is lit.
+        private const float HiveLightRange = 7f;
+        private const float HiveLightIntensity = 2.2f;
+        private const bool FogOn = true;
+        private const float FogDensity = 0.016f;
+
+        // From the world toward the moon. The light comes from high up, so the ground is lit and the shadows stay short;
+        // the moon in the sky sits low on the same side, so a low camera sees it over the horizon, as in the pictures.
+        private static readonly Vector3 MoonlightDirection = new Vector3(-0.25f, 0.75f, 0.65f).normalized;
+        private static readonly Vector3 MoonDirection = new Vector3(-0.354f, 0.156f, 0.922f).normalized;
+        private static readonly Color Grass = new Color(0.25f, 0.27f, 0.13f, 1f);
+        private static readonly Color MoonLightColor = new Color(0.72f, 0.8f, 1f, 1f);
+        private static readonly Color SkyZenith = new Color(0.04f, 0.08f, 0.24f, 1f);
+        private static readonly Color SkyHorizon = new Color(0.22f, 0.15f, 0.34f, 1f);
+        private static readonly Color SkyGround = new Color(0.07f, 0.08f, 0.12f, 1f);
+        private static readonly Color FogColor = new Color(0.07f, 0.08f, 0.12f, 1f); // The sky below the horizon, so the far ground fades into it.
+        private static readonly Color HiveLightColor = new Color(1f, 0.72f, 0.35f, 1f);
         private static readonly Color SuitWhite = new Color(0.94f, 0.94f, 0.9f, 1f);
         private static readonly Color StickWood = new Color(0.4f, 0.26f, 0.13f, 1f);
         private static readonly Color SmokerMetal = new Color(0.45f, 0.47f, 0.5f, 1f);
-        private static readonly Color SunColor = new Color(1f, 0.9f, 0.72f, 1f);
-        private static readonly Color SkyColor = new Color(0.62f, 0.78f, 0.95f, 1f);
-        private static readonly Color AmbientSky = new Color(0.72f, 0.8f, 0.92f, 1f);
-        private static readonly Color AmbientEquator = new Color(0.6f, 0.58f, 0.5f, 1f);
-        private static readonly Color AmbientGround = new Color(0.3f, 0.27f, 0.2f, 1f);
+        private static readonly Color AmbientSky = new Color(0.16f, 0.19f, 0.32f, 1f);
+        private static readonly Color AmbientEquator = new Color(0.11f, 0.12f, 0.19f, 1f);
+        private static readonly Color AmbientGround = new Color(0.05f, 0.05f, 0.08f, 1f);
 
         // Every config and song asset BuildAll loads or creates. The baked ColossusSampleSet is not a config.
         private static readonly string[] ConfigAssetNames =
@@ -1290,8 +1314,8 @@ namespace DigitalStory.Editor
             var camera = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener), typeof(FollowCamera));
             camera.tag = "MainCamera";
             var cameraComponent = camera.GetComponent<Camera>();
-            cameraComponent.clearFlags = CameraClearFlags.SolidColor;
-            cameraComponent.backgroundColor = SkyColor;
+            cameraComponent.clearFlags = CameraClearFlags.Skybox;
+            cameraComponent.backgroundColor = SkyZenith; // Only seen if the skybox is ever switched off.
             cameraComponent.farClipPlane = 200f;
             camera.transform.SetPositionAndRotation(new Vector3(0f, 14f, -10f), Quaternion.Euler(55f, 0f, 0f));
 
@@ -1308,7 +1332,22 @@ namespace DigitalStory.Editor
             var swarmSerialized = new SerializedObject(swarmObject.GetComponent<SwarmGpuView>());
             SetObject(swarmSerialized, "_swarmCompute", AssetDatabase.LoadAssetAtPath<ComputeShader>(ComputePath));
             SetObject(swarmSerialized, "_waspShader", AssetDatabase.LoadAssetAtPath<Shader>(WaspShaderPath));
+            SetObject(swarmSerialized, "_glowShader", AssetDatabase.LoadAssetAtPath<Shader>(GlowShaderPath));
             swarmSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+            // The light that follows the swarm. SwarmGlowLight sets its range, brightness and colour from the SwarmConfig.
+            var glowLight = new GameObject("Swarm Glow Light", typeof(Light), typeof(SwarmGlowLight));
+            Light glow = glowLight.GetComponent<Light>();
+            glow.type = LightType.Point;
+            glow.shadows = LightShadows.None;
+            glow.enabled = false;
+
+            // The second light follows the wasps that attack, in a sting or a meteor.
+            var attackLight = new GameObject("Swarm Attack Light", typeof(Light), typeof(SwarmGlowLight));
+            Light attackGlow = attackLight.GetComponent<Light>();
+            attackGlow.type = LightType.Point;
+            attackGlow.shadows = LightShadows.None;
+            attackGlow.enabled = false;
 
             var beekeeperPool = new GameObject("Beekeeper Pool", typeof(BeekeeperViewPool));
             var smokePool = new GameObject("Smoke Pool", typeof(SmokeViewPool));
@@ -1319,6 +1358,7 @@ namespace DigitalStory.Editor
             document.visualTreeAsset = Require(AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(HudUxmlPath), HudUxmlPath);
             var hudSerialized = new SerializedObject(hud.GetComponent<HiveDefenseHudView>());
             SetObject(hudSerialized, "_camera", cameraComponent);
+            SetObject(hudSerialized, "_swarmConfig", assets.Swarm);
             hudSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             var rootObject = new GameObject("Hive Defense Root", typeof(HiveDefenseRoot));
@@ -1341,6 +1381,8 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_followCamera", camera.GetComponent<FollowCamera>());
             SetObject(serialized, "_camera", cameraComponent);
             SetObject(serialized, "_swarmView", swarmObject.GetComponent<SwarmGpuView>());
+            SetObject(serialized, "_glowLight", glowLight.GetComponent<SwarmGlowLight>());
+            SetObject(serialized, "_attackGlowLight", attackLight.GetComponent<SwarmGlowLight>());
             SetObjects(serialized, "_hives", hives);
             SetObjects(serialized, "_spawnPoints", ChildTransforms(spawns));
             SetObject(serialized, "_beekeeperPool", beekeeperPool.GetComponent<BeekeeperViewPool>());
@@ -1356,23 +1398,51 @@ namespace DigitalStory.Editor
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        // A moonlit night. The moon in the sky and the moonlight come from the same side.
         private static void BuildLighting()
         {
-            var sun = new GameObject("Sun", typeof(Light));
-            var light = sun.GetComponent<Light>();
+            var moon = new GameObject("Moonlight", typeof(Light));
+            var light = moon.GetComponent<Light>();
             light.type = LightType.Directional;
-            light.color = SunColor;
-            light.intensity = 1.1f;
+            light.color = MoonLightColor;
+            light.intensity = MoonlightIntensity;
             light.shadows = LightShadows.Soft;
-            light.shadowStrength = 0.8f;
-            sun.transform.rotation = Quaternion.Euler(48f, -35f, 0f);
+            light.shadowStrength = MoonlightShadowStrength;
+            moon.transform.rotation = Quaternion.LookRotation(-MoonlightDirection); // The light travels away from the moon.
 
             RenderSettings.sun = light;
+            RenderSettings.skybox = BuildSkyMaterial();
             RenderSettings.ambientMode = AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = AmbientSky;
             RenderSettings.ambientEquatorColor = AmbientEquator;
             RenderSettings.ambientGroundColor = AmbientGround;
-            RenderSettings.fog = false;
+            RenderSettings.fog = FogOn;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogColor = FogColor;
+            RenderSettings.fogDensity = FogDensity;
+        }
+
+        private static Material BuildSkyMaterial()
+        {
+            var shader = Require(AssetDatabase.LoadAssetAtPath<Shader>(SkyShaderPath), SkyShaderPath);
+            string path = $"{ArtFolder}/{SkyMaterialName}.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(shader);
+                AssetDatabase.CreateAsset(material, path);
+            }
+
+            material.shader = shader;
+            material.SetColor("_ZenithColor", SkyZenith);
+            material.SetColor("_HorizonColor", SkyHorizon);
+            material.SetColor("_GroundColor", SkyGround);
+            material.SetFloat("_HorizonWidth", SkyHorizonWidth);
+            material.SetFloat("_StarDensity", StarDensity);
+            material.SetFloat("_MoonSize", MoonSize);
+            material.SetVector("_MoonDirection", new Vector4(MoonDirection.x, MoonDirection.y, MoonDirection.z, 0f));
+            EditorUtility.SetDirty(material);
+            return material;
         }
 
         private static void BuildGround()
@@ -1504,6 +1574,19 @@ namespace DigitalStory.Editor
 
             var serialized = new SerializedObject(hive.GetComponent<HiveView>());
             SetObject(serialized, "_model", pivot);
+
+            // A small warm lamp beside the hive, on the camera's side, so it reads as a lit home.
+            var lamp = new GameObject("Hive Light", typeof(Light));
+            lamp.transform.SetParent(hive.transform, false);
+            lamp.transform.localPosition = new Vector3(0f, HiveLightHeight, -HiveLightFront);
+            var lampLight = lamp.GetComponent<Light>();
+            lampLight.type = LightType.Point;
+            lampLight.renderMode = LightRenderMode.ForcePixel; // The ground is one big plane, too coarse for a vertex light.
+            lampLight.color = HiveLightColor;
+            lampLight.range = HiveLightRange;
+            lampLight.intensity = HiveLightIntensity;
+            lampLight.shadows = LightShadows.None;
+
             Property(serialized, "_barHeight").floatValue = HiveHeight + HiveBarGap;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return hive.GetComponent<HiveView>();

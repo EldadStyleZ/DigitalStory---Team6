@@ -69,6 +69,8 @@ namespace DigitalStory.Tests.PlayMode
         private const float QuarterTurnDegrees = 90f;
         private const float StopAfterWalkMeters = 6f;
         private const float StopAfterWalkSeconds = 2.5f;
+        private const float HintPauseSeconds = 0.5f;
+        private const int KnownInHud = 3;
 
         private static readonly int[] DomeHoles = { 0, 1, 0 };
         private static readonly int[] HiveCallHoles = { 0, 5, 0 };
@@ -76,6 +78,7 @@ namespace DigitalStory.Tests.PlayMode
         private static readonly int[] TornadoHoles = { 5, 4, 3, 5 };
         private static readonly int[] ColossusHoles = { 3, 4, 5, 4, 3 };
         private static readonly int[] MeteorHoles = { 4, 2, 0 };
+        private static readonly int[] HintHoles = { 5, 4 };
 
         private HiveDefenseRoot _root;
         private PiperMotor _piper;
@@ -246,12 +249,19 @@ namespace DigitalStory.Tests.PlayMode
 
         // Camera.Render does not draw UI Toolkit, so the HUD panel is pointed at a render texture for a few frames,
         // through a runtime copy of its PanelSettings. The PanelSettings asset itself is never changed.
+        // Two songs are found besides Sting, so the songbook shows three known songs and four empty slots, the "New song"
+        // line, and the start of the Tornado's notes glowing as a hint.
         [UnityTest]
         public IEnumerator Snapshot9_Hud()
         {
             yield return Wait(SongSeconds);
-            yield return Play(DomeHoles);
+            yield return Play(HiveCallHoles);
             yield return Wait(SongSeconds);
+            yield return Play(DomeHoles);
+            yield return Wait(HintPauseSeconds);
+            yield return Play(HintHoles);
+            Assert.That(_root.Session.Discovery.KnownCount, Is.EqualTo(KnownInHud));
+            Assert.That(_root.Session.Discovery.HintNotes(_root.Session.Caster), Is.EqualTo(HintHoles.Length));
 
             UIDocument document = UnityEngine.Object.FindAnyObjectByType<UIDocument>();
             Assert.That(document, Is.Not.Null);

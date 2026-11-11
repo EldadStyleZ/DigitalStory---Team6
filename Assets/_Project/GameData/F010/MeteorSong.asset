@@ -17,6 +17,9 @@ MonoBehaviour:
     _description: Wasps fall from the sky on the target
     _cooldownSeconds: 9
     _keys: 040000000200000000000000i
+  _category: 0
+  _knownFromStart: 0
+  _revealedWhenFuryFills: 0
   <Fraction>k__BackingField: 0.3
   <Height>k__BackingField: 12
   <RiseSeconds>k__BackingField: 0.8

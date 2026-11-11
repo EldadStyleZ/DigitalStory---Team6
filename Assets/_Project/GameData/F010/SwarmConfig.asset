@@ -12,13 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: db20aba9b99bc4c71ac412759a73ff94, type: 3}
   m_Name: SwarmConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.SwarmConfig
-  <StartingWasps>k__BackingField: 5000
-  <MaxWasps>k__BackingField: 10000
-  <CollapseBelow>k__BackingField: 600
+  <StartingWasps>k__BackingField: 2000
+  <MaxWasps>k__BackingField: 4000
+  <CollapseBelow>k__BackingField: 240
   <CollapseBlockSeconds>k__BackingField: 3
-  <RespawnWasps>k__BackingField: 2500
-  <HiveCallWaspsPerSecondPerHive>k__BackingField: 250
+  <RespawnWasps>k__BackingField: 1000
+  <HiveCallWaspsPerSecondPerHive>k__BackingField: 100
   <DomeLossFraction>k__BackingField: 0.15
+  <LowWasps>k__BackingField: 600
   <RiverSpring>k__BackingField: 40
   <RiverDamping>k__BackingField: 0.6
   <ShapeSpring>k__BackingField: 180
@@ -27,23 +28,29 @@ MonoBehaviour:
   <WobbleSeconds>k__BackingField: 0.35
   <FormWaveSeconds>k__BackingField: 0.6
   <FlowSpeed>k__BackingField: 0.08
-  <RiverLengthMeters>k__BackingField: 8
-  <RiverRadius>k__BackingField: 0.55
+  <RiverLengthMeters>k__BackingField: 11
+  <RiverRadius>k__BackingField: 1.2
   <MeanderAmplitude>k__BackingField: 0.25
   <StandingTrailMeters>k__BackingField: 2
-  <TorusRadius>k__BackingField: 1.5
+  <TorusRadius>k__BackingField: 2.4
+  <StandStillMeters>k__BackingField: 0.05
+  <StandDelaySeconds>k__BackingField: 0.5
+  <StandBlendSeconds>k__BackingField: 0.75
   <BuzzAmplitude>k__BackingField: 0.04
   <BuzzFrequency>k__BackingField: 9
   <DyingSeconds>k__BackingField: 1.5
-  <WaspLength>k__BackingField: 0.12
+  <WaspLength>k__BackingField: 0.24
   <TrailPoints>k__BackingField: 128
   <TrailSpacing>k__BackingField: 0.15
   <MaxDeltaTime>k__BackingField: 0.033333335
   <BoundsMeters>k__BackingField: 60
-  <RiverColor>k__BackingField: {r: 1, g: 0.85, b: 0.1, a: 1}
-  <DomeColor>k__BackingField: {r: 0.2, g: 0.55, b: 1, a: 1}
-  <StingColor>k__BackingField: {r: 1, g: 0.5, b: 0.1, a: 1}
-  <TornadoColor>k__BackingField: {r: 0.5, g: 0.55, b: 0.65, a: 1}
-  <GustColor>k__BackingField: {r: 0.7, g: 0.9, b: 1, a: 1}
-  <HiveCallColor>k__BackingField: {r: 1, g: 0.84, b: 0.1, a: 1}
-  <ColossusColor>k__BackingField: {r: 0.9, g: 0.6, b: 0.15, a: 1}
+  <RiverColor>k__BackingField: {r: 1, g: 0.82, b: 0.42, a: 1}
+  <AttackColor>k__BackingField: {r: 1, g: 0.22, b: 0.1, a: 1}
+  <DefenseColor>k__BackingField: {r: 0.25, g: 0.6, b: 1, a: 1}
+  <PowerColor>k__BackingField: {r: 1, g: 0.7, b: 0.08, a: 1}
+  <GlowSize>k__BackingField: 0.5
+  <GlowStrength>k__BackingField: 0.18
+  <LightRange>k__BackingField: 14
+  <LightIntensity>k__BackingField: 5.5
+  <LightHeight>k__BackingField: 3
+  <LightTowardCamera>k__BackingField: 1.5

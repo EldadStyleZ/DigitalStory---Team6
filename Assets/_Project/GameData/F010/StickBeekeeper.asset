@@ -22,4 +22,4 @@ MonoBehaviour:
   <WindUpSeconds>k__BackingField: 0.6
   <CooldownSeconds>k__BackingField: 1.4
   <HiveDamage>k__BackingField: 6
-  <WaspsKnockedOff>k__BackingField: 180
+  <WaspsKnockedOff>k__BackingField: 72

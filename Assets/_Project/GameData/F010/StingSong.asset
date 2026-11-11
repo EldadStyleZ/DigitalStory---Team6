@@ -17,6 +17,9 @@ MonoBehaviour:
     _description: Wasps wrap around the aimed beekeeper
     _cooldownSeconds: 1.5
     _keys: 020000000300000004000000i
+  _category: 0
+  _knownFromStart: 1
+  _revealedWhenFuryFills: 0
   <Seconds>k__BackingField: 4
   <Fraction>k__BackingField: 0.4
   <DamagePerSecond>k__BackingField: 25

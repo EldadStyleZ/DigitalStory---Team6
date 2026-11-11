@@ -16,4 +16,4 @@ MonoBehaviour:
   <Radius>k__BackingField: 4
   <LifeSeconds>k__BackingField: 5
   <HiveDamagePerSecond>k__BackingField: 4
-  <WaspLossPerSecond>k__BackingField: 120
+  <WaspLossPerSecond>k__BackingField: 48

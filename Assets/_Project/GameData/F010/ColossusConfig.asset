@@ -14,8 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.ColossusConfig
   <Height>k__BackingField: 4
   <Speed>k__BackingField: 3.5
-  <DurationSeconds>k__BackingField: 12
-  <BuildSeconds>k__BackingField: 0.8
   <StunSeconds>k__BackingField: 0.5
   <CameraDistance>k__BackingField: 20
   <PunchDamage>k__BackingField: 45

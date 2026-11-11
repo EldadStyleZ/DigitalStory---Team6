@@ -2,11 +2,12 @@
 .hud-root {
     --text: rgb(243, 234, 214);
     --caption: rgb(170, 167, 187);
-    --panel: rgba(18, 20, 34, 0.84);
+    --panel: rgba(18, 20, 34, 0.55);
     --track: rgba(255, 255, 255, 0.12);
     --gold: rgb(232, 197, 71);
     --wasp: rgb(242, 181, 68);
     --danger: rgb(224, 72, 60);
+    --alarm: rgb(255, 150, 40);
     --fury: rgb(176, 92, 230);
     --fury-glow: rgb(255, 214, 90);
     --overlay: rgba(9, 10, 20, 0.74);
@@ -18,7 +19,7 @@
     right: 0;
     bottom: 0;
     color: var(--text);
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .row {
@@ -29,31 +30,31 @@
 
 .panel {
     background-color: var(--panel);
-    border-radius: 8px;
-    padding: 6px 10px;
-    margin-bottom: 6px;
-    min-width: 220px;
+    border-radius: 6px;
+    padding: 3px 8px;
+    margin-bottom: 4px;
+    min-width: 150px;
 }
 
 .panel-title {
     color: var(--caption);
-    font-size: 12px;
+    font-size: 11px;
     padding: 0;
     margin-right: 8px;
 }
 
 .bar-track {
-    height: 10px;
-    margin-top: 4px;
+    height: 6px;
+    margin-top: 2px;
     background-color: var(--track);
-    border-radius: 5px;
+    border-radius: 3px;
     overflow: hidden;
 }
 
 .bar-fill {
     width: 0;
     height: 100%;
-    border-radius: 5px;
+    border-radius: 3px;
 }
 
 /* Top left: wasps and Fury */
@@ -65,13 +66,13 @@
 
 .wasp-count {
     color: var(--text);
-    font-size: 15px;
+    font-size: 13px;
     -unity-font-style: bold;
     padding: 0;
 }
 
 .wasp-count--low {
-    color: var(--danger);
+    color: var(--alarm);
 }
 
 .wasp-fill {
@@ -79,12 +80,12 @@
 }
 
 .wasp-fill--low {
-    background-color: var(--danger);
+    background-color: var(--alarm);
 }
 
 .fury-keys {
     color: var(--caption);
-    font-size: 12px;
+    font-size: 11px;
     padding: 0;
 }
 
@@ -117,11 +118,11 @@
 }
 
 .wave-label {
-    font-size: 22px;
+    font-size: 18px;
     -unity-font-style: bold;
     background-color: var(--panel);
-    border-radius: 8px;
-    padding: 4px 16px;
+    border-radius: 6px;
+    padding: 2px 12px;
 }
 
 /* On its own backing, because bare caption text is unreadable over the bright grass. */
@@ -138,22 +139,22 @@
 .hives {
     position: absolute;
     left: 12px;
-    top: 120px;
+    top: 92px;
 }
 
 .hive-panel {
-    min-width: 160px;
+    min-width: 120px;
     background-color: var(--panel);
-    border-radius: 8px;
+    border-radius: 6px;
     border-width: 2px;
     border-color: rgba(0, 0, 0, 0);
-    padding: 5px 10px;
-    margin-bottom: 6px;
+    padding: 2px 8px;
+    margin-bottom: 4px;
 }
 
 .hive-title {
     color: var(--text);
-    font-size: 12px;
+    font-size: 11px;
     padding: 0;
 }
 
@@ -162,19 +163,19 @@
 }
 
 .hive-panel--flash {
-    border-color: var(--danger);
-    background-color: rgba(120, 24, 20, 0.9);
+    border-color: var(--alarm);
+    background-color: rgba(130, 70, 10, 0.85);
 }
 
 .hive-panel--flash .hive-fill {
-    background-color: var(--danger);
+    background-color: var(--alarm);
 }
 
 .hive-panel--destroyed {
     opacity: 0.4;
 }
 
-/* Bottom: recent notes and the songs row */
+/* Bottom: recent notes */
 .bottom {
     position: absolute;
     left: 0;
@@ -206,57 +207,152 @@
     display: flex;
 }
 
-.songs {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-    margin: 0 10px;
-}
-
-.song {
-    margin: 3px;
-    padding: 4px 8px;
+/* Lines above the notes: the first prompt and discoveries. Hidden until shown. */
+.line {
+    display: none;
+    font-size: 13px;
+    padding: 1px 10px;
+    margin-bottom: 3px;
+    border-radius: 6px;
     background-color: var(--panel);
-    border-radius: 8px;
-    border-width: 2px;
-    border-color: rgba(0, 0, 0, 0);
-    overflow: hidden;
-    min-width: 96px;
 }
 
-.song--resting {
+.line--shown {
+    display: flex;
+}
+
+.prompt-line {
+    color: var(--caption);
+}
+
+.message-line {
+    -unity-font-style: bold;
+}
+
+.note--hint {
+    border-width: 2px;
+    border-color: var(--fury-glow);
+    width: 26px;
+    height: 26px;
+    border-radius: 13px;
+    margin: 0 1px;
+}
+
+/* The songbook, bottom left. Quiet: no panel and partly see-through, but its notes stay readable. */
+.songbook {
+    position: absolute;
+    left: 12px;
+    bottom: 10px;
+    opacity: 0.75;
+}
+
+.songbook-title {
+    color: var(--caption);
+    font-size: 11px;
+    padding: 0;
+    margin-bottom: 2px;
+}
+
+.songbook-chips {
+    width: 196px;
+}
+
+.chip {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    margin-bottom: 2px;
+    padding: 0 6px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.04);
+    overflow: hidden;
+    transition-property: opacity, translate;
+    transition-duration: 0.25s, 0.05s;
+}
+
+.chip-mark,
+.chip-title,
+.chip-pips {
+    display: none;
+}
+
+.chip--known {
+    border-color: rgba(255, 255, 255, 0.22);
+    background-color: var(--panel);
+}
+
+.chip--known .chip-mark,
+.chip--known .chip-title,
+.chip--known .chip-pips {
+    display: flex;
+}
+
+.chip--known.chip--resting {
     opacity: 0.7;
 }
 
-.song-title {
-    color: var(--text);
-    font-size: 13px;
+/* The songbook's own opacity caps brightness, so the flash lifts the backing and the border. */
+.chip--bright {
+    border-color: var(--text);
+    background-color: rgba(255, 255, 255, 0.30);
+}
+
+.chip--nudge {
+    translate: 3px 0;
+    border-color: var(--text);
+}
+
+/* Category marks, so colour is never the only cue: diamond attack, circle defense, square power. */
+.chip-mark {
+    width: 8px;
+    height: 8px;
+    margin-right: 6px;
+}
+
+.chip-mark--attack {
+    rotate: 45deg;
+    width: 7px;
+    height: 7px;
+}
+
+.chip-mark--defense {
+    border-radius: 4px;
+}
+
+.chip-mark--power {
+    border-radius: 1px;
+}
+
+.chip-title {
+    flex-grow: 1;
+    font-size: 12px;
     padding: 0;
 }
 
-.song-keys {
+.chip-pips {
     flex-direction: row;
-    margin-top: 2px;
 }
 
-.key {
-    width: 17px;
-    height: 17px;
-    margin-right: 2px;
-    border-radius: 9px;
-    font-size: 11px;
+.pip {
+    width: 15px;
+    height: 15px;
+    margin-left: 2px;
+    border-radius: 8px;
+    font-size: 10px;
+    -unity-font-style: bold;
     color: var(--key-text);
     -unity-text-align: middle-center;
     padding: 0;
 }
 
-.song-cooldown {
+.chip-cooldown {
     position: absolute;
     left: 0;
-    right: 0;
     bottom: 0;
-    height: 0;
-    background-color: rgba(255, 255, 255, 0.22);
+    width: 0;
+    height: 2px;
 }
 
 /* The six holes, in the order of the flute */
@@ -281,7 +377,7 @@
     width: 40px;
     height: 40px;
     translate: -50% -50%;
-    background-color: var(--danger);
+    background-color: var(--alarm);
     border-radius: 20px;
     color: white;
     font-size: 26px;

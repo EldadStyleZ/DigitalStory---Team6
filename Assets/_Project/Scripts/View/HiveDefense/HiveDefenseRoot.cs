@@ -16,6 +16,15 @@ namespace DigitalStory.View
     public sealed class HiveDefenseRoot : MonoBehaviour
     {
         private const int RequiredHiveCount = 2;
+        private const float MinimumTrailMeters = 0.001f;
+
+        // Share of the river's length behind the Piper where its light hangs: nearer the head than the middle, so the
+        // Piper walks in the light too.
+        private const float RiverLightShare = 0.35f;
+
+        // Share of the way per second the attack light covers toward its target, slower than the light's own follow,
+        // so it arrives with the stingers.
+        private const float AttackLightFollowPerSecond = 4f;
 
         [Header("Rules")]
         [SerializeField, Tooltip("The wasp swarm's numbers.")]
@@ -79,6 +88,12 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Draws the wasps.")]
         private SwarmGpuView _swarmView;
 
+        [SerializeField, Tooltip("The light the glowing swarm casts on the ground, the trees and the beekeepers around it.")]
+        private SwarmGlowLight _glowLight;
+
+        [SerializeField, Tooltip("The red light of the wasps that attack in a sting or a meteor. It travels with them, while the first light stays with the rest of the swarm.")]
+        private SwarmGlowLight _attackGlowLight;
+
         [SerializeField, Tooltip("Draws the two hives, in the same order as the hives' positions.")]
         private HiveView[] _hives = new HiveView[0];
 
@@ -120,6 +135,10 @@ namespace DigitalStory.View
         private Transform _piperTransform;
         private Transform _colossusTransform;
         private Vector3 _lastAimPoint;
+        private Color _castColor;
+        private Vector3 _attackSpot;
+        private float _meteorSeconds;
+        private bool _isAttackSpotSet;
         private int _holeMask;
         private bool _isFollowingColossus;
         private bool _isRestarting;
@@ -184,6 +203,10 @@ namespace DigitalStory.View
             _swarmView.Initialize(_swarm, _trail);
             _swarmView.SetFormRadii(_domeRadius, _tornadoRadius);
             _swarmView.SetMeteorRadius(_meteorRadius);
+            _glowLight.Initialize(_swarm);
+            _attackGlowLight.Initialize(_swarm);
+            _castColor = _swarm.RiverColor;
+            Session.Caster.SongCast += HandleSongCast;
             for (int index = 0; index < _hives.Length; index++)
             {
                 _hives[index].Initialize(Session.Hives[index], _camera);
@@ -245,6 +268,11 @@ namespace DigitalStory.View
             {
                 _input.HolePressed -= PressHole;
             }
+
+            if (Session != null)
+            {
+                Session.Caster.SongCast -= HandleSongCast;
+            }
         }
 
         private void Update()
@@ -290,7 +318,116 @@ namespace DigitalStory.View
             Session.Tick(in frame, dt);
 
             FeedSwarm(piper);
+            FeedGlow(piper, dt);
             FeedCamera();
+        }
+
+        // Every form but the River takes the colour of the category of the song that made it.
+        private void HandleSongCast(int song)
+        {
+            _castColor = _swarm.ColorOf(Session.Caster[song].Category);
+            _swarmView.SetCastColor(_castColor);
+        }
+
+        // One light stands in for the glow of the wasps that stay with the Piper, and a second one for the wasps that attack
+        // in a sting or a meteor, the share the form sends. The first hangs over the middle of the river or the ring (or
+        // the giant), in the river's colour, as strong as the swarm is full and the share that stays. The second travels
+        // with the stingers, or hangs over the meteor ball until the dive starts, in the attack colour. Both sit a little
+        // toward the camera, so the sides it sees are lit.
+        private void FeedGlow(Vector3 piper, float deltaTime)
+        {
+            SwarmFormMachine forms = Session.Forms;
+            SwarmForm form = forms.Current;
+            Vector3 middle = RiverMiddle(piper);
+            Color color = _swarm.RiverColor;
+            float attackShare = 0f;
+            Vector3 attackAt = piper;
+
+            if (form == SwarmForm.Sting && forms.StingTarget != null)
+            {
+                attackShare = forms.StingFraction;
+                attackAt = forms.StingTarget.Position;
+            }
+            else if (form == SwarmForm.Meteor)
+            {
+                attackShare = forms.MeteorFraction;
+                _meteorSeconds += deltaTime;
+                attackAt = MeteorBallPosition(piper, forms);
+            }
+            else if (form == SwarmForm.Colossus)
+            {
+                middle = _colossusTransform.position;
+                color = _castColor;
+            }
+            else if (form != SwarmForm.River && form != SwarmForm.Collapsed)
+            {
+                middle = piper;
+                color = _castColor;
+            }
+
+            if (form != SwarmForm.Meteor)
+            {
+                _meteorSeconds = 0f;
+            }
+
+            Vector3 towardCamera = -_camera.transform.forward;
+            towardCamera.y = 0f;
+            if (towardCamera.sqrMagnitude > 0f)
+            {
+                towardCamera.Normalize();
+            }
+
+            SwarmBody swarm = Session.Swarm;
+            float strength = swarm.Max > 0 ? (float)swarm.Count / swarm.Max : 0f;
+            Vector3 lift = (Vector3.up * _swarm.LightHeight) + (towardCamera * _swarm.LightTowardCamera);
+            _glowLight.Show(middle + lift, color, strength * (1f - attackShare));
+
+            // The attacking light eases to a sting's target slower than the light's own follow, so it arrives with the
+            // stingers. The meteor's path is known, so its light rides the ball and lands with the impact.
+            if (!_isAttackSpotSet || attackShare <= 0f || form == SwarmForm.Meteor)
+            {
+                _attackSpot = attackAt;
+                _isAttackSpotSet = true;
+            }
+            else
+            {
+                _attackSpot = Vector3.Lerp(_attackSpot, attackAt, 1f - Mathf.Exp(-AttackLightFollowPerSecond * deltaTime));
+            }
+
+            _attackGlowLight.Show(_attackSpot + lift, _castColor, strength * attackShare);
+        }
+
+        // Where the meteor's ball is: over the Piper while it climbs and hangs, then along the line down to the impact
+        // point during the dive, as WaspSwarm.compute flies it (MeteorBallPoint and MeteorDiveTarget).
+        private Vector3 MeteorBallPosition(Vector3 piper, SwarmFormMachine forms)
+        {
+            Vector3 top = piper + (Vector3.up * forms.MeteorHeight);
+            float diveSeconds = _meteorSeconds - forms.MeteorRiseSeconds;
+            if (diveSeconds <= 0f)
+            {
+                return top;
+            }
+
+            float dive = forms.MeteorDiveSeconds > 0f ? Mathf.Clamp01(diveSeconds / forms.MeteorDiveSeconds) : 1f;
+            return Vector3.Lerp(top, forms.MeteorTarget, dive);
+        }
+
+        // About a third of the way along the river behind the Piper, or the Piper while the river curls into the ring around
+        // them. It follows the swarm's own blend in WaspSwarm.compute (RiverTarget): a short path, or standing, makes the ring.
+        private Vector3 RiverMiddle(Vector3 piper)
+        {
+            float length = _trail.Length;
+            if (!(length > 0f))
+            {
+                return piper;
+            }
+
+            float back = Mathf.Min(_swarm.RiverLengthMeters, length) * RiverLightShare;
+            Vector3 river = _trail.PointAt(back / length);
+            river.y = piper.y;
+            float trailShare = Mathf.Clamp01(length / Mathf.Max(_swarm.StandingTrailMeters, MinimumTrailMeters));
+            float riverShare = trailShare * (1f - _swarmView.StandingShare);
+            return Vector3.Lerp(piper, river, riverShare);
         }
 
         private void FeedSwarm(Vector3 piper)
@@ -372,6 +509,8 @@ namespace DigitalStory.View
             Require(_followCamera, nameof(_followCamera));
             Require(_camera, nameof(_camera));
             Require(_swarmView, nameof(_swarmView));
+            Require(_glowLight, nameof(_glowLight));
+            Require(_attackGlowLight, nameof(_attackGlowLight));
             Require(_beekeeperPool, nameof(_beekeeperPool));
             Require(_stickPrefab, nameof(_stickPrefab));
             Require(_smokerPrefab, nameof(_smokerPrefab));

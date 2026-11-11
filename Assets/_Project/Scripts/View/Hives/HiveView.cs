@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace DigitalStory.View
 {
-    /// <summary>Shows one hive in the world: a health bar above it, a pulsing red ring on the ground while it is attacked, and a wrecked look once it falls.</summary>
+    /// <summary>Shows one hive in the world: a health bar above it, a pulsing orange ring on the ground while it is attacked, and a wrecked look once it falls.</summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("DigitalStory/Hive View")]
     public sealed class HiveView : MonoBehaviour
@@ -45,7 +45,7 @@ namespace DigitalStory.View
         private Color _barEmptyColor = new Color(0.9f, 0.15f, 0.1f, 1f);
 
         [Header("Attack ring")]
-        [SerializeField, Min(0.1f), Tooltip("Radius of the red ring on the ground, in metres.")]
+        [SerializeField, Min(0.1f), Tooltip("Radius of the orange ring on the ground, in metres.")]
         private float _ringRadius = 3.5f;
 
         [SerializeField, Range(0.05f, 0.95f), Tooltip("Inner edge of the ring as a share of its radius.")]
@@ -55,7 +55,7 @@ namespace DigitalStory.View
         private float _pulseSpeed = 8f;
 
         [SerializeField, Tooltip("The ring colour. Its alpha is the brightest the pulse reaches.")]
-        private Color _ringColor = new Color(0.95f, 0.1f, 0.05f, 0.8f);
+        private Color _ringColor = new Color(1f, 0.55f, 0.1f, 0.8f);
 
         [SerializeField, Range(0f, 1f), Tooltip("The faintest the pulse gets, as a share of the ring's alpha.")]
         private float _ringMinAlpha = 0.25f;

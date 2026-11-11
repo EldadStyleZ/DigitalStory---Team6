@@ -17,6 +17,9 @@ MonoBehaviour:
     _description: A column of wasps throws beekeepers back
     _cooldownSeconds: 10
     _keys: 05000000040000000300000005000000i
+  _category: 0
+  _knownFromStart: 0
+  _revealedWhenFuryFills: 0
   <Seconds>k__BackingField: 1.5
   <Radius>k__BackingField: 5
   <Damage>k__BackingField: 30

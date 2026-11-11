@@ -17,5 +17,8 @@ MonoBehaviour:
     _description: A ring of wasps clears the smoke
     _cooldownSeconds: 6
     _keys: 010000000100000002000000i
+  _category: 1
+  _knownFromStart: 0
+  _revealedWhenFuryFills: 0
   <Seconds>k__BackingField: 0.8
   <ClearRadius>k__BackingField: 6

@@ -27,8 +27,13 @@
         </ui:VisualElement>
         <ui:VisualElement name="hives" class="hives" picking-mode="Ignore" />
         <ui:VisualElement name="bottom" class="bottom" picking-mode="Ignore">
+            <ui:Label name="message-line" text="" class="line message-line" picking-mode="Ignore" />
+            <ui:Label name="prompt-line" text="" class="line prompt-line" picking-mode="Ignore" />
             <ui:VisualElement name="notes" class="notes" picking-mode="Ignore" />
-            <ui:VisualElement name="songs" class="songs" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="songbook" class="songbook" picking-mode="Ignore">
+            <ui:Label name="songbook-title" text="Songs 0/0" class="songbook-title" picking-mode="Ignore" />
+            <ui:VisualElement name="songbook-chips" class="songbook-chips" picking-mode="Ignore" />
         </ui:VisualElement>
         <ui:VisualElement name="offscreen-layer" class="offscreen-layer" picking-mode="Ignore" />
         <ui:VisualElement name="end-screen" class="end-screen" picking-mode="Ignore">

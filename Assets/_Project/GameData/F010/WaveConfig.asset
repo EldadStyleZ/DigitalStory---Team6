@@ -23,6 +23,6 @@ MonoBehaviour:
     _smokers: 4
   - _sticks: 8
     _smokers: 5
-  <FirstWaveDelaySeconds>k__BackingField: 8
+  <FirstWaveDelaySeconds>k__BackingField: 20
   <BreakSeconds>k__BackingField: 15
   <SpawnIntervalSeconds>k__BackingField: 1.2
