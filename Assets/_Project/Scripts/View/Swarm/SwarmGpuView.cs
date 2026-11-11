@@ -86,6 +86,7 @@ namespace DigitalStory.View
         private static readonly int DyingSecondsId = Shader.PropertyToID("_DyingSeconds");
         private static readonly int DomeRadiusId = Shader.PropertyToID("_DomeRadius");
         private static readonly int TornadoRadiusId = Shader.PropertyToID("_TornadoRadius");
+        private static readonly int MeteorRadiusId = Shader.PropertyToID("_MeteorRadius");
         private static readonly int WaspLengthId = Shader.PropertyToID("_WaspLength");
         private static readonly int BuzzAmplitudeId = Shader.PropertyToID("_BuzzAmplitude");
         private static readonly int BuzzFrequencyId = Shader.PropertyToID("_BuzzFrequency");
@@ -141,6 +142,7 @@ namespace DigitalStory.View
         private float _meteorHeight;
         private float _domeRadius;
         private float _tornadoRadius;
+        private float _meteorRadius;
         private int _boneCount;
         private bool _hasColossusSamples;
 
@@ -392,6 +394,9 @@ namespace DigitalStory.View
             _tornadoRadius = Mathf.Max(0f, tornadoRadius);
         }
 
+        /// <summary>The meteor's reach from MeteorSong.Radius, so the ring the wasps burst out to after the impact matches the rule. 0 keeps the shader's default.</summary>
+        public void SetMeteorRadius(float radius) => _meteorRadius = Mathf.Max(0f, radius);
+
         private static WaspStatic[] BuildLayout(int count)
         {
             var random = new System.Random(LayoutSeed);
@@ -603,6 +608,7 @@ namespace DigitalStory.View
             compute.SetFloat(MeteorHeightId, _meteorHeight);
             compute.SetFloat(DomeRadiusId, _domeRadius);
             compute.SetFloat(TornadoRadiusId, _tornadoRadius);
+            compute.SetFloat(MeteorRadiusId, _meteorRadius);
         }
 
         // Pushed every frame, so values tuned on the config asset in Play Mode show at once.

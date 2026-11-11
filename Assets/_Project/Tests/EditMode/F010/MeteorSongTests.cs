@@ -319,6 +319,128 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(0f, 0f, -18f)));
         }
 
+        // Following the aimed beekeeper
+
+        [Test]
+        public void Follow_ATargetThatWalksThreePointFourMetresDuringTheClimb_IsHit()
+        {
+            FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
+
+            _forms.Tick(0.4f, 2);
+            walker.Position = new Vector3(7f, 0f, 0f);
+            _forms.Tick(0.39f, 2);
+            walker.Position = new Vector3(8.4f, 0f, 0f);
+            _forms.Tick(0.02f, 2);
+            _forms.Tick(0.51f, 2);
+
+            Assert.That(walker.DamageTaken, Is.EqualTo(60f));
+            Assert.That(_landings, Is.EqualTo(new[] { new Vector3(8.4f, 0f, 0f) }));
+        }
+
+        [Test]
+        public void Follow_MeteorTarget_ReportsTheFollowedPointEachTickDuringTheClimb()
+        {
+            FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
+
+            walker.Position = new Vector3(6f, 0f, 1f);
+            _forms.Tick(0.2f, 2);
+            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(6f, 0f, 1f)));
+
+            walker.Position = new Vector3(7f, 0f, 2f);
+            _forms.Tick(0.2f, 2);
+            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(7f, 0f, 2f)));
+        }
+
+        [Test]
+        public void Follow_AfterTheDiveStarts_ThePointDoesNotMove()
+        {
+            FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
+            _forms.Tick(0.81f, 2);
+
+            walker.Position = new Vector3(12f, 0f, 0f);
+            _forms.Tick(0.2f, 2);
+
+            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(5f, 0f, 0f)));
+
+            _forms.Tick(0.31f, 2);
+
+            Assert.That(walker.DamageTaken, Is.EqualTo(0f), "it left the 3 m radius during the dive");
+            Assert.That(_landings, Is.EqualTo(new[] { new Vector3(5f, 0f, 0f) }), "the landing reports the locked point");
+        }
+
+        [Test]
+        public void Follow_ATargetThatStaysInTheRadiusDuringTheDive_IsStillHit()
+        {
+            FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
+            _forms.Tick(0.81f, 2);
+
+            walker.Position = new Vector3(7.5f, 0f, 0f);
+            _forms.Tick(0.51f, 2);
+
+            Assert.That(walker.DamageTaken, Is.EqualTo(60f));
+        }
+
+        [Test]
+        public void Follow_ATargetThatDiesDuringTheClimb_LocksTheImpactWhereItWasLastSeen()
+        {
+            FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
+            var bystander = new FakeSwarmTarget { Position = new Vector3(7f, 0f, 1f) };
+            _enemies.Add(bystander);
+            walker.Position = new Vector3(7f, 0f, 0f);
+            _forms.Tick(0.5f, 2);
+
+            walker.IsAlive = false;
+            walker.Position = new Vector3(9f, 0f, 0f);
+            _forms.Tick(0.2f, 2);
+            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(7f, 0f, 0f)));
+
+            _forms.Tick(0.62f, 2);
+
+            Assert.That(_landings, Is.EqualTo(new[] { new Vector3(7f, 0f, 0f) }));
+            Assert.That(bystander.DamageTaken, Is.EqualTo(60f));
+            Assert.That(walker.DamageTaken, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Follow_AimedBeekeeperWalkingBeyondMaxRange_StaysPulledInToEighteenMetres()
+        {
+            FakeSwarmTarget walker = AimAtWalker(new Vector3(10f, 0f, 0f));
+
+            walker.Position = new Vector3(30f, 0f, 0f);
+            _forms.Tick(0.3f, 2);
+
+            Assert.That(_forms.MeteorTarget.x, Is.EqualTo(18f).Within(1e-3f));
+            Assert.That(_forms.MeteorTarget.z, Is.EqualTo(0f).Within(1e-3f));
+        }
+
+        [Test]
+        public void Follow_WithNoBeekeeperAimedAt_ThePointStaysWhereItWasCast()
+        {
+            var walker = new FakeSwarmTarget { Position = new Vector3(5f, 0f, 0f) };
+            _enemies.Add(walker);
+            _aimPoint = new Vector3(5f, 0f, 0f);
+            Cast();
+
+            walker.Position = new Vector3(8.4f, 0f, 0f);
+            _forms.Tick(0.5f, 2);
+
+            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(5f, 0f, 0f)));
+
+            _forms.Tick(0.82f, 2);
+
+            Assert.That(walker.DamageTaken, Is.EqualTo(0f));
+            Assert.That(_landings, Is.EqualTo(new[] { new Vector3(5f, 0f, 0f) }));
+        }
+
+        private FakeSwarmTarget AimAtWalker(Vector3 position)
+        {
+            var walker = new FakeSwarmTarget { Position = position };
+            _enemies.Add(walker);
+            _aim = walker;
+            Cast();
+            return walker;
+        }
+
         // Cooldown, collapse and blocking
 
         [Test]

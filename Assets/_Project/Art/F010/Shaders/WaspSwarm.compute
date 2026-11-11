@@ -82,6 +82,7 @@ float _DyingSeconds;
 // From the song assets, or 0 to use the defaults below.
 float _DomeRadius;
 float _TornadoRadius;
+float _MeteorRadius;                      // the reach of the impact, MeteorSong.Radius: the burst's ring
 
 static const float FullTurn = 6.28318530718;
 static const float HalfTurn = 3.14159265359;
@@ -154,7 +155,7 @@ static const float MeteorDiveEase = 0.5;         // the dive's starting speed as
 static const float MeteorLandingScatter = 0.8;   // metres from the impact point a wasp lands, at most
 static const float MeteorFloorHeight = 0.15;     // metres above the impact point a landed wasp skims
 static const float MeteorSkidKeep = 0.35;        // share of its ground speed a wasp keeps when it hits the floor
-static const float MeteorRingRadius = 3.0;       // the burst's ring, MeteorSong.Radius by default
+static const float DefaultMeteorRadius = 3.0;    // the burst's ring when _MeteorRadius is 0, MeteorSong.Radius's default
 static const float MeteorRingInner = 0.7;        // the ring's inner edge, as a share of its radius
 static const float MeteorRingHeight = 0.4;
 static const float MeteorBurstSeconds = 0.35;    // seconds a wasp flies out to the ring before it heads back to the river
@@ -493,7 +494,8 @@ float3 MeteorLandingPoint(WaspStatic wasp)
 }
 
 // A steep line from the ball to the wasp's landing point, faster as it falls. The divers set off one after another,
-// so the ball stretches into streaks.
+// so the ball stretches into streaks. The line is worked out each frame from _Meteor as it is now, never from where it
+// was at the cast, so a target that moves during the climb is where the dive goes.
 float3 MeteorDiveTarget(WaspStatic wasp, float formSeconds)
 {
     float diveSeconds = max(_MeteorDiveSeconds, Tiny);
@@ -507,9 +509,11 @@ float3 MeteorDiveTarget(WaspStatic wasp, float formSeconds)
 }
 
 // After it lands, each wasp bursts straight out from its landing point to a ring around the impact, low over the ground.
+// The ring's outer edge is the song's reach, so the burst shows which beekeepers the impact hit.
 float3 MeteorBurstTarget(WaspStatic wasp)
 {
-    float reach = lerp(MeteorRingInner, 1.0, wasp.ringRadius) * MeteorRingRadius;
+    float radius = _MeteorRadius > 0.0 ? _MeteorRadius : DefaultMeteorRadius;
+    float reach = lerp(MeteorRingInner, 1.0, wasp.ringRadius) * radius;
     return _Meteor.xyz + RingOffset(wasp.phase01 * FullTurn, reach) + Up * MeteorRingHeight;
 }
 

@@ -46,8 +46,14 @@ namespace DigitalStory.Logic
                 return;
             }
 
+            bool hasTarget = context.AimTarget != null && context.AimTarget.IsAlive;
+            Vector3 point = hasTarget ? context.AimTarget.Position : context.AimPoint;
+
             context.Forms.StartMeteor(
-                ImpactPoint(in context),
+                SwarmFormMachine.PullIn(point, context.PiperPosition, MaxRange),
+                hasTarget ? context.AimTarget : null,
+                context.PiperPosition,
+                MaxRange,
                 Fraction,
                 RiseSeconds,
                 DiveSeconds,
@@ -57,25 +63,6 @@ namespace DigitalStory.Logic
                 Radius,
                 Damage,
                 StunSeconds);
-        }
-
-        // The aimed beekeeper, else the aim point, pulled in to MaxRange from the Piper along the ground.
-        private Vector3 ImpactPoint(in SwarmSongContext context)
-        {
-            bool hasTarget = context.AimTarget != null && context.AimTarget.IsAlive;
-            Vector3 point = hasTarget ? context.AimTarget.Position : context.AimPoint;
-            Vector3 piper = context.PiperPosition;
-            float dx = point.x - piper.x;
-            float dz = point.z - piper.z;
-            float distanceSquared = dx * dx + dz * dz;
-
-            if (distanceSquared <= MaxRange * MaxRange)
-            {
-                return point;
-            }
-
-            float scale = MaxRange / Mathf.Sqrt(distanceSquared);
-            return new Vector3(piper.x + dx * scale, point.y, piper.z + dz * scale);
         }
     }
 }

@@ -34,6 +34,9 @@ namespace DigitalStory.Logic
         private float _meteorStunSeconds;
         private IReadOnlyList<ISwarmTarget> _meteorEnemies;
         private bool _meteorHasLanded;
+        private ISwarmTarget _meteorFollow;
+        private Vector3 _meteorPiper;
+        private float _meteorMaxRange;
 
         public SwarmFormMachine(SwarmBody body, FuryMeter fury)
         {
@@ -158,6 +161,31 @@ namespace DigitalStory.Logic
             float damage,
             float stunSeconds)
         {
+            return StartMeteor(
+                target, null, Vector3.zero, 0f, fraction, riseSeconds, diveSeconds, afterSeconds, height, enemies, radius, damage, stunSeconds);
+        }
+
+        /// <summary>
+        /// Starts the meteor like the overload without a follow target, but the impact point keeps following follow
+        /// (pulled in to maxRange metres from piperPosition along the ground) while the wasps climb. It locks where
+        /// follow stands when the dive starts, or where it was last seen alive if it dies during the climb.
+        /// A null follow fixes the point at target, as the other overload does.
+        /// </summary>
+        public bool StartMeteor(
+            Vector3 target,
+            ISwarmTarget follow,
+            Vector3 piperPosition,
+            float maxRange,
+            float fraction,
+            float riseSeconds,
+            float diveSeconds,
+            float afterSeconds,
+            float height,
+            IReadOnlyList<ISwarmTarget> enemies,
+            float radius,
+            float damage,
+            float stunSeconds)
+        {
             RequireSeconds(riseSeconds);
             RequireSeconds(diveSeconds);
             RequireSeconds(afterSeconds);
@@ -165,6 +193,11 @@ namespace DigitalStory.Logic
             if (fraction < 0f || fraction > 1f)
             {
                 throw new ArgumentOutOfRangeException(nameof(fraction), fraction, "The fraction must be from 0 to 1.");
+            }
+
+            if (maxRange < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxRange), maxRange, "The range cannot be negative.");
             }
 
             if (height < 0f || radius < 0f || damage < 0f || stunSeconds < 0f)
@@ -192,6 +225,9 @@ namespace DigitalStory.Logic
             _meteorStunSeconds = stunSeconds;
             _meteorEnemies = enemies;
             _meteorHasLanded = false;
+            _meteorFollow = follow;
+            _meteorPiper = piperPosition;
+            _meteorMaxRange = maxRange;
             return true;
         }
 
@@ -310,6 +346,8 @@ namespace DigitalStory.Logic
 
         private void TickMeteor()
         {
+            FollowMeteorTarget();
+
             if (!_meteorHasLanded && _secondsInForm >= _meteorRiseSeconds + _meteorDiveSeconds)
             {
                 Land();
@@ -319,6 +357,41 @@ namespace DigitalStory.Logic
             {
                 SetForm(SwarmForm.River);
             }
+        }
+
+        // The point trails the target while the wasps climb, and locks when the dive starts or the target dies.
+        private void FollowMeteorTarget()
+        {
+            if (_meteorFollow == null)
+            {
+                return;
+            }
+
+            if (_meteorFollow.IsAlive)
+            {
+                _meteorTarget = PullIn(_meteorFollow.Position, _meteorPiper, _meteorMaxRange);
+            }
+
+            if (!_meteorFollow.IsAlive || _secondsInForm >= _meteorRiseSeconds)
+            {
+                _meteorFollow = null;
+            }
+        }
+
+        /// <summary>The point, or its ground-plane pull-in to maxRange metres from the piper when it is further.</summary>
+        public static Vector3 PullIn(Vector3 point, Vector3 piper, float maxRange)
+        {
+            float dx = point.x - piper.x;
+            float dz = point.z - piper.z;
+            float distanceSquared = dx * dx + dz * dz;
+
+            if (distanceSquared <= maxRange * maxRange)
+            {
+                return point;
+            }
+
+            float scale = maxRange / Mathf.Sqrt(distanceSquared);
+            return new Vector3(piper.x + dx * scale, point.y, piper.z + dz * scale);
         }
 
         private void Land()
@@ -397,6 +470,9 @@ namespace DigitalStory.Logic
                 _meteorDiveSeconds = 0f;
                 _meteorHeight = 0f;
                 _meteorEnemies = null;
+                _meteorFollow = null;
+                _meteorPiper = Vector3.zero;
+                _meteorMaxRange = 0f;
                 _meteorHasLanded = false;
             }
 
