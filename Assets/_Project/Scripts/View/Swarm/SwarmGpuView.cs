@@ -874,7 +874,7 @@ namespace DigitalStory.View
             compute.SetFloat(MeanderAmplitudeId, _config.MeanderAmplitude);
             compute.SetFloat(StandingTrailMetersId, _config.StandingTrailMeters);
             compute.SetFloat(TorusRadiusId, _config.TorusRadius);
-            compute.SetFloat(CoreRingShareId, _config.CoreRingShare);
+            compute.SetFloat(CoreRingShareId, _config.CoreRingShareFor(_activeCount));
             compute.SetFloat(CoreRingRadiusId, _config.CoreRingRadius);
             compute.SetFloat(CoreRingGlowId, _config.CoreRingGlow);
             compute.SetFloat(CoreClearRadiusId, _config.CoreClearRadius);

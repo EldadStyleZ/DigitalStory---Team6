@@ -93,6 +93,24 @@ namespace DigitalStory.Data
         [field: SerializeField, Range(0f, 0.3f), Tooltip("Share of the wasps that circle the core in a tight inner ring, so the centre of the swarm, which is the player, reads from the camera. 0 hides the inner ring.")]
         public float CoreRingShare { get; private set; } = 0.05f;
 
+        [field: SerializeField, Min(0), Tooltip("The fewest wasps the inner ring keeps, however small the swarm is. A share alone leaves a young swarm of 800 with a ring too thin to see.")]
+        public int CoreRingLeastWasps { get; private set; } = 100;
+
+        [field: SerializeField, Range(0f, 0.5f), Tooltip("The largest share of the wasps the inner ring may take to reach its fewest wasps, so a swarm near collapse still has a river.")]
+        public float CoreRingMostShare { get; private set; } = 0.25f;
+
+        /// <summary>The share of the living wasps that circle the core, for a swarm of this many.</summary>
+        public float CoreRingShareFor(int livingWasps)
+        {
+            if (CoreRingShare <= 0f || livingWasps <= 0)
+            {
+                return 0f;
+            }
+
+            float shareForLeast = (float)CoreRingLeastWasps / livingWasps;
+            return Mathf.Min(Mathf.Max(CoreRingShare, shareForLeast), Mathf.Max(CoreRingShare, CoreRingMostShare));
+        }
+
         [field: SerializeField, Min(0f), Tooltip("Radius of the inner ring around the core, in metres. Keep it below TorusRadius minus RiverRadius, so the two rings stay apart.")]
         public float CoreRingRadius { get; private set; } = 0.6f;
 
@@ -162,6 +180,9 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Min(0f), Tooltip("Brightness of the swarm's light at full strength.")]
         public float LightIntensity { get; private set; } = 5.5f;
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("How strong the swarm's light is for the smallest swarm, as a share of its full strength. It rises to full as the swarm grows to MaxWasps.")]
+        public float LightLeastStrength { get; private set; } = 0.3f;
 
         [field: SerializeField, Min(0f), Tooltip("Metres above the ground the swarm's light hangs. Lower lights a smaller, brighter pool.")]
         public float LightHeight { get; private set; } = 3f;

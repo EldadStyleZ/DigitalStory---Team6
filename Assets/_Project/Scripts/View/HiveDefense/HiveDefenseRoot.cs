@@ -473,7 +473,10 @@ namespace DigitalStory.View
             // Full is the capacity, which grows with each nest, so a full swarm of 800 at the start glows as bright as a
             // full one later, and a hurt swarm dims.
             SwarmBody swarm = Session.Swarm;
-            float strength = swarm.Capacity > 0 ? (float)swarm.Count / swarm.Capacity : 0f;
+            // The light grows with the swarm itself, not with how full it is: a young swarm of 800 glows gently,
+            // and a full-grown one lights the ground around it.
+            float grown = swarm.Max > 0 ? (float)swarm.Count / swarm.Max : 0f;
+            float strength = swarm.Count > 0 ? Mathf.Lerp(_swarm.LightLeastStrength, 1f, grown) : 0f;
             Vector3 lift = (Vector3.up * _swarm.LightHeight) + (towardCamera * _swarm.LightTowardCamera);
             _glowLight.Show(middle + lift, color, strength * (1f - attackShare));
 
