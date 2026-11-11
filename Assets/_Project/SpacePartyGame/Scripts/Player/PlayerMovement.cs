@@ -27,6 +27,20 @@ namespace SpacePartyGame
         private Rigidbody2D _rigidbody;
         private InputAction _move;
         private int _facing = 1;
+        private float _topSpeed = -1f;
+
+        /// <summary>The normal walking top speed, set in the Inspector.</summary>
+        public float WalkSpeed => _moveSpeed;
+
+        /// <summary>The top speed now: walking, unless an ability such as the run has raised it.</summary>
+        public float TopSpeed
+        {
+            get => _topSpeed < 0f ? _moveSpeed : _topSpeed;
+            set => _topSpeed = Mathf.Max(0f, value);
+        }
+
+        /// <summary>How the player is moving now, in units per second.</summary>
+        public Vector2 Velocity => _rigidbody.linearVelocity;
 
         /// <summary>Raised when the player turns, with the new facing.</summary>
         public event Action<int> FacingChanged;
@@ -55,7 +69,9 @@ namespace SpacePartyGame
         private void FixedUpdate()
         {
             Vector2 input = _move.ReadValue<Vector2>();
-            _rigidbody.linearVelocity = PlayerMotion.VelocityFor(input, _moveSpeed);
+            // The top speed replaces the walking speed, so the run can raise it.
+            // _rigidbody.linearVelocity = PlayerMotion.VelocityFor(input, _moveSpeed);
+            _rigidbody.linearVelocity = PlayerMotion.VelocityFor(input, TopSpeed);
 
             int facing = FacingRule.Next(_facing, input.x);
 

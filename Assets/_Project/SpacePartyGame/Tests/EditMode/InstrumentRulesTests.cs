@@ -89,9 +89,11 @@ namespace SpacePartyGame.Tests
 
     public sealed class InstrumentKeysTests
     {
+        // LT and Left are swapped from the flute's order, so running (LT, RT, LT, RT) trills G and B, a sweet
+        // major third, instead of the hollow fifth E and B.
         [TestCase(Note.Root, 1)]
-        [TestCase(Note.LT, 2)]
-        [TestCase(Note.Left, 3)]
+        [TestCase(Note.Left, 2)]
+        [TestCase(Note.LT, 3)]
         [TestCase(Note.Right, 4)]
         [TestCase(Note.RT, 5)]
         [TestCase(Note.Up, 6)]
@@ -104,6 +106,108 @@ namespace SpacePartyGame.Tests
         public void KeyOf_Nothing_IsSilent()
         {
             Assert.That(InstrumentKeys.KeyOf(null), Is.EqualTo(0));
+        }
+    }
+
+    public sealed class RunRhythmTests
+    {
+        // Walk 4, run 7, +0.4 per alternation, alternations within 0.35 s, easing back at 3 per second.
+        private static RunRhythm Make() => new RunRhythm(4f, 7f, 0.4f, 0.35f, 3f);
+
+        [Test]
+        public void New_IsWalkingSpeed()
+        {
+            Assert.That(Make().Speed, Is.EqualTo(4f));
+            Assert.That(Make().Boost, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Alternating_Quickly_AddsSpeedEachSwitch()
+        {
+            RunRhythm run = Make();
+
+            run.Press(Note.LT, 0f);
+            run.Press(Note.RT, 0.2f);
+            run.Press(Note.LT, 0.4f);
+
+            Assert.That(run.Speed, Is.EqualTo(4.8f).Within(1e-4f));
+        }
+
+        [Test]
+        public void TheSameTriggerTwice_AddsNothing()
+        {
+            RunRhythm run = Make();
+
+            run.Press(Note.LT, 0f);
+            run.Press(Note.LT, 0.2f);
+
+            Assert.That(run.Speed, Is.EqualTo(4f));
+        }
+
+        [Test]
+        public void ASlowSwitch_AddsNothing()
+        {
+            RunRhythm run = Make();
+
+            run.Press(Note.LT, 0f);
+            run.Press(Note.RT, 0.5f);
+
+            Assert.That(run.Speed, Is.EqualTo(4f));
+        }
+
+        [Test]
+        public void OtherNotes_AreIgnored()
+        {
+            RunRhythm run = Make();
+
+            run.Press(Note.LT, 0f);
+            run.Press(Note.Root, 0.1f);
+            run.Press(Note.RT, 0.2f);
+
+            Assert.That(run.Speed, Is.EqualTo(4.4f).Within(1e-4f));
+        }
+
+        [Test]
+        public void ManySwitches_StopAtTheRunSpeed()
+        {
+            RunRhythm run = Make();
+
+            for (int i = 0; i < 20; i++)
+            {
+                run.Press(i % 2 == 0 ? Note.LT : Note.RT, i * 0.2f);
+            }
+
+            Assert.That(run.Speed, Is.EqualTo(7f));
+            Assert.That(run.Boost, Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void WhileStillAlternating_ItDoesNotEaseBack()
+        {
+            RunRhythm run = Make();
+            run.Press(Note.LT, 0f);
+            run.Press(Note.RT, 0.2f);
+
+            run.Tick(0.3f, 0.1f);
+
+            Assert.That(run.Speed, Is.EqualTo(4.4f).Within(1e-4f));
+        }
+
+        [Test]
+        public void AfterStopping_ItEasesBackToWalking()
+        {
+            RunRhythm run = Make();
+
+            for (int i = 0; i < 20; i++)
+            {
+                run.Press(i % 2 == 0 ? Note.LT : Note.RT, i * 0.2f);
+            }
+
+            run.Tick(4.5f, 0.5f);
+            Assert.That(run.Speed, Is.EqualTo(5.5f).Within(1e-4f));
+
+            run.Tick(6f, 2f);
+            Assert.That(run.Speed, Is.EqualTo(4f));
         }
     }
 
