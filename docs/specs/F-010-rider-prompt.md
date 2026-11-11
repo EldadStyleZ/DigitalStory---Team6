@@ -2,9 +2,7 @@
 
 ## A. Before you paste it (you, about 15 minutes)
 
-**1. Ask Raz** to push his Piper, the one with 4 animation states, to `raz-art-test1`. If he can't right now, the prompt falls back to `Beekeeper_LowPoly`, which holds the same 4 clips.
-
-**2. Quit Unity.** Then, in the folder of your existing clone, run:
+**1. Quit Unity.** Then, in the folder of your existing clone, run:
 
 ```bash
 git fetch origin
@@ -13,7 +11,7 @@ cd ../DigitalStory---Team6-eldad-lab-2
 git status    # must say: On branch eldad-lab-2
 ```
 
-**3. Set up Unity MCP in the new folder** (`AGENTS.md`, Unity MCP section):
+**2. Set up Unity MCP in the new folder** (`AGENTS.md`, Unity MCP section):
 
 ```bash
 npx unity-mcp-cli@1.5.0 setup-mcp claude-code . --transport stdio --no-pin
@@ -24,9 +22,9 @@ Then create `UserSettings/AI-Game-Developer-Config.json` with the port from the 
 - Run only one Unity with MCP at a time, because they share the port.
 - Keep Error Pause off.
 
-**4. Open the new folder in Unity Hub** and let the first import finish. It is slow, because Raz's models are big.
+**3. Open the new folder in Unity Hub** and let the first import finish. It is slow, because Raz's models are big.
 
-**5. Mixamo** (mixamo.com), for the Colossus:
+**4. Mixamo** (mixamo.com), for the Colossus:
 
 - the **Y Bot** character, as FBX for Unity, with skin;
 - these clips **without skin**, with **In Place** ticked for Walking:
@@ -38,13 +36,13 @@ Then create `UserSettings/AI-Game-Developer-Config.json` with the port from the 
 
 Put all of them in `Assets/_Project/Art/Mixamo/`. If you skip this, the prompt uses a fallback.
 
-**6. Start Claude Code** in Rider's terminal, in the new folder, with Fable as the orchestrator:
+**5. Start Claude Code** in Rider's terminal, in the new folder, with Fable as the orchestrator:
 
 ```bash
 claude --model claude-fable-5-2
 ```
 
-**7. Paste everything in the block below.**
+**6. Paste everything in the block below.**
 
 ## B. The prompt
 
@@ -117,11 +115,11 @@ SUBAGENT BRIEF TEMPLATE (fill in every field)
 === TASK PLAN (dependencies → parallel waves) ===
 M0 (you, no subagents)
 - Check git: on eldad-lab-2, `git pull origin eldad-lab-2`.
-- If origin/raz-art-test1 has commits that are not in this branch, merge it. That brings Raz's Piper.
+- If origin/raz-art-test1 has commits that are not in this branch, merge it.
   Raz's testing.unity is his: never open it to edit it.
-- Find the Piper art, with Unity MCP or by searching for a Piper prefab or model.
-  Fallback: Assets/_Project/Art/prefabs/Beekeeper_LowPoly.prefab, whose FBX has the clips
-  Idle, Run, PlayFluteTwoHands and RunFluteTwoHands (spec §3).
+- The Piper is Assets/_Project/Art/prefabs/Beekeeper_LowPoly.prefab (Raz confirmed it, despite the name).
+  Its FBX has the clips Idle, Run, PlayFluteTwoHands and RunFluteTwoHands (spec §3).
+  Make the Piper AND the beekeepers prefab variants of it: the beekeepers get a different tint and a prop (spec §7).
 - Check whether Assets/_Project/Art/Mixamo/ exists. If not, plan M4 with the fallback in spec §6.
 - Add the F-010 feature-notes block to FEATURES.md on this branch. Use the template in FEATURES.md and link to the spec.
 

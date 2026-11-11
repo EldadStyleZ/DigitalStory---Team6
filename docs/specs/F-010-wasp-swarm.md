@@ -38,9 +38,7 @@ This is the team's Piper idea grown up: rats become wasps, cats become beekeeper
 
 ## 3. The Piper
 
-- **Art:** Raz's Piper, which has 4 animation states: Idle, Run, Play flute, and Run while playing the flute.
-  - If Raz has pushed a Piper prefab, use it.
-  - If not, use `Assets/_Project/Art/prefabs/Beekeeper_LowPoly.prefab`. Its FBX holds exactly these 4 clips: `Idle`, `Run`, `PlayFluteTwoHands` and `RunFluteTwoHands`.
+- **Art:** Raz's Piper is `Assets/_Project/Art/prefabs/Beekeeper_LowPoly.prefab`, despite its name. Raz confirmed it. Its Animator uses `Beekeeper.controller`, whose 4 states (`Idle`, `Run`, `PlayFluteTwoHands` and `RunFluteTwoHands`) come from `Beekeeper_LowPoly.fbx`. Use a **prefab variant** of it for the Piper.
 - **Animator:** make our own Animator Controller by copying the 4 clips into `Assets/_Project/Art/F010/PiperSwarm.controller`.
   - It has a `Speed` float and an `IsPlaying` bool.
   - `IsPlaying` stays true for 0.6 s after any hole press, and during channelled songs.
@@ -144,10 +142,11 @@ There are two `BeekeeperConfig` assets.
 
 One stick beekeeper alone destroys a hive in about a minute, so the player has time to react.
 
-**Model:**
+**Model:** the beekeepers are another **prefab variant** of the same `Beekeeper_LowPoly` model, so they read as the enemy and not as the Piper:
 
-- If Raz's Piper is a separate model, the beekeepers are a variant of `Beekeeper_LowPoly`.
-- If `Beekeeper_LowPoly` *is* the Piper, the beekeepers are a variant of it with a different tint, plus a primitive prop: a stick, or a smoke can for the smoker.
+- a different tint, such as a white beekeeper suit;
+- no flute;
+- a primitive prop on the hand bone: a stick, or a smoke can for the smoker.
 
 The model uses its Run clip while moving and Idle while attacking, with a lean or bob tween for the wind-up and the hit.
 
