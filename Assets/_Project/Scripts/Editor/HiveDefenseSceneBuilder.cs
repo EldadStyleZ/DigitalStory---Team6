@@ -990,15 +990,76 @@ namespace DigitalStory.Editor
 
         private static Animator UseController(GameObject model, AnimatorController controller)
         {
-            Animator animator = model.GetComponentInChildren<Animator>(true);
-            if (animator == null)
+            Transform host = AnimatorHost(model, controller);
+            Animator animator = null;
+            foreach (Animator found in model.GetComponentsInChildren<Animator>(true))
             {
-                animator = model.AddComponent<Animator>();
+                if (found.transform == host)
+                {
+                    animator = found;
+                }
+                else
+                {
+                    // Raz's prefab has its Animator on the mesh object, where the clips' bone paths lead nowhere.
+                    // His prefab is not ours to change, so our prefab switches that one off and uses its own.
+                    found.enabled = false;
+                }
             }
 
+            if (animator == null)
+            {
+                animator = host.gameObject.AddComponent<Animator>();
+            }
+
+            animator.enabled = true;
             animator.runtimeAnimatorController = controller;
             animator.applyRootMotion = false;
             return animator;
+        }
+
+        // A generic clip names each bone by its path from the Animator's object, so the Animator belongs on the
+        // parent of the first object those paths name. A Humanoid clip has no paths and uses the model's own Animator.
+        private static Transform AnimatorHost(GameObject model, AnimatorController controller)
+        {
+            foreach (AnimationClip clip in controller.animationClips)
+            {
+                foreach (EditorCurveBinding binding in AnimationUtility.GetCurveBindings(clip))
+                {
+                    if (string.IsNullOrEmpty(binding.path))
+                    {
+                        continue;
+                    }
+
+                    int slash = binding.path.IndexOf('/');
+                    string first = slash < 0 ? binding.path : binding.path.Substring(0, slash);
+                    foreach (Transform candidate in model.GetComponentsInChildren<Transform>(true))
+                    {
+                        if (candidate.name == first && candidate.parent != null)
+                        {
+                            return candidate.parent;
+                        }
+                    }
+
+                    throw new InvalidOperationException(
+                        $"{model.name} has no object named '{first}', which the clip '{clip.name}' animates.");
+                }
+            }
+
+            Animator existing = model.GetComponentInChildren<Animator>(true);
+            return existing != null ? existing.transform : model.transform;
+        }
+
+        private static Animator EnabledAnimator(GameObject root)
+        {
+            foreach (Animator found in root.GetComponentsInChildren<Animator>(true))
+            {
+                if (found.enabled)
+                {
+                    return found;
+                }
+            }
+
+            throw new InvalidOperationException($"{root.name} has no enabled Animator.");
         }
 
         private static GameObject SavePrefab(GameObject root, string name)
@@ -1268,7 +1329,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_colossusSamples", assets.Samples);
             SetObject(serialized, "_input", input.GetComponent<HiveDefenseInput>());
             SetObject(serialized, "_piperMotor", piper.GetComponent<PiperMotor>());
-            SetObject(serialized, "_piperAnimator", piper.GetComponentInChildren<Animator>(true));
+            SetObject(serialized, "_piperAnimator", EnabledAnimator(piper));
             SetObject(serialized, "_followCamera", camera.GetComponent<FollowCamera>());
             SetObject(serialized, "_camera", cameraComponent);
             SetObject(serialized, "_swarmView", swarmObject.GetComponent<SwarmGpuView>());

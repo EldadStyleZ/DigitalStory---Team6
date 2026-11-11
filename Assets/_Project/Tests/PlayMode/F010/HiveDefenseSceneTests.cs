@@ -22,6 +22,9 @@ namespace DigitalStory.Tests.PlayMode
         private const int MaxFramesForWave = 300000;
         private const float MaxWaveSeconds = 40f;
         private const int FramesBetweenNotes = 1;
+        private const string LegBone = "LeftUpperLeg";
+        private const float WatchSeconds = 0.7f;
+        private const float SmallestSwingDegrees = 10f;
 
         private static readonly int[] DomeHoles = { 0, 1, 0 };
         private static readonly int[] MeteorHoles = { 4, 2, 0 };
@@ -137,6 +140,87 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             Assert.That(_root.Session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator Piper_WhileWalking_MovesItsLegs()
+        {
+            var motor = Object.FindAnyObjectByType<PiperMotor>();
+            Transform leg = FindBone(motor.transform, LegBone);
+            Assert.That(leg, Is.Not.Null, "The Piper's model has no " + LegBone + " bone.");
+
+            float swing = 0f;
+            yield return WatchBone(leg, WatchSeconds, () => motor.Move(Vector3.forward, 1f, false, Time.deltaTime), angle => swing = angle);
+
+            // The Run clip swings the thigh by tens of degrees. Nothing moves when the Animator cannot find the bones.
+            Assert.That(swing, Is.GreaterThan(SmallestSwingDegrees));
+        }
+
+        [UnityTest]
+        public IEnumerator Beekeeper_WhileWalkingToAHive_MovesItsLegs()
+        {
+            Time.timeScale = FastTimeScale;
+
+            int frames = 0;
+            float elapsed = 0f;
+            while (_root.Session.ActiveBeekeeperCount < 1 && elapsed < MaxWaveSeconds && frames < MaxFramesForWave)
+            {
+                elapsed += Time.deltaTime;
+                frames++;
+                yield return null;
+            }
+
+            Time.timeScale = _savedTimeScale;
+            BeekeeperView view = null;
+            foreach (BeekeeperView candidate in Object.FindObjectsByType<BeekeeperView>(FindObjectsSortMode.None))
+            {
+                if (candidate.isActiveAndEnabled && candidate.Brain != null)
+                {
+                    view = candidate;
+                    break;
+                }
+            }
+
+            Assert.That(view, Is.Not.Null, "No beekeeper is shown.");
+            Transform leg = FindBone(view.transform, LegBone);
+            Assert.That(leg, Is.Not.Null, "The beekeeper's model has no " + LegBone + " bone.");
+
+            float swing = 0f;
+            yield return WatchBone(leg, WatchSeconds, null, angle => swing = angle);
+
+            Assert.That(swing, Is.GreaterThan(SmallestSwingDegrees));
+        }
+
+        private static Transform FindBone(Transform root, string boneName)
+        {
+            foreach (Transform candidate in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (candidate.name == boneName)
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        // Reports the widest angle the bone turned away from where it started, over some game seconds.
+        private static IEnumerator WatchBone(Transform bone, float seconds, System.Action eachFrame, System.Action<float> report)
+        {
+            Quaternion start = bone.localRotation;
+            float widest = 0f;
+            float elapsed = 0f;
+            int frames = 0;
+            while (elapsed < seconds && frames < MaxFramesForWave)
+            {
+                eachFrame?.Invoke();
+                yield return null;
+                elapsed += Time.deltaTime;
+                frames++;
+                widest = Mathf.Max(widest, Quaternion.Angle(start, bone.localRotation));
+            }
+
+            report(widest);
         }
     }
 }

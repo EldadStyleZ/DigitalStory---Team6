@@ -45,7 +45,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e66c470cab8645b0bb33446b15a800e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: DigitalStory.View::DigitalStory.View.BeekeeperView
-  _animator: {fileID: 6481491571855109914}
+  _animator: {fileID: 7206998986632668635}
   _pivot: {fileID: 205701389635987776}
   _maxLeanDegrees: 35
   _swingDegrees: 55
@@ -185,9 +185,9 @@ PrefabInstance:
     m_TransformParent: {fileID: 205701389635987776}
     m_Modifications:
     - target: {fileID: 339786513274744767, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
-      propertyPath: m_Controller
-      value: 
-      objectReference: {fileID: 9100000, guid: 6b59d977e530c453c93cb042db6886c2, type: 2}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1095121783781913794, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -290,18 +290,43 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1817660838089827762, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7877062803228436544}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4050351839759824267, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7206998986632668635}
   m_SourcePrefab: {fileID: 100100000, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
 --- !u!4 &4934934538352764183 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1817660838089827762, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
   m_PrefabInstance: {fileID: 6720998153512353957}
   m_PrefabAsset: {fileID: 0}
---- !u!95 &6481491571855109914 stripped
-Animator:
-  m_CorrespondingSourceObject: {fileID: 339786513274744767, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
+--- !u!1 &7309471662516401454 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4050351839759824267, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
   m_PrefabInstance: {fileID: 6720998153512353957}
   m_PrefabAsset: {fileID: 0}
+--- !u!95 &7206998986632668635
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7309471662516401454}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: 6b59d977e530c453c93cb042db6886c2, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!4 &7943123870677118868 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3710523150737059633, guid: f09ebaeb447174a08bc5c01c59b8280a, type: 3}
