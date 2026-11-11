@@ -6,13 +6,14 @@ using UnityEngine;
 
 namespace DigitalStory.Tests.EditMode
 {
-    /// <summary>Uses the default WaveConfig: waves 3/0, 4/1, 4/3, 6/4, 8/5, first wave after 8 s, 15 s breaks, 1.2 s spawn gaps.</summary>
+    /// <summary>Uses the default WaveConfig: waves 3/0, 4/1, 4/3, 6/4, 8/5, first wave after FirstWaveDelaySeconds (20 s), 15 s breaks, 1.2 s spawn gaps.</summary>
     public sealed class WaveDirectorTests
     {
         private const float Step = 0.1f;
         private const int SpawnPoints = 4;
         private static readonly int[] Sticks = { 3, 4, 4, 6, 8 };
         private static readonly int[] Smokers = { 0, 1, 3, 4, 5 };
+        private static readonly float FirstDelay = ReadFirstDelay();
 
         private sealed class Recorder
         {
@@ -40,6 +41,14 @@ namespace DigitalStory.Tests.EditMode
 
                 return count;
             }
+        }
+
+        private static float ReadFirstDelay()
+        {
+            var config = ScriptableObject.CreateInstance<WaveConfig>();
+            float delay = config.FirstWaveDelaySeconds;
+            Object.DestroyImmediate(config);
+            return delay;
         }
 
         private static WaveDirector MakeDirector()
@@ -103,7 +112,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(director.WaveCount, Is.EqualTo(5));
             Assert.That(director.IsWaveRunning, Is.False);
             Assert.That(director.AllWavesCleared, Is.False);
-            Assert.That(director.SecondsToNextWave, Is.EqualTo(8f).Within(0.001f));
+            Assert.That(director.SecondsToNextWave, Is.EqualTo(FirstDelay).Within(0.001f));
         }
 
         [Test]
@@ -112,7 +121,7 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            Run(director, 7.5f, 0);
+            Run(director, FirstDelay - 0.5f, 0);
 
             Assert.That(recorder.Started, Is.Empty);
             Assert.That(recorder.Spawns, Is.Empty);
@@ -125,7 +134,7 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            Run(director, 8.2f, 0);
+            Run(director, FirstDelay + 0.2f, 0);
 
             Assert.That(recorder.Started, Is.EqualTo(new[] { 1 }));
             Assert.That(director.WaveNumber, Is.EqualTo(1));
@@ -139,7 +148,7 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            Run(director, 8f + 10f, 3);
+            Run(director, FirstDelay + 10f, 3);
 
             Assert.That(recorder.Count(BeekeeperKind.Stick), Is.EqualTo(3));
             Assert.That(recorder.Count(BeekeeperKind.Smoker), Is.EqualTo(0));
@@ -151,8 +160,8 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            // Wave one starts at 8 s. By 8.5 s only the first has spawned, by 9.5 s two, by 10.5 s three.
-            Run(director, 8.5f, 1);
+            // Wave one starts at the first delay. 0.5 s later only the first has spawned, 1.6 s later two, 2.9 s later three.
+            Run(director, FirstDelay + 0.5f, 1);
             Assert.That(recorder.Spawns.Count, Is.EqualTo(1));
 
             Run(director, 1.1f, 1);
@@ -202,7 +211,7 @@ namespace DigitalStory.Tests.EditMode
             var director = new WaveDirector(ScriptableObject.CreateInstance<WaveConfig>(), 2);
             var recorder = new Recorder(director);
 
-            Run(director, 8f + 10f, 1);
+            Run(director, FirstDelay + 10f, 1);
 
             Assert.That(recorder.Spawns[0].Point, Is.EqualTo(0));
             Assert.That(recorder.Spawns[1].Point, Is.EqualTo(1));
@@ -254,7 +263,7 @@ namespace DigitalStory.Tests.EditMode
             var recorder = new Recorder(director);
 
             // The first stick spawned and was killed at once; two sticks are still to come.
-            Run(director, 8.5f, 0);
+            Run(director, FirstDelay + 0.5f, 0);
 
             Assert.That(recorder.Spawns.Count, Is.EqualTo(1));
             Assert.That(director.IsWaveRunning, Is.True);
@@ -354,7 +363,7 @@ namespace DigitalStory.Tests.EditMode
             director.WaveStarted += n => order.Add("start" + n);
             director.SpawnRequested += (_, __) => order.Add("spawn");
 
-            Run(director, 9f, 1);
+            Run(director, FirstDelay + 1f, 1);
 
             Assert.That(order[0], Is.EqualTo("start1"));
             Assert.That(order[1], Is.EqualTo("spawn"));

@@ -382,11 +382,12 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
+            float halfAWaspSeconds = 0.5f / config.HiveCallWaspsPerSecondPerHive;
 
-            body.Gain(0.002f, 1);
+            body.Gain(halfAWaspSeconds, 1);
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps));
 
-            body.Gain(0.002f, 1);
+            body.Gain(halfAWaspSeconds, 1);
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps + 1));
         }
 

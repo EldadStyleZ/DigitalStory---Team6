@@ -293,7 +293,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _forms.StartColossus(12f);
 
-            _body.Lose(4500, false);
+            _body.Lose(_config.StartingWasps - 100, false);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsPiperRooted, Is.False);
@@ -317,7 +317,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(1f, 2);
 
-            Assert.That(_body.Count, Is.EqualTo(5500), "250 a second for each of 2 hives");
+            Assert.That(_body.Count, Is.EqualTo(_config.StartingWasps + (int)(2 * _config.HiveCallWaspsPerSecondPerHive)), "the hive rate a second for each of 2 hives");
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall), "no end before the swarm is full");
         }
 
@@ -328,7 +328,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(1f, 0);
 
-            Assert.That(_body.Count, Is.EqualTo(5000));
+            Assert.That(_body.Count, Is.EqualTo(_config.StartingWasps));
         }
 
         [Test]
@@ -384,26 +384,26 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_HiveCallFillsTheSwarm_EndsAtTheMaximum()
         {
-            SetInt("StartingWasps", 9900);
+            SetInt("StartingWasps", _config.MaxWasps - (int)_config.HiveCallWaspsPerSecondPerHive);
             Build();
             _forms.StartHiveCall();
 
             _forms.Tick(1f, 1);
 
-            Assert.That(_body.Count, Is.EqualTo(10000), "capped at the maximum");
+            Assert.That(_body.Count, Is.EqualTo(_config.MaxWasps), "capped at the maximum");
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
         }
 
         [Test]
         public void Tick_HiveCallJustBelowTheMaximum_KeepsCalling()
         {
-            SetInt("StartingWasps", 9000);
+            SetInt("StartingWasps", _config.MaxWasps - (int)(2 * _config.HiveCallWaspsPerSecondPerHive));
             Build();
             _forms.StartHiveCall();
 
             _forms.Tick(1f, 1);
 
-            Assert.That(_body.Count, Is.EqualTo(9250));
+            Assert.That(_body.Count, Is.EqualTo(_config.MaxWasps - (int)_config.HiveCallWaspsPerSecondPerHive));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
         }
 
@@ -414,7 +414,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _forms.StartDome(5f);
 
-            _body.Lose(4500, false);
+            _body.Lose(_config.StartingWasps - 100, false);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsDomed, Is.False);
@@ -424,7 +424,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Collapse_WhileInTheRiver_GoesToCollapsed()
         {
-            _body.Lose(4500, false);
+            _body.Lose(_config.StartingWasps - 100, false);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsPiperRooted, Is.False);
@@ -435,7 +435,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _forms.StartSting(new FakeSwarmTarget(), 4f, 0.4f, 25f);
 
-            _body.Lose(4500, false);
+            _body.Lose(_config.StartingWasps - 100, false);
 
             Assert.That(_forms.StingTarget, Is.Null);
         }
@@ -443,7 +443,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Start_WhileCollapsed_IsRefused()
         {
-            _body.Lose(4500, false);
+            _body.Lose(_config.StartingWasps - 100, false);
             _changes.Clear();
 
             Assert.That(_forms.StartDome(5f), Is.False);
@@ -460,7 +460,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_WhileCollapsed_StaysCollapsedWithoutTheBodyRespawning()
         {
-            _body.Lose(4500, false);
+            _body.Lose(_config.StartingWasps - 100, false);
 
             _forms.Tick(1f, 2);
 
@@ -470,7 +470,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Respawn_AfterTheBlock_GoesBackToTheRiver()
         {
-            _body.Lose(4500, false);
+            _body.Lose(_config.StartingWasps - 100, false);
             _changes.Clear();
 
             _body.Tick(3f, 2);

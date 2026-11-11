@@ -14,7 +14,6 @@ namespace DigitalStory.Tests.EditMode
         private const float Radius = 4f;
         private const float LifeSeconds = 5f;
         private const float HiveDps = 4f;
-        private const float LossPerSecond = 120f;
         private static readonly Vector3 Far = new Vector3(100f, 0f, 100f);
         private static readonly Vector3 Landing = new Vector3(10f, 0f, 0f);
 
@@ -294,7 +293,7 @@ namespace DigitalStory.Tests.EditMode
 
             Tick(1f, piper: Landing);
 
-            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps - (int)LossPerSecond));
+            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps - (int)_config.WaspLossPerSecond));
             Assert.That(_field.IsPiperInSmoke, Is.True);
         }
 
@@ -333,7 +332,7 @@ namespace DigitalStory.Tests.EditMode
         public void Tick_PiperInSmokeWithDome_LosesOnlyTheDomeShare()
         {
             LandACloudAt(Landing);
-            int expected = _swarmConfig.StartingWasps - (int)Math.Round(LossPerSecond * _swarmConfig.DomeLossFraction);
+            int expected = _swarmConfig.StartingWasps - (int)Math.Round(_config.WaspLossPerSecond * _swarmConfig.DomeLossFraction);
 
             Tick(1f, piper: Landing, domed: true);
 
@@ -350,7 +349,7 @@ namespace DigitalStory.Tests.EditMode
                 Tick(1f / 60f, piper: Landing);
             }
 
-            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps - (int)LossPerSecond).Within(1));
+            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps - (int)_config.WaspLossPerSecond).Within(1));
         }
 
         [Test]
@@ -362,7 +361,7 @@ namespace DigitalStory.Tests.EditMode
 
             Tick(1f, piper: Landing);
 
-            Assert.That(before - _swarm.Count, Is.EqualTo((int)LossPerSecond));
+            Assert.That(before - _swarm.Count, Is.EqualTo((int)_config.WaspLossPerSecond));
         }
 
         [Test]

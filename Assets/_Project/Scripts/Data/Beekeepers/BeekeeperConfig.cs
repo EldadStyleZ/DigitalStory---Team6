@@ -41,6 +41,6 @@ namespace DigitalStory.Data
         public float HiveDamage { get; private set; } = 6f;
 
         [field: SerializeField, Min(0), Tooltip("Wasps a stick hit knocks off the Piper. A smoker does none.")]
-        public int WaspsKnockedOff { get; private set; } = 180;
+        public int WaspsKnockedOff { get; private set; } = 72;
     }
 }

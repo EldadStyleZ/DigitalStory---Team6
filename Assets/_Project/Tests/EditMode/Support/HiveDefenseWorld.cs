@@ -16,6 +16,11 @@ namespace DigitalStory.Tests.EditMode
         public const float Step = 1f / 60f;
         public const int HoleCount = 6;
 
+        /// <summary>The song indices when the world is built with songs: Dome 0,1,0, Colossus 3,4,5,4,3 and Sting 2,3,4.</summary>
+        public const int DomeIndex = 0;
+        public const int ColossusIndex = 1;
+        public const int StingIndex = 2;
+
         private readonly List<ScriptableObject> _created = new List<ScriptableObject>();
 
         public HiveDefenseWorld(
@@ -23,7 +28,8 @@ namespace DigitalStory.Tests.EditMode
             Vector3[] hives = null,
             Vector3[] spawns = null,
             Vector3 piper = default,
-            bool smokerForSecondKind = true)
+            bool smokerForSecondKind = true,
+            bool withSongs = false)
         {
             Piper = piper;
             Swarm = Make<SwarmConfig>();
@@ -42,9 +48,15 @@ namespace DigitalStory.Tests.EditMode
             WaveConfig = Make<WaveConfig>();
             JsonUtility.FromJsonOverwrite(WaveJson(waves ?? new[] { new WaveEntry(1, 0) }), WaveConfig);
 
+            SwarmSongEffect[] songs = Array.Empty<SwarmSongEffect>();
+            if (withSongs)
+            {
+                songs = new SwarmSongEffect[] { Make<DomeSong>(), Make<ColossusSong>(), Make<StingSong>() };
+            }
+
             var rules = new HiveDefenseRules(
                 Swarm, PiperMove, Fury, Colossus, Hive, Smoke, WaveConfig, Stick, Smoker,
-                Make<SongConfig>(), Array.Empty<SwarmSongEffect>(), HoleCount);
+                Make<SongConfig>(), songs, HoleCount);
             Session = new HiveDefenseSession(
                 rules,
                 hives ?? new[] { new Vector3(-40f, 0f, 40f), new Vector3(40f, 0f, 40f) },

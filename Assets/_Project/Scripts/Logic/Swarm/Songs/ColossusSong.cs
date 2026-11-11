@@ -8,7 +8,7 @@ namespace DigitalStory.Logic
     public sealed class ColossusSong : SwarmSongEffect
     {
         public ColossusSong()
-            : base(new SongDefinition("Colossus", "Needs full Fury: the swarm becomes a giant", 0f, 3, 4, 5, 4, 3))
+            : base(new SongDefinition("Colossus", "Needs full Fury: the swarm becomes a giant", 0f, 3, 4, 5, 4, 3), SongCategory.Attack, revealedWhenFuryFills: true)
         {
         }
 

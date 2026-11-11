@@ -42,6 +42,7 @@ namespace DigitalStory.Tests.EditMode
         private readonly List<SwarmSongEffect> _songs = new List<SwarmSongEffect>();
         private readonly List<int> _cast = new List<int>();
         private readonly List<int> _played = new List<int>();
+        private readonly List<int> _notReady = new List<int>();
 
         [SetUp]
         public void SetUp()
@@ -66,6 +67,8 @@ namespace DigitalStory.Tests.EditMode
             _caster = new SwarmSongCaster(_songs, _songConfig, HoleCount);
             _cast.Clear();
             _played.Clear();
+            _notReady.Clear();
+            _caster.SongNotReady += song => _notReady.Add(song);
             _caster.SongCast += song => _cast.Add(song);
             _caster.NotePlayed += hole => _played.Add(hole);
         }
@@ -278,7 +281,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_WhileCollapsed_CastsNothingAndRemembersNothing()
         {
-            _body.Lose(4500, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
 
             int result = PlayAll(SongKeys[0]);
 
@@ -292,13 +295,139 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_AfterTheRespawn_CastsAgain()
         {
-            _body.Lose(4500, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
             PlayAll(SongKeys[0]);
             _body.Tick(3f, 2);
 
             int result = PlayAll(SongKeys[0]);
 
             Assert.That(result, Is.EqualTo(0));
+        }
+
+        // SongNotReady
+
+        [Test]
+        public void SongNotReady_NotesCompletedWhileCoolingDown_IsRaisedWithThatSong()
+        {
+            PlayAll(SongKeys[0]);
+            _notReady.Clear();
+
+            PlayAll(SongKeys[0]);
+
+            Assert.That(_notReady, Is.EqualTo(new[] { 0 }));
+            Assert.That(_cast, Is.EqualTo(new[] { 0 }), "only the first cast");
+        }
+
+        [Test]
+        public void SongNotReady_NotesCompletedWhileCoolingDown_AreNotUsedUp()
+        {
+            PlayAll(SongKeys[0]);
+
+            PlayAll(SongKeys[0]);
+
+            Assert.That(_caster.RecentNoteCount, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void SongNotReady_NotesCompletedWhileCollapsed_IsRaisedAndNothingIsRemembered()
+        {
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+
+            PlayAll(SongKeys[0]);
+
+            Assert.That(_notReady, Is.EqualTo(new[] { 0 }));
+            Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
+            Assert.That(_played, Is.Empty);
+        }
+
+        [Test]
+        public void SongNotReady_CollapsedAndOnlyPartOfASong_IsNotRaised()
+        {
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+
+            Press(SongKeys[0][0]);
+            Press(SongKeys[0][1]);
+
+            Assert.That(_notReady, Is.Empty);
+        }
+
+        [Test]
+        public void SongNotReady_CollapsedNotesTooOld_AreNotCounted()
+        {
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            Press(SongKeys[0][0]);
+            Press(SongKeys[0][1]);
+            _caster.Tick(3f);
+
+            Press(SongKeys[0][2]);
+
+            Assert.That(_notReady, Is.Empty);
+        }
+
+        [Test]
+        public void SongNotReady_NotesCompletedWhileTheColossusStands_IsRaisedAndTheNotesAreUsedUp()
+        {
+            _fury.AddDamage(1000f);
+            _forms.StartColossus(12f);
+
+            PlayAll(SongKeys[0]);
+
+            Assert.That(_notReady, Is.EqualTo(new[] { 0 }));
+            Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void SongNotReady_CanCastIsFalse_IsRaisedAndTheNotesAreUsedUp()
+        {
+            _aim = null;
+
+            PlayAll(SongKeys[1]);
+
+            Assert.That(_notReady, Is.EqualTo(new[] { 1 }));
+            Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void SongNotReady_ColossusWithoutFullFury_IsRaisedWithTheColossus()
+        {
+            _fury.AddDamage(199.8f);
+
+            PlayAll(SongKeys[5]);
+
+            Assert.That(_notReady, Is.EqualTo(new[] { 5 }));
+        }
+
+        [Test]
+        public void SongNotReady_SuccessfulCast_IsNotRaised()
+        {
+            PlayAll(SongKeys[0]);
+
+            Assert.That(_notReady, Is.Empty);
+            Assert.That(_cast, Is.EqualTo(new[] { 0 }));
+        }
+
+        [Test]
+        public void SongNotReady_NotesThatMatchNothing_IsNotRaised()
+        {
+            Press(4);
+            Press(4);
+            Press(4);
+            PlayAll(SongKeys[0]);
+            _notReady.Clear();
+            Press(4);
+            Press(4);
+            Press(4);
+
+            Assert.That(_notReady, Is.Empty);
+        }
+
+        [Test]
+        public void Press_WhileCollapsedWithNotesPlayed_AllocatesNothing()
+        {
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            SwarmSongContext context = Context();
+
+            Assert.That(() => { _caster.Press(4, in context); }, Is.Not.AllocatingGCMemory());
         }
 
         // Notes for the HUD

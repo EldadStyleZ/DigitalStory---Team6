@@ -21,7 +21,7 @@ namespace DigitalStory.Data
         public IReadOnlyList<WaveEntry> Waves => _waves;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds before the first wave.")]
-        public float FirstWaveDelaySeconds { get; private set; } = 8f;
+        public float FirstWaveDelaySeconds { get; private set; } = 20f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds of rest after a wave is cleared.")]
         public float BreakSeconds { get; private set; } = 15f;

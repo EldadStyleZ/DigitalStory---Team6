@@ -38,7 +38,7 @@ namespace DigitalStory.Tests.EditMode
             HiveDefenseSession session = _world.Session;
 
             Assert.That(session.State, Is.EqualTo(HiveDefenseState.Playing));
-            Assert.That(session.Swarm.Count, Is.EqualTo(5000));
+            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps));
             Assert.That(session.Hives.Count, Is.EqualTo(2));
             Assert.That(session.Hives.StandingCount, Is.EqualTo(2));
             Assert.That(session.Hives[0].Position, Is.EqualTo(new Vector3(-40f, 0f, 40f)));
@@ -206,10 +206,10 @@ namespace DigitalStory.Tests.EditMode
             StickBesidePiper();
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
 
-            bool hit = _world.RunUntil(() => _world.Session.Swarm.Count < 5000, 10f);
+            bool hit = _world.RunUntil(() => _world.Session.Swarm.Count < _world.Swarm.StartingWasps, 10f);
 
             Assert.That(hit, Is.True);
-            Assert.That(_world.Session.Swarm.Count, Is.EqualTo(5000 - _world.Stick.WaspsKnockedOff));
+            Assert.That(_world.Session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps - _world.Stick.WaspsKnockedOff));
         }
 
         [Test]
@@ -219,9 +219,9 @@ namespace DigitalStory.Tests.EditMode
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
             Assert.That(_world.Session.Forms.StartDome(30f), Is.True);
 
-            bool hit = _world.RunUntil(() => _world.Session.Swarm.Count < 5000, 10f);
+            bool hit = _world.RunUntil(() => _world.Session.Swarm.Count < _world.Swarm.StartingWasps, 10f);
 
-            int lost = 5000 - _world.Session.Swarm.Count;
+            int lost = _world.Swarm.StartingWasps - _world.Session.Swarm.Count;
             Assert.That(hit, Is.True);
             Assert.That(lost, Is.EqualTo(Mathf.RoundToInt(_world.Stick.WaspsKnockedOff * _world.Swarm.DomeLossFraction)));
             Assert.That(lost, Is.LessThan(_world.Stick.WaspsKnockedOff));
@@ -234,7 +234,7 @@ namespace DigitalStory.Tests.EditMode
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
             Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
 
-            _world.RunUntil(() => _world.Session.Swarm.Count < 5000, 10f);
+            _world.RunUntil(() => _world.Session.Swarm.Count < _world.Swarm.StartingWasps, 10f);
 
             Assert.That(_world.Session.Forms.Current, Is.Not.EqualTo(SwarmForm.HiveCall));
             Assert.That(_world.Session.LastHitPoint.x, Is.EqualTo(Origin.x).Within(0.5f));
@@ -255,7 +255,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(hit, Is.True);
             Assert.That(_world.Session.Hives[0].Health, Is.EqualTo(300f - _world.Stick.HiveDamage));
             Assert.That(_world.Session.Hives[1].Health, Is.EqualTo(300f));
-            Assert.That(_world.Session.Swarm.Count, Is.EqualTo(5000));
+            Assert.That(_world.Session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps));
         }
 
         [Test]
@@ -362,6 +362,94 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(keeper.Health, Is.EqualTo(_world.Stick.Health - _world.Colossus.PunchDamage).Within(0.01f));
             Assert.That(keeper.State, Is.EqualTo(BeekeeperState.Stunned));
             Assert.That(_world.Session.Fury.Value, Is.GreaterThan(0f));
+        }
+
+        // ---- Song discovery ----
+
+        private void PlayDome()
+        {
+            int[] holes = { 0, 1, 0 };
+            foreach (int hole in holes)
+            {
+                _world.RunWith(HiveDefenseWorld.Step, _world.Frame(holes: HiveDefenseFrame.HoleBit(hole)));
+            }
+        }
+
+        [Test]
+        public void Discovery_NewSession_KnowsOnlyTheStingAndRevealsNothingElse()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            SongDiscovery discovery = _world.Session.Discovery;
+
+            Assert.That(discovery.Count, Is.EqualTo(3));
+            Assert.That(discovery.KnownCount, Is.EqualTo(1));
+            Assert.That(discovery.IsKnown(HiveDefenseWorld.StingIndex), Is.True);
+            Assert.That(discovery.IsRevealed(HiveDefenseWorld.DomeIndex), Is.False);
+            Assert.That(discovery.IsRevealed(HiveDefenseWorld.ColossusIndex), Is.False);
+        }
+
+        [Test]
+        public void Discovery_ASuccessfulCast_MakesTheSongKnownOnce()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            var discovered = new List<int>();
+            _world.Session.Discovery.Discovered += discovered.Add;
+
+            PlayDome();
+
+            Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(_world.Session.Discovery.IsKnown(HiveDefenseWorld.DomeIndex), Is.True);
+            Assert.That(discovered, Is.EqualTo(new[] { HiveDefenseWorld.DomeIndex }));
+        }
+
+        [Test]
+        public void Discovery_NotesPlayedWhileTheSongIsNotReady_DoNotMakeItKnown()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            var notReady = new List<int>();
+            _world.Session.Caster.SongNotReady += notReady.Add;
+            int[] holes = { 3, 4, 5, 4, 3 };
+
+            foreach (int hole in holes)
+            {
+                _world.RunWith(HiveDefenseWorld.Step, _world.Frame(holes: HiveDefenseFrame.HoleBit(hole)));
+            }
+
+            Assert.That(notReady, Is.EqualTo(new[] { HiveDefenseWorld.ColossusIndex }), "Fury is empty");
+            Assert.That(_world.Session.Discovery.IsKnown(HiveDefenseWorld.ColossusIndex), Is.False);
+        }
+
+        [Test]
+        public void Discovery_FuryFillsTheFirstTime_RevealsTheColossusButDoesNotMakeItKnown()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            var revealed = new List<int>();
+            _world.Session.Discovery.Revealed += revealed.Add;
+            _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint * 0.5f);
+            Assert.That(revealed, Is.Empty, "half full reveals nothing");
+
+            _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
+
+            Assert.That(_world.Session.Fury.IsFull, Is.True);
+            Assert.That(revealed, Is.EqualTo(new[] { HiveDefenseWorld.ColossusIndex }));
+            Assert.That(_world.Session.Discovery.IsRevealed(HiveDefenseWorld.ColossusIndex), Is.True);
+            Assert.That(_world.Session.Discovery.IsKnown(HiveDefenseWorld.ColossusIndex), Is.False);
+            Assert.That(_world.Session.Discovery.IsRevealed(HiveDefenseWorld.DomeIndex), Is.False, "other songs stay hidden");
+        }
+
+        [Test]
+        public void Discovery_FuryFillsAgainAfterBeingUsed_RevealsNothingNew()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            var revealed = new List<int>();
+            _world.Session.Discovery.Revealed += revealed.Add;
+            float full = _world.Fury.Max * _world.Fury.DamagePerFuryPoint;
+            _world.Session.Fury.AddDamage(full);
+            Assert.That(_world.Session.Fury.TryUse(), Is.True);
+
+            _world.Session.Fury.AddDamage(full);
+
+            Assert.That(revealed.Count, Is.EqualTo(1));
         }
     }
 }

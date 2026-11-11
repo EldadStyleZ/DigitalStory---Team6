@@ -8,7 +8,7 @@ namespace DigitalStory.Logic
     public sealed class GustSong : SwarmSongEffect
     {
         public GustSong()
-            : base(new SongDefinition("Gust", "A ring of wasps clears the smoke", 6f, 1, 1, 2))
+            : base(new SongDefinition("Gust", "A ring of wasps clears the smoke", 6f, 1, 1, 2), SongCategory.Defense)
         {
         }
 

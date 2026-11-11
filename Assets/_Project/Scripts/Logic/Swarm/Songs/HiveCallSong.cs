@@ -8,7 +8,7 @@ namespace DigitalStory.Logic
     public sealed class HiveCallSong : SwarmSongEffect
     {
         public HiveCallSong()
-            : base(new SongDefinition("Hive Call", "The hives send wasps to the Piper", 3f, 0, 5, 0))
+            : base(new SongDefinition("Hive Call", "The hives send wasps to the Piper", 3f, 0, 5, 0), SongCategory.Power)
         {
         }
 

@@ -467,7 +467,7 @@ namespace DigitalStory.Tests.EditMode
             Cast();
             _forms.Tick(1f, 2);
 
-            _body.Lose(4500, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
             _forms.Tick(1f, 2);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
@@ -480,7 +480,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_WhileCollapsed_CastsNothing()
         {
-            _body.Lose(4500, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
 
             int result = PlayAll();
 
@@ -491,7 +491,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Cast_WhileCollapsed_ChangesNothing()
         {
-            _body.Lose(4500, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
 
             Cast();
 

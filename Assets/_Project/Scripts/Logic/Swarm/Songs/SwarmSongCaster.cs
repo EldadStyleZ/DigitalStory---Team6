@@ -9,7 +9,7 @@ namespace DigitalStory.Logic
     /// and keeps what the HUD shows: recent notes and cooldowns.
     /// </summary>
     /// <remarks>
-    /// Nothing is cast, or even remembered, while the swarm is collapsed. While the Colossus stands no song is cast and none starts a cooldown. A song whose
+    /// Nothing is cast, or even remembered, while the swarm is collapsed. When a song's notes are completed but it cannot cast, <see cref="SongNotReady"/> is raised. While the Colossus stands no song is cast and none starts a cooldown. A song whose
     /// <see cref="SwarmSongEffect.CanCast"/> is false still uses up the notes and starts its cooldown.
     /// </remarks>
     public sealed class SwarmSongCaster
@@ -19,9 +19,12 @@ namespace DigitalStory.Logic
         private readonly float[] _cooldownLeft;
         private readonly int[] _noteHoles;
         private readonly float[] _noteAges;
+        private readonly int[] _missedHoles;
+        private readonly float[] _missedAges;
         private readonly float _noteWindow;
 
         private int _noteCount;
+        private int _missedCount;
 
         public SwarmSongCaster(IReadOnlyList<SwarmSongEffect> songs, SongConfig config, int holeCount)
         {
@@ -53,6 +56,8 @@ namespace DigitalStory.Logic
             _cooldownLeft = new float[songs.Count];
             _noteHoles = new int[config.NotesRemembered];
             _noteAges = new float[config.NotesRemembered];
+            _missedHoles = new int[config.NotesRemembered];
+            _missedAges = new float[config.NotesRemembered];
             _noteWindow = config.NoteWindowSeconds;
         }
 
@@ -67,6 +72,12 @@ namespace DigitalStory.Logic
 
         /// <summary>Raised with the song's index when a song is cast.</summary>
         public event Action<int> SongCast;
+
+        /// <summary>
+        /// Raised with the song's index when its notes were just completed but it could not cast: it is cooling down,
+        /// the swarm is collapsed, the Colossus stands or <see cref="SwarmSongEffect.CanCast"/> is false.
+        /// </summary>
+        public event Action<int> SongNotReady;
 
         /// <summary>Raised with the hole when a note is played.</summary>
         public event Action<int> NotePlayed;
@@ -102,9 +113,19 @@ namespace DigitalStory.Logic
 
             if (context.Swarm.IsCollapsed || (context.Forms != null && context.Forms.Current == SwarmForm.Collapsed))
             {
+                RememberMissedNote(hole);
+                int missed = LongestTailMatch(_missedHoles, _missedAges, _missedCount, false);
+
+                if (missed != SongBook.NoSong)
+                {
+                    _missedCount = 0;
+                    SongNotReady?.Invoke(missed);
+                }
+
                 return SongBook.NoSong;
             }
 
+            _missedCount = 0;
             ForgetExpiredNotes();
             RememberNote(hole);
             NotePlayed?.Invoke(hole);
@@ -113,6 +134,7 @@ namespace DigitalStory.Logic
 
             if (song == SongBook.NoSong)
             {
+                RaiseNotReady(LongestTailMatch(_noteHoles, _noteAges, _noteCount, true));
                 return SongBook.NoSong;
             }
 
@@ -121,6 +143,7 @@ namespace DigitalStory.Logic
             // The giant stands until its time is up: a song cannot replace it, so it costs no cooldown.
             if (context.Forms != null && context.Forms.Current == SwarmForm.Colossus)
             {
+                SongNotReady?.Invoke(song);
                 return SongBook.NoSong;
             }
 
@@ -130,6 +153,7 @@ namespace DigitalStory.Logic
 
             if (!effect.CanCast(in context))
             {
+                SongNotReady?.Invoke(song);
                 return SongBook.NoSong;
             }
 
@@ -152,6 +176,88 @@ namespace DigitalStory.Logic
             {
                 _noteAges[note] += deltaTime;
             }
+
+            for (int note = 0; note < _missedCount; note++)
+            {
+                _missedAges[note] += deltaTime;
+            }
+        }
+
+        private void RaiseNotReady(int song)
+        {
+            if (song != SongBook.NoSong)
+            {
+                SongNotReady?.Invoke(song);
+            }
+        }
+
+        // The longest song whose keys end the given notes. Notes that are too old are ignored. It does not allocate.
+        private int LongestTailMatch(int[] holes, float[] ages, int count, bool onlyCooling)
+        {
+            int first = 0;
+
+            while (first < count && ages[first] >= _noteWindow)
+            {
+                first++;
+            }
+
+            int total = count - first;
+            int best = SongBook.NoSong;
+            int bestLength = 0;
+
+            for (int song = 0; song < _songs.Count; song++)
+            {
+                IReadOnlyList<int> keys = _songs[song].Song.Keys;
+                int length = keys.Count;
+
+                if (length > total || length <= bestLength || (onlyCooling && !_book.IsCoolingDown(song)))
+                {
+                    continue;
+                }
+
+                bool matches = true;
+
+                for (int key = 0; key < length && matches; key++)
+                {
+                    matches = holes[count - length + key] == keys[key];
+                }
+
+                if (matches)
+                {
+                    best = song;
+                    bestLength = length;
+                }
+            }
+
+            return best;
+        }
+
+        // Notes played while the swarm is collapsed are not remembered for the HUD, but are kept apart to tell when a song was meant.
+        private void RememberMissedNote(int hole)
+        {
+            int expired = 0;
+
+            while (expired < _missedCount && _missedAges[expired] >= _noteWindow)
+            {
+                expired++;
+            }
+
+            if (expired == 0 && _missedCount == _missedHoles.Length)
+            {
+                expired = 1;
+            }
+
+            if (expired > 0)
+            {
+                int kept = _missedCount - expired;
+                Array.Copy(_missedHoles, expired, _missedHoles, 0, kept);
+                Array.Copy(_missedAges, expired, _missedAges, 0, kept);
+                _missedCount = kept;
+            }
+
+            _missedHoles[_missedCount] = hole;
+            _missedAges[_missedCount] = 0f;
+            _missedCount++;
         }
 
         private void RequireNote(int index)

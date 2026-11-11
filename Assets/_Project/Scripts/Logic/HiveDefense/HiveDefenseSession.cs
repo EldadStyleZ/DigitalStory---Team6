@@ -25,6 +25,7 @@ namespace DigitalStory.Logic
         private readonly ISwarmTarget[] _enemies;
         private readonly int _stickPoolSize;
         private readonly ColossusAttackChain _chain;
+        private readonly IReadOnlyList<SwarmSongEffect> _songs;
 
         private HiveDefenseState _state = HiveDefenseState.Playing;
         private Vector3 _piperPosition;
@@ -33,6 +34,7 @@ namespace DigitalStory.Logic
         private BeekeeperBrain _aimTarget;
         private int _activeCount;
         private bool _isColossusActive;
+        private bool _furyHasFilled;
         private Vector3 _colossusPosition;
         private Vector3 _colossusFacing = Vector3.forward;
 
@@ -85,6 +87,10 @@ namespace DigitalStory.Logic
             Waves = new WaveDirector(rules.Waves, spawnPoints.Count);
             Caster = new SwarmSongCaster(rules.Songs, rules.SongConfig, rules.HoleCount);
             Smoke = new SmokeField(rules.Smoke);
+            _songs = rules.Songs;
+            Discovery = new SongDiscovery(rules.Songs);
+            Caster.SongCast += Discovery.NoteCast;
+            Fury.Changed += OnFuryChanged;
 
             int sticks = 0;
             int smokers = 0;
@@ -140,6 +146,9 @@ namespace DigitalStory.Logic
 
         /// <summary>The song caster, for the HUD.</summary>
         public SwarmSongCaster Caster { get; }
+
+        /// <summary>Which songs the player knows. A cast makes a song known, and the first full Fury reveals the songs that wait for it.</summary>
+        public SongDiscovery Discovery { get; }
 
         /// <summary>The smoke grenades and clouds.</summary>
         public SmokeField Smoke { get; }
@@ -268,6 +277,23 @@ namespace DigitalStory.Logic
             else if (Waves.AllWavesCleared)
             {
                 SetState(HiveDefenseState.Won);
+            }
+        }
+
+        private void OnFuryChanged(float fraction)
+        {
+            if (_furyHasFilled || !Fury.IsFull)
+            {
+                return;
+            }
+
+            _furyHasFilled = true;
+            for (int song = 0; song < _songs.Count; song++)
+            {
+                if (_songs[song].RevealedWhenFuryFills)
+                {
+                    Discovery.Reveal(song);
+                }
             }
         }
 

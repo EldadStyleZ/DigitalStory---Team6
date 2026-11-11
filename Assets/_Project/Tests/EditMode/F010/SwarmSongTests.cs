@@ -283,7 +283,7 @@ namespace DigitalStory.Tests.EditMode
         public void HiveCall_CanCast_NotWhenTheSwarmIsFull()
         {
             var song = Make<HiveCallSong>();
-            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":10000}", _swarmConfig);
+            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":" + _swarmConfig.MaxWasps + "}", _swarmConfig);
             _body = new SwarmBody(_swarmConfig);
             _forms = new SwarmFormMachine(_body, _fury);
             SwarmSongContext context = Context();

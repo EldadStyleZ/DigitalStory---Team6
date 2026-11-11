@@ -19,6 +19,6 @@ namespace DigitalStory.Data
         public float HiveDamagePerSecond { get; private set; } = 4f;
 
         [field: SerializeField, Min(0f), Tooltip("Wasps lost per second while the Piper is inside the cloud.")]
-        public float WaspLossPerSecond { get; private set; } = 120f;
+        public float WaspLossPerSecond { get; private set; } = 48f;
     }
 }

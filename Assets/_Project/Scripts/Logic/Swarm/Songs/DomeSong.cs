@@ -8,7 +8,7 @@ namespace DigitalStory.Logic
     public sealed class DomeSong : SwarmSongEffect
     {
         public DomeSong()
-            : base(new SongDefinition("Dome", "A dome of wasps shields the Piper", 8f, 0, 1, 0))
+            : base(new SongDefinition("Dome", "A dome of wasps shields the Piper", 8f, 0, 1, 0), SongCategory.Defense)
         {
         }
 

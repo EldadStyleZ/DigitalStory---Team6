@@ -8,7 +8,7 @@ namespace DigitalStory.Logic
     public sealed class MeteorSong : SwarmSongEffect
     {
         public MeteorSong()
-            : base(new SongDefinition("Meteor", "Wasps fall from the sky on the target", 9f, 4, 2, 0))
+            : base(new SongDefinition("Meteor", "Wasps fall from the sky on the target", 9f, 4, 2, 0), SongCategory.Attack)
         {
         }
 

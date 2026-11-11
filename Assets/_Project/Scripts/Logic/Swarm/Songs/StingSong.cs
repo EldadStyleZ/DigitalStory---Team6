@@ -8,7 +8,7 @@ namespace DigitalStory.Logic
     public sealed class StingSong : SwarmSongEffect
     {
         public StingSong()
-            : base(new SongDefinition("Sting", "Wasps wrap around the aimed beekeeper", 1.5f, 2, 3, 4))
+            : base(new SongDefinition("Sting", "Wasps wrap around the aimed beekeeper", 1.5f, 2, 3, 4), SongCategory.Attack, knownFromStart: true)
         {
         }
 
