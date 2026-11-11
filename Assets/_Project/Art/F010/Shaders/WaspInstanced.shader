@@ -77,10 +77,14 @@ Shader "DigitalStory/WaspInstanced"
 
             // Stripes along the body. The mesh is one unit long, from z -0.5 (sting) to 0.5 (head).
             static const float StripeCount = 7.0;
+            static const float DarkStripeShare = 0.4;   // less than half, so a far swarm still reads yellow, not brown
             static const float HeadStart = 0.3;
             static const float3 StripeDark = float3(0.05, 0.04, 0.03);
-            static const float3 WingColor = float3(0.85, 0.9, 0.95);
-            static const float WingTint = 0.25;
+
+            // Grey-blue and half tinted, so the wings read as see-through and carry the form's colour, rather than
+            // turning the swarm white from above.
+            static const float3 WingColor = float3(0.62, 0.66, 0.72);
+            static const float WingTint = 0.45;
 
             struct VertexInput
             {
@@ -151,7 +155,7 @@ Shader "DigitalStory/WaspInstanced"
 
             float3 Albedo(float localZ, float wing, float3 tint)
             {
-                float band = step(0.5, frac((localZ + 0.5) * StripeCount));
+                float band = step(DarkStripeShare, frac((localZ + 0.5) * StripeCount));
                 float3 bodyColor = localZ > HeadStart ? StripeDark : lerp(StripeDark, tint, band);
                 float3 wingColor = lerp(WingColor, tint, WingTint);
                 return lerp(bodyColor, wingColor, wing);
@@ -196,7 +200,10 @@ Shader "DigitalStory/WaspInstanced"
                 float lambert = lightLength > 0.00001 ? saturate(dot(normal, toLight / lightLength)) : 0.0;
                 float3 ambient = ShadeSH9(float4(normal, 1.0));
 
-                float3 color = albedo * (_LightColor0.rgb * lambert + ambient) + input.tint.rgb * input.tint.a;
+                // The light is capped at white, so a lit yellow stays yellow instead of clipping to pale lemon. The form's
+                // glow blends toward its flat colour rather than adding to it, because an added orange clips to yellow.
+                float3 light = min(_LightColor0.rgb * lambert + ambient, 1.0);
+                float3 color = lerp(albedo * light, input.tint.rgb, saturate(input.tint.a));
                 return float4(color, 1.0);
             }
             ENDCG

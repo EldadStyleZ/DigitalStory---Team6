@@ -52,6 +52,7 @@ float _PreviousFormStartTime;
 
 float4 _PiperPosition;
 float4 _PiperForward;                     // flat and unit length
+float _StandingShare;                     // 0 while the Piper walks, easing to 1 once they have stood still a moment
 float4 _Sting;                            // xyz target, w share of the swarm that stings
 float4 _HiveA;                            // xyz position, w 1 while it stands
 float4 _HiveB;
@@ -117,8 +118,13 @@ static const float StingArcRise = 0.25;
 static const float StingTargetHeight = 1.0;      // metres above the target's feet
 static const float StingOrbitRadius = 0.8;
 static const float StingOrbitSpin = 5.0;         // radians per second
+static const float RiverHeadGap = 1.0;           // metres behind the Piper where the river starts, so it never hides them
 static const float TornadoInnerRadius = 1.5;
 static const float DefaultTornadoRadius = 5.0;
+static const float TornadoFunnelBottom = 0.8;    // the column's radius at the bottom and top, as a share
+static const float TornadoFunnelTop = 1.25;
+static const float TornadoWallShare = 0.75;      // share of the wasps in the column's wall; the rest are flung out
+static const float TornadoWallThickness = 0.5;   // metres
 static const float TornadoBaseHeight = 0.2;
 static const float TornadoHeight = 3.0;
 static const float TornadoSpin = 6.0;            // radians per second
@@ -155,39 +161,36 @@ int StateOf(WaspDynamic body)
     return (int)(body.state + 0.5);
 }
 
+// One exit with the result set first, so the compiler sees it initialised on every path.
 float GlowOf(int look)
 {
+    float glow = RiverGlow;
     if (look == FormDome)
     {
-        return DomeGlow;
+        glow = DomeGlow;
     }
-
-    if (look == FormSting)
+    else if (look == FormSting)
     {
-        return StingGlow;
+        glow = StingGlow;
     }
-
-    if (look == FormTornado)
+    else if (look == FormTornado)
     {
-        return TornadoGlow;
+        glow = TornadoGlow;
     }
-
-    if (look == FormGust)
+    else if (look == FormGust)
     {
-        return GustGlow;
+        glow = GustGlow;
     }
-
-    if (look == FormHiveCall)
+    else if (look == FormHiveCall)
     {
-        return HiveCallGlow;
+        glow = HiveCallGlow;
     }
-
-    if (look == FormColossus)
+    else if (look == FormColossus)
     {
-        return ColossusGlow;
+        glow = ColossusGlow;
     }
 
-    return RiverGlow;
+    return glow;
 }
 
 float4 TintOf(int look)
@@ -274,7 +277,7 @@ float3 RiverTarget(WaspStatic wasp)
 {
     float flowLane = frac(wasp.lane + _SimTime * _FlowSpeed);
     float trailLength = TrailLength();
-    float along = flowLane * min(_RiverLength, trailLength);
+    float along = lerp(RiverHeadGap, max(min(_RiverLength, trailLength), RiverHeadGap), flowLane);
 
     float3 center;
     float3 direction;
@@ -286,7 +289,10 @@ float3 RiverTarget(WaspStatic wasp)
     float meander = _MeanderAmplitude * sin(along * MeanderWaveNumber - _SimTime * MeanderSpeed);
     float3 river = center + Up * (FlyHeight + sin(angle) * radius) + side * (cos(angle) * radius + meander);
 
-    float riverShare = saturate(trailLength / max(_StandingTrailMeters, Tiny));
+    // The torus shows while the trail is still too short to hold a river (the start of a run) and while the Piper
+    // stands. The trail alone cannot say the second: it keeps its full length after the Piper stops.
+    float trailShare = saturate(trailLength / max(_StandingTrailMeters, Tiny));
+    float riverShare = trailShare * (1.0 - saturate(_StandingShare));
     return lerp(TorusTarget(wasp, flowLane), river, riverShare);
 }
 
@@ -330,11 +336,15 @@ float3 StingTarget(WaspStatic wasp, float formSeconds)
     return lerp(arc, orbit, smoothstep(0.75, 1.0, progress));
 }
 
-// A spinning funnel, narrow at the bottom and wide at the top.
+// A spinning spiral column, a little wider at the top. Most wasps make its wall at the inner radius, so it reads as a
+// column from the game camera; the rest are flung out to the outer radius, the reach of the song's knockback.
 float3 TornadoTarget(WaspStatic wasp)
 {
     float outer = _TornadoRadius > 0.0 ? _TornadoRadius : DefaultTornadoRadius;
-    float radius = lerp(TornadoInnerRadius, outer, wasp.level01);
+    float funnel = lerp(TornadoFunnelBottom, TornadoFunnelTop, wasp.level01);
+    float wall = (TornadoInnerRadius + (wasp.ringRadius - 0.5) * TornadoWallThickness) * funnel;
+    float flung = lerp(TornadoInnerRadius, outer, wasp.ringRadius);
+    float radius = wasp.phase01 < TornadoWallShare ? wall : flung;
     float around = wasp.ringAngle + wasp.level01 * TornadoTwist + _SimTime * TornadoSpin;
     float height = TornadoBaseHeight + wasp.level01 * TornadoHeight;
     return _PiperPosition.xyz + RingOffset(around, radius) + Up * height;
@@ -381,40 +391,48 @@ float3 GoalOf(int form, float formSeconds, uint index, WaspStatic wasp, out int 
 {
     look = form;
     isShape = true;
+    float3 goal = _PiperPosition.xyz;
 
     if (form == FormDome)
     {
-        return DomeTarget(index);
+        goal = DomeTarget(index);
     }
-
-    if (form == FormSting && IsStinger(wasp))
+    else if (form == FormSting && IsStinger(wasp))
     {
-        return StingTarget(wasp, formSeconds);
+        goal = StingTarget(wasp, formSeconds);
     }
-
-    if (form == FormTornado)
+    else if (form == FormTornado)
     {
-        return TornadoTarget(wasp);
+        goal = TornadoTarget(wasp);
     }
-
-    if (form == FormGust && formSeconds < GustSeconds)
+    else if (form == FormGust && formSeconds < GustSeconds)
     {
-        return GustTarget(wasp, formSeconds);
+        goal = GustTarget(wasp, formSeconds);
     }
-
-    if (form == FormHiveCall)
+    else if (form == FormHiveCall)
     {
-        return HaloTarget(wasp);
+        goal = HaloTarget(wasp);
     }
-
-    if (form == FormColossus && HasColossusPlace(wasp))
+    else if (form == FormColossus && HasColossusPlace(wasp))
     {
-        return ColossusTarget(wasp);
+        goal = ColossusTarget(wasp);
+    }
+    else
+    {
+        look = FormRiver;
+        isShape = false;
+        goal = RiverTarget(wasp);
     }
 
-    look = FormRiver;
-    isShape = false;
-    return RiverTarget(wasp);
+    return goal;
+}
+
+// True in the one frame a wasp's river lane wraps from the tail (1) back to the Piper (0).
+bool HasLaneWrapped(WaspStatic wasp)
+{
+    float now = wasp.lane + _SimTime * _FlowSpeed;
+    float before = now - _DeltaTime * _FlowSpeed;
+    return floor(now) != floor(before);
 }
 
 float WaveOrderOf(int form, WaspStatic wasp)
@@ -442,6 +460,14 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     bool isShape;
     float3 goal = GoalOf(form, formSeconds, index, wasp, look, isShape);
 
+    // A wasp that leaves the river's tail starts again at its head. Flying there would draw a straight, sparse
+    // second river across every curve of the path, so it jumps instead; in the crowd at the head nobody sees it.
+    if (!isShape && HasLaneWrapped(wasp))
+    {
+        body.position = goal;
+        body.velocity = Still;
+    }
+
     float stiffness = isShape ? _ShapeSpring : _RiverSpring;
     float damping = isShape ? _ShapeDamping : _RiverDamping;
     if (hasSwitched && formSeconds < _WobbleSeconds)
@@ -468,21 +494,22 @@ float3 SpawnPoint(WaspStatic wasp)
 {
     bool firstStands = _HiveA.w > 0.5;
     bool secondStands = _HiveB.w > 0.5;
+    float3 spawn = _PiperPosition.xyz + Up * FlyHeight;
 
-    if (!firstStands && !secondStands)
+    if (firstStands || secondStands)
     {
-        return _PiperPosition.xyz + Up * FlyHeight;
+        float3 hive = firstStands ? _HiveA.xyz : _HiveB.xyz;
+        if (firstStands && secondStands)
+        {
+            bool isFirstNearer = DistanceOnGround(_HiveA.xyz, _PiperPosition.xyz) <= DistanceOnGround(_HiveB.xyz, _PiperPosition.xyz);
+            bool takesFirst = _Form == FormHiveCall ? wasp.seed < 0.5 : isFirstNearer;
+            hive = takesFirst ? _HiveA.xyz : _HiveB.xyz;
+        }
+
+        spawn = hive + Up * SpawnHeight;
     }
 
-    float3 hive = firstStands ? _HiveA.xyz : _HiveB.xyz;
-    if (firstStands && secondStands)
-    {
-        bool isFirstNearer = DistanceOnGround(_HiveA.xyz, _PiperPosition.xyz) <= DistanceOnGround(_HiveB.xyz, _PiperPosition.xyz);
-        bool takesFirst = _Form == FormHiveCall ? wasp.seed < 0.5 : isFirstNearer;
-        hive = takesFirst ? _HiveA.xyz : _HiveB.xyz;
-    }
-
-    return hive + Up * SpawnHeight;
+    return spawn;
 }
 
 float3 Scatter(WaspStatic wasp, float size)

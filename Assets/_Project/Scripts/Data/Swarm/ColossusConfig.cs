@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>The Colossus, the human form of the swarm: its body, its attacks and how long it lasts.</summary>
+    /// <summary>The Colossus, the human form of the swarm: its body, its attacks. How long it lasts is the Colossus song's Seconds.</summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Colossus Config", fileName = "ColossusConfig")]
     public sealed class ColossusConfig : ScriptableObject
     {
@@ -12,12 +12,6 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Min(0f), Tooltip("Walking speed in metres per second.")]
         public float Speed { get; private set; } = 3.5f;
-
-        [field: SerializeField, Min(0f), Tooltip("Seconds the Colossus lasts.")]
-        public float DurationSeconds { get; private set; } = 12f;
-
-        [field: SerializeField, Min(0f), Tooltip("Seconds the wasps take to build the Colossus.")]
-        public float BuildSeconds { get; private set; } = 0.8f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds a beekeeper stays stunned after being hit by the Colossus.")]
         public float StunSeconds { get; private set; } = 0.5f;

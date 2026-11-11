@@ -36,6 +36,15 @@ namespace DigitalStory.View
         private const float StandsFlag = 1f;
         private const float FallenFlag = 0f;
 
+        // Spec 9.3: while the Piper stands, the river curls into a torus around them. The Piper counts as standing
+        // while they stay within StandingDriftMeters (on the ground) of where they stopped, so settling never counts
+        // as a step. After StandingDelaySeconds the river eases into the torus over StandingBlendSeconds, and eases
+        // back as soon as they walk. Like the look constants in WaspSwarm.compute, SwarmConfig does not hold these
+        // yet; move one there if it needs tuning.
+        private const float StandingDriftMeters = 0.05f;
+        private const float StandingDelaySeconds = 0.5f;
+        private const float StandingBlendSeconds = 0.75f;
+
         // Bytes per element. Each matches a struct in WaspSwarm.compute and WaspInstanced.shader.
         private const int StaticStride = sizeof(float) * 12;
         private const int DynamicStride = sizeof(float) * 12;
@@ -75,6 +84,7 @@ namespace DigitalStory.View
         private static readonly int RiverRadiusId = Shader.PropertyToID("_RiverRadius");
         private static readonly int MeanderAmplitudeId = Shader.PropertyToID("_MeanderAmplitude");
         private static readonly int StandingTrailMetersId = Shader.PropertyToID("_StandingTrailMeters");
+        private static readonly int StandingShareId = Shader.PropertyToID("_StandingShare");
         private static readonly int TorusRadiusId = Shader.PropertyToID("_TorusRadius");
         private static readonly int DyingSecondsId = Shader.PropertyToID("_DyingSeconds");
         private static readonly int DomeRadiusId = Shader.PropertyToID("_DomeRadius");
@@ -119,6 +129,9 @@ namespace DigitalStory.View
         private float _previousFormStartTime;
         private Vector3 _piperPosition;
         private Vector3 _piperForward = Vector3.forward;
+        private Vector3 _standingAnchor;
+        private float _standingSeconds;
+        private float _standingShare;
         private Vector3 _stingTarget;
         private float _stingFraction;
         private Vector4 _firstHive;
@@ -149,6 +162,7 @@ namespace DigitalStory.View
 
             float deltaTime = Mathf.Min(Time.deltaTime, _config.MaxDeltaTime);
             _simTime += deltaTime;
+            TrackStanding(deltaTime);
 
             int trailCount = _trail.CopyTo(_trailPoints);
             if (trailCount > 0)
@@ -482,6 +496,28 @@ namespace DigitalStory.View
             _previousForm = SwarmForm.River;
             _formStartTime = 0f;
             _previousFormStartTime = 0f;
+            _standingSeconds = 0f;
+            _standingShare = 0f;
+        }
+
+        // The PathTrail never shrinks while the Piper stands (it only stores points as they walk), so its length cannot
+        // tell standing from walking. This measures standing directly instead, and eases the torus in and out.
+        private void TrackStanding(float deltaTime)
+        {
+            Vector3 drift = _piperPosition - _standingAnchor;
+            drift.y = 0f;
+            if (drift.sqrMagnitude > StandingDriftMeters * StandingDriftMeters)
+            {
+                _standingAnchor = _piperPosition;
+                _standingSeconds = 0f;
+            }
+            else
+            {
+                _standingSeconds += deltaTime;
+            }
+
+            float goal = _standingSeconds >= StandingDelaySeconds ? 1f : 0f;
+            _standingShare = Mathf.MoveTowards(_standingShare, goal, deltaTime / StandingBlendSeconds);
         }
 
         private void DestroyOwnedAssets()
@@ -534,6 +570,7 @@ namespace DigitalStory.View
             compute.SetFloat(PreviousFormStartTimeId, _previousFormStartTime);
             compute.SetVector(PiperPositionId, _piperPosition);
             compute.SetVector(PiperForwardId, _piperForward);
+            compute.SetFloat(StandingShareId, _standingShare);
             compute.SetVector(StingId, new Vector4(_stingTarget.x, _stingTarget.y, _stingTarget.z, _stingFraction));
             compute.SetVector(HiveAId, _firstHive);
             compute.SetVector(HiveBId, _secondHive);

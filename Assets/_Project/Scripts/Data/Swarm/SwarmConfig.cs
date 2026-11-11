@@ -54,7 +54,7 @@ namespace DigitalStory.Data
         public float FlowSpeed { get; private set; } = 0.08f;
 
         [field: SerializeField, Min(0f), Tooltip("Length of the river when the Piper moves.")]
-        public float RiverLengthMeters { get; private set; } = 14f;
+        public float RiverLengthMeters { get; private set; } = 8f;
 
         [field: SerializeField, Min(0f), Tooltip("Half the width of the river.")]
         public float RiverRadius { get; private set; } = 0.55f;
@@ -96,7 +96,7 @@ namespace DigitalStory.Data
 
         [field: Header("Colours")]
         [field: SerializeField, Tooltip("Colour of wasps in the river.")]
-        public Color RiverColor { get; private set; } = new Color(0.95f, 0.75f, 0.1f, 1f);
+        public Color RiverColor { get; private set; } = new Color(1f, 0.85f, 0.1f, 1f);
 
         [field: SerializeField, Tooltip("Colour of the dome.")]
         public Color DomeColor { get; private set; } = new Color(0.2f, 0.55f, 1f, 1f);
@@ -105,7 +105,7 @@ namespace DigitalStory.Data
         public Color StingColor { get; private set; } = new Color(1f, 0.5f, 0.1f, 1f);
 
         [field: SerializeField, Tooltip("Colour of the tornado.")]
-        public Color TornadoColor { get; private set; } = new Color(0.8f, 0.8f, 0.8f, 1f);
+        public Color TornadoColor { get; private set; } = new Color(0.5f, 0.55f, 0.65f, 1f);
 
         [field: SerializeField, Tooltip("Colour of the gust.")]
         public Color GustColor { get; private set; } = new Color(0.7f, 0.9f, 1f, 1f);

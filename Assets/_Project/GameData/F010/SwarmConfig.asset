@@ -27,7 +27,7 @@ MonoBehaviour:
   <WobbleSeconds>k__BackingField: 0.35
   <FormWaveSeconds>k__BackingField: 0.6
   <FlowSpeed>k__BackingField: 0.08
-  <RiverLengthMeters>k__BackingField: 14
+  <RiverLengthMeters>k__BackingField: 8
   <RiverRadius>k__BackingField: 0.55
   <MeanderAmplitude>k__BackingField: 0.25
   <StandingTrailMeters>k__BackingField: 2
@@ -40,10 +40,10 @@ MonoBehaviour:
   <TrailSpacing>k__BackingField: 0.15
   <MaxDeltaTime>k__BackingField: 0.033333335
   <BoundsMeters>k__BackingField: 60
-  <RiverColor>k__BackingField: {r: 0.95, g: 0.75, b: 0.1, a: 1}
+  <RiverColor>k__BackingField: {r: 1, g: 0.85, b: 0.1, a: 1}
   <DomeColor>k__BackingField: {r: 0.2, g: 0.55, b: 1, a: 1}
   <StingColor>k__BackingField: {r: 1, g: 0.5, b: 0.1, a: 1}
-  <TornadoColor>k__BackingField: {r: 0.8, g: 0.8, b: 0.8, a: 1}
+  <TornadoColor>k__BackingField: {r: 0.5, g: 0.55, b: 0.65, a: 1}
   <GustColor>k__BackingField: {r: 0.7, g: 0.9, b: 1, a: 1}
   <HiveCallColor>k__BackingField: {r: 1, g: 0.84, b: 0.1, a: 1}
   <ColossusColor>k__BackingField: {r: 0.9, g: 0.6, b: 0.15, a: 1}

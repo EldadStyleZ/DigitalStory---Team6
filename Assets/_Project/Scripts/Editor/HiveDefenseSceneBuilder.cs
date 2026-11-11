@@ -53,6 +53,7 @@ namespace DigitalStory.Editor
         private const float PiperHeight = 1.8f;
         private const float BeekeeperHeight = 1.8f;
         private const float HiveHeight = 1.6f;
+        private const float HiveBarGap = 0.6f;
         private const float PiperRadius = 0.35f;
 
         private const float GroundSize = 70f;
@@ -78,6 +79,14 @@ namespace DigitalStory.Editor
         private static readonly Color AmbientSky = new Color(0.72f, 0.8f, 0.92f, 1f);
         private static readonly Color AmbientEquator = new Color(0.6f, 0.58f, 0.5f, 1f);
         private static readonly Color AmbientGround = new Color(0.3f, 0.27f, 0.2f, 1f);
+
+        // Every config and song asset BuildAll loads or creates. The baked ColossusSampleSet is not a config.
+        private static readonly string[] ConfigAssetNames =
+        {
+            "SwarmConfig", "PiperMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "SmokeConfig", "WaveConfig",
+            "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
+            "DomeSong", "StingSong", "TornadoSong", "GustSong", "HiveCallSong", "ColossusSong",
+        };
 
         // Prefab name, target height in metres.
         private static readonly (string Name, float Height)[] Scenery =
@@ -119,6 +128,31 @@ namespace DigitalStory.Editor
                     EditorApplication.Exit(1);
                 }
             }
+        }
+
+        /// <summary>
+        /// Deletes the F-010 config and song assets, so they are made again from the defaults in code, then builds as
+        /// <see cref="Build"/> does. Use it after changing a default; tuned values in those assets are lost.
+        /// </summary>
+        [MenuItem("DigitalStory/Build F-010 Scene (reset configs)")]
+        public static void ResetConfigsAndBuild()
+        {
+            if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                return;
+            }
+
+            for (int index = 0; index < ConfigAssetNames.Length; index++)
+            {
+                string path = $"{DataFolder}/{ConfigAssetNames[index]}.asset";
+                if (AssetDatabase.LoadAssetAtPath<ScriptableObject>(path) != null && !AssetDatabase.DeleteAsset(path))
+                {
+                    Debug.LogError($"[F010] Could not delete {path}, so it keeps its old values.");
+                }
+            }
+
+            Debug.Log("[F010] Config assets deleted; they are made again from the defaults.");
+            Build();
         }
 
         private static void BuildAll()
@@ -351,7 +385,10 @@ namespace DigitalStory.Editor
             var body = root.GetComponent<CharacterController>();
             body.height = PiperHeight;
             body.radius = PiperRadius;
-            body.center = new Vector3(0f, PiperHeight * 0.5f, 0f);
+
+            // A CharacterController rests its skin width above the ground, so the capsule is raised by that much
+            // and the feet, at the root, touch the grass.
+            body.center = new Vector3(0f, (PiperHeight * 0.5f) + body.skinWidth, 0f);
 
             GameObject model = InstantiateModel(source, root.transform);
             FitToHeight(model.transform, PiperHeight);
@@ -388,7 +425,7 @@ namespace DigitalStory.Editor
             }
             else
             {
-                AddProp(hand, model.transform, "Stick", LoadOrCreateMaterial("StickWood", StickWood), new Vector3(0.04f, 0.5f, 0.04f), Quaternion.Euler(70f, 0f, 0f), 0.4f);
+                AddProp(hand, model.transform, "Stick", LoadOrCreateMaterial("StickWood", StickWood), new Vector3(0.08f, 0.5f, 0.08f), Quaternion.Euler(70f, 0f, 0f), 0.4f);
             }
 
             var serialized = new SerializedObject(root.GetComponent<BeekeeperView>());
@@ -502,12 +539,14 @@ namespace DigitalStory.Editor
             return SavePrefab(root, name).GetComponent<T>();
         }
 
+        // Keeps the source prefab's own root rotation: Raz's exports are Z-up and stand up through a -90 degree turn
+        // about X on that root, so resetting it to identity would lay the model on its side.
         private static GameObject InstantiateModel(GameObject source, Transform parent)
         {
             var model = (GameObject)PrefabUtility.InstantiatePrefab(source);
             model.transform.SetParent(parent, false);
             model.transform.localPosition = Vector3.zero;
-            model.transform.localRotation = Quaternion.identity;
+            model.transform.localRotation = source.transform.localRotation;
             return model;
         }
 
@@ -719,6 +758,14 @@ namespace DigitalStory.Editor
             model.position += new Vector3(0f, floor - bounds.min.y, 0f);
         }
 
+        // Moves the model on the ground so the middle of its bounds is over its parent, for models whose pivot is off to one side.
+        private static void CenterOnParent(Transform model)
+        {
+            Vector3 anchor = model.parent != null ? model.parent.position : Vector3.zero;
+            Bounds bounds = MeasureBounds(model);
+            model.position += new Vector3(anchor.x - bounds.center.x, 0f, anchor.z - bounds.center.z);
+        }
+
         // ---------------------------------------------------------------- Scene
 
         private static void FillScene(SceneAssets assets)
@@ -879,8 +926,10 @@ namespace DigitalStory.Editor
                     continue;
                 }
 
+                // The random turn goes on top of the prefab's own root rotation, which stands the Z-up model upright.
                 var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
-                instance.transform.SetPositionAndRotation(point, Quaternion.Euler(0f, (float)random.NextDouble() * 360f, 0f));
+                Quaternion turn = Quaternion.Euler(0f, (float)random.NextDouble() * 360f, 0f);
+                instance.transform.SetPositionAndRotation(point, turn * prefab.transform.localRotation);
                 float target = height * (0.85f + ((float)random.NextDouble() * 0.3f));
                 float current = MeasureBounds(instance.transform).size.y;
                 if (current > 1e-4f)
@@ -935,11 +984,18 @@ namespace DigitalStory.Editor
         {
             var hive = new GameObject(name, typeof(HiveView));
             hive.transform.position = position;
-            GameObject model = InstantiateModel(source, hive.transform);
+
+            // HiveView flattens a destroyed hive by scaling its model's local Y. The model itself is turned -90 degrees
+            // about X to stand up, so its own Y is horizontal; this unturned pivot at the base is what gets scaled.
+            var pivot = new GameObject("Model").transform;
+            pivot.SetParent(hive.transform, false);
+            GameObject model = InstantiateModel(source, pivot);
             FitToHeight(model.transform, HiveHeight);
+            CenterOnParent(model.transform);
 
             var serialized = new SerializedObject(hive.GetComponent<HiveView>());
-            SetObject(serialized, "_model", model.transform);
+            SetObject(serialized, "_model", pivot);
+            Property(serialized, "_barHeight").floatValue = HiveHeight + HiveBarGap;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             return hive.GetComponent<HiveView>();
         }

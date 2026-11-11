@@ -41,6 +41,7 @@ namespace DigitalStory.View
         private Camera _camera;
 
         private HiveDefenseSession _session;
+        private bool _isReady;
         private HiveOffscreenIndicatorView _indicator;
         private EndScreenView _endScreen;
 
@@ -82,6 +83,7 @@ namespace DigitalStory.View
         /// <exception cref="InvalidOperationException">The UXML lacks an element, or there is no camera.</exception>
         public void Initialize(HiveDefenseSession session)
         {
+            _isReady = false;
             _session = session ?? throw new ArgumentNullException(nameof(session));
 
             VisualElement root = GetComponent<UIDocument>().rootVisualElement
@@ -115,11 +117,12 @@ namespace DigitalStory.View
             _indicator.Initialize(session.Hives, camera, offscreen);
             _endScreen = GetOrAdd<EndScreenView>();
             _endScreen.Initialize(session, endScreen);
+            _isReady = true; // Last, so Update never runs on a half-built HUD.
         }
 
         private void Update()
         {
-            if (_session == null)
+            if (!_isReady)
             {
                 return;
             }
@@ -331,12 +334,13 @@ namespace DigitalStory.View
                     + "/" + count.ToString(CultureInfo.InvariantCulture);
             }
 
-            // 0 while a wave runs or after the last one, so the line is empty then.
+            // 0 while a wave runs or after the last one, so the line is hidden then, and its backing with it.
             int next = Mathf.CeilToInt(waves.SecondsToNextWave);
             if (next != _shownNextWave)
             {
                 _shownNextWave = next;
                 _nextWaveLabel.text = next > 0 ? "Next wave in " + next.ToString(CultureInfo.InvariantCulture) : string.Empty;
+                _nextWaveLabel.style.display = next > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             }
         }
 

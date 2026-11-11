@@ -124,11 +124,14 @@
     padding: 4px 16px;
 }
 
+/* On its own backing, because bare caption text is unreadable over the bright grass. */
 .next-wave-label {
     font-size: 14px;
-    color: var(--caption);
+    color: var(--text);
+    background-color: var(--panel);
+    border-radius: 6px;
     margin-top: 4px;
-    padding: 0;
+    padding: 2px 10px;
 }
 
 /* Hives, down the left side */

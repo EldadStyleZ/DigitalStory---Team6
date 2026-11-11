@@ -16,6 +16,7 @@ namespace DigitalStory.View
 
         private static readonly int ColorId = Shader.PropertyToID("_Color");
         private static Material s_sharedMaterial;
+        private static Material s_fillMaterial;
 
         [Header("Model")]
         [SerializeField, Tooltip("The hive model. It is squashed and darkened when the hive is destroyed. Optional.")]
@@ -234,7 +235,7 @@ namespace DigitalStory.View
             _block.SetColor(ColorId, _barBackColor);
             _backRenderer.SetPropertyBlock(_block);
 
-            _barFill = NewQuad("Fill", _quadMesh, material, out _fillRenderer);
+            _barFill = NewQuad("Fill", _quadMesh, FillMaterial(material), out _fillRenderer);
             _barFill.localPosition = new Vector3(-_barSize.x * 0.5f, 0f, FillDepthOffset);
             _barFill.localScale = new Vector3(_barSize.x, _barSize.y * 0.8f, 1f);
         }
@@ -287,6 +288,23 @@ namespace DigitalStory.View
 
             s_sharedMaterial = new Material(shader) { name = "HiveView Unlit", hideFlags = HideFlags.HideAndDontSave };
             return s_sharedMaterial;
+        }
+
+        // Transparent quads are drawn far to near by their centres. A shortened fill's centre can lie farther from the
+        // camera than the backing's, and the backing then darkens it, so the fill gets a later queue and is always on top.
+        private static Material FillMaterial(Material shared)
+        {
+            if (s_fillMaterial == null)
+            {
+                s_fillMaterial = new Material(shared)
+                {
+                    name = "HiveView Unlit Fill",
+                    hideFlags = HideFlags.HideAndDontSave,
+                    renderQueue = shared.renderQueue + 1,
+                };
+            }
+
+            return s_fillMaterial;
         }
 
         // A quad whose left edge is at x = 0, so scaling x makes a bar that shrinks toward the left.

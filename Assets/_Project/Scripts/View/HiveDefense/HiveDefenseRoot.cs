@@ -187,8 +187,35 @@ namespace DigitalStory.View
 
         private void Start()
         {
+            if (!_isReady)
+            {
+                return; // Awake already logged the real cause.
+            }
+
             // The HUD reads the UIDocument's tree, which exists only once every object has been enabled.
             _hud.Initialize(Session);
+        }
+
+        private void Restart()
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            if (scene.buildIndex >= 0)
+            {
+                SceneManager.LoadScene(scene.buildIndex);
+                return;
+            }
+
+#if UNITY_EDITOR
+            // The scene is not in the build settings, so load it by path, as Play Mode allows.
+            if (!string.IsNullOrEmpty(scene.path))
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.LoadSceneInPlayMode(
+                    scene.path, new LoadSceneParameters(LoadSceneMode.Single));
+                return;
+            }
+#endif
+            Debug.LogError($"Cannot restart: scene '{scene.name}' is not in the build settings.", this);
+            _isRestarting = false;
         }
 
         private void OnDestroy()
@@ -213,7 +240,7 @@ namespace DigitalStory.View
                 if (_input.RestartPressed && !_isRestarting)
                 {
                     _isRestarting = true;
-                    SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+                    Restart();
                 }
 
                 return;
@@ -221,10 +248,9 @@ namespace DigitalStory.View
 
             bool isColossus = Session.IsColossusActive;
             Vector3 move = _input.Move;
-            if (!isColossus)
-            {
-                _piperMotor.Move(move, Session.PiperSpeedMultiplier, Session.IsPiperRooted, dt);
-            }
+            // While the giant stands the Piper stays put but still animates, plays and settles.
+            _piperMotor.Move(
+                isColossus ? Vector3.zero : move, Session.PiperSpeedMultiplier, isColossus || Session.IsPiperRooted, dt);
 
             _piperMotor.SetChannelling(Session.IsPiperRooted);
 
