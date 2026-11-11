@@ -114,6 +114,14 @@ flowchart LR
 - **Tests:** the dawn value, plus a Profiler check at the full rat count.
 - **Notes:** the prototype's mute button and its moving moon-and-sun bar ship here, because they need sound and the dawn value. Changing audio device stops every source and empties clips made in code, so the flute restarts and the effects bake again. Unity's first read of the listener is blank even with sound playing, so PlayMode tests read it through `ListenerMeter`. Disco lights keep orbiting during Pause, as in the prototype. Left out on purpose: cobblestones, roof detail, water flow lines, a detailed Piper, rat tails and eye glints, and the March target line. Touch is not tested.
 
+### F-010: Wasp swarm defends the hives
+
+- **Goal:** the player is the Piper, whose swarm of up to 10,000 wasps flows behind them like a river and takes shapes from flute combos to defend two hives from beekeepers.
+- **Done when:** in Play Mode, the Piper walks with the river behind, each song casts from its keys, beekeepers attack the hives in five waves, and the match can be won and lost.
+- **Layers:** Data holds the swarm, Piper movement, Fury, Colossus, hive, beekeeper, smoke and wave configs. Logic holds the swarm body, form machine, songs, Fury, path trail, hives, beekeeper brain, smoke, waves and the session. View holds the composition root, input, Piper motor, camera, the GPU swarm, hive, beekeeper and smoke views and the HUD.
+- **Tests:** the EditMode tests listed in section 11 of the spec.
+- **Notes:** the full spec is [`docs/specs/F-010-wasp-swarm.md`](docs/specs/F-010-wasp-swarm.md). The wasps live on the GPU (one compute shader and one indirect draw) instead of Jobs and Burst, because DOTS would need new packages. The scene is separate from Town, so The Piper keeps working. Raz's prefabs, controllers and `testing.unity` are not changed: the Piper and the beekeepers are prefab variants.
+
 ## Ideas
 
 Not approved work. Do not build on these until they move to the board.
