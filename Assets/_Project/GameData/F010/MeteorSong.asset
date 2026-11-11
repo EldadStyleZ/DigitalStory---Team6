@@ -16,15 +16,14 @@ MonoBehaviour:
     _title: Meteor
     _description: Wasps fall from the sky on the target
     _cooldownSeconds: 9
-    _keys: 040000000200000000000000i
+    _keys: 01000000020000000300000002000000i
   _category: 0
   _knownFromStart: 0
   _revealedWhenFuryFills: 0
-  <Fraction>k__BackingField: 0.3
+  _share: 0.35
   <Height>k__BackingField: 12
   <RiseSeconds>k__BackingField: 0.8
   <DiveSeconds>k__BackingField: 0.5
-  <AfterSeconds>k__BackingField: 0.6
   <MaxRange>k__BackingField: 18
   <Radius>k__BackingField: 3
   <Damage>k__BackingField: 60

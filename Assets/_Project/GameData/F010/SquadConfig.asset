@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b86439d0a23b4f3ab1a2f371e912ec0, type: 3}
+  m_Name: SquadConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.SquadConfig
+  <PostLow>k__BackingField: 0
+  <PostHigh>k__BackingField: 0.2
+  <GuardLow>k__BackingField: 0.2
+  <GuardHigh>k__BackingField: 0.55
+  <StrikeLow>k__BackingField: 0.55
+  <StrikeHigh>k__BackingField: 0.92
+  <ReturnSeconds>k__BackingField: 0.6

@@ -45,6 +45,7 @@ namespace DigitalStory.Editor
         private const string PanelSettingsPath = Root + "/UI/GamePanelSettings.asset";
         private const string HudUxmlPath = Root + "/UI/F010/HiveDefenseHud.uxml";
         private const string SoundConfigPath = Root + "/GameData/SoundConfig.asset"; // The Town scene's, shared and never changed here.
+        private const int FluteHoleCount = 4; // H J K L (songs-v2, section D).
 
         private const string SpeedParameter = "Speed";
         private const string IsPlayingParameter = "IsPlaying";
@@ -115,8 +116,8 @@ namespace DigitalStory.Editor
         // Every config and song asset BuildAll loads or creates. The baked ColossusSampleSet is not a config.
         private static readonly string[] ConfigAssetNames =
         {
-            "SwarmConfig", "PiperMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "SmokeConfig", "WaveConfig",
-            "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
+            "SwarmConfig", "SquadConfig", "AimConfig", "PiperMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "SmokeConfig",
+            "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
             "DomeSong", "StingSong", "TornadoSong", "GustSong", "MeteorSong", "HiveCallSong", "ColossusSong",
         };
 
@@ -196,6 +197,8 @@ namespace DigitalStory.Editor
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             var swarm = LoadOrCreate<SwarmConfig>("SwarmConfig");
+            var squads = LoadOrCreate<SquadConfig>("SquadConfig");
+            var aim = LoadOrCreate<AimConfig>("AimConfig");
             var piperMove = LoadOrCreate<PiperMoveConfig>("PiperMoveConfig");
             var fury = LoadOrCreate<FuryConfig>("FuryConfig");
             var colossus = LoadOrCreate<ColossusConfig>("ColossusConfig");
@@ -232,7 +235,7 @@ namespace DigitalStory.Editor
 
             AssetDatabase.SaveAssets();
             FillScene(new SceneAssets(
-                swarm, piperMove, fury, colossus, hive, smoke, waves, stick, smoker, songConfig, songs, samples,
+                swarm, squads, aim, piperMove, fury, colossus, hive, smoke, waves, stick, smoker, songConfig, songs, samples,
                 piper, colossusPrefab, hivePrefab, stickView, smokerView, grenade, cloud));
             Debug.Log("[F010] Scene filled.");
 
@@ -1364,6 +1367,8 @@ namespace DigitalStory.Editor
             var rootObject = new GameObject("Hive Defense Root", typeof(HiveDefenseRoot));
             var serialized = new SerializedObject(rootObject.GetComponent<HiveDefenseRoot>());
             SetObject(serialized, "_swarm", assets.Swarm);
+            SetObject(serialized, "_squads", assets.Squads);
+            SetObject(serialized, "_aim", assets.Aim);
             SetObject(serialized, "_piperMove", assets.PiperMove);
             SetObject(serialized, "_fury", assets.Fury);
             SetObject(serialized, "_colossus", assets.Colossus);
@@ -1374,6 +1379,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_smoker", assets.Smoker);
             SetObject(serialized, "_songConfig", assets.SongConfig);
             SetObjects(serialized, "_songs", assets.Songs);
+            Property(serialized, "_holeCount").intValue = FluteHoleCount;
             SetObject(serialized, "_colossusSamples", assets.Samples);
             SetObject(serialized, "_input", input.GetComponent<HiveDefenseInput>());
             SetObject(serialized, "_piperMotor", piper.GetComponent<PiperMotor>());
@@ -1648,6 +1654,8 @@ namespace DigitalStory.Editor
         {
             public SceneAssets(
                 SwarmConfig swarm,
+                SquadConfig squads,
+                AimConfig aim,
                 PiperMoveConfig piperMove,
                 FuryConfig fury,
                 ColossusConfig colossus,
@@ -1668,6 +1676,8 @@ namespace DigitalStory.Editor
                 SmokeCloudView cloud)
             {
                 Swarm = swarm;
+                Squads = squads;
+                Aim = aim;
                 PiperMove = piperMove;
                 Fury = fury;
                 Colossus = colossus;
@@ -1689,6 +1699,8 @@ namespace DigitalStory.Editor
             }
 
             public SwarmConfig Swarm { get; }
+            public SquadConfig Squads { get; }
+            public AimConfig Aim { get; }
             public PiperMoveConfig PiperMove { get; }
             public FuryConfig Fury { get; }
             public ColossusConfig Colossus { get; }

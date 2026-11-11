@@ -26,9 +26,18 @@ namespace DigitalStory.View
         // so it arrives with the stingers.
         private const float AttackLightFollowPerSecond = 4f;
 
+        // Every slot, in the order the view numbers them.
+        private static readonly SongSlot[] Slots = { SongSlot.Post, SongSlot.Guard, SongSlot.Strike };
+
         [Header("Rules")]
         [SerializeField, Tooltip("The wasp swarm's numbers.")]
         private SwarmConfig _swarm;
+
+        [SerializeField, Tooltip("The song slots' squads of wasps and the return beat after a song lets go.")]
+        private SquadConfig _squads;
+
+        [SerializeField, Tooltip("How auto-aim chooses what an aimed song strikes.")]
+        private AimConfig _aim;
 
         [SerializeField, Tooltip("How fast the Piper moves and what slows it.")]
         private PiperMoveConfig _piperMove;
@@ -60,8 +69,8 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Every song the Piper can play, including the Dome, Tornado and Meteor songs.")]
         private SwarmSongEffect[] _songs = new SwarmSongEffect[0];
 
-        [SerializeField, Min(1), Tooltip("How many holes the flute has. The input has six keys.")]
-        private int _holeCount = 6;
+        [SerializeField, Min(1), Tooltip("How many holes the flute has. The input has four keys: H J K L.")]
+        private int _holeCount = 4;
 
         [SerializeField, Tooltip("The baked body samples the swarm takes when it forms the giant.")]
         private ColossusSampleSet _colossusSamples;
@@ -135,17 +144,13 @@ namespace DigitalStory.View
         private Transform _piperTransform;
         private Transform _colossusTransform;
         private Vector3 _lastAimPoint;
-        private Color _castColor;
         private Vector3 _attackSpot;
-        private float _meteorSeconds;
         private bool _isAttackSpotSet;
         private int _holeMask;
+        private bool _hasFormChangedThisTick;
         private bool _isFollowingColossus;
         private bool _isRestarting;
         private bool _isReady;
-        private float _domeRadius;
-        private float _tornadoRadius;
-        private float _meteorRadius;
 
         /// <summary>The running match, for the views, tests and debugging.</summary>
         public HiveDefenseSession Session { get; private set; }
@@ -190,22 +195,19 @@ namespace DigitalStory.View
             _colossusTransform = _colossusMotor.transform;
 
             var rules = new HiveDefenseRules(
-                _swarm, _piperMove, _fury, _colossus, _hive, _smoke, _waves, _stick, _smoker, _songConfig, _songs, _holeCount);
+                _swarm, _squads, _piperMove, _fury, _colossus, _hive, _smoke, _waves, _stick, _smoker, _aim, _songConfig, _songs, _holeCount);
             var random = new Mulberry32Random(unchecked((uint)_seed));
             Session = new HiveDefenseSession(rules, positions, spawns, _piperMotor.Position, random);
 
             _trail = new PathTrail(_swarm.TrailPoints, _swarm.TrailSpacing);
             _trail.Reset(_piperMotor.Position);
-            ReadSongRadii();
 
             _input.Initialize(_camera);
             _piperMotor.Initialize(_piperMove, _piperAnimator);
             _swarmView.Initialize(_swarm, _trail);
-            _swarmView.SetFormRadii(_domeRadius, _tornadoRadius);
-            _swarmView.SetMeteorRadius(_meteorRadius);
             _glowLight.Initialize(_swarm);
             _attackGlowLight.Initialize(_swarm);
-            _castColor = _swarm.RiverColor;
+            Session.Forms.FormChanged += HandleFormChanged;
             Session.Caster.SongCast += HandleSongCast;
             for (int index = 0; index < _hives.Length; index++)
             {
@@ -271,6 +273,7 @@ namespace DigitalStory.View
 
             if (Session != null)
             {
+                Session.Forms.FormChanged -= HandleFormChanged;
                 Session.Caster.SongCast -= HandleSongCast;
             }
         }
@@ -311,10 +314,19 @@ namespace DigitalStory.View
                 _lastAimPoint = aim;
             }
 
-            // While the giant stands, the move steers the giant and the Piper stays where it is.
+            // While the giant stands, the move steers the giant and the Piper stays where it is. The mouse aims only while
+            // it is live; otherwise auto-aim chooses.
             var frame = new HiveDefenseFrame(
-                piper, _lastAimPoint, new Vector2(move.x, move.z), _holeMask, _input.PunchPressed, _input.KickPressed);
+                piper,
+                _piperMotor.Forward,
+                _lastAimPoint,
+                new Vector2(move.x, move.z),
+                _holeMask,
+                _input.PunchPressed,
+                _input.KickPressed,
+                _input.IsMouseLive);
             _holeMask = 0;
+            _hasFormChangedThisTick = false;
             Session.Tick(in frame, dt);
 
             FeedSwarm(piper);
@@ -322,52 +334,57 @@ namespace DigitalStory.View
             FeedCamera();
         }
 
-        // Every form but the River takes the colour of the category of the song that made it.
-        private void HandleSongCast(int song)
+        private void HandleFormChanged(SwarmForm form)
         {
-            _castColor = _swarm.ColorOf(Session.Caster[song].Category);
-            _swarmView.SetCastColor(_castColor);
+            _hasFormChangedThisTick = true;
         }
 
-        // One light stands in for the glow of the wasps that stay with the Piper, and a second one for the wasps that attack
-        // in a sting or a meteor, the share the form sends. The first hangs over the middle of the river or the ring (or
-        // the giant), in the river's colour, as strong as the swarm is full and the share that stays. The second travels
-        // with the stingers, or hangs over the meteor ball until the dive starts, in the attack colour. Both sit a little
-        // toward the camera, so the sides it sees are lit.
+        // A whole-swarm form (Hive Call, the Colossus) takes the colour of the category of the song whose cast started it.
+        // A slot song's squad shows its own colour through SetSlot, and a Gust changes no form, so neither recolours it.
+        private void HandleSongCast(int song)
+        {
+            if (_hasFormChangedThisTick)
+            {
+                _swarmView.SetCastColor(_swarm.ColorOf(Session.Caster[song].Category));
+            }
+        }
+
+        // One light stands in for the glow of the wasps that stay with the Piper, and a second one for the Strike squad,
+        // the wasps that attack. The first hangs over the middle of the river or the ring in the river's colour, over the
+        // Piper in the Guard song's colour while one shields them, or over the giant; it is as strong as the swarm is full
+        // and the share that stays. The second travels with the striking squad in its colour, and fades as the squad flies
+        // home. Both sit a little toward the camera, so the sides it sees are lit.
         private void FeedGlow(Vector3 piper, float deltaTime)
         {
             SwarmFormMachine forms = Session.Forms;
             SwarmForm form = forms.Current;
+            SlotState guard = forms.Slot(SongSlot.Guard);
+            SlotState strike = forms.Slot(SongSlot.Strike);
             Vector3 middle = RiverMiddle(piper);
             Color color = _swarm.RiverColor;
-            float attackShare = 0f;
-            Vector3 attackAt = piper;
 
-            if (form == SwarmForm.Sting && forms.StingTarget != null)
-            {
-                attackShare = forms.StingFraction;
-                attackAt = forms.StingTarget.Position;
-            }
-            else if (form == SwarmForm.Meteor)
-            {
-                attackShare = forms.MeteorFraction;
-                _meteorSeconds += deltaTime;
-                attackAt = MeteorBallPosition(piper, forms);
-            }
-            else if (form == SwarmForm.Colossus)
+            if (form == SwarmForm.Colossus)
             {
                 middle = _colossusTransform.position;
-                color = _castColor;
+                color = _swarmView.CastColor;
             }
-            else if (form != SwarmForm.River && form != SwarmForm.Collapsed)
+            else if (form == SwarmForm.HiveCall)
             {
                 middle = piper;
-                color = _castColor;
+                color = _swarmView.CastColor;
+            }
+            else if (guard.IsActive && guard.ReleasedSeconds < 0f)
+            {
+                middle = piper;
+                color = _swarm.ColorOf(guard.Category);
             }
 
-            if (form != SwarmForm.Meteor)
+            float attackShare = 0f;
+            Vector3 attackAt = piper;
+            if (strike.IsActive)
             {
-                _meteorSeconds = 0f;
+                attackShare = (strike.High - strike.Low) * StrikeLightLeft(strike);
+                attackAt = StrikeLightPoint(piper, strike);
             }
 
             Vector3 towardCamera = -_camera.transform.forward;
@@ -384,7 +401,7 @@ namespace DigitalStory.View
 
             // The attacking light eases to a sting's target slower than the light's own follow, so it arrives with the
             // stingers. The meteor's path is known, so its light rides the ball and lands with the impact.
-            if (!_isAttackSpotSet || attackShare <= 0f || form == SwarmForm.Meteor)
+            if (!_isAttackSpotSet || attackShare <= 0f || strike.Form == SwarmForm.Meteor)
             {
                 _attackSpot = attackAt;
                 _isAttackSpotSet = true;
@@ -394,22 +411,49 @@ namespace DigitalStory.View
                 _attackSpot = Vector3.Lerp(_attackSpot, attackAt, 1f - Mathf.Exp(-AttackLightFollowPerSecond * deltaTime));
             }
 
-            _attackGlowLight.Show(_attackSpot + lift, _castColor, strength * attackShare);
+            Color attackColor = strike.IsActive ? _swarm.ColorOf(strike.Category) : _swarm.RiverColor;
+            _attackGlowLight.Show(_attackSpot + lift, attackColor, strength * attackShare);
         }
 
-        // Where the meteor's ball is: over the Piper while it climbs and hangs, then along the line down to the impact
-        // point during the dive, as WaspSwarm.compute flies it (MeteorBallPoint and MeteorDiveTarget).
-        private Vector3 MeteorBallPosition(Vector3 piper, SwarmFormMachine forms)
+        // 1 while the Strike song runs, easing to 0 over its return beat as its squad flies home.
+        private float StrikeLightLeft(in SlotState strike)
         {
-            Vector3 top = piper + (Vector3.up * forms.MeteorHeight);
-            float diveSeconds = _meteorSeconds - forms.MeteorRiseSeconds;
+            if (strike.ReleasedSeconds < 0f)
+            {
+                return 1f;
+            }
+
+            float beat = _squads.ReturnSeconds;
+            return beat > 0f ? 1f - Mathf.Clamp01(strike.ReleasedSeconds / beat) : 0f;
+        }
+
+        // Where the striking squad is: on the sting's target, or on the meteor's ball (over the Piper while it climbs and
+        // hangs, then along the line down to the impact point, as MeteorSteer in WaspSwarm.compute flies it), or around the
+        // Piper for a song that strikes there, such as the Tornado.
+        private static Vector3 StrikeLightPoint(Vector3 piper, in SlotState strike)
+        {
+            Vector4 a = strike.ParamA;
+            Vector3 target = new Vector3(a.x, a.y, a.z);
+            if (strike.Form == SwarmForm.Sting)
+            {
+                return target;
+            }
+
+            if (strike.Form != SwarmForm.Meteor)
+            {
+                return piper;
+            }
+
+            Vector4 b = strike.ParamB;
+            Vector3 top = piper + (Vector3.up * a.w);
+            float diveSeconds = strike.Seconds - b.x;
             if (diveSeconds <= 0f)
             {
                 return top;
             }
 
-            float dive = forms.MeteorDiveSeconds > 0f ? Mathf.Clamp01(diveSeconds / forms.MeteorDiveSeconds) : 1f;
-            return Vector3.Lerp(top, forms.MeteorTarget, dive);
+            float dive = b.y > 0f ? Mathf.Clamp01(diveSeconds / b.y) : 1f;
+            return Vector3.Lerp(top, target, dive);
         }
 
         // About a third of the way along the river behind the Piper, or the Piper while the river curls into the ring around
@@ -437,14 +481,13 @@ namespace DigitalStory.View
             _swarmView.SetForm(forms.Current);
             _swarmView.SetPiper(piper, _piperMotor.Forward);
 
-            ISwarmTarget stingTarget = forms.StingTarget;
-            _swarmView.SetSting(stingTarget != null ? stingTarget.Position : piper, forms.StingFraction);
-
-            if (forms.Current == SwarmForm.Meteor)
+            for (int index = 0; index < Slots.Length; index++)
             {
-                _swarmView.SetMeteor(
-                    forms.MeteorTarget, forms.MeteorFraction, forms.MeteorRiseSeconds, forms.MeteorDiveSeconds, forms.MeteorHeight);
+                SlotState state = forms.Slot(Slots[index]);
+                _swarmView.SetSlot((int)Slots[index], in state, _swarm.ColorOf(state.Category));
             }
+
+            _swarmView.SetGust(forms.GustCenter, forms.GustRadius, forms.GustSeconds);
 
             HiveSet hives = Session.Hives;
             _swarmView.SetHives(hives[0].Position, hives[1].Position, !hives[0].IsDestroyed, !hives[1].IsDestroyed);
@@ -472,28 +515,11 @@ namespace DigitalStory.View
             }
         }
 
-        private void ReadSongRadii()
-        {
-            for (int index = 0; index < _songs.Length; index++)
-            {
-                if (_songs[index] is DomeSong dome)
-                {
-                    _domeRadius = dome.Radius;
-                }
-                else if (_songs[index] is TornadoSong tornado)
-                {
-                    _tornadoRadius = tornado.Radius;
-                }
-                else if (_songs[index] is MeteorSong meteor)
-                {
-                    _meteorRadius = meteor.Radius;
-                }
-            }
-        }
-
         private void CheckReferences()
         {
             Require(_swarm, nameof(_swarm));
+            Require(_squads, nameof(_squads));
+            Require(_aim, nameof(_aim));
             Require(_piperMove, nameof(_piperMove));
             Require(_fury, nameof(_fury));
             Require(_colossus, nameof(_colossus));

@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections;
+using System.Collections.Generic;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using DigitalStory.View;
@@ -12,7 +13,10 @@ using UnityEngine.TestTools;
 
 namespace DigitalStory.Tests.PlayMode
 {
-    /// <summary>Loads the Wasp Piper scene and checks that it starts, draws the swarm and answers the flute.</summary>
+    /// <summary>
+    /// Loads the Wasp Piper scene and checks that it starts, draws the swarm and answers the flute. Every song is played
+    /// with the keys on its own asset, so a change of keys never breaks these tests.
+    /// </summary>
     public sealed class HiveDefenseSceneTests
     {
         private const string ScenePath = "Assets/_Project/Scenes/eldad-lab-2-scene.unity";
@@ -29,10 +33,8 @@ namespace DigitalStory.Tests.PlayMode
         private const float WatchSeconds = 0.7f;
         private const float SmallestSwingDegrees = 10f;
         private const int SoundedHole = 3;
-
-        private static readonly int[] DomeHoles = { 0, 1, 0 };
-        private static readonly int[] MeteorHoles = { 4, 2, 0 };
-        private static readonly int[] StingHoles = { 2, 3, 4 };
+        private const int GuardSlot = (int)SongSlot.Guard;
+        private const int StrikeSlot = (int)SongSlot.Strike;
 
         private HiveDefenseRoot _root;
         private SwarmConfig _swarmConfig;
@@ -103,39 +105,60 @@ namespace DigitalStory.Tests.PlayMode
             int dome = SongIndex<DomeSong>();
             Assert.That(_root.Session.Discovery.IsKnown(dome), Is.False, "The Dome is known before it is played.");
 
-            yield return Play(DomeHoles);
+            yield return Play(KeysOf<DomeSong>());
 
             Assert.That(_root.Session.Discovery.IsKnown(dome), Is.True);
         }
 
         [UnityTest]
-        public IEnumerator PressHole_WithTheDomeKeys_ColoursTheSwarmInTheDefenseColour()
+        public IEnumerator PressHole_WithTheDomeKeys_ColoursTheGuardSquadInTheDefenseColour()
         {
             SwarmGpuView view = Object.FindAnyObjectByType<SwarmGpuView>();
 
-            yield return Play(DomeHoles);
+            yield return Play(KeysOf<DomeSong>());
 
-            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Dome));
-            Assert.That(view.CastColor, Is.EqualTo(_swarmConfig.DefenseColor));
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(view.IsSlotLive(GuardSlot), Is.True);
+            Assert.That(view.SlotColor(GuardSlot), Is.EqualTo(_swarmConfig.DefenseColor));
+            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.River), "the rest of the swarm stays the river");
+        }
+
+        // Plan section G, M1 is done when the Dome and the Sting run together in Play Mode.
+        [UnityTest]
+        public IEnumerator PressHole_TheDomeThenTheSting_RunBothAtOnceInTheirOwnColours()
+        {
+            SwarmGpuView view = Object.FindAnyObjectByType<SwarmGpuView>();
+
+            yield return Play(KeysOf<DomeSong>());
+            yield return Play(KeysOf<StingSong>());
+
+            SwarmFormMachine forms = _root.Session.Forms;
+            Assert.That(forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Sting));
+            Assert.That(forms.IsDomed, Is.True);
+            Assert.That(forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(view.IsSlotLive(GuardSlot), Is.True, "the view does not draw the Dome");
+            Assert.That(view.IsSlotLive(StrikeSlot), Is.True, "the view does not draw the Sting");
+            Assert.That(view.SlotColor(GuardSlot), Is.EqualTo(_swarmConfig.DefenseColor));
+            Assert.That(view.SlotColor(StrikeSlot), Is.EqualTo(_swarmConfig.AttackColor));
         }
 
         [UnityTest]
-        public IEnumerator PressHole_WithTheStingKeys_ColoursTheSwarmInTheAttackColour()
+        public IEnumerator PressHole_ASecondAttack_ReplacesTheFirstWhileTheDomeStays()
         {
             SwarmGpuView view = Object.FindAnyObjectByType<SwarmGpuView>();
-            yield return Play(DomeHoles);
-            Assert.That(view.CastColor, Is.EqualTo(_swarmConfig.DefenseColor), "The Dome did not colour the swarm first.");
+            yield return Play(KeysOf<DomeSong>());
+            yield return Play(KeysOf<StingSong>());
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Sting), "the Sting did not start");
 
-            // The sting needs a beekeeper to aim at.
-            Time.timeScale = FastTimeScale;
-            yield return WaitForBeekeeper();
-            Time.timeScale = _savedTimeScale;
-            Assert.That(_root.Session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(1), "No beekeeper came to sting.");
+            yield return Play(KeysOf<TornadoSong>());
 
-            yield return Play(StingHoles);
-
-            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Sting));
-            Assert.That(view.CastColor, Is.EqualTo(_swarmConfig.AttackColor));
+            SwarmFormMachine forms = _root.Session.Forms;
+            Assert.That(forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Tornado));
+            Assert.That(forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(forms.IsDomed, Is.True);
+            Assert.That(view.SlotColor(GuardSlot), Is.EqualTo(_swarmConfig.DefenseColor));
+            Assert.That(view.SlotColor(StrikeSlot), Is.EqualTo(_swarmConfig.AttackColor));
         }
 
         [UnityTest]
@@ -154,37 +177,20 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator PressHole_WithTheDomeKeys_FormsTheDome()
         {
-            for (int index = 0; index < DomeHoles.Length; index++)
-            {
-                _root.PressHole(DomeHoles[index]);
-                for (int frame = 0; frame < FramesBetweenNotes; frame++)
-                {
-                    yield return null;
-                }
-            }
+            yield return Play(KeysOf<DomeSong>());
 
-            yield return null;
-            yield return null;
-
-            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
         }
 
+        // Plan section A: an aimed song casts even with nobody on the field, and strikes ahead of the Piper.
         [UnityTest]
         public IEnumerator PressHole_WithTheMeteorKeys_FormsTheMeteor()
         {
-            for (int index = 0; index < MeteorHoles.Length; index++)
-            {
-                _root.PressHole(MeteorHoles[index]);
-                for (int frame = 0; frame < FramesBetweenNotes; frame++)
-                {
-                    yield return null;
-                }
-            }
+            Assert.That(_root.Session.ActiveBeekeeperCount, Is.EqualTo(0), "a beekeeper came before the test played");
 
-            yield return null;
-            yield return null;
+            yield return Play(KeysOf<MeteorSong>());
 
-            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Meteor));
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Meteor));
         }
 
         [UnityTest]
@@ -266,9 +272,9 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(swing, Is.GreaterThan(SmallestSwingDegrees));
         }
 
-        private IEnumerator Play(int[] holes)
+        private IEnumerator Play(IReadOnlyList<int> holes)
         {
-            for (int index = 0; index < holes.Length; index++)
+            for (int index = 0; index < holes.Count; index++)
             {
                 _root.PressHole(holes[index]);
                 for (int frame = 0; frame < FramesBetweenNotes; frame++)
@@ -282,17 +288,10 @@ namespace DigitalStory.Tests.PlayMode
             yield return null;
         }
 
-        // Batch mode runs thousands of frames a second, so count game time, not frames.
-        private IEnumerator WaitForBeekeeper()
+        // The keys on the scene's own song asset.
+        private IReadOnlyList<int> KeysOf<T>() where T : SwarmSongEffect
         {
-            int frames = 0;
-            float elapsed = 0f;
-            while (_root.Session.ActiveBeekeeperCount < 1 && elapsed < MaxWaveSeconds && frames < MaxFramesForWave)
-            {
-                elapsed += Time.deltaTime;
-                frames++;
-                yield return null;
-            }
+            return _root.Session.Caster[SongIndex<T>()].Song.Keys;
         }
 
         private int SongIndex<T>() where T : SwarmSongEffect

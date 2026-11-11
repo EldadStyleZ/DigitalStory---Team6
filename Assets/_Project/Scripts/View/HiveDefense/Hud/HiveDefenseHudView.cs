@@ -33,7 +33,7 @@ namespace DigitalStory.View
         private SwarmConfig _swarmConfig;
 
         [SerializeField, Tooltip("The line shown in the first seconds of a match.")]
-        private string _promptText = "Play notes with 1 to 6. Find the songs.";
+        private string _promptText = "Play notes with H J K L. Find the songs.";
 
         [SerializeField, Min(0f), Tooltip("How long the first line stays, in seconds.")]
         private float _promptSeconds = 8f;
@@ -227,7 +227,7 @@ namespace DigitalStory.View
                     text.Append(' ');
                 }
 
-                text.Append(song.Keys[index] + 1);
+                text.Append(HiveDefenseInput.HoleName(song.Keys[index]));
             }
 
             return text.ToString();
@@ -400,7 +400,7 @@ namespace DigitalStory.View
 
                     _noteHoles[slot] = hole;
                     cell.AddToClassList(HoleClassPrefix + HoleColour(hole));
-                    cell.text = (hole + 1).ToString(CultureInfo.InvariantCulture);
+                    cell.text = HiveDefenseInput.HoleName(hole);
                 }
 
                 SetHint(slot, slot >= hintFrom && hint > 0);

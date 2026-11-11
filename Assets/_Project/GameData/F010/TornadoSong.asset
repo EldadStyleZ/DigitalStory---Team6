@@ -16,11 +16,16 @@ MonoBehaviour:
     _title: Tornado
     _description: A column of wasps throws beekeepers back
     _cooldownSeconds: 10
-    _keys: 05000000040000000300000005000000i
+    _keys: 01000000020000000200000000000000i
   _category: 0
   _knownFromStart: 0
   _revealedWhenFuryFills: 0
+  _share: 0.37
   <Seconds>k__BackingField: 1.5
   <Radius>k__BackingField: 5
+  <Height>k__BackingField: 3
+  <SpinRadiansPerSecond>k__BackingField: 6
+  <HitSeconds>k__BackingField: 0.3
+  <WallRadius>k__BackingField: 1.5
   <Damage>k__BackingField: 30
   <KnockbackSpeed>k__BackingField: 6

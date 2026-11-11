@@ -129,7 +129,7 @@ namespace DigitalStory.View
             pips.pickingMode = PickingMode.Ignore;
             for (int key = 0; key < song.Keys.Count; key++)
             {
-                var pip = new Label((song.Keys[key] + 1).ToString(CultureInfo.InvariantCulture));
+                var pip = new Label(HiveDefenseInput.HoleName(song.Keys[key]));
                 pip.AddToClassList("pip");
                 pip.AddToClassList(HoleClassPrefix + (((song.Keys[key] % HoleColours) + HoleColours) % HoleColours));
                 pip.pickingMode = PickingMode.Ignore;

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using DigitalStory.Logic;
 using DigitalStory.View;
@@ -15,7 +16,8 @@ namespace DigitalStory.Tests.PlayMode
 {
     /// <summary>
     /// Renders the Wasp Piper scene's camera into PNG files so a reviewer can see the swarm without opening the Editor.
-    /// Each test is ignored unless the F010_SNAPSHOT_DIR environment variable names a folder.
+    /// Each test is ignored unless the F010_SNAPSHOT_DIR environment variable names a folder. Every song is played with
+    /// the keys on its own asset, so a change of keys never breaks these tests.
     /// </summary>
     /// <remarks>
     /// Batch mode runs thousands of frames a second, so every frame is pinned to 1/30 s of game time with
@@ -71,14 +73,14 @@ namespace DigitalStory.Tests.PlayMode
         private const float StopAfterWalkSeconds = 2.5f;
         private const float HintPauseSeconds = 0.5f;
         private const int KnownInHud = 3;
-
-        private static readonly int[] DomeHoles = { 0, 1, 0 };
-        private static readonly int[] HiveCallHoles = { 0, 5, 0 };
-        private static readonly int[] StingHoles = { 2, 3, 4 };
-        private static readonly int[] TornadoHoles = { 5, 4, 3, 5 };
-        private static readonly int[] ColossusHoles = { 3, 4, 5, 4, 3 };
-        private static readonly int[] MeteorHoles = { 4, 2, 0 };
-        private static readonly int[] HintHoles = { 5, 4 };
+        private const float DomeWovenSeconds = 0.5f;
+        private const float DomeAndStingFromMeters = 10f;
+        private const float StingLaunchShotSeconds = 0.35f;
+        private const float StingWrapShotSeconds = 1.2f;
+        private const float TornadoGrowShotSeconds = 0.3f;
+        private const string LaunchSuffix = "-launch";
+        private const string WrapSuffix = "-wrap";
+        private const string GrowSuffix = "-grow";
 
         private HiveDefenseRoot _root;
         private PiperMotor _piper;
@@ -168,8 +170,8 @@ namespace DigitalStory.Tests.PlayMode
         public IEnumerator Snapshot3_Dome()
         {
             yield return Wait(SongSeconds);
-            yield return Play(DomeHoles);
-            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Dome));
+            yield return Play(KeysOf<DomeSong>());
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
             yield return Wait(SongSeconds);
             yield return Capture("snap-3-dome");
             yield return CaptureClose("snap-3-dome", PiperFocus());
@@ -179,7 +181,7 @@ namespace DigitalStory.Tests.PlayMode
         public IEnumerator Snapshot4_HiveCall()
         {
             yield return Wait(SongSeconds);
-            yield return Play(HiveCallHoles);
+            yield return Play(KeysOf<HiveCallSong>());
             Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall));
             yield return Wait(SongSeconds);
             yield return Capture("snap-4-hivecall");
@@ -207,11 +209,19 @@ namespace DigitalStory.Tests.PlayMode
             yield return WalkToNearestBeekeeper(StingFromMeters);
             yield return Wait(StingSettleSeconds);
 
-            yield return Play(StingHoles);
-            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Sting));
-            yield return Wait(StingSeconds);
+            yield return Play(KeysOf<StingSong>());
+            float castTime = Time.time;
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Sting));
+
+            // The comet on its way, the wrap as the head arrives, and the two rings once every wasp is on them.
+            yield return WaitSince(castTime, StingLaunchShotSeconds);
+            yield return CaptureClose("snap-6-sting" + LaunchSuffix, MidpointToNearestBeekeeper());
+            yield return WaitSince(castTime, StingSeconds);
             yield return Capture("snap-6-sting");
             yield return CaptureClose("snap-6-sting", MidpointToNearestBeekeeper());
+            yield return WaitSince(castTime, StingWrapShotSeconds);
+            Vector3 target = _root.Session.Forms.Slot(SongSlot.Strike).ParamA;
+            yield return CaptureClose("snap-6-sting" + WrapSuffix, target + (Vector3.up * CloseFocusHeight));
         }
 
         [UnityTest]
@@ -220,7 +230,7 @@ namespace DigitalStory.Tests.PlayMode
             yield return Wait(SongSeconds);
             _root.Session.Fury.AddDamage(FuryDamage);
             Assert.That(_root.Session.Fury.IsFull, Is.True);
-            yield return Play(ColossusHoles);
+            yield return Play(KeysOf<ColossusSong>());
 
             float waited = 0f;
             while (!_root.Session.IsColossusActive && waited < MaxColossusWaitSeconds)
@@ -240,9 +250,15 @@ namespace DigitalStory.Tests.PlayMode
         public IEnumerator Snapshot8_Tornado()
         {
             yield return Wait(SongSeconds);
-            yield return Play(TornadoHoles);
-            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Tornado));
-            yield return Wait(TornadoSeconds);
+            yield return Play(KeysOf<TornadoSong>());
+            float castTime = Time.time;
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Tornado));
+
+            // The hit: the column has grown from the ground and the shock ring flies out to the reach.
+            yield return WaitSince(castTime, TornadoGrowShotSeconds);
+            yield return CaptureClose(
+                "snap-8-tornado" + GrowSuffix, _piper.Position + (Vector3.up * TornadoFocusHeight), WideCloseDistance, LowPitch);
+            yield return WaitSince(castTime, TornadoSeconds);
             yield return Capture("snap-8-tornado");
             yield return CaptureClose("snap-8-tornado", _piper.Position + (Vector3.up * TornadoFocusHeight), WideCloseDistance, LowPitch);
         }
@@ -250,18 +266,25 @@ namespace DigitalStory.Tests.PlayMode
         // Camera.Render does not draw UI Toolkit, so the HUD panel is pointed at a render texture for a few frames,
         // through a runtime copy of its PanelSettings. The PanelSettings asset itself is never changed.
         // Two songs are found besides Sting, so the songbook shows three known songs and four empty slots, the "New song"
-        // line, and the start of the Tornado's notes glowing as a hint.
+        // line, and all but the last of the Tornado's notes glowing as a hint.
         [UnityTest]
         public IEnumerator Snapshot9_Hud()
         {
             yield return Wait(SongSeconds);
-            yield return Play(HiveCallHoles);
+            yield return Play(KeysOf<HiveCallSong>());
             yield return Wait(SongSeconds);
-            yield return Play(DomeHoles);
+            yield return Play(KeysOf<DomeSong>());
             yield return Wait(HintPauseSeconds);
-            yield return Play(HintHoles);
+            IReadOnlyList<int> tornado = KeysOf<TornadoSong>();
+            var hint = new int[tornado.Count - 1];
+            for (int index = 0; index < hint.Length; index++)
+            {
+                hint[index] = tornado[index];
+            }
+
+            yield return Play(hint);
             Assert.That(_root.Session.Discovery.KnownCount, Is.EqualTo(KnownInHud));
-            Assert.That(_root.Session.Discovery.HintNotes(_root.Session.Caster), Is.EqualTo(HintHoles.Length));
+            Assert.That(_root.Session.Discovery.HintNotes(_root.Session.Caster), Is.EqualTo(hint.Length));
 
             UIDocument document = UnityEngine.Object.FindAnyObjectByType<UIDocument>();
             Assert.That(document, Is.Not.Null);
@@ -309,12 +332,12 @@ namespace DigitalStory.Tests.PlayMode
             yield return WalkToNearestBeekeeper(MeteorFromMeters);
             yield return Wait(StingSettleSeconds);
 
-            yield return Play(MeteorHoles);
+            yield return Play(KeysOf<MeteorSong>());
             float castTime = Time.time;
-            SwarmFormMachine forms = _root.Session.Forms;
-            Assert.That(forms.Current, Is.EqualTo(SwarmForm.Meteor));
+            SlotState strike = _root.Session.Forms.Slot(SongSlot.Strike);
+            Assert.That(strike.Form, Is.EqualTo(SwarmForm.Meteor));
             Vector3 piper = _piper.Position;
-            Vector3 impact = forms.MeteorTarget;
+            Vector3 impact = strike.ParamA;
 
             yield return WaitSince(castTime, MeteorRiseShotSeconds);
             yield return CaptureMeteor("snap-10-meteor-rise", piper, impact);
@@ -344,6 +367,29 @@ namespace DigitalStory.Tests.PlayMode
             yield return CaptureClose("snap-11-stop-after-walk", PiperFocus());
         }
 
+        // Plan section G, M1: the Dome (blue, around the Piper) and the Sting (red, on a beekeeper) at once, while the rest
+        // of the swarm still flows as the yellow river.
+        [UnityTest]
+        public IEnumerator Snapshot12_DomeAndSting()
+        {
+            yield return WaitForBeekeepers(1);
+            Assert.That(_root.Session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(1));
+
+            // Far enough that the beekeeper, walking in, is still clear of the Dome when the picture is taken.
+            yield return WalkToNearestBeekeeper(DomeAndStingFromMeters);
+            yield return Play(KeysOf<DomeSong>());
+            yield return Wait(DomeWovenSeconds);
+            yield return Play(KeysOf<StingSong>());
+            SwarmFormMachine forms = _root.Session.Forms;
+            Assert.That(forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Sting));
+            yield return Wait(StingSeconds);
+            Assert.That(forms.Slot(SongSlot.Guard).IsActive && forms.Slot(SongSlot.Strike).IsActive, Is.True, "both songs run in the picture");
+
+            yield return Capture("snap-12-dome-and-sting");
+            yield return CaptureClose("snap-12-dome-and-sting", MidpointToNearestBeekeeper(), WideCloseDistance, ClosePitch);
+        }
+
         private IEnumerator Wait(float seconds)
         {
             float elapsed = 0f;
@@ -370,9 +416,25 @@ namespace DigitalStory.Tests.PlayMode
             return offset.magnitude;
         }
 
-        private IEnumerator Play(int[] holes)
+        // The keys on the scene's own song asset.
+        private IReadOnlyList<int> KeysOf<T>() where T : SwarmSongEffect
         {
-            for (int index = 0; index < holes.Length; index++)
+            HiveDefenseSession session = _root.Session;
+            for (int song = 0; song < session.Caster.Count; song++)
+            {
+                if (session.Caster[song] is T)
+                {
+                    return session.Caster[song].Song.Keys;
+                }
+            }
+
+            Assert.Fail("The scene has no " + typeof(T).Name + ".");
+            return null;
+        }
+
+        private IEnumerator Play(IReadOnlyList<int> holes)
+        {
+            for (int index = 0; index < holes.Count; index++)
             {
                 _root.PressHole(holes[index]);
                 yield return null;

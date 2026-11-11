@@ -10,17 +10,23 @@ namespace DigitalStory.View
     [AddComponentMenu("DigitalStory/Hive Defense Input")]
     public sealed class HiveDefenseInput : MonoBehaviour
     {
-        private static readonly KeyCode[] NumberKeys =
-        {
-            KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5, KeyCode.Alpha6,
-        };
+        private const float MouseLiveSeconds = 1f;
+        private const float MouseMovePixels = 4f;
 
-        private static readonly KeyCode[] KeypadKeys =
-        {
-            KeyCode.Keypad1, KeyCode.Keypad2, KeyCode.Keypad3, KeyCode.Keypad4, KeyCode.Keypad5, KeyCode.Keypad6,
-        };
+        // Holes 0 to 3, lowest first: H J K L, then the top row, then the keypad.
+        private static readonly KeyCode[] LetterKeys = { KeyCode.H, KeyCode.J, KeyCode.K, KeyCode.L };
+
+        private static readonly KeyCode[] NumberKeys = { KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4 };
+
+        private static readonly KeyCode[] KeypadKeys = { KeyCode.Keypad1, KeyCode.Keypad2, KeyCode.Keypad3, KeyCode.Keypad4 };
+
+        // What the HUD writes for each hole: the letter of its key.
+        private static readonly string[] HoleNames = { "H", "J", "K", "L" };
 
         private Camera _camera;
+        private Vector3 _lastMouse;
+        private bool _hasLastMouse;
+        private float _mouseLiveLeft;
 
         /// <summary>Raised for each hole pressed this frame, lowest hole first. The hole counts from 0.</summary>
         public event Action<int> HolePressed;
@@ -28,19 +34,29 @@ namespace DigitalStory.View
         /// <summary>The walking direction on the ground, relative to the camera's yaw. Length at most 1.</summary>
         public Vector3 Move { get; private set; }
 
-        /// <summary>True only on the frame the punch was pressed (left mouse or J).</summary>
+        /// <summary>True only on the frame the punch was pressed (Space or left mouse).</summary>
         public bool PunchPressed { get; private set; }
 
-        /// <summary>True only on the frame the kick was pressed (right mouse or K).</summary>
+        /// <summary>True only on the frame the kick was pressed (Left Shift or right mouse).</summary>
         public bool KickPressed { get; private set; }
 
         /// <summary>True only on the frame restart was pressed (R).</summary>
         public bool RestartPressed { get; private set; }
 
-        /// <summary>True while the key for a hole is held down. The hole counts from 0.</summary>
+        /// <summary>True for 1 s after the mouse moves 4 px, and while a mouse button is held. Then the mouse aims.</summary>
+        public bool IsMouseLive { get; private set; }
+
+        /// <summary>True while a key for a hole is held down (H J K L, top row or keypad). The hole counts from 0.</summary>
         public bool IsHoleHeld(int hole)
         {
-            return hole >= 0 && hole < NumberKeys.Length && (Input.GetKey(NumberKeys[hole]) || Input.GetKey(KeypadKeys[hole]));
+            return hole >= 0 && hole < LetterKeys.Length
+                && (Input.GetKey(LetterKeys[hole]) || Input.GetKey(NumberKeys[hole]) || Input.GetKey(KeypadKeys[hole]));
+        }
+
+        /// <summary>The letter of the key that plays the hole (H J K L), for the HUD. The hole counts from 0; any other hole is "?".</summary>
+        public static string HoleName(int hole)
+        {
+            return hole >= 0 && hole < HoleNames.Length ? HoleNames[hole] : "?";
         }
 
         /// <summary>Supplies the camera that walking and aiming are relative to. Call once, before the first Update.</summary>
@@ -75,17 +91,46 @@ namespace DigitalStory.View
         private void Update()
         {
             Move = ReadMove();
-            PunchPressed = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.J);
-            KickPressed = Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.K);
+            PunchPressed = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
+            KickPressed = Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.LeftShift);
             RestartPressed = Input.GetKeyDown(KeyCode.R);
+            UpdateMouseLive();
 
-            for (int hole = 0; hole < NumberKeys.Length; hole++)
+            for (int hole = 0; hole < LetterKeys.Length; hole++)
             {
-                if (Input.GetKeyDown(NumberKeys[hole]) || Input.GetKeyDown(KeypadKeys[hole]))
+                if (Input.GetKeyDown(LetterKeys[hole]) || Input.GetKeyDown(NumberKeys[hole]) || Input.GetKeyDown(KeypadKeys[hole]))
                 {
                     HolePressed?.Invoke(hole);
                 }
             }
+        }
+
+        private void UpdateMouseLive()
+        {
+            Vector3 mouse = Input.mousePosition;
+            if (_hasLastMouse && (mouse - _lastMouse).sqrMagnitude >= MouseMovePixels * MouseMovePixels)
+            {
+                _mouseLiveLeft = MouseLiveSeconds;
+            }
+            else
+            {
+                _mouseLiveLeft = Mathf.Max(0f, _mouseLiveLeft - Time.unscaledDeltaTime);
+            }
+
+            // The reference moves only when the mouse has moved 4 px, so slow drags still add up.
+            if (!_hasLastMouse || (mouse - _lastMouse).sqrMagnitude >= MouseMovePixels * MouseMovePixels)
+            {
+                _lastMouse = mouse;
+                _hasLastMouse = true;
+            }
+
+            bool held = Input.GetMouseButton(0) || Input.GetMouseButton(1);
+            if (held)
+            {
+                _mouseLiveLeft = MouseLiveSeconds;
+            }
+
+            IsMouseLive = held || _mouseLiveLeft > 0f;
         }
 
         private Vector3 ReadMove()

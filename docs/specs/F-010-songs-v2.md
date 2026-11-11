@@ -221,3 +221,64 @@ For the owner:
 - Four hidden duets, with only a counter showing. You could list their names as hints.
 - The Colossus punches on Space and kicks on Left Shift. Sting now starts its damage when it arrives (0.6 s), not at the cast.
 ```
+
+## Added by the owner after the plan: nests, swarm level, the giant and the core loop
+
+These sections were agreed with the owner on 2026-11-11. Where they differ from the plan above, they win.
+
+### H. Nests and swarm level
+
+The swarm grows during a match. Strength comes from the **swarm level**, never from the live wasp count, because the count is also the player's health: a hurt swarm must not hit softer.
+
+| Value | Start |
+|---|---|
+| Starting wasps and capacity | 800 |
+| Nests on the map | 8, in Raz's `WaspNestTree_LowPoly` trees, each at least 12 m from a hive |
+| Open at the start | 2, within 10 to 14 m of the middle |
+| Opened later | 2 after wave 1, 2 after wave 2, 1 after wave 3, 1 after wave 4 |
+| Collecting | Stay within 2.5 m of an open nest for 2 s. Leaving the circle or being hit starts the 2 s again |
+| Each nest gives | +400 capacity (4,000 at most), +400 wasps now, +1 level. The nest is gone; the tree stays |
+| Size per level | × (1 + 0.12 × (level − 1)) on every song's radius, reach and height |
+| Damage per level | The same multiplier |
+| Hydra's heads | 3, then 4 from level 4 and 5 from level 7 |
+| Collapse | Below 12% of capacity. The respawn brings 50% of capacity |
+| Low warning | Below 30% of capacity |
+
+- Hive Call refills up to the capacity, at its usual rate.
+- A collected nest **hums**: the first two notes of one song the player has not found are shown on its empty slot in the songbook. A nest collected when every song is found hums nothing.
+- Wasps knocked off by a hit stay absolute numbers, so a bigger swarm is also a tougher one.
+- Waves 4 and 5 grow to match the stronger swarm. The playtest bot sets the numbers: lost without nests, winnable with them.
+- The HUD shows the level, a marker at the screen edge for each open nest, and a ring that fills while collecting. The end screen counts nests.
+- Left out for now: beekeepers that destroy nests, and wild wasps that defend them.
+
+### I. The giant, version 2
+
+The owner played the Colossus and found it too short and too shallow.
+
+| Value | Start |
+|---|---|
+| Lasts | 20 s, plus 2 s for each beekeeper the giant kills, 30 s at most |
+| Fury | 1 point per 3 damage (was 2), so the giant stays a highlight |
+| Size and damage | Follow the swarm level |
+
+While the giant stands, H J K L are its moves and do not reach the songs:
+
+| Keys | Move | Rule |
+|---|---|---|
+| J | Punch | The existing three-hit chain; the third is heavy |
+| K | Kick | As today |
+| L | Ground slam | 40 damage and 4 m/s knockback within 5 m of the giant. 3 s cooldown |
+| H | Roar | Stuns every beekeeper within 6 m for 1.2 s. 6 s cooldown |
+| K K | Spin kick | The second K within 0.6 s: 55 damage all around within 3.5 m |
+| L L | Leap slam | The second L within 0.6 s: the giant leaps to the aimed spot, 10 m at most, lands after 0.6 s and deals 70 damage within 4 m |
+
+- Space or left mouse still punches, and Left Shift or right mouse still kicks.
+- A strip on the HUD names the four moves while the giant stands, and a ring shows the time left.
+
+### J. The core loop and its feedback
+
+- **Every few seconds:** read a threat, choose, play three or four notes, watch the swarm answer, see the result. Each step has one clear signal: a wind-up lean or a ring on the ground, a pitched note and a glowing pip, a change of shape and colour with a flash of light, and a hit that lands when it looks like it lands.
+- **Every wave:** a banner when a wave starts and when it is cleared. The break is time to try phrases and fetch a nest.
+- **Every match:** the end screen shows hives saved, wasps left, songs found, nests collected and a grade. R restarts at once.
+- **Impact feel:** a 50 ms pause of the swarm and a small camera shake on the big hits, as section B says.
+- **The playtest bot** plays whole matches through the rules: an idle player loses, a player with only Sting struggles, and a skilled player wins. It runs after every batch of songs.
