@@ -142,8 +142,10 @@ namespace DigitalStory.Tests.PlayMode
                 $"main thread avg {whole.AverageMs:F3} ms, worst {whole.WorstMs:F3} ms, " +
                 $"GC per frame median {whole.Median} B, max {whole.Max} B (empty-scene floor median {floor.Median} B)");
 
-            // The UI Toolkit panel allocates inside the engine each frame while a UIDocument is enabled, even with every
-            // F-010 script disabled, so it is measured apart: everything but the UIDocument must stay at the floor.
+            // While any UIDocument is enabled, UI Toolkit's input provider asks the Input Manager for the "Next" and
+            // "Previous" buttons every frame. The project defines neither, so each call throws and catches an exception:
+            // 1216 B per frame inside the engine, in every scene with a UIDocument (Town too), none of it from F-010.
+            // So the UIDocument is measured apart: everything but it must stay at the floor.
             foreach (UnityEngine.UIElements.UIDocument document in Object.FindObjectsByType<UnityEngine.UIElements.UIDocument>())
             {
                 document.enabled = false;

@@ -58,12 +58,24 @@ namespace DigitalStory.Tests.PlayMode
         private const float TornadoFocusHeight = 1.5f;
         private const float HurtShare = 0.4f;
         private const float HiveShowSeconds = 0.3f;
+        private const string GameSuffix = "-game";
+        private const float MeteorFromMeters = 10f;
+        private const float MeteorRiseShotSeconds = 0.7f;
+        private const float MeteorDiveShotSeconds = 1.05f;
+        private const float MeteorImpactShotSeconds = 1.45f;
+        private const float MeteorViewDistance = 20f;
+        private const float MeteorViewPitch = 10f;
+        private const float MeteorFocusHeight = 6.5f;
+        private const float QuarterTurnDegrees = 90f;
+        private const float StopAfterWalkMeters = 6f;
+        private const float StopAfterWalkSeconds = 2.5f;
 
         private static readonly int[] DomeHoles = { 0, 1, 0 };
         private static readonly int[] HiveCallHoles = { 0, 5, 0 };
         private static readonly int[] StingHoles = { 2, 3, 4 };
         private static readonly int[] TornadoHoles = { 5, 4, 3, 5 };
         private static readonly int[] ColossusHoles = { 3, 4, 5, 4, 3 };
+        private static readonly int[] MeteorHoles = { 4, 2, 0 };
 
         private HiveDefenseRoot _root;
         private PiperMotor _piper;
@@ -277,6 +289,51 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(_capturer.LastWasFlat, Is.False, "snap-9-hud.png is a single flat colour.");
         }
 
+        // Each moment is taken twice: from the side, far and low enough to show the climb (the named picture), and
+        // from the game camera (the -game picture), which looks down too steeply to see the top of the climb.
+        [UnityTest]
+        public IEnumerator Snapshot10_Meteor()
+        {
+            yield return WaitForBeekeepers(1);
+            Assert.That(_root.Session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(1));
+            yield return WalkToNearestBeekeeper(MeteorFromMeters);
+            yield return Wait(StingSettleSeconds);
+
+            yield return Play(MeteorHoles);
+            float castTime = Time.time;
+            SwarmFormMachine forms = _root.Session.Forms;
+            Assert.That(forms.Current, Is.EqualTo(SwarmForm.Meteor));
+            Vector3 piper = _piper.Position;
+            Vector3 impact = forms.MeteorTarget;
+
+            yield return WaitSince(castTime, MeteorRiseShotSeconds);
+            yield return CaptureMeteor("snap-10-meteor-rise", piper, impact);
+            yield return WaitSince(castTime, MeteorDiveShotSeconds);
+            yield return CaptureMeteor("snap-10-meteor-dive", piper, impact);
+            yield return WaitSince(castTime, MeteorImpactShotSeconds);
+            yield return CaptureMeteor("snap-10-meteor-impact", piper, impact);
+        }
+
+        // Spec 9.3: once the Piper stops, the river curls back into the ring around them.
+        [UnityTest]
+        public IEnumerator Snapshot11_StopAfterWalk()
+        {
+            Vector3 start = _piper.Position;
+            float elapsed = 0f;
+            while (GroundDistance(start, _piper.Position) < StopAfterWalkMeters && elapsed < MaxWalkSeconds)
+            {
+                float dt = Time.deltaTime;
+                _piper.Move(Vector3.forward, 1f, false, dt);
+                elapsed += dt;
+                yield return null;
+            }
+
+            Assert.That(GroundDistance(start, _piper.Position), Is.GreaterThanOrEqualTo(StopAfterWalkMeters));
+            yield return Wait(StopAfterWalkSeconds);
+            yield return Capture("snap-11-stop-after-walk");
+            yield return CaptureClose("snap-11-stop-after-walk", PiperFocus());
+        }
+
         private IEnumerator Wait(float seconds)
         {
             float elapsed = 0f;
@@ -285,6 +342,22 @@ namespace DigitalStory.Tests.PlayMode
                 elapsed += Time.deltaTime;
                 yield return null;
             }
+        }
+
+        // Waits until this many game seconds have passed since startTime, a Time.time.
+        private IEnumerator WaitSince(float startTime, float seconds)
+        {
+            while (Time.time - startTime < seconds)
+            {
+                yield return null;
+            }
+        }
+
+        private static float GroundDistance(Vector3 from, Vector3 to)
+        {
+            Vector3 offset = to - from;
+            offset.y = 0f;
+            return offset.magnitude;
         }
 
         private IEnumerator Play(int[] holes)
@@ -376,14 +449,34 @@ namespace DigitalStory.Tests.PlayMode
 
         private IEnumerator CaptureClose(string name, Vector3 focus) => CaptureClose(name, focus, CloseDistance, ClosePitch);
 
-        // A temporary pose this far from the focus. The capturer puts the camera back afterwards.
         private IEnumerator CaptureClose(string name, Vector3 focus, float distance, float pitch)
         {
-            string closeName = name + CloseSuffix;
-            Quaternion rotation = Quaternion.Euler(pitch, _camera.transform.eulerAngles.y, 0f);
+            return CapturePosed(name + CloseSuffix, focus, distance, pitch, _camera.transform.eulerAngles.y);
+        }
+
+        // Looks across the line from the Piper to the impact, so both stand apart in the picture, then from the game camera.
+        private IEnumerator CaptureMeteor(string name, Vector3 piper, Vector3 impact)
+        {
+            Vector3 across = impact - piper;
+            across.y = 0f;
+            float yaw = _camera.transform.eulerAngles.y;
+            if (across.sqrMagnitude > 0f)
+            {
+                yaw = (Mathf.Atan2(across.x, across.z) * Mathf.Rad2Deg) + QuarterTurnDegrees;
+            }
+
+            Vector3 focus = ((piper + impact) * 0.5f) + (Vector3.up * MeteorFocusHeight);
+            yield return CapturePosed(name, focus, MeteorViewDistance, MeteorViewPitch, yaw);
+            yield return Capture(name + GameSuffix);
+        }
+
+        // A temporary pose this far from the focus. The capturer puts the camera back afterwards.
+        private IEnumerator CapturePosed(string fileName, Vector3 focus, float distance, float pitch, float yaw)
+        {
+            Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
             Vector3 position = focus - (rotation * Vector3.forward * distance);
-            _capturer.RequestCapture(Path.Combine(_directory, closeName + ".png"), position, rotation);
-            yield return WaitForCapture(closeName);
+            _capturer.RequestCapture(Path.Combine(_directory, fileName + ".png"), position, rotation);
+            yield return WaitForCapture(fileName);
         }
 
         private IEnumerator WaitForCapture(string name)

@@ -35,6 +35,8 @@ namespace DigitalStory.Editor
         private const string PiperFbxPath = Root + "/Art/model/Beekeeper_LowPoly.fbx";
         private const string MixamoFolder = Root + "/Art/Mixamo";
         private const string ControllerPath = ArtFolder + "/PiperSwarm.controller";
+        private const string ClipFolder = ArtFolder + "/Clips";
+        private const string ColossusControllerPath = ArtFolder + "/Colossus.controller";
         private const string ComputePath = ArtFolder + "/Shaders/WaspSwarm.compute";
         private const string WaspShaderPath = ArtFolder + "/Shaders/WaspInstanced.shader";
         private const string PanelSettingsPath = Root + "/UI/GamePanelSettings.asset";
@@ -44,6 +46,11 @@ namespace DigitalStory.Editor
         private const string IsPlayingParameter = "IsPlaying";
         private const float MovingThreshold = 0.1f;
         private const float BlendSeconds = 0.1f;
+        private const float AttackExitTime = 0.95f;
+        private const string PunchTrigger = "Punch";
+        private const string HeavyPunchTrigger = "HeavyPunch";
+        private const string KickTrigger = "Kick";
+        private const string HitTrigger = "Hit";
 
         private const string IdleClip = "Idle";
         private const string RunClip = "Run";
@@ -85,7 +92,7 @@ namespace DigitalStory.Editor
         {
             "SwarmConfig", "PiperMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "SmokeConfig", "WaveConfig",
             "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
-            "DomeSong", "StingSong", "TornadoSong", "GustSong", "HiveCallSong", "ColossusSong",
+            "DomeSong", "StingSong", "TornadoSong", "GustSong", "MeteorSong", "HiveCallSong", "ColossusSong",
         };
 
         // Prefab name, target height in metres.
@@ -190,7 +197,8 @@ namespace DigitalStory.Editor
             BeekeeperView stickView = MakeBeekeeperPrefab("F010StickBeekeeper", piperPrefab, controller, false);
             BeekeeperView smokerView = MakeBeekeeperPrefab("F010SmokerBeekeeper", piperPrefab, controller, true);
             Debug.Log("[F010] Prefabs F010StickBeekeeper and F010SmokerBeekeeper saved.");
-            GameObject colossusPrefab = MakeColossusPrefab(piperPrefab, controller, colossus);
+            MixamoKit mixamo = PrepareMixamo();
+            GameObject colossusPrefab = MakeColossusPrefab(piperPrefab, controller, colossus, mixamo);
             BakeSamples(colossusPrefab, swarm, samples);
             Debug.Log("[F010] Prefab F010Colossus saved and its samples baked.");
             var grenade = MakeViewPrefab<SmokeGrenadeView>("F010SmokeGrenade");
@@ -270,7 +278,7 @@ namespace DigitalStory.Editor
             return smoker;
         }
 
-        // The order is the spec's table: Dome, Sting, Tornado, Gust, Hive Call, Colossus.
+        // The order is the spec's table: Dome, Sting, Tornado, Gust, Meteor, Hive Call, Colossus.
         private static SwarmSongEffect[] LoadOrCreateSongs()
         {
             return new SwarmSongEffect[]
@@ -279,6 +287,7 @@ namespace DigitalStory.Editor
                 LoadOrCreate<StingSong>("StingSong"),
                 LoadOrCreate<TornadoSong>("TornadoSong"),
                 LoadOrCreate<GustSong>("GustSong"),
+                LoadOrCreate<MeteorSong>("MeteorSong"),
                 LoadOrCreate<HiveCallSong>("HiveCallSong"),
                 LoadOrCreate<ColossusSong>("ColossusSong"),
             };
@@ -343,11 +352,7 @@ namespace DigitalStory.Editor
 
         private static AnimatorState AddState(AnimatorStateMachine machine, string clipName, bool isRun)
         {
-            AnimationClip clip = FindClip(clipName);
-            if (!clip.isLooping)
-            {
-                Debug.LogWarning($"[F010] The clip '{clipName}' in {PiperFbxPath} is not set to loop. The importer is left as it is; ask Raz to tick Loop Time.");
-            }
+            AnimationClip clip = LoopingCopy(FindClip(clipName), clipName);
 
             AnimatorState state = machine.AddState(clipName);
             state.motion = clip;
@@ -361,6 +366,33 @@ namespace DigitalStory.Editor
             }
 
             return state;
+        }
+
+        // Raz's clips are imported without Loop Time, and his importer settings are not ours to change.
+        // Each state therefore plays our own copy of the clip, saved beside the controller with looping on.
+        private static AnimationClip LoopingCopy(AnimationClip source, string clipName)
+        {
+            EnsureFolder(ClipFolder);
+            string path = $"{ClipFolder}/{clipName}.anim";
+            var copy = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            if (copy == null)
+            {
+                copy = Object.Instantiate(source);
+                copy.name = clipName;
+                AssetDatabase.CreateAsset(copy, path);
+            }
+            else
+            {
+                // Copying into the existing asset keeps its GUID, so nothing that points at it breaks.
+                EditorUtility.CopySerialized(source, copy);
+                copy.name = clipName;
+            }
+
+            AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings(copy);
+            settings.loopTime = true;
+            AnimationUtility.SetAnimationClipSettings(copy, settings);
+            EditorUtility.SetDirty(copy);
+            return copy;
         }
 
         private static AnimationClip FindClip(string clipName)
@@ -438,13 +470,19 @@ namespace DigitalStory.Editor
         }
 
         // The fallback of spec section 6, or a Mixamo model when the folder holds one.
-        private static GameObject MakeColossusPrefab(GameObject piperSource, AnimatorController controller, ColossusConfig config)
+        private static GameObject MakeColossusPrefab(
+            GameObject piperSource, AnimatorController controller, ColossusConfig config, MixamoKit mixamo)
         {
-            GameObject source = FindMixamoModel() ?? piperSource;
+            GameObject source = mixamo != null ? mixamo.Character : piperSource;
             var root = new GameObject("F010Colossus", typeof(ColossusMotor));
             GameObject model = InstantiateModel(source, root.transform);
             FitToHeight(model.transform, config.Height);
-            Animator animator = UseController(model, controller);
+            Animator animator = UseController(model, mixamo != null ? mixamo.Controller : controller);
+            if (mixamo != null && mixamo.Avatar != null)
+            {
+                animator.avatar = mixamo.Avatar;
+            }
+
             animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             SkinnedMeshRenderer body = PickBody(model.transform);
@@ -469,10 +507,15 @@ namespace DigitalStory.Editor
             return SavePrefab(root, "F010Colossus");
         }
 
-        private static GameObject FindMixamoModel()
+        // ---------------------------------------------------------------- Mixamo Colossus (spec section 6)
+
+        // Reads Art/Mixamo. Returns null, and leaves the Piper's rig as the puppet, when the folder is missing or holds no
+        // character model or no idle or walking clip.
+        private static MixamoKit PrepareMixamo()
         {
             if (!AssetDatabase.IsValidFolder(MixamoFolder))
             {
+                Debug.Log("[F010] Colossus uses the fallback rig (no folder Art/Mixamo).");
                 return null;
             }
 
@@ -480,22 +523,417 @@ namespace DigitalStory.Editor
             var paths = new List<string>(guids.Length);
             for (int index = 0; index < guids.Length; index++)
             {
-                paths.Add(AssetDatabase.GUIDToAssetPath(guids[index]));
+                string path = AssetDatabase.GUIDToAssetPath(guids[index]);
+                if (path.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase))
+                {
+                    paths.Add(path);
+                }
             }
 
             paths.Sort(StringComparer.Ordinal);
+
+            string characterPath = FindCharacterPath(paths);
+            var clipFiles = new Dictionary<MixamoClip, List<string>>();
             for (int index = 0; index < paths.Count; index++)
             {
-                var model = AssetDatabase.LoadAssetAtPath<GameObject>(paths[index]);
-                if (model != null && model.GetComponentInChildren<SkinnedMeshRenderer>(true) != null)
+                if (paths[index] == characterPath)
                 {
-                    Debug.Log($"[F010] The Colossus uses the Mixamo model {paths[index]}.");
-                    Debug.LogWarning("[F010] The Colossus controller is made from the Piper's clips. A Mixamo Humanoid needs its own clips to move.");
-                    return model;
+                    continue;
+                }
+
+                MixamoClip kind = Classify(System.IO.Path.GetFileNameWithoutExtension(paths[index]));
+                if (kind == MixamoClip.None)
+                {
+                    continue;
+                }
+
+                if (!clipFiles.TryGetValue(kind, out List<string> list))
+                {
+                    list = new List<string>();
+                    clipFiles[kind] = list;
+                }
+
+                list.Add(paths[index]);
+            }
+
+            bool hasMove = clipFiles.ContainsKey(MixamoClip.Idle) || clipFiles.ContainsKey(MixamoClip.Walk);
+            if (characterPath == null || !hasMove)
+            {
+                Debug.Log("[F010] Colossus uses the fallback rig (Art/Mixamo has no character model, or no idle or walking clip).");
+                return null;
+            }
+
+            // The character goes first: the clip files copy the avatar it makes.
+            ConfigureImporter(characterPath, false, null, null);
+            Avatar avatar = LoadAvatar(characterPath);
+            if (avatar == null || !avatar.isValid || !avatar.isHuman)
+            {
+                Debug.LogWarning($"[F010] {characterPath} did not make a valid Humanoid avatar; each clip file makes its own.");
+                avatar = null;
+            }
+
+            var kit = new MixamoKit
+            {
+                CharacterPath = characterPath,
+                Character = AssetDatabase.LoadAssetAtPath<GameObject>(characterPath),
+                Avatar = avatar,
+            };
+
+            foreach (KeyValuePair<MixamoClip, List<string>> pair in clipFiles)
+            {
+                bool loops = pair.Key == MixamoClip.Idle || pair.Key == MixamoClip.Walk;
+                for (int index = 0; index < pair.Value.Count; index++)
+                {
+                    ConfigureImporter(pair.Value[index], true, avatar, loops);
+                }
+            }
+
+            AnimationClip punch = null;
+            AnimationClip heavy = null;
+            if (clipFiles.TryGetValue(MixamoClip.Punch, out List<string> punches))
+            {
+                // A cross or hook punch is the heavy one, so the plain punch comes first.
+                punches.Sort(ComparePunchFiles);
+                punch = LoadClip(punches[0]);
+                heavy = punches.Count > 1 ? LoadClip(punches[1]) : null;
+            }
+
+            kit.Idle = FirstClip(clipFiles, MixamoClip.Idle);
+            kit.Walk = FirstClip(clipFiles, MixamoClip.Walk);
+            kit.Punch = punch;
+            kit.HeavyPunch = heavy ?? punch;
+            kit.Kick = FirstClip(clipFiles, MixamoClip.Kick);
+            kit.Hit = FirstClip(clipFiles, MixamoClip.Hit);
+            kit.Controller = BuildColossusController(kit);
+
+            var names = new StringBuilder();
+            AppendClipName(names, "Idle", kit.Idle);
+            AppendClipName(names, "Walk", kit.Walk);
+            AppendClipName(names, "Punch", kit.Punch);
+            AppendClipName(names, "HeavyPunch", kit.HeavyPunch);
+            AppendClipName(names, "Kick", kit.Kick);
+            AppendClipName(names, "Hit", kit.Hit);
+            Debug.Log($"[F010] Colossus uses the Mixamo character {kit.Character.name} with clips: {names}");
+            return kit;
+        }
+
+        private static string FindCharacterPath(List<string> paths)
+        {
+            string firstSkinned = null;
+            for (int index = 0; index < paths.Count; index++)
+            {
+                string file = System.IO.Path.GetFileNameWithoutExtension(paths[index]);
+                if (Classify(file) != MixamoClip.None)
+                {
+                    continue;
+                }
+
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>(paths[index]);
+                if (model == null || model.GetComponentInChildren<SkinnedMeshRenderer>(true) == null)
+                {
+                    continue;
+                }
+
+                if (file.EndsWith(" Bot", StringComparison.OrdinalIgnoreCase))
+                {
+                    return paths[index]; // X Bot or Y Bot.
+                }
+
+                firstSkinned = firstSkinned ?? paths[index];
+            }
+
+            return firstSkinned;
+        }
+
+        private static MixamoClip Classify(string fileName)
+        {
+            string lower = fileName.ToLowerInvariant();
+            if (lower.Contains("kick"))
+            {
+                return MixamoClip.Kick;
+            }
+
+            if (lower.Contains("punch"))
+            {
+                return MixamoClip.Punch;
+            }
+
+            if (lower.Contains("hit") || lower.Contains("reaction"))
+            {
+                return MixamoClip.Hit;
+            }
+
+            if (lower.Contains("idle"))
+            {
+                return MixamoClip.Idle;
+            }
+
+            return lower.Contains("walk") ? MixamoClip.Walk : MixamoClip.None;
+        }
+
+        private static int ComparePunchFiles(string left, string right)
+        {
+            int byWeight = IsHeavyPunchName(left).CompareTo(IsHeavyPunchName(right));
+            return byWeight != 0 ? byWeight : string.CompareOrdinal(left, right);
+        }
+
+        private static bool IsHeavyPunchName(string path)
+        {
+            string lower = System.IO.Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+            return lower.Contains("cross") || lower.Contains("hook");
+        }
+
+        // Sets the importer of one Mixamo FBX and reimports it only when something differs. These are our own files.
+        // loops is null for the character, which keeps whatever clips it carries.
+        private static void ConfigureImporter(string path, bool isClipFile, Avatar source, bool? loops)
+        {
+            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (importer == null)
+            {
+                Debug.LogWarning($"[F010] {path} has no model importer, so it is left as it is.");
+                return;
+            }
+
+            bool useSource = isClipFile && source != null;
+            ModelImporterAvatarSetup setup = useSource ? ModelImporterAvatarSetup.CopyFromOther : ModelImporterAvatarSetup.CreateFromThisModel;
+            bool changed = false;
+
+            if (importer.animationType != ModelImporterAnimationType.Human)
+            {
+                importer.animationType = ModelImporterAnimationType.Human;
+                changed = true;
+            }
+
+            if (importer.avatarSetup != setup)
+            {
+                importer.avatarSetup = setup;
+                changed = true;
+            }
+
+            if (useSource && importer.sourceAvatar != source)
+            {
+                importer.sourceAvatar = source;
+                changed = true;
+            }
+
+            if (importer.materialImportMode != ModelImporterMaterialImportMode.None)
+            {
+                importer.materialImportMode = ModelImporterMaterialImportMode.None;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                importer.SaveAndReimport();
+            }
+
+            if (loops.HasValue)
+            {
+                ConfigureClip(importer, path, loops.Value);
+            }
+        }
+
+        // One clip named after the file. Turning and height stay in the pose, so the puppet never drifts.
+        // A looping clip keeps its forward travel as root motion, which the Animator ignores (root motion is off),
+        // so a walk downloaded without "In Place" still walks on the spot. An attack keeps its lunge in the pose.
+        private static void ConfigureClip(ModelImporter importer, string path, bool loops)
+        {
+            string clipName = System.IO.Path.GetFileNameWithoutExtension(path);
+            bool bakesTravel = !loops;
+            ModelImporterClipAnimation[] current = importer.clipAnimations;
+            if (current.Length == 1 && current[0].name == clipName && current[0].loopTime == loops
+                && current[0].lockRootRotation && current[0].lockRootHeightY
+                && current[0].lockRootPositionXZ == bakesTravel)
+            {
+                return;
+            }
+
+            ModelImporterClipAnimation[] defaults = importer.defaultClipAnimations;
+            if (defaults.Length == 0)
+            {
+                Debug.LogWarning($"[F010] {path} has no animation take, so it gives no clip.");
+                return;
+            }
+
+            ModelImporterClipAnimation clip = defaults[0];
+            clip.name = clipName;
+            clip.loopTime = loops;
+            clip.lockRootRotation = true;
+            clip.lockRootHeightY = true;
+            clip.lockRootPositionXZ = bakesTravel;
+            importer.clipAnimations = new[] { clip };
+            importer.SaveAndReimport();
+        }
+
+        private static Avatar LoadAvatar(string path)
+        {
+            Object[] assets = AssetDatabase.LoadAllAssetsAtPath(path);
+            for (int index = 0; index < assets.Length; index++)
+            {
+                if (assets[index] is Avatar avatar)
+                {
+                    return avatar;
                 }
             }
 
             return null;
+        }
+
+        private static AnimationClip LoadClip(string path)
+        {
+            Object[] assets = AssetDatabase.LoadAllAssetsAtPath(path);
+            for (int index = 0; index < assets.Length; index++)
+            {
+                if (assets[index] is AnimationClip clip && !clip.name.StartsWith("__preview__", StringComparison.Ordinal))
+                {
+                    return clip;
+                }
+            }
+
+            Debug.LogWarning($"[F010] {path} holds no animation clip.");
+            return null;
+        }
+
+        private static AnimationClip FirstClip(Dictionary<MixamoClip, List<string>> files, MixamoClip kind)
+        {
+            return files.TryGetValue(kind, out List<string> list) ? LoadClip(list[0]) : null;
+        }
+
+        private static void AppendClipName(StringBuilder text, string role, AnimationClip clip)
+        {
+            if (clip == null)
+            {
+                return;
+            }
+
+            if (text.Length > 0)
+            {
+                text.Append(", ");
+            }
+
+            text.Append(role).Append('=').Append(clip.name);
+        }
+
+        // Speed above the threshold walks. Each attack trigger comes from Any State and returns to Idle at the clip's end.
+        // A missing clip leaves its trigger without a state.
+        private static AnimatorController BuildColossusController(MixamoKit kit)
+        {
+            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ColossusControllerPath);
+            if (controller == null)
+            {
+                controller = AnimatorController.CreateAnimatorControllerAtPath(ColossusControllerPath);
+            }
+
+            for (int index = controller.parameters.Length - 1; index >= 0; index--)
+            {
+                controller.RemoveParameter(index);
+            }
+
+            AnimatorStateMachine machine = controller.layers[0].stateMachine;
+            ChildAnimatorState[] oldStates = machine.states;
+            for (int index = 0; index < oldStates.Length; index++)
+            {
+                machine.RemoveState(oldStates[index].state);
+            }
+
+            AnimatorStateTransition[] oldAny = machine.anyStateTransitions;
+            for (int index = 0; index < oldAny.Length; index++)
+            {
+                machine.RemoveAnyStateTransition(oldAny[index]);
+            }
+
+            controller.AddParameter(SpeedParameter, AnimatorControllerParameterType.Float);
+            controller.AddParameter(PunchTrigger, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(HeavyPunchTrigger, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(KickTrigger, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(HitTrigger, AnimatorControllerParameterType.Trigger);
+
+            // Without an idle clip the walk clip's first pose is held while the giant stands.
+            AnimatorState idle = machine.AddState("Idle");
+            idle.motion = kit.Idle != null ? kit.Idle : kit.Walk;
+            idle.speed = kit.Idle != null ? 1f : 0f;
+            idle.writeDefaultValues = true;
+            machine.defaultState = idle;
+
+            if (kit.Walk != null)
+            {
+                AnimatorState walk = machine.AddState("Walk");
+                walk.motion = kit.Walk;
+                walk.writeDefaultValues = true;
+                AddSpeedTransition(idle, walk, AnimatorConditionMode.Greater);
+                AddSpeedTransition(walk, idle, AnimatorConditionMode.Less);
+            }
+            else
+            {
+                Debug.LogWarning("[F010] Mixamo folder has no walking clip: the Colossus has no Walk state.");
+            }
+
+            AddAttackState(machine, idle, "Punch", PunchTrigger, kit.Punch);
+            AddAttackState(machine, idle, "HeavyPunch", HeavyPunchTrigger, kit.HeavyPunch);
+            AddAttackState(machine, idle, "Kick", KickTrigger, kit.Kick);
+            AddAttackState(machine, idle, "Hit", HitTrigger, kit.Hit);
+
+            EditorUtility.SetDirty(controller);
+            return controller;
+        }
+
+        private static void AddSpeedTransition(AnimatorState from, AnimatorState to, AnimatorConditionMode mode)
+        {
+            AnimatorStateTransition transition = from.AddTransition(to);
+            transition.hasExitTime = false;
+            transition.hasFixedDuration = true;
+            transition.duration = BlendSeconds;
+            transition.AddCondition(mode, MovingThreshold, SpeedParameter);
+        }
+
+        private static void AddAttackState(AnimatorStateMachine machine, AnimatorState idle, string stateName, string trigger, AnimationClip clip)
+        {
+            if (clip == null)
+            {
+                Debug.LogWarning($"[F010] Mixamo folder has no clip for '{trigger}': the Colossus's {trigger} trigger has no state.");
+                return;
+            }
+
+            AnimatorState state = machine.AddState(stateName);
+            state.motion = clip;
+            state.writeDefaultValues = true;
+
+            AnimatorStateTransition enter = machine.AddAnyStateTransition(state);
+            enter.hasExitTime = false;
+            enter.hasFixedDuration = true;
+            enter.duration = BlendSeconds;
+            enter.canTransitionToSelf = true;
+            enter.AddCondition(AnimatorConditionMode.If, 0f, trigger);
+
+            AnimatorStateTransition leave = state.AddTransition(idle);
+            leave.hasExitTime = true;
+            leave.exitTime = AttackExitTime;
+            leave.hasFixedDuration = true;
+            leave.duration = BlendSeconds;
+        }
+
+        private enum MixamoClip
+        {
+            None,
+            Idle,
+            Walk,
+            Punch,
+            Kick,
+            Hit,
+        }
+
+        private sealed class MixamoKit
+        {
+            public string CharacterPath;
+            public GameObject Character;
+            public Avatar Avatar;
+            public AnimationClip Idle;
+            public AnimationClip Walk;
+            public AnimationClip Punch;
+            public AnimationClip HeavyPunch;
+            public AnimationClip Kick;
+            public AnimationClip Hit;
+            public AnimatorController Controller;
         }
 
         private static SkinnedMeshRenderer PickBody(Transform model)

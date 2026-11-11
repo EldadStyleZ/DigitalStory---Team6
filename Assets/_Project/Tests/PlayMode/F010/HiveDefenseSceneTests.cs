@@ -24,6 +24,7 @@ namespace DigitalStory.Tests.PlayMode
         private const int FramesBetweenNotes = 1;
 
         private static readonly int[] DomeHoles = { 0, 1, 0 };
+        private static readonly int[] MeteorHoles = { 4, 2, 0 };
 
         private HiveDefenseRoot _root;
         private float _savedTimeScale;
@@ -100,6 +101,24 @@ namespace DigitalStory.Tests.PlayMode
             yield return null;
 
             Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Dome));
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_WithTheMeteorKeys_FormsTheMeteor()
+        {
+            for (int index = 0; index < MeteorHoles.Length; index++)
+            {
+                _root.PressHole(MeteorHoles[index]);
+                for (int frame = 0; frame < FramesBetweenNotes; frame++)
+                {
+                    yield return null;
+                }
+            }
+
+            yield return null;
+            yield return null;
+
+            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Meteor));
         }
 
         [UnityTest]
