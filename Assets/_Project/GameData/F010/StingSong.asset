@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a65901571ed8456faae3279e0883283, type: 3}
+  m_Name: StingSong
+  m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.StingSong
+  _song:
+    _title: Sting
+    _description: Wasps wrap around the aimed beekeeper
+    _cooldownSeconds: 1.5
+    _keys: 020000000300000004000000i
+  <Seconds>k__BackingField: 4
+  <Fraction>k__BackingField: 0.4
+  <DamagePerSecond>k__BackingField: 25

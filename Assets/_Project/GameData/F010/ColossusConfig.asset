@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 963c2984b11b04de0a7e9808c4d43adf, type: 3}
+  m_Name: ColossusConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.ColossusConfig
+  <Height>k__BackingField: 4
+  <Speed>k__BackingField: 3.5
+  <DurationSeconds>k__BackingField: 12
+  <BuildSeconds>k__BackingField: 0.8
+  <StunSeconds>k__BackingField: 0.5
+  <CameraDistance>k__BackingField: 20
+  <PunchDamage>k__BackingField: 45
+  <PunchRadius>k__BackingField: 1.5
+  <PunchReach>k__BackingField: 2.5
+  <PunchHitDelay>k__BackingField: 0.2
+  <ChainWindowSeconds>k__BackingField: 0.6
+  <HeavyPunchDamage>k__BackingField: 70
+  <HeavyPunchHitDelay>k__BackingField: 0.25
+  <HeavyPunchKnockback>k__BackingField: 8
+  <KickDamage>k__BackingField: 60
+  <KickRadius>k__BackingField: 1.8
+  <KickReach>k__BackingField: 2.8
+  <KickHitDelay>k__BackingField: 0.3
+  <KickCooldownSeconds>k__BackingField: 0.8

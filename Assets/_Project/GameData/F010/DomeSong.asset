@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a68284b58e8f48a49f0230d3cfce3b4, type: 3}
+  m_Name: DomeSong
+  m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.DomeSong
+  _song:
+    _title: Dome
+    _description: A dome of wasps shields the Piper
+    _cooldownSeconds: 8
+    _keys: 000000000100000000000000i
+  <Seconds>k__BackingField: 5
+  <Radius>k__BackingField: 2.2
