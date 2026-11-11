@@ -52,6 +52,17 @@ namespace SpacePartyGame
         /// <summary>Whether a vermin is inside this cage.</summary>
         public bool Holds(Transform vermin) => _inside.Contains(vermin);
 
+        /// <summary>The four solid walls, so a following vermin can pass through them.</summary>
+        public IReadOnlyList<Collider2D> Walls => _walls;
+
+        /// <summary>The middle of the cage, in world space.</summary>
+        public Vector2 Centre => _interior.bounds.center;
+
+        /// <summary>Half the size of the space inside the walls.</summary>
+        public Vector2 InnerHalfSize => _interior.bounds.extents;
+
+        private readonly List<Collider2D> _walls = new List<Collider2D>();
+
         /// <summary>Gives the cage its owner and the owner's cage picture.</summary>
         public void Initialize(PlayerIdentity owner, Sprite picture)
         {
@@ -67,6 +78,14 @@ namespace SpacePartyGame
             }
 
             _filter = new ContactFilter2D { useLayerMask = true, layerMask = _verminLayers, useTriggers = false };
+
+            foreach (Collider2D collider in GetComponentsInChildren<Collider2D>(true))
+            {
+                if (collider != _interior && !collider.isTrigger)
+                {
+                    _walls.Add(collider);
+                }
+            }
         }
 
         private void FixedUpdate()
