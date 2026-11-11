@@ -48,7 +48,7 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("How long the song window is and how many notes it remembers.")]
         private SongConfig _songConfig;
 
-        [SerializeField, Tooltip("Every song the Piper can play, including the Dome and Tornado songs.")]
+        [SerializeField, Tooltip("Every song the Piper can play, including the Dome, Tornado and Meteor songs.")]
         private SwarmSongEffect[] _songs = new SwarmSongEffect[0];
 
         [SerializeField, Min(1), Tooltip("How many holes the flute has. The input has six keys.")]
@@ -109,6 +109,13 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The HUD.")]
         private HiveDefenseHudView _hud;
 
+        [Header("Sound")]
+        [SerializeField, Tooltip("Sounds each note the Piper plays. May stay empty, and the flute is then silent.")]
+        private SwarmFluteVoice _fluteVoice;
+
+        [SerializeField, Tooltip("How the flute sounds. Needed when the flute voice is set; it must have a pitch for every hole.")]
+        private SoundConfig _sound;
+
         private PathTrail _trail;
         private Transform _piperTransform;
         private Transform _colossusTransform;
@@ -119,6 +126,7 @@ namespace DigitalStory.View
         private bool _isReady;
         private float _domeRadius;
         private float _tornadoRadius;
+        private float _meteorRadius;
 
         /// <summary>The running match, for the views, tests and debugging.</summary>
         public HiveDefenseSession Session { get; private set; }
@@ -136,6 +144,11 @@ namespace DigitalStory.View
 
             _holeMask |= HiveDefenseFrame.HoleBit(hole);
             _piperMotor.NotifyNotePlayed();
+
+            if (_fluteVoice != null)
+            {
+                _fluteVoice.PlayNote(hole);
+            }
         }
 
         private void Awake()
@@ -170,6 +183,7 @@ namespace DigitalStory.View
             _piperMotor.Initialize(_piperMove, _piperAnimator);
             _swarmView.Initialize(_swarm, _trail);
             _swarmView.SetFormRadii(_domeRadius, _tornadoRadius);
+            _swarmView.SetMeteorRadius(_meteorRadius);
             for (int index = 0; index < _hives.Length; index++)
             {
                 _hives[index].Initialize(Session.Hives[index], _camera);
@@ -178,6 +192,13 @@ namespace DigitalStory.View
             _beekeeperPool.Initialize(Session, _stickPrefab, _smokerPrefab);
             _smokePool.Initialize(Session.Smoke, _grenadePrefab, _cloudPrefab);
             _colossusMotor.Initialize(Session, _swarmView, _colossusSamples, _colossus);
+
+            if (_fluteVoice != null)
+            {
+                // A held key keeps its note sounding past the shortest note length.
+                _fluteVoice.Initialize(_sound, _piperMove);
+                _fluteVoice.Connect(_input);
+            }
 
             _followCamera.SetTarget(_piperTransform);
             _lastAimPoint = _piperMotor.Position;
@@ -326,6 +347,10 @@ namespace DigitalStory.View
                 {
                     _tornadoRadius = tornado.Radius;
                 }
+                else if (_songs[index] is MeteorSong meteor)
+                {
+                    _meteorRadius = meteor.Radius;
+                }
             }
         }
 
@@ -384,6 +409,18 @@ namespace DigitalStory.View
             for (int index = 0; index < _spawnPoints.Length; index++)
             {
                 Require(_spawnPoints[index], $"{nameof(_spawnPoints)}[{index}]");
+            }
+
+            if (_fluteVoice != null)
+            {
+                Require(_sound, nameof(_sound));
+
+                // The synth looks a hole's pitch up on the audio thread, where a missing pitch cannot be reported.
+                if (_holeCount > _sound.HoleCount)
+                {
+                    throw new InvalidOperationException(
+                        $"{name}: the flute has {_holeCount} holes, but '{_sound.name}' only has pitches for {_sound.HoleCount}.");
+                }
             }
         }
 

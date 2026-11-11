@@ -25,6 +25,7 @@ namespace DigitalStory.Tests.PlayMode
         private const string LegBone = "LeftUpperLeg";
         private const float WatchSeconds = 0.7f;
         private const float SmallestSwingDegrees = 10f;
+        private const int SoundedHole = 3;
 
         private static readonly int[] DomeHoles = { 0, 1, 0 };
         private static readonly int[] MeteorHoles = { 4, 2, 0 };
@@ -122,6 +123,18 @@ namespace DigitalStory.Tests.PlayMode
             yield return null;
 
             Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.Meteor));
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_OnAHole_SoundsThatHoleOnTheFluteVoice()
+        {
+            SwarmFluteVoice voice = Object.FindAnyObjectByType<SwarmFluteVoice>();
+            Assert.That(voice, Is.Not.Null, "The scene has no SwarmFluteVoice.");
+
+            _root.PressHole(SoundedHole);
+
+            Assert.That(voice.HolePlaying, Is.EqualTo(SoundedHole));
+            yield return null;
         }
 
         [UnityTest]

@@ -18,6 +18,9 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Seconds after a note that the Piper counts as playing.")]
         public float PlayingHoldSeconds { get; private set; } = 0.6f;
 
+        [field: SerializeField, Min(0f), Tooltip("Shortest time a flute note sounds, in seconds, even for a tap. A held key sounds longer.")]
+        public float NoteSeconds { get; private set; } = 0.3f;
+
         [field: SerializeField, Min(0f), Tooltip("How fast the Piper turns, in degrees per second.")]
         public float TurnDegreesPerSecond { get; private set; } = 720f;
 

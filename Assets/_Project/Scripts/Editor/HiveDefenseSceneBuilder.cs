@@ -41,6 +41,7 @@ namespace DigitalStory.Editor
         private const string WaspShaderPath = ArtFolder + "/Shaders/WaspInstanced.shader";
         private const string PanelSettingsPath = Root + "/UI/GamePanelSettings.asset";
         private const string HudUxmlPath = Root + "/UI/F010/HiveDefenseHud.uxml";
+        private const string SoundConfigPath = Root + "/GameData/SoundConfig.asset"; // The Town scene's, shared and never changed here.
 
         private const string SpeedParameter = "Speed";
         private const string IsPlayingParameter = "IsPlaying";
@@ -1296,6 +1297,13 @@ namespace DigitalStory.Editor
 
             var input = new GameObject("Hive Defense Input", typeof(HiveDefenseInput));
 
+            // The voice writes its sound in OnAudioFilterRead, so its source plays no clip and stays flat (2D).
+            var fluteVoice = new GameObject("Swarm Flute Voice", typeof(AudioSource), typeof(SwarmFluteVoice));
+            var fluteSource = fluteVoice.GetComponent<AudioSource>();
+            fluteSource.clip = null;
+            fluteSource.playOnAwake = false;
+            fluteSource.spatialBlend = 0f;
+
             var swarmObject = new GameObject("Wasp Swarm", typeof(SwarmGpuView));
             var swarmSerialized = new SerializedObject(swarmObject.GetComponent<SwarmGpuView>());
             SetObject(swarmSerialized, "_swarmCompute", AssetDatabase.LoadAssetAtPath<ComputeShader>(ComputePath));
@@ -1343,6 +1351,8 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_cloudPrefab", assets.Cloud);
             SetObject(serialized, "_colossusMotor", colossus.GetComponent<ColossusMotor>());
             SetObject(serialized, "_hud", hud.GetComponent<HiveDefenseHudView>());
+            SetObject(serialized, "_fluteVoice", fluteVoice.GetComponent<SwarmFluteVoice>());
+            SetObject(serialized, "_sound", Require(AssetDatabase.LoadAssetAtPath<SoundConfig>(SoundConfigPath), SoundConfigPath));
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

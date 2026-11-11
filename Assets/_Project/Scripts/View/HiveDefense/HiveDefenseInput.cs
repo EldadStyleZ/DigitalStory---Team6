@@ -37,6 +37,12 @@ namespace DigitalStory.View
         /// <summary>True only on the frame restart was pressed (R).</summary>
         public bool RestartPressed { get; private set; }
 
+        /// <summary>True while the key for a hole is held down. The hole counts from 0.</summary>
+        public bool IsHoleHeld(int hole)
+        {
+            return hole >= 0 && hole < NumberKeys.Length && (Input.GetKey(NumberKeys[hole]) || Input.GetKey(KeypadKeys[hole]));
+        }
+
         /// <summary>Supplies the camera that walking and aiming are relative to. Call once, before the first Update.</summary>
         public void Initialize(Camera camera)
         {
