@@ -2613,6 +2613,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 944354867}
   m_CullTransparentMesh: 1
+--- !u!1 &1026378776
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1026378777}
+  m_Layer: 0
+  m_Name: Cages
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1026378777
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1026378776}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1264139653}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1030304162
 GameObject:
   m_ObjectHideFlags: 0
@@ -3281,6 +3312,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 5191656445928249104}
+  - {fileID: 1026378777}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1266436485
@@ -4992,6 +5024,7 @@ GameObject:
   - component: {fileID: 1992134056}
   - component: {fileID: 1992134058}
   - component: {fileID: 1992134057}
+  - component: {fileID: 1992134060}
   m_Layer: 0
   m_Name: Game
   m_TagString: Untagged
@@ -5096,6 +5129,45 @@ Transform:
   - {fileID: 2083684725}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1992134060
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1992134055}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f05601f7bb6633944adca5ceea279236, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.CageManager
+  _flow: {fileID: 1992134056}
+  _joining: {fileID: 1992134057}
+  _palette: {fileID: 11400000, guid: 9d2b20de8a2def94fbdfd4d73f390060, type: 2}
+  _map: {fileID: 5191656445928249103}
+  _cagePrefab: {fileID: 7923212247268800387, guid: a1629c5e54de5a640b1c885661249c28, type: 3}
+  _cagesParent: {fileID: 1026378777}
+  _huds:
+  - {fileID: 657640827}
+  - {fileID: 122586471}
+  - {fileID: 881796654}
+  - {fileID: 924394282}
+  _pointsPerVermin: 5
+  _paintedSpots:
+  - {x: -2.74, y: 2.76}
+  - {x: 1.87, y: 3}
+  - {x: -6.38, y: 0.32}
+  - {x: 5.35, y: 0.4}
+  - {x: -3.86, y: -3}
+  - {x: 2.48, y: -2.78}
+  _twoPlayerSpots: 0200000003000000i
+  _threePlayerSpots: 020000000100000005000000i
+  _fourPlayerSpots: 00000000010000000400000005000000i
+  _borderMargin: 0.4
+  _gap: 0.6
+  _spawnClearance: 0.6
+  _minCentreDistance: 3
+  _searchRadius: 3
 --- !u!1 &2016082171
 GameObject:
   m_ObjectHideFlags: 0

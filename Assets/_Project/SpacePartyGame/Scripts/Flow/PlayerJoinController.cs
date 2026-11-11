@@ -51,6 +51,9 @@ namespace SpacePartyGame
         /// <summary>The players who have joined, in the order they joined.</summary>
         public IReadOnlyList<PlayerInput> Players => _players;
 
+        /// <summary>Where P1 to P4 appear, so cages can keep clear of them.</summary>
+        public IReadOnlyList<Vector2> SpawnPoints => _spawnPoints;
+
         /// <summary>A short name for the kind of device a player uses, such as "Keyboard" or "Gamepad".</summary>
         public static string DeviceNameOf(PlayerInput player) =>
             player.currentControlScheme == "Gamepad" ? "Gamepad" : "Keyboard";
