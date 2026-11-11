@@ -1,120 +1,172 @@
-# F-010: Wasp swarm defends the hives
+# F-010: The Wasp Piper, a wasp swarm that defends the hives
 
-Owner: EldadStyleZ. Branch: `eldad-lab-2` (made from Raz's `raz-art-test1`, so his art is here).
-Scene: `Assets/_Project/Scenes/eldad-lab-2-scene.unity` (new).
+| | |
+|---|---|
+| Owner | EldadStyleZ |
+| Repo | `EldadStyleZ/DigitalStory---Team6` |
+| Branch | **`eldad-lab-2`**, made from Raz's `raz-art-test1` so his art is here |
+| Claimed | The F-010 row is already on `main` |
+| Scene | `Assets/_Project/Scenes/eldad-lab-2-scene.unity` (new) |
+| Build prompt | `docs/specs/F-010-rider-prompt.md` |
 
-## 1. The game in one paragraph
+## 1. The game
 
-The player is a swarm of 5,000 to 10,000 wasps flying in the shape of a person. The shape walks and runs like a normal human. Two hives stand in a small open world, and they are the player's lives. Beekeepers come in waves to destroy the hives. Some fight up close with a stick, and others throw smoke grenades from a distance. The player punches and kicks them, and the swarm can reshape into a shield, flow into a giant fist for a strong attack, or stand still and power up by calling more wasps from the hives. Every hit the player takes knocks wasps out of the swarm. The player loses when both hives are destroyed and wins after the last wave.
+The player is **the Piper**. A swarm of 5,000 to 10,000 wasps follows them like a river. Playing short combos on a six-hole flute, with keys 1 to 6, commands the swarm. It can raise a dome, sting a beekeeper, spin a tornado, blow away smoke, call more wasps from the hives, or build a **Colossus**: a giant in human shape that the player steers and fights with.
+
+Two hives stand in a small open world, and they are the player's lives. Beekeepers come in waves to destroy them. Some fight up close with a stick, and some throw smoke grenades from a distance. Each hit the swarm takes knocks wasps out of it.
+
+- **Lose:** both hives are destroyed.
+- **Win:** the last wave is cleared.
+
+The toy is **flow**. Everything the swarm does should look like a river or a spring.
 
 Reference for the feel: **Leafborn** (Steam app 4247440), a 3D action game whose hero is a shape-shifting swarm of more than 10,000 leaves.
 
-## 2. The toy: flow
+This is the team's Piper idea grown up: rats become wasps, cats become beekeepers, and the river becomes the hives. Reuse the tested flute combo code (`SongBook`).
 
-Everything the swarm does should look like a river or a spring:
+## 2. Controls (Input Manager, which the team already uses)
 
-- **Walking and running** look like a normal human. The wasps hold the body shape tightly and only buzz a little at the edges.
-- **Jumping** turns the body into a spring. The head leads, the lower body trails behind in an arc, and on landing the swarm wobbles and settles.
-- **Changing form** is a wave. Wasps leave the old shape in order, from top to bottom, so the eye sees the swarm *flow* into the new shape.
-- **Powering up** pulls visible streams of wasps from the hives into the player.
+| Action | Key |
+|---|---|
+| Walk | WASD, relative to the camera |
+| Flute holes 1 to 6 | Number keys 1 to 6, or the keypad |
+| Aim (sting target) | Mouse, which picks the beekeeper nearest the cursor's point on the ground |
+| Colossus punch / kick | Left mouse or J / right mouse or K, only while the Colossus is active |
+| Restart | R on the end screen |
 
-## 3. Controls (Input Manager, which the team already uses)
+**Camera:** a three-quarter view from above, about 55° down and about 14 m back. It follows the Piper with smoothing, so the river is easy to see. While the Colossus is active it pulls back to about 20 m.
 
-| Action | Key | Notes |
-|---|---|---|
-| Move | WASD | Relative to the camera |
-| Run | Hold Left Shift | |
-| Jump | Space | Spring look in the air |
-| Punch | Left mouse or J | Up to 3 punches in a chain; the third is heavier |
-| Kick | Right mouse or K | |
-| Shield | Hold Q | Slower movement, no attacks |
-| Strong strike | Hold E, release to hit | Only when the strike meter is at 100% |
-| Power up | Hold R | Standing still only. Adds wasps up to the maximum |
-| Camera | Mouse | Third person, cursor locked |
-| Restart | R on the end screen | |
+## 3. The Piper
 
-Power up is on R, not a long press of Space. Space jumps on key down, and a long press would delay every jump.
+- **Art:** Raz's Piper, which has 4 animation states: Idle, Run, Play flute, and Run while playing the flute.
+  - If Raz has pushed a Piper prefab, use it.
+  - If not, use `Assets/_Project/Art/prefabs/Beekeeper_LowPoly.prefab`. Its FBX holds exactly these 4 clips: `Idle`, `Run`, `PlayFluteTwoHands` and `RunFluteTwoHands`.
+- **Animator:** make our own Animator Controller by copying the 4 clips into `Assets/_Project/Art/F010/PiperSwarm.controller`.
+  - It has a `Speed` float and an `IsPlaying` bool.
+  - `IsPlaying` stays true for 0.6 s after any hole press, and during channelled songs.
+  - **Never edit Raz's controller or prefabs. Use prefab variants.**
+- **Movement:** a `CharacterController` at 4.5 m/s, with the Run clip's speed matched to the movement.
+  - While playing a channelled song (Hive Call, or while the Colossus is active) the Piper stands still.
+- **Flute:** `Flute_LowPoly` attached to the hand bone, unless the model already has one.
+- **Health:** the Piper has no health of their own. **The swarm is the health** (see §5).
 
-## 4. Rules and numbers
+## 4. Flute songs (combos)
 
-All numbers go in ScriptableObject configs. These are the starting values.
+Reuse `DigitalStory.Logic.SongBook`, `DigitalStory.Data.SongDefinition` and `SongConfig`:
 
-### Swarm (the player's health)
+- 6 holes;
+- a 3 s note window;
+- the last 5 notes remembered;
+- the longest song wins.
+
+Each song is **one strategy asset**, following the team's pattern of one asset per song. Make a new abstract `SwarmSongEffect : ScriptableObject` in Logic with `Cast(in SwarmSongContext)`, in the same style as the existing `SongEffect`. The existing rat songs are not used.
+
+| Song | Keys | Lasts | Cooldown | Effect |
+|---|---|---|---|---|
+| **Dome** | 1-2-1 | 5 s | 8 s | The swarm forms a dome of radius 2.2 m around the Piper. Hits cost 85% fewer wasps. The Piper moves at × 0.5 |
+| **Sting** | 3-4-5 | 4 s, or until the target dies | 1.5 s | 40% of the swarm streams in an arc to the aimed beekeeper and wraps around it. 25 damage a second. Fills Fury |
+| **Tornado** | 6-5-4-6 | 1.5 s | 10 s | A spinning column around the Piper. 30 damage and 6 m/s knockback to every beekeeper within 5 m. Fills Fury |
+| **Gust** | 2-2-3 | 0.8 s | 6 s | The swarm bursts outward in a ring and comes back. Clears every smoke cloud within 6 m |
+| **Hive Call** | 1-6-1 | Until the Piper moves, is hit or reaches the maximum | 3 s | **Power up.** Streams of wasps fly from every standing hive to the Piper, adding 250 a second per standing hive. The Piper is rooted and plays |
+| **Colossus** | 4-5-6-5-4 | 12 s | Needs **Fury at 100%** | The swarm builds a giant human (§6). The player steers the giant, and the Piper stands still and plays |
+
+- The Colossus keys must not cast anything at 100% Fury unless the Colossus is played whole.
+- A test checks that playing each song's keys from silence casts exactly that song.
+
+**Fury meter:** 0 to 100. It fills by 1 per 2 damage dealt by Sting, Tornado or the Colossus, and casting the Colossus uses all of it.
+
+**Notes are sounded:** reuse `FluteSynth` from `View/Sound` if it plugs in cleanly. Otherwise skip sound, because sound is optional for F-010.
+
+## 5. The swarm (the player's health)
 
 | Value | Start |
 |---|---|
 | Starting wasps | 5,000 |
-| Maximum wasps | 10,000 |
-| Power-up rate | 250 wasps per second per hive still standing |
+| Maximum wasps (GPU buffer size) | 10,000 |
 | Collapse below | 600 wasps |
-| After a collapse | Respawn at a standing hive after 3 s with 2,500 wasps |
+| After a collapse | All songs are blocked for 3 s, then the swarm respawns with 2,500 wasps flying in from a standing hive |
 
-- A hit removes wasps. Those wasps visibly scatter and fall away.
-- While powering up the player cannot move or attack. A hit cancels the power up.
+- **Losing wasps:** stick hits, smoke and Colossus damage remove wasps. The lost wasps visibly scatter away from the hit and fall.
+- A hit cancels Hive Call.
 
-### Movement
+## 6. The Colossus (the human form)
 
-| Value | Start |
-|---|---|
-| Walk speed | 2.4 m/s |
-| Run speed | 6 m/s |
-| Jump height | 1.8 m |
-| Gravity | -20 m/s² |
-| Speed in shield form | × 0.45 |
+- **Puppet:** Mixamo's **Y Bot**, imported as **Humanoid**, scaled so it stands about 4 m tall. It moves with its own `CharacterController` and Animator, using these clips: Idle, Walking, Punching (1 or 2 variants), Mma Kick and Hit Reaction.
+  - The import settings are changed in the Unity Editor, never in `.meta` files.
+  - Its renderer is switched off. The wasps *are* its body.
+- **It appears where the Piper stands.** The wasps flow from the river into the body, from the feet up, over 0.8 s.
+- **Controls while active:** WASD moves the giant at 3.5 m/s, J or left mouse punches, and K or right mouse kicks. The Piper stays rooted and plays, and the beekeepers can still hit the Piper.
 
-### Player attacks
-
-| Attack | Damage | Reach | Hit after | Notes |
+| Attack | Damage | Hit area | Hit after | Notes |
 |---|---|---|---|---|
-| Punch 1 and 2 | 20 | 1.6 m, radius 0.9 | 0.15 s | Next punch only within a 0.5 s window |
-| Punch 3 | 35 | 1.8 m, radius 1.0 | 0.2 s | Knocks back |
-| Kick | 30 | 2.0 m, radius 1.0 | 0.25 s | 0.7 s cooldown |
-| Strong strike | 120 | 4.5 m area in front | 1 s charge | Knocks back, empties the meter |
+| Punch 1 and 2 | 45 | Sphere of radius 1.5 m, 2.5 m ahead | 0.2 s | Chain window 0.6 s |
+| Punch 3 | 70 | Same | 0.25 s | Knockback 8 m/s |
+| Kick | 60 | Sphere of radius 1.8 m, 2.8 m ahead | 0.3 s | Cooldown 0.8 s |
 
-- Each landed hit adds 12% to the strike meter.
 - A hit enemy is stunned for 0.5 s.
-- The shield cuts wasp loss by 85% for hits from the front 120°. Smoke still goes through.
+- **Ends** after 12 s, or when the swarm falls below the collapse value. The wasps then flow back into the river.
+- **Fallback if Mixamo is missing:** build the Colossus from the Piper rig scaled ×2.2, with the Run and Idle clips. Its attacks then use the same timings and a scale-punch tween in place of animation.
+
+## 7. Hives and beekeepers
 
 ### Hives (the player's lives)
 
 | Value | Start |
 |---|---|
-| Hives | 2, about 25 m apart |
-| Hive health | 300 |
+| Hives | 2 × `Beehive_LowPoly 1`, about 25 m apart |
+| Health | 300 each |
 | "Under attack" shows for | 2 s after the last hit |
+
+A destroyed hive stops feeding Hive Call. When both are destroyed, the game is lost.
 
 ### Beekeepers
 
-| Value | Close (stick) | Far (smoke) |
+There are two `BeekeeperConfig` assets.
+
+| Value | Stick (close) | Smoker (far) |
 |---|---|---|
 | Health | 60 | 40 |
 | Speed | 2.6 m/s | 2.2 m/s |
-| Notices the player within | 7 m | 7 m |
+| Notices the Piper within | 7 m | 7 m |
 | Gives up the chase beyond | 14 m | 14 m |
-| Attack range | 1.8 m | 14 m (throw) |
+| Attack range | 1.8 m | 14 m (throws a grenade) |
 | Wind-up (visible warning) | 0.6 s | 0.8 s |
 | Cooldown | 1.4 s | 4.5 s |
-| Damage to a hive | 6 per hit | Through smoke |
-| Wasps lost by the player | 180 per hit | Through smoke |
+| Hive damage | 6 per hit | Through smoke |
+| Wasps knocked off | 180 per hit | Through smoke |
 
-- A beekeeper walks to the nearest standing hive and attacks it. When the player gets close or hits it, it fights the player, and it goes back to the hive when the player is far away.
-- If its hive is destroyed it goes to the other hive.
-- One stick beekeeper alone destroys a hive in about a minute, so the player has time to react.
+**Behaviour:** `BeekeeperBrain` is one class whose states are GoToHive, AttackHive, ChasePiper, WindUp, Recover, Stunned and Dead.
 
-### Smoke grenade
+1. A beekeeper walks to the nearest standing hive and attacks it.
+2. When the Piper comes within 7 m, or the beekeeper is hit, it attacks the Piper.
+3. When the Piper is more than 14 m away, it goes back to the hive.
+4. If its hive falls, it goes to the other hive.
+
+One stick beekeeper alone destroys a hive in about a minute, so the player has time to react.
+
+**Model:**
+
+- If Raz's Piper is a separate model, the beekeepers are a variant of `Beekeeper_LowPoly`.
+- If `Beekeeper_LowPoly` *is* the Piper, the beekeepers are a variant of it with a different tint, plus a primitive prop: a stick, or a smoke can for the smoker.
+
+The model uses its Run clip while moving and Idle while attacking, with a lean or bob tween for the wind-up and the hit.
+
+**Movement:** simple steering toward the target that pushes beekeepers apart, with **no NavMesh**, because baking it needs a package in Unity 6. Keep the play area open.
+
+### Smoke grenade and cloud
 
 | Value | Start |
 |---|---|
-| Flight time | 1.2 s, in an arc, with a ring on the ground where it will land |
-| Cloud radius | 4 m |
-| Cloud lasts | 5 s |
+| Flight | 1.2 s in an arc, with a ring on the ground where it will land |
+| Cloud | Radius 4 m, lasts 5 s |
 | Hive damage | 4 per second |
-| Wasps the player loses | 120 per second |
-| Player speed in smoke | × 0.6 |
+| Swarm loss | 120 wasps per second while the Piper is inside |
+| Piper speed in smoke | × 0.6 |
+| Counter | Gust clears it |
 
 ### Waves
 
-| Wave | Stick | Smoke |
+| Wave | Stick | Smoker |
 |---|---|---|
 | 1 | 3 | 0 |
 | 2 | 4 | 1 |
@@ -122,211 +174,228 @@ All numbers go in ScriptableObject configs. These are the starting values.
 | 4 | 6 | 4 |
 | 5 | 8 | 5 |
 
-- The first wave comes after 8 s. There is a 15 s break between waves, which is time to power up.
-- Beekeepers come in from 4 points at the edges of the map, 1.2 s apart.
-- **Win:** wave 5 is cleared. **Lose:** both hives are destroyed.
+- The first wave comes after 8 s. There is a 15 s break between waves, which is time for Hive Call.
+- Beekeepers spawn from 4 points at the edges of the map, 1.2 s apart.
+- **Win:** wave 5 is cleared.
 
-## 5. What the player sees (HUD, in UI Toolkit)
+## 8. What the player sees (HUD, in UI Toolkit, like the existing HUD)
 
 - **Wasp count:** a bar and a number, such as `5,000 / 10,000`, that turns red below 1,500.
-- **Form:** an icon for body, shield, strike or power up.
-- **Strike meter:** fills up and glows at 100%.
-- **Hives:** one small panel per hive, with a health bar, that flashes red while under attack.
-- **In the world:** a health bar over each hive, and a red pulsing ring around a hive under attack.
-- **Off screen:** an arrow at the screen edge pointing to any hive under attack, so the player always knows where to go.
+- **Fury:** a bar that glows when full, with the Colossus keys shown.
+- **Songs row:** each song's name, its keys and a cooldown fill, like the F-004 combos row.
+- **Recent notes:** the last notes played, which fade with the 3 s window.
+- **Hives:**
+  - one panel per hive, with a health bar, that flashes red while under attack;
+  - in the world, a health bar over each hive and a red pulsing ring while it is under attack;
+  - off screen, an arrow at the screen edge pointing to any hive under attack.
 - **Waves:** `Wave 2/5` and `Next wave in 10`.
 - **End screen:** win or lose, and "Press R to play again".
 
-## 6. Technical design
+## 9. Technical design
 
-### 6.1 The decision: wasps are not GameObjects
+### 9.1 The core decision: wasps are not GameObjects
 
-10,000 GameObjects or Animators cannot run smoothly. Every wasp lives in a GPU buffer:
+All wasps live in GPU buffers:
 
-- A **compute shader** moves all wasps each frame.
-- **One** `Graphics.RenderMeshIndirect` call draws them all.
-- The CPU cost does not change with the number of wasps, and the CPU never reads data back from the GPU.
+- one compute shader, `WaspSwarm.compute`, moves them;
+- **one** `Graphics.RenderMeshIndirect` call draws them all.
 
-Both work in the Built-in Render Pipeline the project uses, with no new package. DOTS/ECS would need four new packages, which is a team decision, and it is too big for this deadline. `docs/CODING_STANDARDS.md` says "Profile first, then Jobs and Burst". We go straight to the GPU on purpose, and the code comment and the pull request must say why.
+This works in the project's Built-in Render Pipeline with **no new package**. The CPU cost does not change with the number of wasps, and **the CPU never reads GPU data back**.
 
-**Gameplay never touches individual wasps.** Hits, health and blocking all use the puppet's capsule and the counts in Logic. The GPU only shows the result.
+`docs/CODING_STANDARDS.md` says "profile first, then Jobs and Burst". We go to the GPU on purpose, because 10,000 independently animated agents is a known GPU workload, and DOTS would need four new packages, which is a team decision. Say this in a code comment in `SwarmGpuView` and in the pull request.
 
-### 6.2 The puppet
+**Gameplay never touches individual wasps.**
 
-- An invisible humanoid, the **puppet**, has an Animator with Idle, Walk, Run, Jump, Punch ×2 or 3, Kick, Block and Hit clips. It moves with a `CharacterController`. Its animations are an ordinary person's animations.
-- **Source:** Mixamo's "Y Bot" with these clips. Download them as FBX for Unity, with "In Place" for the movement clips, and set the rig to Humanoid **in the Unity import settings**, never by editing `.meta` files.
-- The puppet's own renderer is switched off. The swarm *is* its body.
+- Hits, damage and blocking use Logic counts and simple distances: the Piper's position, the beekeepers' positions, the dome radius, the sting target and the Colossus's hit spheres.
+- The GPU only *shows* the result.
+- The sting's damage comes from Logic: "target wrapped for this many seconds".
 
-### 6.3 Where each wasp goes (targets)
+### 9.2 Buffers
 
-When the game starts, sample the puppet's mesh once on the CPU:
+| Buffer | Holds | Written |
+|---|---|---|
+| Static, per wasp | `seed` (0..1), `lane` (0..1 position along the river), `ring` (angle and radius in the river's cross-section), `boneIndex`, `boneOffset` (float3, for the Colossus), `height01` | Once, at start |
+| Dynamic, per wasp | `position`, `velocity`, `state` (Alive, Dying or Dead), `stateTime` | By the compute shader |
+| Trail | 128 × float4 points of the Piper's recent path, from `PathTrail` in Logic | By the CPU each frame, in place |
+| Bones | Up to 64 × `float4x4` of the Colossus's bones | By the CPU each frame, only while the Colossus is active |
+| Uniforms | Time, dt, form, `formStartTime`, active count, the Piper's position and facing, the sting target and fraction, the dome and tornado radii, hive positions, the last hit point, colours | Each frame |
 
-1. Pick a random point on a random triangle, weighted by triangle area.
-2. Take the bone with the highest weight at that point.
-3. Save the bone index and the point in that bone's space: `offset = bindposes[bone].MultiplyPoint3x4(meshPoint)`.
+Make every buffer once in `OnEnable`, release it in `OnDisable`, and reuse the arrays. There are no garbage-collection allocations per frame.
 
-Also save:
+### 9.3 Where each wasp wants to be (targets per form)
 
-- a random `seed`;
-- `height01`, the point's height from feet (0) to head (1).
-
-These go into a **static buffer**, which never changes.
-
-**Each frame** the CPU uploads only the puppet's bone matrices (`bone.localToWorldMatrix`, about 20 to 60 of them) into a reused buffer. There is no allocation. The body target of each wasp is `boneMatrix[bone] × offset`.
-
-This is more robust than reading the skinned vertex buffer, because it does not depend on the renderer being visible or on the vertex layout. `SkinnedMeshRenderer.GetVertexBuffer` is the fallback if more detail is ever needed.
-
-**Form targets.** The shader computes these from the index and seed, with no extra buffer:
-
-| Form | Targets |
+| Form | Target |
 |---|---|
-| Body | Bone × offset, as above |
-| Shield | A slightly curved disc of about 1.6 m in front of the chest, laid out as a Fibonacci disc by index. Blue tint |
-| Strike | A ball around the right hand bone, whose radius grows from 0.3 m to 1.2 m with the charge. Orange glow |
-| Power up | A loose spinning shell around the body. Gold tint. New wasps start at a hive and fly in |
-| Collapsed | Fall to the ground and spread out |
+| **River** (default) | A point along the trail at `lane`, which **drifts forward over time** (`lane + time × flowSpeed`, wrapped), plus the cross-section offset, plus a slow sine meander. The wasps keep flowing along the path like water. When the trail is shorter than 2 m (the Piper is standing), the river curls into a lazy torus about 1.5 m around the Piper |
+| **Dome** | A Fibonacci hemisphere point by index, radius 2.2 m around the Piper, slowly rotating. Blue tint |
+| **Sting** | Wasps with `seed < stingFraction` follow a Bezier arc from the Piper to the target, then orbit a 0.8 m sphere around it. The rest stay in the River. Orange glow |
+| **Tornado** | A spiral cylinder around the Piper, radius from 1.5 to 5 m and height 3 m, spinning fast |
+| **Gust** | An outward ring burst to 6 m, then back to the River |
+| **Hive Call** | A tight halo around the Piper. Newly active wasps start at a standing hive and fly an arc to the halo. Gold tint |
+| **Colossus** | `bones[boneIndex] × boneOffset` |
+| **Dying** | A burst away from `lastHitPoint`, gravity, shrink to zero over 1.5 s, then Dead |
+| **Dead** | Scale 0, so it is not drawn. It comes back to life at a hive when its index drops below the active count |
 
-### 6.4 How each wasp moves (a spring)
-
-Per-wasp dynamic data: position, velocity, state (alive, dying or dead) and state time.
+### 9.4 How wasps move (a spring, for the flow)
 
 ```text
 acceleration = k * (target - position) - 2 * zeta * sqrt(k) * velocity + buzz(seed, time)
 ```
 
-| Situation | What changes |
+| Form | Spring |
 |---|---|
-| Walking and running | Stiff and damped: `k` 220, `zeta` 0.75. The shape reads as a human |
-| In the air | `k` drops from the head to the feet down to 25. The target is pushed back by `velocity × 0.12 s × (1 - height01)`, so the body becomes a stretched arc |
-| Landing | `zeta` 0.3 for 0.35 s, which gives the spring wobble |
-| Form change | Each wasp switches target at `changeTime + (1 - height01) × 0.45 s`, so the change flows top to bottom like a wave |
-| Buzz | About 0.04 m at about 9 Hz, from cheap sine noise on the seed |
+| River | `k` 40, `zeta` 0.6. Soft, so it flows |
+| Dome and Colossus | `k` 180, `zeta` 0.75. The shape reads clearly |
 
-- `deltaTime` is capped at 1/30 s.
-- The CPU sets `_ActiveCount` as a uniform. Wasps at index `_ActiveCount` or above that are still alive start dying: they get a burst away from `_LastHitPoint`, fall, shrink and become dead after 1.5 s.
-- Wasps below `_ActiveCount` that are dead come back to life at the nearest standing hive and fly in.
-- The draw call always draws the full maximum. Dead wasps collapse to zero size in the vertex shader, which costs almost nothing.
+- **Form change as a wave:** each wasp switches to its new target at `formStartTime + order × 0.6 s`.
+  - For the Colossus, `order` is `height01`, so it builds from the feet up.
+  - For the other forms, `order` is `lane`, so the change flows along the river.
+- **Spring wobble:** when a form starts, `zeta` drops to 0.3 for 0.35 s.
+- **Buzz:** about 0.04 m at about 9 Hz, from cheap sine noise on the seed.
+- **Cap:** dt is capped at 1/30 s.
+- **Active count:** the CPU sets `activeCount` from `SwarmBody`.
+  - A wasp with index ≥ activeCount that is still Alive starts Dying.
+  - A wasp with index < activeCount that is Dead starts Alive at the nearest standing hive.
+  - The draw always covers the full maximum, and Dead wasps cost nothing visible.
 
-### 6.5 Drawing the wasps
+### 9.5 Colossus bone sampling (once, at start)
 
-- **Mesh:** a tiny wasp made in code, of about 24 triangles: a body and two wing quads. The stripes come from the shader.
-  - Raz's `waspa_fly` is rigged and animated, so it cannot be instanced as it is. Its mesh may be used instead only if it is under about 200 triangles.
-- **Shader:** a Built-in Render Pipeline vertex and fragment shader.
-  - It reads from `StructuredBuffer`s by `SV_InstanceID` and points each wasp along its velocity.
-  - The wings flap in the vertex shader, using `sin(time × 40 + seed)` on the wing vertices.
-  - Lighting is simple Lambert plus ambient light, plus a tint and emission per form.
-  - `#pragma target 4.5`, with no shadows.
-- **Draw:** `Graphics.RenderMeshIndirect`, with `RenderParams.worldBounds` set to a box of about 60 m around the player. All buffers are made once in `OnEnable` and released in `OnDisable`.
+From the Y Bot `sharedMesh`:
 
-### 6.6 Performance budget
+1. Pick a random point on a random triangle, weighted by area.
+2. Take the dominant bone of that triangle's first vertex.
+3. Store `boneOffset = bindposes[bone].MultiplyPoint3x4(point)` and `height01` (feet 0, head 1).
 
-- 60 FPS or better at 10,000 wasps, with all beekeepers alive.
-- The swarm's compute shader and draw take under 2 ms on the GPU, and the CPU work around them takes under 0.3 ms.
-- There are no garbage-collection allocations per frame.
-- Measure this in the Profiler and write the numbers in `FEATURES.md`.
+Each frame of the Colossus, upload `bones[i].localToWorldMatrix`. This needs neither the skinned vertex buffer nor a visible renderer.
 
-## 7. Layers and files
+**Check it:** draw 200 targets as gizmos in Play Mode and confirm they sit on the body before you trust the shader.
 
-### Data (`Assets/_Project/Scripts/Data/Swarm/`, `.../Hives/`, `.../Beekeepers/`)
+### 9.6 Drawing
 
-- `SwarmConfig`: wasp counts, power-up rate, collapse and respawn, spring values, jump lag, wave delay, buzz and form colours.
-- `PlayerMoveConfig`: speeds, jump, gravity and the shield multiplier.
-- `PlayerCombatConfig`: punches, kick, strike, meter gain, stun and shield reduction.
-- `HiveConfig`: health and how long "under attack" shows.
-- `BeekeeperConfig`, with **two assets**, `StickBeekeeper` and `SmokeBeekeeper`: health, speed, ranges, wind-up, cooldown and damage, plus an attack-kind enum.
+- **Mesh:** a wasp of about 24 triangles made in code by `WaspMeshFactory`: a body and two wing quads. The yellow and black stripes come from local Z in the shader.
+  - Raz's `waspa_fly` is rigged and animated, so it cannot be instanced. Its mesh may be used only if it is under about 200 triangles.
+- **Shader:** `WaspInstanced.shader`, a Built-in Render Pipeline vertex and fragment shader with `#pragma target 4.5`.
+  - It reads the buffers by `SV_InstanceID` and points each wasp along its velocity.
+  - The wings flap with `sin(time × 40 + seed × 6.28)` on the wing vertices.
+  - Lighting is Lambert plus ambient, plus a tint and emission per form.
+  - It casts no shadows.
+- **Draw:** `Graphics.RenderMeshIndirect` with `RenderParams.worldBounds` set to a 60 m box around the Piper.
+
+### 9.7 Performance budget, measured in the Profiler and written in `FEATURES.md`
+
+- 60 FPS or better at **10,000** wasps, with 13 beekeepers and 2 smoke clouds.
+- The swarm's GPU work takes under 2 ms, and the CPU side of the swarm under 0.3 ms.
+- There are 0 B of garbage-collection allocation per frame in gameplay.
+
+## 10. Layers and files
+
+Namespaces follow the layer, such as `DigitalStory.Logic`. Folders are per feature.
+
+### Data (`Scripts/Data/Swarm/`, `Hives/`, `Beekeepers/`; assets in `Assets/_Project/GameData/F010/`)
+
+- `SwarmConfig`: wasp counts, collapse, respawn, Hive Call rate, the springs, flow speed, wave delay, buzz and form colours.
+- `PiperMoveConfig`: speed and the multipliers in the dome and in smoke.
+- `SwarmSongTimings`, or fields on each song asset: durations, cooldowns, radii, damage and sting fraction.
+- `FuryConfig`.
+- `ColossusConfig`: scale, speed, attacks, chain window, stun and duration.
+- `HiveConfig`.
+- `BeekeeperConfig`, with two assets: `StickBeekeeper` and `SmokerBeekeeper`.
 - `SmokeConfig`.
-- `WaveConfig`: a list of waves and the timings.
+- `WaveConfig`.
+- A `SongConfig` asset for this game, with a 3 s window and 5 notes. Reuse the existing class.
 
-### Logic (`Assets/_Project/Scripts/Logic/...`, plain C#, every rule tested)
+### Logic (`Scripts/Logic/...`, plain C#, every rule tested)
 
-- `SwarmBody`: count, maximum, `Lose(amount, isShielded)`, `PowerUp(deltaTime, standingHives)`, collapse and respawn. Events `CountChanged`, `Collapsed` and `Respawned`.
-- `SwarmFormMachine`: the states Body, Shield, StrikeCharging, StrikeRelease, PoweringUp and Collapsed, and which change is allowed when. Event `FormChanged`.
-- `StrikeMeter`: fill, full and use.
-- `AttackChain`: the punch combo window, the kick cooldown, and which attack happens and when its hit lands.
-- `Hive` and `HiveSet`: health, under attack, destroyed, and how many still stand.
-- `BeekeeperBrain`: the states GoToHive, AttackHive, ChasePlayer, WindUp, Recover, Stunned and Dead. It takes positions and `deltaTime`, and gives back a move direction and attack events. Stick and smoke behaviour differ only through config.
-- `SmokeCloud`: area, lifetime, damage to hives, wasp loss and slow.
-- `WaveDirector`: the timeline of waves and breaks, spawn requests, and "all waves cleared".
-- `HiveDefenseSession`: owns all of the above, ticks them and decides Playing, Won or Lost. Randomness comes through the existing `IRandomSource` in `Logic/Random`.
+| Class | Job |
+|---|---|
+| `SwarmBody` | Count, maximum, `Lose(amount, isDomed)`, `Gain(deltaTime, standingHives)`, collapse and respawn. Events `CountChanged`, `Collapsed` and `Respawned` |
+| `SwarmFormMachine` | The forms River, Dome, Sting, Tornado, Gust, HiveCall, Colossus and Collapsed, which change is allowed when, and the timers. Event `FormChanged` |
+| `SwarmSongEffect` (abstract ScriptableObject) | The base of each song. The songs are `DomeSong`, `StingSong`, `TornadoSong`, `GustSong`, `HiveCallSong` and `ColossusSong`, with `SwarmSongContext` |
+| `FuryMeter` | Fill, full and use |
+| `PathTrail` | A fixed ring buffer of the Piper's path, resampled by distance (0.15 m), giving its length and a point at any lane |
+| `ColossusAttackChain` | The punch chain window, the kick cooldown, and which attack happens and when it lands |
+| `Hive` and `HiveSet` | Health, under attack, destroyed, standing count and nearest standing hive |
+| `BeekeeperBrain` | The state machine in §7. It takes positions and dt, and gives back a move direction and `AttackLanded` and `GrenadeThrown` events |
+| `SmokeCloud` and `SmokeField` | Area, lifetime, hive damage, swarm loss, slow, and clearing by Gust |
+| `WaveDirector` | The timeline, spawn requests and "all waves cleared" |
+| `HiveDefenseSession` | Owns the above, ticks them in a fixed order, and decides Playing, Won or Lost. Randomness comes through the existing `IRandomSource` |
 
-### View (`Assets/_Project/Scripts/View/...`)
+**Reused as they are:** `SongBook`, `SongDefinition`, `SongConfig` and `IRandomSource`.
+
+### View (`Scripts/View/...`)
 
 | Script | Job |
 |---|---|
 | `HiveDefenseRoot` | The scene's single composition root |
-| `PlayerInputReader` | Input Manager, cached |
-| `PuppetMotor` | `CharacterController`, gravity and Animator parameters through `Animator.StringToHash` |
-| `ThirdPersonCamera` | Orbit and follow with smoothing |
-| `SwarmGpuView` | Buffers, bone upload, dispatch and draw, with `WaspSwarm.compute`, `WaspInstanced.shader` and `WaspMeshFactory` |
-| `HiveView` | Shows one hive |
-| `BeekeeperView` | Raz's beekeeper prefab: its Run and Idle clips, a stick primitive on the hand bone, and a lean or bob tween for the attack. Simple steering, with no NavMesh, because baking needs a package in Unity 6 |
-| `SmokeGrenadeView` and `SmokeCloudView` | Pooled with `ObjectPool<T>`, using a ParticleSystem |
-| `HiveDefenseHudView` | UI Toolkit UXML and USS |
-| `HiveOffscreenIndicatorView` | The edge arrows |
-| `EndScreenView` | Win or lose screen |
+| `HiveDefenseInput` | Input Manager: WASD, holes 1 to 6, mouse aim on the ground, J/K/left/right mouse, and R |
+| `PiperMotor` | `CharacterController`, Animator hashes and the flute on the hand |
+| `ColossusMotor` | The giant's controller and Animator, and its hit timing |
+| `FollowCamera` | The three-quarter follow camera |
+| `SwarmGpuView`, `WaspSwarm.compute`, `WaspInstanced.shader` and `WaspMeshFactory` | The GPU swarm |
+| `HiveView` and `BeekeeperView` | Show hives and beekeepers. Beekeepers are pooled with `ObjectPool<T>` |
+| `SmokeGrenadeView` and `SmokeCloudView` | Pooled, using a ParticleSystem |
+| `HiveDefenseHudView` (UXML and USS), `HiveOffscreenIndicatorView` and `EndScreenView` | The HUD and the end screen |
 
 ### Editor
 
-`HiveDefenseSceneBuilder`, in the same style as the existing `TownSceneBuilder`, builds the scene from Raz's prefabs:
+`HiveDefenseSceneBuilder` (menu `DigitalStory/Build F-010 Scene`), in the style of `TownSceneBuilder`. It creates the configs if they are missing, keeping tuned values, and builds the scene:
 
-- the ground;
-- trees, bushes and ruins around the edges;
-- 2 × `Beehive_LowPoly 1`;
+- a ground plane of about 70 × 70 m;
+- Raz's trees, bushes and ruins around the edge;
+- 2 hives;
 - 4 spawn points;
-- the player and the root.
+- the Piper, the Colossus puppet, the camera, the HUD and the root.
 
-Use **prefab variants** for the beekeepers and hives. Do not change Raz's original prefabs, and do not touch his `testing.unity`.
-
-## 8. Tests (EditMode, written first and failing)
+## 11. Tests (EditMode, written first and seen failing)
 
 - `SwarmBody`:
-  - A hit removes wasps, and the shield cuts the loss by 85%.
-  - Power up adds 250 per second per standing hive and stops at the maximum.
-  - Falling below 600 collapses the swarm, which respawns with 2,500 after 3 s.
+  - Loss with and without the dome, minus 85%.
+  - Gain of 250 a second per standing hive, capped at 10,000.
+  - Collapse below 600, the 3 s block, and the respawn with 2,500.
+- `SongBook` with this game's songs:
+  - Each song's keys played from silence cast exactly that song.
+  - Cooldowns block a recast.
+  - The Colossus needs full Fury.
 - `SwarmFormMachine`:
-  - Shield blocks attacks.
-  - Power up only starts while standing still, and a hit cancels it.
-  - Strike only starts with a full meter.
-- `StrikeMeter`: +12% per hit, and full at 100%.
-- `AttackChain`:
-  - Three punches inside the window, and the window resets after it.
-  - The third punch has the heavy values.
-  - The kick has a cooldown.
-- `Hive` and `HiveSet`:
-  - Damage, destroyed, and "under attack" for 2 s.
-  - Losing both hives means Lost.
+  - Songs are blocked while collapsed.
+  - A hit and a move each cancel Hive Call.
+  - Each form ends after its duration.
+- `FuryMeter`: fill from damage, full, and used by the Colossus.
+- `PathTrail`: distance resampling, its length, the point at a lane, and wrapping.
+- `ColossusAttackChain`: the 3-punch window, the heavy third punch, and the kick cooldown.
+- `Hive` and `HiveSet`: damage, under attack for 2 s, nearest standing hive, and Lost when both fall.
 - `BeekeeperBrain`:
   - It goes to the nearest hive and retargets when that hive falls.
   - It chases within 7 m and gives up beyond 14 m.
-  - It hits only after the wind-up, and a stun delays the attack.
-  - The smoke beekeeper throws from 14 m.
-- `SmokeCloud`: damage per second to a hive and to the swarm, the slow, and expiry.
+  - It lands a hit only after the wind-up, and a stun delays the attack.
+  - The smoker throws from 14 m.
+- `SmokeField`: hive damage, swarm loss, the slow, expiry, and clearing by Gust.
 - `WaveDirector`: the counts per wave, the breaks, and Won after wave 5.
+- `HiveDefenseSession`: Lost when both hives fall, and Won after wave 5.
 - PlayMode, if time allows:
   - The scene loads with no errors.
-  - The swarm buffers are made and released.
+  - `SwarmGpuView` makes and releases its buffers.
 
-## 9. Milestones
+## 12. Milestones
 
-Commit and push after each one, so there is always a playable build.
+Commit and push after each one.
 
-| # | Time | Result you can see |
+| # | Result you can see | Must ship |
 |---|---|---|
-| M0 | 0:00 to 0:15 | Claim in `FEATURES.md`, worktree, Mixamo import, empty scene from the builder |
-| M1 | 0:15 to 0:55 | **The core:** the puppet walks, runs and turns with the camera, and 5,000 wasps hold its shape and buzz. Profiler at 10,000 |
-| M2 | 0:55 to 1:35 | Hives, stick beekeepers, punches, hits remove wasps, HUD count, hive bars and edge arrows, losing |
-| M3 | 1:35 to 2:05 | Power up with streams from the hives, smoke beekeepers and smoke, waves and winning |
-| M4 | 2:05 to 2:30 | The jump spring and the shield form |
-| M5 | 2:30 to 2:45 | The strong strike and the kick |
-| M6 | 2:45 to 3:00 | Full verification, `FEATURES.md` and the pull request |
+| M0 | Branch synced, assets checked, configs and the empty scene from the builder | Yes |
+| M1 | **The core:** the Piper walks and animates, 5,000 wasps flow behind as a river and curl around the Piper when standing still. Profiler at 10,000 | Yes |
+| M2 | Hives, stick beekeepers, songs Sting and Dome, hits knock off wasps, Fury, the HUD (count, songs row, notes, hives and arrows), and losing | Yes |
+| M3 | Hive Call with streams from the hives, smokers and smoke, Gust, Tornado, all 5 waves and winning | Yes |
+| M4 | The Colossus: Mixamo import, bone sampling, the build-up wave, punches and kick | Cut first if late |
+| M5 | Full verification, `FEATURES.md`, review and the pull request | Yes |
 
-If time runs short, cut from the bottom: M5, then M4. M1 to M3 are the game.
+If time runs short inside M3, cut Tornado first.
 
-## 10. Left out on purpose
+## 13. Left out on purpose
 
 - Levels, upgrades and saving.
-- Sound, beyond hooks.
+- Sound beyond the flute notes.
 - NavMesh.
-- Combos beyond the 3-punch chain.
+- Jumping.
 - Multiplayer.
-- Changing Raz's assets.
+- Changing Raz's assets or his `testing.unity`.
