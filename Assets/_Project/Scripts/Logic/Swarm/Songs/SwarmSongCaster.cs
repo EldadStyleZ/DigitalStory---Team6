@@ -9,7 +9,7 @@ namespace DigitalStory.Logic
     /// and keeps what the HUD shows: recent notes and cooldowns.
     /// </summary>
     /// <remarks>
-    /// Nothing is cast, or even remembered, while the swarm is collapsed. A song whose
+    /// Nothing is cast, or even remembered, while the swarm is collapsed. While the Colossus stands no song is cast and none starts a cooldown. A song whose
     /// <see cref="SwarmSongEffect.CanCast"/> is false still uses up the notes and starts its cooldown.
     /// </remarks>
     public sealed class SwarmSongCaster
@@ -117,6 +117,13 @@ namespace DigitalStory.Logic
             }
 
             _noteCount = 0;
+
+            // The giant stands until its time is up: a song cannot replace it, so it costs no cooldown.
+            if (context.Forms != null && context.Forms.Current == SwarmForm.Colossus)
+            {
+                return SongBook.NoSong;
+            }
+
             _cooldownLeft[song] = _songs[song].Song.CooldownSeconds;
 
             SwarmSongEffect effect = _songs[song];

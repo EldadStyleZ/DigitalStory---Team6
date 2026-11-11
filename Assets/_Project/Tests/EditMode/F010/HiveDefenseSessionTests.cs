@@ -302,13 +302,15 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.AimTarget, Is.SameAs(west), "a dead beekeeper cannot be aimed at");
         }
 
+        private const float ColossusSeconds = 12f;
+
         [Test]
         public void Colossus_FollowsTheFormAndSteersWithTheInput()
         {
             _world = new HiveDefenseWorld(piper: new Vector3(5f, 0f, 5f));
             _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
             Assert.That(_world.Session.Fury.TryUse(), Is.True);
-            Assert.That(_world.Session.Forms.StartColossus(_world.Colossus.DurationSeconds), Is.True);
+            Assert.That(_world.Session.Forms.StartColossus(ColossusSeconds), Is.True);
 
             _world.Session.Tick(_world.Frame(), HiveDefenseWorld.Step);
             Assert.That(_world.Session.IsColossusActive, Is.True);
@@ -329,11 +331,11 @@ namespace DigitalStory.Tests.EditMode
             _world = new HiveDefenseWorld();
             _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
             _world.Session.Fury.TryUse();
-            _world.Session.Forms.StartColossus(_world.Colossus.DurationSeconds);
+            _world.Session.Forms.StartColossus(ColossusSeconds);
             _world.Run(HiveDefenseWorld.Step);
             Assert.That(_world.Session.IsColossusActive, Is.True);
 
-            _world.Run(_world.Colossus.DurationSeconds + 1f);
+            _world.Run(ColossusSeconds + 1f);
 
             Assert.That(_world.Session.IsColossusActive, Is.False);
             Assert.That(_world.Session.IsPiperRooted, Is.False);
@@ -347,7 +349,7 @@ namespace DigitalStory.Tests.EditMode
             _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
             _world.Session.Fury.TryUse();
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
-            _world.Session.Forms.StartColossus(_world.Colossus.DurationSeconds);
+            _world.Session.Forms.StartColossus(ColossusSeconds);
             _world.Run(HiveDefenseWorld.Step);
             BeekeeperBrain keeper = _world.Session.ActiveBeekeeper(0);
             var landed = new List<ColossusAttack>();

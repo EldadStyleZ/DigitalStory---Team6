@@ -4,7 +4,6 @@ namespace DigitalStory.Logic
     public enum BeekeeperState
     {
         GoToHive,
-        AttackHive,
         ChasePiper,
         WindUp,
         Recover,

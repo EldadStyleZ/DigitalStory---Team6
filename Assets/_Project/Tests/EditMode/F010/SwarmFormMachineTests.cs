@@ -132,6 +132,18 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Dome, SwarmForm.Gust }));
         }
 
+        [Test]
+        public void StartingAnyForm_WhileTheColossusStands_IsRefused()
+        {
+            _forms.StartColossus(12f);
+
+            Assert.That(_forms.StartDome(5f), Is.False);
+            Assert.That(_forms.StartGust(0.8f), Is.False);
+            Assert.That(_forms.StartHiveCall(), Is.False);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
+            Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Colossus }));
+        }
+
         // Sting
 
         [Test]

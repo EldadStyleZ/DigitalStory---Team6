@@ -321,6 +321,37 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void IsTargetingHive_SwingAtAHive_IsTrueThroughWindUpAndRecover()
+        {
+            var config = StickConfig();
+            var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
+            var recorder = new Recorder(brain);
+            var hives = HivesAt(new Vector3(0f, 0f, 10f));
+            var senses = Senses(hives, PiperFar);
+            Assert.That(brain.IsTargetingHive, Is.False);
+
+            AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
+            Assert.That(brain.IsTargetingHive, Is.True);
+
+            AdvanceUntil(brain, in senses, () => recorder.HiveHits.Count == 1, 3f);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.Recover));
+            Assert.That(brain.IsTargetingHive, Is.True);
+        }
+
+        [Test]
+        public void IsTargetingHive_SwingAtThePiper_IsFalse()
+        {
+            var config = StickConfig();
+            var brain = SpawnAt(config, new Vector3(0f, 0f, 0f));
+            var hives = HivesAt(new Vector3(0f, 0f, 100f));
+            var senses = Senses(hives, new Vector3(0f, 0f, 1f));
+
+            AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
+
+            Assert.That(brain.IsTargetingHive, Is.False);
+        }
+
+        [Test]
         public void Tick_AfterTheHit_RecoversAndShowsNoWindUpProgress()
         {
             var config = StickConfig();

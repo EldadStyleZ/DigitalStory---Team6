@@ -232,7 +232,7 @@ namespace DigitalStory.Logic
 
         private bool Begin(SwarmForm form, float seconds)
         {
-            if (_current == SwarmForm.Collapsed)
+            if (_current == SwarmForm.Collapsed || (_current == SwarmForm.Colossus && form != SwarmForm.Colossus))
             {
                 return false;
             }

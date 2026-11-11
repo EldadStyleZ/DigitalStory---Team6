@@ -24,6 +24,7 @@ namespace DigitalStory.Logic
         private float _cooldownLeft;
         private float _windUpElapsed;
         private int _windUpHive = NoHive;
+        private bool _isTargetingHive;
         private bool _hasAggro;
         private bool _isMoving;
 
@@ -50,6 +51,12 @@ namespace DigitalStory.Logic
 
         /// <summary>False once it is dead.</summary>
         public bool IsAlive => _state != BeekeeperState.Dead;
+
+        /// <summary>
+        /// True while a swing, or the recovery after it, is aimed at a hive; false when it is aimed at the Piper.
+        /// A hive attack and a Piper attack share the WindUp and Recover states.
+        /// </summary>
+        public bool IsTargetingHive => _isTargetingHive;
 
         /// <summary>True when it walked during the last tick.</summary>
         public bool IsMoving => _isMoving;
@@ -314,6 +321,7 @@ namespace DigitalStory.Logic
             _state = BeekeeperState.WindUp;
             _windUpElapsed = 0f;
             _windUpHive = hive;
+            _isTargetingHive = hive != NoHive;
             Face(target);
         }
 

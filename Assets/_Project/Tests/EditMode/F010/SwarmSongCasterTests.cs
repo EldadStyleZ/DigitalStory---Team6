@@ -136,6 +136,23 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_cast, Is.EqualTo(new[] { 5 }));
         }
 
+        [TestCase(0)]
+        [TestCase(2)]
+        [TestCase(3)]
+        [TestCase(4)]
+        public void Press_WhileTheColossusStands_CastsNothingAndStartsNoCooldown(int song)
+        {
+            _fury.AddDamage(1000f);
+            _forms.StartColossus(12f);
+
+            int result = PlayAll(SongKeys[song]);
+
+            Assert.That(result, Is.EqualTo(SongBook.NoSong));
+            Assert.That(_cast, Is.Empty);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
+            Assert.That(_caster.CooldownFraction(song), Is.EqualTo(0f));
+        }
+
         [Test]
         public void Press_SongOnCooldown_CannotBeRecast()
         {
