@@ -1,0 +1,592 @@
+// Moves every wasp of the swarm, one thread per wasp. Spec: docs/specs/F-010-wasp-swarm.md, sections 9.2 to 9.4.
+// SwarmGpuView sets every uniform and buffer below by name, so keep the names and layouts in step with it.
+// The CPU never reads this data back. Gameplay only feeds in counts, the form and a few positions.
+
+#pragma kernel Simulate
+#pragma kernel ResetWasps
+
+// Matches SwarmGpuView.ThreadsPerGroup.
+#define THREAD_GROUP_SIZE 64
+
+// 48 bytes, the same layout as SwarmGpuView.WaspStatic and the struct in WaspInstanced.shader. Written once by the CPU.
+struct WaspStatic
+{
+    float seed;          // 0..1: picks the stingers and phases the wings
+    float lane;          // 0..1: place along the river (0 at the Piper) and order in a form wave
+    float ringAngle;     // radians: place around the river's cross-section
+    float ringRadius;    // 0..1: share of the river radius
+    float3 boneOffset;   // the wasp's point on the Colossus, in its bone's space
+    float boneIndex;     // the Colossus bone, as a whole number
+    float height01;      // 0 at the Colossus's feet, 1 at its head: order of the Colossus wave
+    float level01;       // 0..1: height in the tornado and latitude on the sting orbit
+    float phase01;       // 0..1: spreads timings and directions
+    float unused;        // pads the struct to 48 bytes
+};
+
+// 48 bytes, the same layout as the struct in WaspInstanced.shader. Only this shader writes it.
+struct WaspDynamic
+{
+    float3 position;
+    float state;         // StateAlive, StateDying or StateDead
+    float3 velocity;
+    float stateTime;     // seconds in the current state
+    float4 tint;         // rgb colour, a glow
+};
+
+StructuredBuffer<WaspStatic> _Static;
+RWStructuredBuffer<WaspDynamic> _Dynamic;
+StructuredBuffer<float4> _Trail;          // newest first: xyz position, w metres from the newest point
+StructuredBuffer<float4x4> _Bones;        // the Colossus's bones, local to world
+
+int _MaxWasps;
+int _ActiveCount;
+int _TrailCount;
+int _BoneCount;                           // 0 until the Colossus has bones and samples
+int _Form;                                // DigitalStory.Logic.SwarmForm
+int _PreviousForm;
+
+float _SimTime;
+float _DeltaTime;                         // already capped at SwarmConfig.MaxDeltaTime
+float _FormStartTime;
+float _PreviousFormStartTime;
+
+float4 _PiperPosition;
+float4 _PiperForward;                     // flat and unit length
+float4 _Sting;                            // xyz target, w share of the swarm that stings
+float4 _HiveA;                            // xyz position, w 1 while it stands
+float4 _HiveB;
+float4 _LastHit;
+float4 _FormColors[8];                    // rgb per form id
+
+// From SwarmConfig.
+float _RiverSpring;
+float _RiverDamping;
+float _ShapeSpring;
+float _ShapeDamping;
+float _WobbleDamping;
+float _WobbleSeconds;
+float _FormWaveSeconds;
+float _FlowSpeed;
+float _RiverLength;
+float _RiverRadius;
+float _MeanderAmplitude;
+float _StandingTrailMeters;
+float _TorusRadius;
+float _DyingSeconds;
+
+// From the song assets, or 0 to use the defaults below.
+float _DomeRadius;
+float _TornadoRadius;
+
+static const float FullTurn = 6.28318530718;
+static const float HalfTurn = 3.14159265359;
+static const float GoldenAngle = 2.39996322973;
+static const float3 Up = float3(0.0, 1.0, 0.0);
+static const float3 Still = float3(0.0, 0.0, 0.0);
+static const float Tiny = 0.0001;
+
+// Wasp states, stored as floats in WaspDynamic.state.
+static const int StateAlive = 0;
+static const int StateDying = 1;
+static const int StateDead = 2;
+
+// Form ids, the same numbers as DigitalStory.Logic.SwarmForm.
+static const int FormRiver = 0;
+static const int FormDome = 1;
+static const int FormSting = 2;
+static const int FormTornado = 3;
+static const int FormGust = 4;
+static const int FormHiveCall = 5;
+static const int FormColossus = 6;
+static const int FormCollapsed = 7;
+
+// Enough halving steps for a trail of 4,096 points.
+static const int TrailSearchSteps = 12;
+
+// The look of each form, from spec 9.3. SwarmConfig does not hold these yet; move one there if it needs tuning.
+static const float FlyHeight = 1.0;              // metres above the ground the river flows
+static const float RiverSwirl = 0.6;             // radians per second the river's cross-section turns
+static const float MeanderWaveNumber = 1.4;      // radians per metre along the river, a wave about 4.5 m long
+static const float MeanderSpeed = 0.9;           // radians per second
+static const float DefaultDomeRadius = 2.2;
+static const float DomeSpin = 0.25;              // radians per second
+static const float StingFlightSeconds = 0.6;
+static const float StingStaggerSeconds = 0.35;
+static const float StingArcHeight = 1.2;         // metres the arc rises, plus StingArcRise per metre of distance
+static const float StingArcRise = 0.25;
+static const float StingTargetHeight = 1.0;      // metres above the target's feet
+static const float StingOrbitRadius = 0.8;
+static const float StingOrbitSpin = 5.0;         // radians per second
+static const float TornadoInnerRadius = 1.5;
+static const float DefaultTornadoRadius = 5.0;
+static const float TornadoBaseHeight = 0.2;
+static const float TornadoHeight = 3.0;
+static const float TornadoSpin = 6.0;            // radians per second
+static const float TornadoTwist = 3.0;           // radians the spiral turns from bottom to top
+static const float GustSeconds = 0.8;
+static const float GustStartRadius = 0.6;
+static const float GustRadius = 6.0;
+static const float HaloRadius = 0.7;
+static const float HaloHeight = 2.1;
+static const float HaloThickness = 0.15;
+static const float HaloSpin = 2.5;               // radians per second
+static const float MaxSpeed = 25.0;              // metres per second, so a far target never fires a wasp across the map
+static const float SpawnHeight = 1.2;            // metres above a hive's base
+static const float SpawnScatter = 0.4;
+static const float SpawnLift = 4.0;              // upward metres per second at birth, so newcomers arc in
+static const float ResetScatter = 1.5;
+static const float BurstSpeed = 4.0;             // metres per second a lost wasp flies from the hit
+static const float BurstLift = 0.6;
+static const float BurstSpreadMin = 0.6;
+static const float BurstSpreadRange = 0.8;
+static const float Gravity = 9.81;
+static const float FallDrag = 1.5;               // share of speed lost per second while falling
+static const float TintSharpness = 6.0;          // how fast a wasp takes on its form's colour, per second
+static const float RiverGlow = 0.1;
+static const float DomeGlow = 0.35;
+static const float StingGlow = 0.9;
+static const float TornadoGlow = 0.3;
+static const float GustGlow = 0.3;
+static const float HiveCallGlow = 0.8;
+static const float ColossusGlow = 0.2;
+
+int StateOf(WaspDynamic body)
+{
+    return (int)(body.state + 0.5);
+}
+
+float GlowOf(int look)
+{
+    if (look == FormDome)
+    {
+        return DomeGlow;
+    }
+
+    if (look == FormSting)
+    {
+        return StingGlow;
+    }
+
+    if (look == FormTornado)
+    {
+        return TornadoGlow;
+    }
+
+    if (look == FormGust)
+    {
+        return GustGlow;
+    }
+
+    if (look == FormHiveCall)
+    {
+        return HiveCallGlow;
+    }
+
+    if (look == FormColossus)
+    {
+        return ColossusGlow;
+    }
+
+    return RiverGlow;
+}
+
+float4 TintOf(int look)
+{
+    return float4(_FormColors[look].rgb, GlowOf(look));
+}
+
+float3 RingOffset(float angle, float radius)
+{
+    return float3(cos(angle) * radius, 0.0, sin(angle) * radius);
+}
+
+// The point `distance` metres back along the Piper's trail, and the way the trail runs there (toward the Piper).
+// Safe with no trail points (the Piper) and with one (that point).
+void SampleTrail(float distance, out float3 position, out float3 direction)
+{
+    position = _PiperPosition.xyz;
+    direction = _PiperForward.xyz;
+
+    if (_TrailCount <= 0)
+    {
+        return;
+    }
+
+    if (_TrailCount == 1)
+    {
+        position = _Trail[0].xyz;
+        return;
+    }
+
+    int low = 0;
+    int high = _TrailCount - 1;
+    float clamped = clamp(distance, 0.0, _Trail[high].w);
+
+    [loop]
+    for (int step = 0; step < TrailSearchSteps; step++)
+    {
+        if (high - low > 1)
+        {
+            int middle = (low + high) >> 1;
+            if (_Trail[middle].w <= clamped)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+    }
+
+    float4 newer = _Trail[low];
+    float4 older = _Trail[high];
+    float span = older.w - newer.w;
+    float blend = span > Tiny ? saturate((clamped - newer.w) / span) : 0.0;
+    position = lerp(newer.xyz, older.xyz, blend);
+
+    float3 along = newer.xyz - older.xyz;
+    along.y = 0.0;
+    float alongLength = length(along);
+    if (alongLength > Tiny)
+    {
+        direction = along / alongLength;
+    }
+}
+
+float TrailLength()
+{
+    return _TrailCount > 0 ? _Trail[_TrailCount - 1].w : 0.0;
+}
+
+// While the Piper stands, the river curls into a lazy ring around them.
+float3 TorusTarget(WaspStatic wasp, float flowLane)
+{
+    float around = flowLane * FullTurn;
+    float angle = wasp.ringAngle + _SimTime * RiverSwirl;
+    float radius = wasp.ringRadius * _RiverRadius;
+    float reach = _TorusRadius + cos(angle) * radius;
+    float3 lift = Up * (FlyHeight + sin(angle) * radius);
+    return _PiperPosition.xyz + RingOffset(around, reach) + lift;
+}
+
+float3 RiverTarget(WaspStatic wasp)
+{
+    float flowLane = frac(wasp.lane + _SimTime * _FlowSpeed);
+    float trailLength = TrailLength();
+    float along = flowLane * min(_RiverLength, trailLength);
+
+    float3 center;
+    float3 direction;
+    SampleTrail(along, center, direction);
+    float3 side = cross(Up, direction);
+
+    float angle = wasp.ringAngle + _SimTime * RiverSwirl;
+    float radius = wasp.ringRadius * _RiverRadius;
+    float meander = _MeanderAmplitude * sin(along * MeanderWaveNumber - _SimTime * MeanderSpeed);
+    float3 river = center + Up * (FlyHeight + sin(angle) * radius) + side * (cos(angle) * radius + meander);
+
+    float riverShare = saturate(trailLength / max(_StandingTrailMeters, Tiny));
+    return lerp(TorusTarget(wasp, flowLane), river, riverShare);
+}
+
+// A Fibonacci hemisphere: every active wasp gets its own evenly spread point.
+float3 DomeTarget(uint index)
+{
+    float count = max((float)_ActiveCount, 1.0);
+    float slot = (float)index + 0.5;
+    float height = 1.0 - saturate(slot / count);
+    float spread = sqrt(saturate(1.0 - height * height));
+    float around = slot * GoldenAngle + _SimTime * DomeSpin;
+    float radius = _DomeRadius > 0.0 ? _DomeRadius : DefaultDomeRadius;
+    return _PiperPosition.xyz + (RingOffset(around, spread) + Up * height) * radius;
+}
+
+bool IsStinger(WaspStatic wasp)
+{
+    return wasp.seed < _Sting.w;
+}
+
+float3 Bezier(float3 start, float3 control, float3 end, float progress)
+{
+    float rest = 1.0 - progress;
+    return rest * rest * start + 2.0 * rest * progress * control + progress * progress * end;
+}
+
+// Along an arc from the Piper to the target, then round a sphere about it.
+float3 StingTarget(WaspStatic wasp, float formSeconds)
+{
+    float3 start = _PiperPosition.xyz + Up * FlyHeight;
+    float3 end = _Sting.xyz + Up * StingTargetHeight;
+    float3 control = (start + end) * 0.5 + Up * (StingArcHeight + StingArcRise * distance(start, end));
+    float progress = saturate((formSeconds - wasp.phase01 * StingStaggerSeconds) / StingFlightSeconds);
+    float3 arc = Bezier(start, control, end, progress);
+
+    float latitude = 1.0 - 2.0 * wasp.level01;
+    float spread = sqrt(saturate(1.0 - latitude * latitude));
+    float spin = wasp.phase01 < 0.5 ? StingOrbitSpin : -StingOrbitSpin;
+    float around = wasp.phase01 * FullTurn + _SimTime * spin;
+    float3 orbit = end + (RingOffset(around, spread) + Up * latitude) * StingOrbitRadius;
+    return lerp(arc, orbit, smoothstep(0.75, 1.0, progress));
+}
+
+// A spinning funnel, narrow at the bottom and wide at the top.
+float3 TornadoTarget(WaspStatic wasp)
+{
+    float outer = _TornadoRadius > 0.0 ? _TornadoRadius : DefaultTornadoRadius;
+    float radius = lerp(TornadoInnerRadius, outer, wasp.level01);
+    float around = wasp.ringAngle + wasp.level01 * TornadoTwist + _SimTime * TornadoSpin;
+    float height = TornadoBaseHeight + wasp.level01 * TornadoHeight;
+    return _PiperPosition.xyz + RingOffset(around, radius) + Up * height;
+}
+
+// A ring that bursts out and comes back over GustSeconds.
+float3 GustTarget(WaspStatic wasp, float formSeconds)
+{
+    float burst = saturate(formSeconds / GustSeconds);
+    float radius = lerp(GustStartRadius, GustRadius, sin(burst * HalfTurn));
+    float lift = FlyHeight + sin(wasp.ringAngle) * wasp.ringRadius * _RiverRadius;
+    return _PiperPosition.xyz + RingOffset(wasp.seed * FullTurn, radius) + Up * lift;
+}
+
+// A tight halo over the Piper's head.
+float3 HaloTarget(WaspStatic wasp)
+{
+    float around = wasp.seed * FullTurn + _SimTime * HaloSpin;
+    float wobble = wasp.ringRadius * HaloThickness;
+    float reach = HaloRadius + cos(wasp.ringAngle) * wobble;
+    float lift = HaloHeight + sin(wasp.ringAngle) * wobble;
+    return _PiperPosition.xyz + RingOffset(around, reach) + Up * lift;
+}
+
+int BoneOf(WaspStatic wasp)
+{
+    return (int)(wasp.boneIndex + 0.5);
+}
+
+bool HasColossusPlace(WaspStatic wasp)
+{
+    int bone = BoneOf(wasp);
+    return bone >= 0 && bone < _BoneCount;
+}
+
+float3 ColossusTarget(WaspStatic wasp)
+{
+    return mul(_Bones[BoneOf(wasp)], float4(wasp.boneOffset, 1.0)).xyz;
+}
+
+// Where a wasp wants to be in a form, which colour it shows and whether the stiff shape spring holds it.
+// Every case that does not apply (the non-stingers, a finished gust, a Colossus without bones, Collapsed) is the river.
+float3 GoalOf(int form, float formSeconds, uint index, WaspStatic wasp, out int look, out bool isShape)
+{
+    look = form;
+    isShape = true;
+
+    if (form == FormDome)
+    {
+        return DomeTarget(index);
+    }
+
+    if (form == FormSting && IsStinger(wasp))
+    {
+        return StingTarget(wasp, formSeconds);
+    }
+
+    if (form == FormTornado)
+    {
+        return TornadoTarget(wasp);
+    }
+
+    if (form == FormGust && formSeconds < GustSeconds)
+    {
+        return GustTarget(wasp, formSeconds);
+    }
+
+    if (form == FormHiveCall)
+    {
+        return HaloTarget(wasp);
+    }
+
+    if (form == FormColossus && HasColossusPlace(wasp))
+    {
+        return ColossusTarget(wasp);
+    }
+
+    look = FormRiver;
+    isShape = false;
+    return RiverTarget(wasp);
+}
+
+float WaveOrderOf(int form, WaspStatic wasp)
+{
+    return form == FormColossus ? wasp.height01 : wasp.lane;
+}
+
+float3 LimitSpeed(float3 velocity)
+{
+    float speed = length(velocity);
+    return speed > MaxSpeed ? velocity * (MaxSpeed / speed) : velocity;
+}
+
+// The spring of spec 9.4, stepped with semi-implicit Euler. Each wasp takes up a new form at
+// formStartTime + order x FormWaveSeconds, so a change sweeps along the river (or up the Colossus).
+void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
+{
+    float switchTime = _FormStartTime + WaveOrderOf(_Form, wasp) * _FormWaveSeconds;
+    bool hasSwitched = _SimTime >= switchTime;
+    float previousSwitchTime = _PreviousFormStartTime + WaveOrderOf(_PreviousForm, wasp) * _FormWaveSeconds;
+    int form = hasSwitched ? _Form : _PreviousForm;
+    float formSeconds = max(_SimTime - (hasSwitched ? switchTime : previousSwitchTime), 0.0);
+
+    int look;
+    bool isShape;
+    float3 goal = GoalOf(form, formSeconds, index, wasp, look, isShape);
+
+    float stiffness = isShape ? _ShapeSpring : _RiverSpring;
+    float damping = isShape ? _ShapeDamping : _RiverDamping;
+    if (hasSwitched && formSeconds < _WobbleSeconds)
+    {
+        damping = _WobbleDamping;
+    }
+
+    float3 acceleration = stiffness * (goal - body.position) - 2.0 * damping * sqrt(stiffness) * body.velocity;
+    body.velocity = LimitSpeed(body.velocity + acceleration * _DeltaTime);
+    body.position += body.velocity * _DeltaTime;
+    body.stateTime += _DeltaTime;
+    body.tint = lerp(body.tint, TintOf(look), saturate(_DeltaTime * TintSharpness));
+}
+
+float DistanceOnGround(float3 from, float3 to)
+{
+    float2 offset = from.xz - to.xz;
+    return length(offset);
+}
+
+// Where a revived wasp appears: the nearest standing hive to the Piper, or the Piper when none stands.
+// During Hive Call with both hives standing, half come from each, so streams fly in from every hive.
+float3 SpawnPoint(WaspStatic wasp)
+{
+    bool firstStands = _HiveA.w > 0.5;
+    bool secondStands = _HiveB.w > 0.5;
+
+    if (!firstStands && !secondStands)
+    {
+        return _PiperPosition.xyz + Up * FlyHeight;
+    }
+
+    float3 hive = firstStands ? _HiveA.xyz : _HiveB.xyz;
+    if (firstStands && secondStands)
+    {
+        bool isFirstNearer = DistanceOnGround(_HiveA.xyz, _PiperPosition.xyz) <= DistanceOnGround(_HiveB.xyz, _PiperPosition.xyz);
+        bool takesFirst = _Form == FormHiveCall ? wasp.seed < 0.5 : isFirstNearer;
+        hive = takesFirst ? _HiveA.xyz : _HiveB.xyz;
+    }
+
+    return hive + Up * SpawnHeight;
+}
+
+float3 Scatter(WaspStatic wasp, float size)
+{
+    return (float3(wasp.phase01, wasp.level01, wasp.seed) - 0.5) * (2.0 * size);
+}
+
+void Revive(WaspStatic wasp, inout WaspDynamic body)
+{
+    body.position = SpawnPoint(wasp) + Scatter(wasp, SpawnScatter);
+    body.velocity = Up * SpawnLift;
+    body.state = (float)StateAlive;
+    body.stateTime = 0.0;
+}
+
+// A lost wasp bursts away from the last hit, then falls.
+void StartDying(WaspStatic wasp, inout WaspDynamic body)
+{
+    float3 away = body.position - _LastHit.xyz;
+    float awayLength = length(away);
+    float3 direction = awayLength > Tiny ? away / awayLength : RingOffset(wasp.phase01 * FullTurn, 1.0);
+    direction = normalize(direction + Up * BurstLift);
+    body.velocity = direction * (BurstSpeed * (BurstSpreadMin + BurstSpreadRange * wasp.level01));
+    body.state = (float)StateDying;
+    body.stateTime = 0.0;
+}
+
+void Fall(inout WaspDynamic body)
+{
+    body.velocity.y -= Gravity * _DeltaTime;
+    body.velocity *= saturate(1.0 - FallDrag * _DeltaTime);
+    body.position += body.velocity * _DeltaTime;
+
+    float ground = _PiperPosition.y;
+    if (body.position.y < ground)
+    {
+        body.position.y = ground;
+        body.velocity = Still;
+    }
+
+    body.stateTime += _DeltaTime;
+    if (body.stateTime >= _DyingSeconds)
+    {
+        body.state = (float)StateDead;
+        body.stateTime = 0.0;
+        body.velocity = Still;
+    }
+}
+
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void Simulate(uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    if (index >= (uint)_MaxWasps)
+    {
+        return;
+    }
+
+    WaspStatic wasp = _Static[index];
+    WaspDynamic body = _Dynamic[index];
+    bool isActive = index < (uint)max(_ActiveCount, 0);
+    int state = StateOf(body);
+
+    if (state == StateDead && isActive)
+    {
+        Revive(wasp, body);
+        state = StateAlive;
+    }
+    else if (state == StateAlive && !isActive)
+    {
+        StartDying(wasp, body);
+        state = StateDying;
+    }
+
+    if (state == StateAlive)
+    {
+        Fly(index, wasp, body);
+    }
+    else if (state == StateDying)
+    {
+        Fall(body);
+    }
+
+    _Dynamic[index] = body;
+}
+
+// Fills the dynamic buffer the first time: the active wasps in a loose cloud about the Piper, the rest dead.
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void ResetWasps(uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    if (index >= (uint)_MaxWasps)
+    {
+        return;
+    }
+
+    WaspStatic wasp = _Static[index];
+    bool isActive = index < (uint)max(_ActiveCount, 0);
+
+    WaspDynamic body;
+    body.position = _PiperPosition.xyz + Up * FlyHeight + Scatter(wasp, ResetScatter);
+    body.state = isActive ? (float)StateAlive : (float)StateDead;
+    body.velocity = Still;
+    body.stateTime = 0.0;
+    body.tint = TintOf(FormRiver);
+    _Dynamic[index] = body;
+}
