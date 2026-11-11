@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 05d9a1d7d3fc6a04c98cbd4f0dd856b3, type: 3}
+  m_Name: VerminSettings
+  m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.VerminSettings
+  _startCount: 50
+  _refillThreshold: 20
+  _refillAmount: 15
+  _secondsBetweenSpawns: 0.06
+  _poolSize: 150
+  _edgeMargin: 0.8
+  _cageMargin: 0.5
+  _playerMargin: 1.2
+  _wanderSpeed: 0.7
+  _minWanderSeconds: 1
+  _maxWanderSeconds: 3
+  _pauseChance: 0.3

@@ -1,5 +1,148 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &5490935783441515123
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2539856453400309430}
+  - component: {fileID: 307078903052156035}
+  - component: {fileID: 9086039944024360283}
+  m_Layer: 0
+  m_Name: Instrument Voice
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2539856453400309430
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5490935783441515123}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3806410753146538380}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!82 &307078903052156035
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5490935783441515123}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 1
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+--- !u!114 &9086039944024360283
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5490935783441515123}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c010f01c8046b174fa9ebbb3ebaf7e57, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.InstrumentVoice
+  _instrument: {fileID: 3347826226918501955}
 --- !u!1 &6008438571621355713
 GameObject:
   m_ObjectHideFlags: 0
@@ -302,6 +445,8 @@ GameObject:
   - component: {fileID: 5757803920872337041}
   - component: {fileID: 549729940581155829}
   - component: {fileID: 1696535029551939352}
+  - component: {fileID: 3347826226918501955}
+  - component: {fileID: 7223759563616895703}
   m_Layer: 8
   m_Name: Player
   m_TagString: Untagged
@@ -324,6 +469,8 @@ Transform:
   m_Children:
   - {fileID: 2960450830415614877}
   - {fileID: 2399663919792948798}
+  - {fileID: 2539856453400309430}
+  - {fileID: 8863018932739063852}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!50 &8110736561958503626
@@ -447,6 +594,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.PlayerMovement
   _moveSpeed: 4
   _body: {fileID: 5540053891105762509}
+  _startsFacingLeft: 0
 --- !u!114 &1696535029551939352
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -459,3 +607,120 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2bb27072a3a3f934084766c080e82a24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.PlayerNotes
+--- !u!114 &3347826226918501955
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7950683626632486778}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc6759e4f397c74418163bf703e05342, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.PlayerInstrument
+  _instrument: {fileID: 11400000, guid: 76855f287f9fd6b4f836b90009f33296, type: 2}
+  _maxHoldSeconds: 1
+  _voice: {fileID: 9086039944024360283}
+--- !u!114 &7223759563616895703
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7950683626632486778}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b33402c119de7a45a426f4a97c44b7e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.PlayerAbilities
+  _callArea: {fileID: 8520271674073425335}
+  _callRadius: 2.5
+  _verminLayers:
+    serializedVersion: 2
+    m_Bits: 512
+--- !u!1001 &9030760557751946704
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 3806410753146538380}
+    m_Modifications:
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.78
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3399072233754519906, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.1185683
+      objectReference: {fileID: 0}
+    - target: {fileID: 3399072233754519906, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1.1185683
+      objectReference: {fileID: 0}
+    - target: {fileID: 6483829753617397143, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_Name
+      value: Call Area
+      objectReference: {fileID: 0}
+    - target: {fileID: 6483829753617397143, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+--- !u!114 &8520271674073425335 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 823491399697688679, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+  m_PrefabInstance: {fileID: 9030760557751946704}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20f0f2aafa460064a9304d30f739808d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.CallArea
+--- !u!4 &8863018932739063852 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 552940152219012604, guid: 9b282d37b704fc441b53ec28a28872a3, type: 3}
+  m_PrefabInstance: {fileID: 9030760557751946704}
+  m_PrefabAsset: {fileID: 0}

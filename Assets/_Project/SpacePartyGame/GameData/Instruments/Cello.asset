@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e4e0f3e7a8b0f14c985ab6185957c1d, type: 3}
+  m_Name: Cello
+  m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.InstrumentSettings
+  _kind: 1
+  _flute:
+    _baseHertz: 587.33
+    _semitones: 00000000020000000500000007000000090000000c000000i
+    _vibratoHertz: 5.3
+    _vibratoDepthHertz: 6
+    _overtoneShare: 0.25
+    _brightnessHertz: 2800
+    _breathHertz: 1900
+    _breathWidth: 0.3
+    _breathShare: 0.12
+    _volume: 0.13
+    _noteStartVolume: 0.06
+    _noteStartSeconds: 0.035
+    _noteDipSeconds: 0.006
+    _noteRecoverSeconds: 0.02
+    _glideSeconds: 0.012
+    _fadeSeconds: 0.05
+  _cello:
+    _baseHertz: 293.665
+    _semitones: 00000000020000000500000007000000090000000c000000i
+    _vibratoHertz: 5
+    _vibratoDepthHertz: 2.5
+    _brightnessHertz: 1600
+    _bowNoiseShare: 0.03
+    _volume: 0.16
+    _attackSeconds: 0.06
+    _glideSeconds: 0.02
+    _fadeSeconds: 0.08
