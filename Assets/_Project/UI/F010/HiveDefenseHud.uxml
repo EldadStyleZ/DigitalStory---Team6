@@ -1,0 +1,41 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/_Project/UI/F010/HiveDefenseHud.uss" />
+    <ui:VisualElement name="hud-root" class="hud-root" picking-mode="Ignore">
+        <ui:VisualElement name="top-left" class="top-left" picking-mode="Ignore">
+            <ui:VisualElement name="wasp-panel" class="panel" picking-mode="Ignore">
+                <ui:VisualElement class="row" picking-mode="Ignore">
+                    <ui:Label text="Wasps" class="panel-title" />
+                    <ui:Label name="wasp-count" text="0 / 0" class="wasp-count" />
+                </ui:VisualElement>
+                <ui:VisualElement class="bar-track" picking-mode="Ignore">
+                    <ui:VisualElement name="wasp-fill" class="bar-fill wasp-fill" picking-mode="Ignore" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="fury-panel" class="panel fury-panel" picking-mode="Ignore">
+                <ui:VisualElement class="row" picking-mode="Ignore">
+                    <ui:Label text="Fury" class="panel-title" />
+                    <ui:Label name="fury-keys" text="" class="fury-keys" />
+                </ui:VisualElement>
+                <ui:VisualElement class="bar-track" picking-mode="Ignore">
+                    <ui:VisualElement name="fury-fill" class="bar-fill fury-fill" picking-mode="Ignore" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="top-center" class="top-center" picking-mode="Ignore">
+            <ui:Label name="wave-label" text="Wave 0/0" class="wave-label" />
+            <ui:Label name="next-wave-label" text="" class="next-wave-label" />
+        </ui:VisualElement>
+        <ui:VisualElement name="hives" class="hives" picking-mode="Ignore" />
+        <ui:VisualElement name="bottom" class="bottom" picking-mode="Ignore">
+            <ui:VisualElement name="notes" class="notes" picking-mode="Ignore" />
+            <ui:VisualElement name="songs" class="songs" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="offscreen-layer" class="offscreen-layer" picking-mode="Ignore" />
+        <ui:VisualElement name="end-screen" class="end-screen" picking-mode="Ignore">
+            <ui:VisualElement class="end-card" picking-mode="Ignore">
+                <ui:Label name="end-title" text="" class="end-title" />
+                <ui:Label name="end-hint" text="" class="end-hint" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

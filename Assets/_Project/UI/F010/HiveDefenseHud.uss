@@ -1,0 +1,341 @@
+/* The Wasp Piper's HUD. Colours match the existing HUD (HudConfig). */
+.hud-root {
+    --text: rgb(243, 234, 214);
+    --caption: rgb(170, 167, 187);
+    --panel: rgba(18, 20, 34, 0.84);
+    --track: rgba(255, 255, 255, 0.12);
+    --gold: rgb(232, 197, 71);
+    --wasp: rgb(242, 181, 68);
+    --danger: rgb(224, 72, 60);
+    --fury: rgb(176, 92, 230);
+    --fury-glow: rgb(255, 214, 90);
+    --overlay: rgba(9, 10, 20, 0.74);
+    --key-text: rgb(35, 28, 12);
+
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    color: var(--text);
+    font-size: 14px;
+}
+
+.row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.panel {
+    background-color: var(--panel);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    min-width: 220px;
+}
+
+.panel-title {
+    color: var(--caption);
+    font-size: 12px;
+    padding: 0;
+    margin-right: 8px;
+}
+
+.bar-track {
+    height: 10px;
+    margin-top: 4px;
+    background-color: var(--track);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    width: 0;
+    height: 100%;
+    border-radius: 5px;
+}
+
+/* Top left: wasps and Fury */
+.top-left {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+}
+
+.wasp-count {
+    color: var(--text);
+    font-size: 15px;
+    -unity-font-style: bold;
+    padding: 0;
+}
+
+.wasp-count--low {
+    color: var(--danger);
+}
+
+.wasp-fill {
+    background-color: var(--wasp);
+}
+
+.wasp-fill--low {
+    background-color: var(--danger);
+}
+
+.fury-keys {
+    color: var(--caption);
+    font-size: 12px;
+    padding: 0;
+}
+
+.fury-fill {
+    background-color: var(--fury);
+}
+
+.fury-panel--full {
+    border-width: 2px;
+    border-color: var(--fury-glow);
+    background-color: rgba(70, 30, 100, 0.9);
+}
+
+.fury-panel--full .fury-fill {
+    background-color: var(--fury-glow);
+}
+
+.fury-panel--full .fury-keys {
+    color: var(--fury-glow);
+    -unity-font-style: bold;
+}
+
+/* Top centre: waves */
+.top-center {
+    position: absolute;
+    top: 12px;
+    left: 0;
+    right: 0;
+    align-items: center;
+}
+
+.wave-label {
+    font-size: 22px;
+    -unity-font-style: bold;
+    background-color: var(--panel);
+    border-radius: 8px;
+    padding: 4px 16px;
+}
+
+.next-wave-label {
+    font-size: 14px;
+    color: var(--caption);
+    margin-top: 4px;
+    padding: 0;
+}
+
+/* Hives, down the left side */
+.hives {
+    position: absolute;
+    left: 12px;
+    top: 120px;
+}
+
+.hive-panel {
+    min-width: 160px;
+    background-color: var(--panel);
+    border-radius: 8px;
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+    padding: 5px 10px;
+    margin-bottom: 6px;
+}
+
+.hive-title {
+    color: var(--text);
+    font-size: 12px;
+    padding: 0;
+}
+
+.hive-fill {
+    background-color: var(--gold);
+}
+
+.hive-panel--flash {
+    border-color: var(--danger);
+    background-color: rgba(120, 24, 20, 0.9);
+}
+
+.hive-panel--flash .hive-fill {
+    background-color: var(--danger);
+}
+
+.hive-panel--destroyed {
+    opacity: 0.4;
+}
+
+/* Bottom: recent notes and the songs row */
+.bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8px;
+    align-items: center;
+}
+
+.notes {
+    flex-direction: row;
+    justify-content: center;
+    height: 26px;
+    margin-bottom: 4px;
+}
+
+.note {
+    width: 22px;
+    height: 22px;
+    margin: 0 3px;
+    border-radius: 11px;
+    font-size: 12px;
+    color: var(--key-text);
+    -unity-text-align: middle-center;
+    padding: 0;
+    display: none;
+}
+
+.note--shown {
+    display: flex;
+}
+
+.songs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0 10px;
+}
+
+.song {
+    margin: 3px;
+    padding: 4px 8px;
+    background-color: var(--panel);
+    border-radius: 8px;
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+    overflow: hidden;
+    min-width: 96px;
+}
+
+.song--resting {
+    opacity: 0.7;
+}
+
+.song-title {
+    color: var(--text);
+    font-size: 13px;
+    padding: 0;
+}
+
+.song-keys {
+    flex-direction: row;
+    margin-top: 2px;
+}
+
+.key {
+    width: 17px;
+    height: 17px;
+    margin-right: 2px;
+    border-radius: 9px;
+    font-size: 11px;
+    color: var(--key-text);
+    -unity-text-align: middle-center;
+    padding: 0;
+}
+
+.song-cooldown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0;
+    background-color: rgba(255, 255, 255, 0.22);
+}
+
+/* The six holes, in the order of the flute */
+.hole-0 { background-color: rgb(240, 120, 110); }
+.hole-1 { background-color: rgb(240, 170, 90); }
+.hole-2 { background-color: rgb(240, 220, 100); }
+.hole-3 { background-color: rgb(130, 210, 120); }
+.hole-4 { background-color: rgb(110, 180, 240); }
+.hole-5 { background-color: rgb(190, 140, 240); }
+
+/* Arrows to hives under attack, off screen */
+.offscreen-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.hive-arrow {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    translate: -50% -50%;
+    background-color: var(--danger);
+    border-radius: 20px;
+    color: white;
+    font-size: 26px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    padding: 0;
+    display: none;
+}
+
+.hive-arrow--shown {
+    display: flex;
+}
+
+/* End screen */
+.end-screen {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--overlay);
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+
+.end-screen--shown {
+    display: flex;
+}
+
+.end-card {
+    align-items: center;
+    padding: 24px 40px;
+    background-color: var(--panel);
+    border-radius: 12px;
+    border-width: 3px;
+    border-color: var(--gold);
+}
+
+.end-title {
+    font-size: 40px;
+    -unity-font-style: bold;
+    color: var(--gold);
+    padding: 0;
+}
+
+.end-screen--lost .end-card {
+    border-color: var(--danger);
+}
+
+.end-screen--lost .end-title {
+    color: var(--danger);
+}
+
+.end-hint {
+    font-size: 16px;
+    color: var(--caption);
+    margin-top: 12px;
+    padding: 0;
+}
