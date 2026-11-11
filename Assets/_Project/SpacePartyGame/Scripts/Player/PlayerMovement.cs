@@ -28,6 +28,10 @@ namespace SpacePartyGame
         private InputAction _move;
         private int _facing = 1;
         private float _topSpeed = -1f;
+        private Vector2 _aim;
+        private Vector2 _push;
+        private float _pushControl = 1f;
+        private float _pushUntil = float.NegativeInfinity;
 
         /// <summary>The normal walking top speed, set in the Inspector.</summary>
         public float WalkSpeed => _moveSpeed;
@@ -51,6 +55,46 @@ namespace SpacePartyGame
         /// <summary>The way the player faces, as a unit vector.</summary>
         public Vector2 FacingDirection => new Vector2(_facing, 0f);
 
+        /// <summary>Whether the player may walk now. When off, they stand still but can still aim.</summary>
+        public bool CanMove { get; set; } = true;
+
+        /// <summary>
+        /// The way the player aims, as a unit vector: the stick or WASD now, or the last way they pushed it, or their
+        /// facing before they have pushed it at all. It works while they cannot move, too.
+        /// </summary>
+        public Vector2 AimDirection => _aim.sqrMagnitude > 0f ? _aim : FacingDirection;
+
+        /// <summary>
+        /// Shoves the player for a while: <paramref name="velocity"/> is added to their own movement, and fades to
+        /// nothing over <paramref name="seconds"/>, while they keep only <paramref name="control"/> (0 to 1) of
+        /// their own movement.
+        /// </summary>
+        public void Push(Vector2 velocity, float seconds, float control)
+        {
+            _push = velocity;
+            _pushStartedAt = Time.time;
+            _pushSeconds = Mathf.Max(0.01f, seconds);
+            _pushUntil = Time.time + _pushSeconds;
+            _pushControl = Mathf.Clamp01(control);
+        }
+
+        /// <summary>Puts the player back as they started: facing their start way, standing still, not pushed.</summary>
+        public void ResetToStart()
+        {
+            _pushUntil = float.NegativeInfinity;
+            _aim = Vector2.zero;
+            _rigidbody.linearVelocity = Vector2.zero;
+            _facing = _startsFacingLeft ? -1 : 1;
+
+            if (_body != null)
+            {
+                _body.flipX = _facing < 0;
+            }
+        }
+
+        private float _pushStartedAt;
+        private float _pushSeconds = 1f;
+
         private void Awake()
         {
             _rigidbody = GetComponent<Rigidbody2D>();
@@ -69,9 +113,24 @@ namespace SpacePartyGame
         private void FixedUpdate()
         {
             Vector2 input = _move.ReadValue<Vector2>();
+
+            if (input.sqrMagnitude > 0.04f)
+            {
+                _aim = input.normalized;
+            }
+
             // The top speed replaces the walking speed, so the run can raise it.
             // _rigidbody.linearVelocity = PlayerMotion.VelocityFor(input, _moveSpeed);
-            _rigidbody.linearVelocity = PlayerMotion.VelocityFor(input, TopSpeed);
+            // _rigidbody.linearVelocity = PlayerMotion.VelocityFor(input, TopSpeed);
+            Vector2 own = CanMove ? PlayerMotion.VelocityFor(input, TopSpeed) : Vector2.zero;
+            bool isPushed = Time.time < _pushUntil;
+            float left = isPushed ? 1f - (Time.time - _pushStartedAt) / _pushSeconds : 0f;
+            _rigidbody.linearVelocity = isPushed ? own * _pushControl + _push * left : own;
+
+            if (!CanMove)
+            {
+                return;
+            }
 
             int facing = FacingRule.Next(_facing, input.x);
 

@@ -47,6 +47,10 @@ namespace SpacePartyGame
 
             // With the leaderboard off, the round end goes straight back to the start menu.
             (GameState.RoundEnd, GameState.StartMenu),
+
+            // Esc or Start resets the game from the countdown or from play.
+            (GameState.Countdown, GameState.StartMenu),
+            (GameState.Playing, GameState.StartMenu),
         };
 
         /// <summary>The current stage.</summary>
@@ -61,6 +65,11 @@ namespace SpacePartyGame
         /// <summary>Whether a match may start with this many players. It needs two, or one when testing alone.</summary>
         public static bool CanStartMatch(int joined, bool allowSinglePlayer) =>
             joined <= MaxPlayers && joined >= (allowSinglePlayer ? 1 : 2);
+
+        /// <summary>Whether Esc or Start may reset the game to the start menu now: any time during a game.</summary>
+        public static bool CanReset(GameState state) =>
+            state == GameState.Countdown || state == GameState.Playing || state == GameState.Paused
+            || state == GameState.RoundEnd;
 
         /// <summary>The stage the start menu leads to: the join screen, or straight to the countdown without it.</summary>
         public static GameState AfterStartMenu(bool useJoinScreen) =>
@@ -147,6 +156,10 @@ namespace SpacePartyGame
             {
                 case GameState.Join:
                     return JoinMap;
+                // The countdown and the round end use the player map too, so Esc or Start can reset the game;
+                // PlayerPermissions decides what each player may do then.
+                case GameState.Countdown:
+                case GameState.RoundEnd:
                 case GameState.Playing:
                     return PlayerMap;
                 case GameState.Paused:
@@ -159,6 +172,7 @@ namespace SpacePartyGame
         }
 
         /// <summary>Whether players may move and play notes in a stage.</summary>
-        public static bool CanMoveAndPlay(GameState state) => MapFor(state) == PlayerMap;
+        // public static bool CanMoveAndPlay(GameState state) => MapFor(state) == PlayerMap;
+        public static bool CanMoveAndPlay(GameState state) => state == GameState.Playing;
     }
 }

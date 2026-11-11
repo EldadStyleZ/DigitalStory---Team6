@@ -117,6 +117,12 @@ namespace SpacePartyGame
             }
         }
 
+        /// <summary>Stops following its leader now, such as when the round ends.</summary>
+        public void StopFollowing()
+        {
+            _follow?.Stop();
+        }
+
         private void Awake()
         {
             _rigidbody = GetComponent<Rigidbody2D>();

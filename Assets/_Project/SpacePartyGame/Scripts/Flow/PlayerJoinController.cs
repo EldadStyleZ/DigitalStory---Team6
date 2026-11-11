@@ -36,6 +36,9 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("Players placed in the scene, P1 first. With the join screen off, these are the fixed players; they are paired to their devices here and stay still until play starts.")]
         private PlayerInput[] _scenePlayers = Array.Empty<PlayerInput>();
 
+        [SerializeField, Tooltip("Scene players start where they stand in the scene instead of at the spawn points.")]
+        private bool _keepScenePlayerPositions = true;
+
         [SerializeField, Tooltip("The parent for spawned players.")]
         private Transform _playersParent;
 
@@ -49,6 +52,7 @@ namespace SpacePartyGame
         };
 
         private readonly List<PlayerInput> _players = new List<PlayerInput>();
+        private readonly Dictionary<PlayerInput, Vector3> _scenePositions = new Dictionary<PlayerInput, Vector3>();
         private PlayerInputManager _manager;
 
         /// <summary>Raised when a player joins, after its slot, colour and place are set.</summary>
@@ -146,7 +150,13 @@ namespace SpacePartyGame
             {
                 PlayerInput player = _scenePlayers[slot];
                 PairFixedPlayer(player, slot);
-                Register(player, slot);
+                if (_keepScenePlayerPositions)
+                {
+                    _scenePositions[player] = player.transform.position;
+                }
+
+                // Register(player, slot);
+                Register(player, slot, !_keepScenePlayerPositions);
             }
         }
 
@@ -251,6 +261,11 @@ namespace SpacePartyGame
         {
             SetJoining(to == GameState.Join);
 
+            if (to == GameState.StartMenu)
+            {
+                PutPlayersBack();
+            }
+
             foreach (PlayerInput player in _players)
             {
                 ApplyInputMode(player, to);
@@ -282,7 +297,8 @@ namespace SpacePartyGame
             Register(player, player.playerIndex);
         }
 
-        private void Register(PlayerInput player, int slot)
+        // private void Register(PlayerInput player, int slot)
+        private void Register(PlayerInput player, int slot, bool moveToSpawnPoint = true)
         {
             if (_players.Contains(player))
             {
@@ -292,7 +308,12 @@ namespace SpacePartyGame
             // int slot = player.playerIndex;
             player.name = $"Player {slot + 1}";
             player.transform.SetParent(_playersParent, true);
-            player.transform.position = SpawnPointFor(slot);
+            // player.transform.position = SpawnPointFor(slot);
+            if (moveToSpawnPoint)
+            {
+                player.transform.position = SpawnPointFor(slot);
+            }
+
             player.GetComponent<PlayerIdentity>().Initialize(slot, _palette.ColourOf(slot));
             player.actions.FindAction("Join/Join", true).performed += HandleJoinPressed;
             player.neverAutoSwitchControlSchemes = true;
@@ -300,6 +321,30 @@ namespace SpacePartyGame
             ApplyInputMode(player, _flow.State);
             SetJoining(_flow.State == GameState.Join);
             PlayerJoined?.Invoke(player);
+        }
+
+        // Back on the start menu, scene players return to where they stand in the scene, as they started.
+        private void PutPlayersBack()
+        {
+            foreach (PlayerInput player in _players)
+            {
+                if (player.TryGetComponent(out PlayerMovement movement))
+                {
+                    movement.ResetToStart();
+                }
+
+                if (_scenePositions.TryGetValue(player, out Vector3 position))
+                {
+                    var body = player.GetComponent<Rigidbody2D>();
+                    player.transform.position = position;
+
+                    if (body != null)
+                    {
+                        body.position = position;
+                        body.linearVelocity = Vector2.zero;
+                    }
+                }
+            }
         }
 
         private void HandleJoinPressed(InputAction.CallbackContext context)

@@ -46,8 +46,25 @@ namespace SpacePartyGame
         private RunRhythm _run;
         private ContactFilter2D _filter;
 
+        /// <summary>What the player may do now; set by the round for each stage.</summary>
+        public PlayerPermissions Permissions { get; private set; } = PlayerPermissions.All;
+
         /// <summary>Whether the player is calling now.</summary>
-        public bool IsCalling => _instrument.IsPlaying(Note.Root);
+        // public bool IsCalling => _instrument.IsPlaying(Note.Root);
+        public bool IsCalling => Permissions.CanCall && _instrument.IsPlaying(Note.Root);
+
+        /// <summary>Sets what the player may do: walk, play notes, call, run and blow.</summary>
+        public void Apply(PlayerPermissions permissions)
+        {
+            Permissions = permissions;
+            _movement.CanMove = permissions.CanMove;
+            _notes.CanPlay = permissions.CanPlay;
+
+            if (!permissions.CanCall && _callArea != null)
+            {
+                _callArea.Hide();
+            }
+        }
 
         /// <summary>How far the call reaches.</summary>
         public float CallRadius => _callRadius;
@@ -102,6 +119,11 @@ namespace SpacePartyGame
         // Every press counts toward the run, even a quick tap of a note already playing.
         private void HandleNotePressed(Note note)
         {
+            if (!Permissions.CanRun)
+            {
+                return;
+            }
+
             _run.Press(note, Time.time);
         }
 
@@ -118,7 +140,7 @@ namespace SpacePartyGame
 
         private void HandleNoteStarted(Note note)
         {
-            if (note == Note.Root && _callArea != null)
+            if (note == Note.Root && _callArea != null && Permissions.CanCall)
             {
                 _callArea.Show(_identity.Colour);
             }

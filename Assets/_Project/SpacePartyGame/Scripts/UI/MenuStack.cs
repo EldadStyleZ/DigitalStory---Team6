@@ -88,8 +88,9 @@ namespace SpacePartyGame
                     return MenuId.Join;
                 case GameState.Paused:
                     return MenuId.Pause;
-                case GameState.RoundEnd:
-                    return MenuId.Winner;
+                // The winner is shown in the game world, over the widened winner's view, so no menu opens.
+                // case GameState.RoundEnd:
+                //     return MenuId.Winner;
                 case GameState.NameEntry:
                     return MenuId.NameEntry;
                 case GameState.Leaderboard:

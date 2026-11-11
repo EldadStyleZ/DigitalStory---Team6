@@ -115,4 +115,38 @@ namespace SpacePartyGame.Tests
             Assert.That(CameraFraming.SizeToFit(Map, aspect), Is.EqualTo(expected).Within(0.0001f));
         }
     }
+
+    public sealed class WinnerWidenTests
+    {
+        private static readonly Rect Left = new Rect(0f, 0f, 0.5f, 1f);
+        private static readonly Rect Right = new Rect(0.5f, 0f, 0.5f, 1f);
+
+        [Test]
+        public void Lerp_Halfway_IsBetween()
+        {
+            Rect half = SplitLayout.Lerp(Left, new Rect(0f, 0f, 1f, 1f), 0.5f);
+
+            Assert.That(half.xMax, Is.EqualTo(0.75f).Within(0.0001f));
+            Assert.That(half.xMin, Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void SqueezedAway_RightLoser_FlattensAgainstTheRightEdge()
+        {
+            Rect squeezed = SplitLayout.SqueezedAway(Right, Left);
+
+            Assert.That(squeezed.xMin, Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(squeezed.width, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(squeezed.height, Is.EqualTo(1f).Within(0.0001f));
+        }
+
+        [Test]
+        public void SqueezedAway_LeftLoser_FlattensAgainstTheLeftEdge()
+        {
+            Rect squeezed = SplitLayout.SqueezedAway(Left, Right);
+
+            Assert.That(squeezed.xMax, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(squeezed.width, Is.EqualTo(0f).Within(0.0001f));
+        }
+    }
 }

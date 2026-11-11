@@ -41,8 +41,37 @@ namespace SpacePartyGame
         /// <summary>Raised when a note's button comes up.</summary>
         public event Action<Note> NoteReleased;
 
-        /// <summary>Whether a note's button is held now.</summary>
-        public bool IsHeld(Note note) => _actions[(int)note].IsPressed();
+        private bool _canPlay = true;
+
+        /// <summary>Whether a note's button is held now (never while playing is switched off).</summary>
+        // public bool IsHeld(Note note) => _actions[(int)note].IsPressed();
+        public bool IsHeld(Note note) => _canPlay && _actions[(int)note].IsPressed();
+
+        /// <summary>
+        /// Whether the player may play notes. Switching it off releases every note, so nothing keeps sounding, and
+        /// ignores presses until it is switched on again.
+        /// </summary>
+        public bool CanPlay
+        {
+            get => _canPlay;
+            set
+            {
+                if (_canPlay == value)
+                {
+                    return;
+                }
+
+                _canPlay = value;
+
+                if (!value)
+                {
+                    foreach (Note note in Enum.GetValues(typeof(Note)))
+                    {
+                        NoteReleased?.Invoke(note);
+                    }
+                }
+            }
+        }
 
         private void Awake()
         {
@@ -75,11 +104,21 @@ namespace SpacePartyGame
 
         private void HandleStarted(InputAction.CallbackContext context)
         {
+            if (!_canPlay)
+            {
+                return;
+            }
+
             NotePressed?.Invoke(NoteOf(context.action));
         }
 
         private void HandleCanceled(InputAction.CallbackContext context)
         {
+            if (!_canPlay)
+            {
+                return;
+            }
+
             NoteReleased?.Invoke(NoteOf(context.action));
         }
 

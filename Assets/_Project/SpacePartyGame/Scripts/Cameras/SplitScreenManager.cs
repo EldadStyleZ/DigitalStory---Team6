@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -38,7 +39,18 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("The line across the middle of the screen.")]
         private GameObject _horizontalDivider;
 
+        [SerializeField, Min(0f), Tooltip("How long the winner's view takes to widen to the whole screen at the round's end, in seconds.")]
+        private float _winnerWidenSeconds = 1.5f;
+
+        [SerializeField, Tooltip("How the widening eases, from 0 (start) to 1 (whole screen).")]
+        private AnimationCurve _winnerWidenEase = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
         private float _fullScreenSize;
+        private Rect[] _viewports = new Rect[GameFlow.MaxPlayers];
+        private Coroutine _widening;
+        private RectTransform _verticalLine;
+        private RectTransform _horizontalLine;
+        private Vector2 _verticalAnchorMin, _verticalAnchorMax, _horizontalAnchorMin, _horizontalAnchorMax;
 
         /// <summary>Whether the screen is split now.</summary>
         public bool IsSplit { get; private set; }
@@ -53,6 +65,123 @@ namespace SpacePartyGame
             }
 
             _fullScreenSize = _mainCamera.orthographicSize;
+            _verticalLine = _verticalDivider.GetComponent<RectTransform>();
+            _horizontalLine = _horizontalDivider.GetComponent<RectTransform>();
+
+            if (_verticalLine != null)
+            {
+                _verticalAnchorMin = _verticalLine.anchorMin;
+                _verticalAnchorMax = _verticalLine.anchorMax;
+            }
+
+            if (_horizontalLine != null)
+            {
+                _horizontalAnchorMin = _horizontalLine.anchorMin;
+                _horizontalAnchorMax = _horizontalLine.anchorMax;
+            }
+        }
+
+        /// <summary>
+        /// At the round's end, widens the winner's view until it fills the screen, squeezing the others' views to
+        /// nothing and sliding the dividers along. With no winner (a draw) it goes back to the single overview.
+        /// </summary>
+        public void ShowWinner(int winnerSlot)
+        {
+            if (!IsSplit || winnerSlot < 0 || winnerSlot >= _joining.Players.Count)
+            {
+                Unsplit();
+                return;
+            }
+
+            if (_widening != null)
+            {
+                StopCoroutine(_widening);
+            }
+
+            _widening = StartCoroutine(Widen(winnerSlot));
+        }
+
+        private IEnumerator Widen(int winner)
+        {
+            int count = Mathf.Min(_joining.Players.Count, GameFlow.MaxPlayers);
+            var from = (Rect[])_viewports.Clone();
+            var to = new Rect[count];
+
+            for (int slot = 0; slot < count; slot++)
+            {
+                to[slot] = slot == winner ? new Rect(0f, 0f, 1f, 1f) : SplitLayout.SqueezedAway(from[slot], from[winner]);
+
+                if (slot != winner)
+                {
+                    _huds[slot].Hide();
+                }
+            }
+
+            for (float t = 0f; t < _winnerWidenSeconds; t += Time.deltaTime)
+            {
+                ShowWidening(from, to, count, winner, _winnerWidenEase.Evaluate(t / _winnerWidenSeconds));
+                yield return null;
+            }
+
+            ShowWidening(from, to, count, winner, 1f);
+
+            for (int slot = 0; slot < count; slot++)
+            {
+                if (slot != winner)
+                {
+                    _cameras[slot].Stop();
+                }
+            }
+
+            _verticalDivider.SetActive(false);
+            _horizontalDivider.SetActive(false);
+            _widening = null;
+        }
+
+        private void ShowWidening(Rect[] from, Rect[] to, int count, int winner, float k)
+        {
+            Rect wide = SplitLayout.Lerp(from[winner], to[winner], k);
+
+            for (int slot = 0; slot < count; slot++)
+            {
+                _viewports[slot] = SplitLayout.Lerp(from[slot], to[slot], k);
+                _cameras[slot].SetViewport(_viewports[slot]);
+
+                // A view squeezed to almost nothing stops drawing, so Unity never gets a zero-sized viewport.
+                _cameras[slot].Camera.enabled = _viewports[slot].width > 0.002f && _viewports[slot].height > 0.002f;
+            }
+
+            _huds[winner].Place(wide);
+
+            // A divider follows the edge of the winner's view that faces the others.
+            if (_verticalLine != null && _verticalDivider.activeSelf)
+            {
+                float x = from[winner].center.x < 0.5f ? wide.xMax : wide.xMin;
+                _verticalLine.anchorMin = new Vector2(x, _verticalAnchorMin.y);
+                _verticalLine.anchorMax = new Vector2(x, _verticalAnchorMax.y);
+            }
+
+            if (_horizontalLine != null && _horizontalDivider.activeSelf)
+            {
+                float y = from[winner].center.y < 0.5f ? wide.yMax : wide.yMin;
+                _horizontalLine.anchorMin = new Vector2(_horizontalAnchorMin.x, y);
+                _horizontalLine.anchorMax = new Vector2(_horizontalAnchorMax.x, y);
+            }
+        }
+
+        private void RestoreDividers()
+        {
+            if (_verticalLine != null)
+            {
+                _verticalLine.anchorMin = _verticalAnchorMin;
+                _verticalLine.anchorMax = _verticalAnchorMax;
+            }
+
+            if (_horizontalLine != null)
+            {
+                _horizontalLine.anchorMin = _horizontalAnchorMin;
+                _horizontalLine.anchorMax = _horizontalAnchorMax;
+            }
         }
 
         private void OnEnable()
@@ -96,7 +225,9 @@ namespace SpacePartyGame
                 if (slot < count)
                 {
                     PlayerInput player = _joining.Players[slot];
+                    _viewports[slot] = layout.Players[slot];
                     _cameras[slot].Follow(player.transform, layout.Players[slot]);
+                    _cameras[slot].Camera.enabled = true;
                     _huds[slot].Show(player.GetComponent<PlayerIdentity>(), layout.Players[slot]);
                 }
                 else
@@ -125,6 +256,14 @@ namespace SpacePartyGame
 
         private void Unsplit()
         {
+            if (_widening != null)
+            {
+                StopCoroutine(_widening);
+                _widening = null;
+            }
+
+            RestoreDividers();
+
             foreach (FollowCamera camera in _cameras)
             {
                 camera.Stop();

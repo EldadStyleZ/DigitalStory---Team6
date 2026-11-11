@@ -106,7 +106,9 @@ namespace SpacePartyGame.Tests
         [TestCase(GameState.Countdown, MenuId.None)]
         [TestCase(GameState.Playing, MenuId.None)]
         [TestCase(GameState.Paused, MenuId.Pause)]
-        [TestCase(GameState.RoundEnd, MenuId.Winner)]
+        // The round end shows the winner in the world instead of a menu.
+        // [TestCase(GameState.RoundEnd, MenuId.Winner)]
+        [TestCase(GameState.RoundEnd, MenuId.None)]
         [TestCase(GameState.NameEntry, MenuId.NameEntry)]
         [TestCase(GameState.Leaderboard, MenuId.Leaderboard)]
         public void MenuFor_EachState(GameState state, MenuId expected)

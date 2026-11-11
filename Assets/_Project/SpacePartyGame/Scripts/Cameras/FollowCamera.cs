@@ -40,6 +40,12 @@ namespace SpacePartyGame
             MoveTo(Framed(target.position));
         }
 
+        /// <summary>Moves the camera's view to another part of the screen, keeping its zoom.</summary>
+        public void SetViewport(Rect viewport)
+        {
+            _camera.rect = viewport;
+        }
+
         /// <summary>Stops following and switches the camera off.</summary>
         public void Stop()
         {

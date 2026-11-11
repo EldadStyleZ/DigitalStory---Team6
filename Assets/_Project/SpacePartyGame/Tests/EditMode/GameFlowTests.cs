@@ -184,10 +184,14 @@ namespace SpacePartyGame.Tests
     {
         [TestCase(GameState.StartMenu, null)]
         [TestCase(GameState.Join, PlayerInputModes.JoinMap)]
-        [TestCase(GameState.Countdown, null)]
+        // The countdown and the round end use the player map, so Esc or Start can reset the game; what each player
+        // may do then comes from PlayerPermissions.
+        // [TestCase(GameState.Countdown, null)]
+        [TestCase(GameState.Countdown, PlayerInputModes.PlayerMap)]
         [TestCase(GameState.Playing, PlayerInputModes.PlayerMap)]
         [TestCase(GameState.Paused, PlayerInputModes.UIMap)]
-        [TestCase(GameState.RoundEnd, null)]
+        // [TestCase(GameState.RoundEnd, null)]
+        [TestCase(GameState.RoundEnd, PlayerInputModes.PlayerMap)]
         [TestCase(GameState.NameEntry, PlayerInputModes.UIMap)]
         [TestCase(GameState.Leaderboard, PlayerInputModes.UIMap)]
         public void MapFor_EachState(GameState state, string expected)

@@ -57,6 +57,36 @@ namespace SpacePartyGame
                     throw new ArgumentOutOfRangeException(nameof(players), players, "Split screen is for 1 to 4 players.");
             }
         }
+
+        /// <summary>A viewport part way from one to another: 0 gives <paramref name="from"/>, 1 gives <paramref name="to"/>.</summary>
+        public static Rect Lerp(Rect from, Rect to, float t) => Rect.MinMaxRect(
+            Mathf.Lerp(from.xMin, to.xMin, t), Mathf.Lerp(from.yMin, to.yMin, t),
+            Mathf.Lerp(from.xMax, to.xMax, t), Mathf.Lerp(from.yMax, to.yMax, t));
+
+        /// <summary>
+        /// Where a loser's viewport ends up while the winner's widens: squashed flat against its own far side, away
+        /// from the winner, on each axis where the two differ.
+        /// </summary>
+        public static Rect SqueezedAway(Rect loser, Rect winner)
+        {
+            float xMin = loser.xMin, xMax = loser.xMax, yMin = loser.yMin, yMax = loser.yMax;
+
+            if (!Mathf.Approximately(loser.center.x, winner.center.x))
+            {
+                float edge = loser.center.x > winner.center.x ? loser.xMax : loser.xMin;
+                xMin = edge;
+                xMax = edge;
+            }
+
+            if (!Mathf.Approximately(loser.center.y, winner.center.y))
+            {
+                float edge = loser.center.y > winner.center.y ? loser.yMax : loser.yMin;
+                yMin = edge;
+                yMax = edge;
+            }
+
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
     }
 
     /// <summary>Camera maths: keeping a view on the map and fitting the whole map in a view.</summary>

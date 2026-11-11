@@ -31,6 +31,14 @@ namespace SpacePartyGame
             gameObject.SetActive(true);
         }
 
+        /// <summary>Moves the HUD over another viewport, keeping its player and score.</summary>
+        public void Place(Rect viewport)
+        {
+            var area = (RectTransform)transform;
+            area.anchorMin = viewport.min;
+            area.anchorMax = viewport.max;
+        }
+
         /// <summary>Hides the HUD.</summary>
         public void Hide()
         {
