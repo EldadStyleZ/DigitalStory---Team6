@@ -35,6 +35,9 @@ namespace DigitalStory.Tests.EditMode
             _squads = ScriptableObject.CreateInstance<SquadConfig>();
             _hiveConfig = ScriptableObject.CreateInstance<HiveConfig>();
             _hives = new HiveSet(new List<Hive> { new Hive(_hiveConfig, new Vector3(-10f, 0f, 0f)), new Hive(_hiveConfig, new Vector3(10f, 0f, 0f)) });
+
+            // The swarm starts full at its capacity (plan section H), so these start half full to leave Hive Call room.
+            SetInt("StartingWasps", _config.StartingCapacity / 2);
             Build();
         }
 
@@ -214,7 +217,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.AddColossusDamage(45f);
 
-            Assert.That(_fury.Value, Is.EqualTo(22.5f).Within(1e-3f));
+            Assert.That(_fury.Value, Is.EqualTo(45f / _furyConfig.DamagePerFuryPoint).Within(1e-3f));
         }
 
         [Test]
@@ -244,7 +247,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _forms.StartColossus(12f);
 
-            _body.Lose(_config.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Colossus, SwarmForm.Collapsed }));
@@ -398,31 +401,33 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_changes, Is.Empty);
         }
 
-        // 30 wasps of room and 200 in the stores: the swarm fills, and the stores keep what it had no room for.
+        // 30 wasps of room and 200 in the stores: the swarm fills, and the stores keep what it had no room for. Full means
+        // the capacity, which nests raise (plan section H), not the 4,000 ceiling.
         [Test]
-        public void Tick_HiveCallFillsTheSwarm_EndsAtTheMaximum()
+        public void Tick_HiveCallFillsTheSwarm_EndsAtTheCapacity()
         {
-            SetInt("StartingWasps", _config.MaxWasps - 30);
+            SetInt("StartingWasps", _config.StartingCapacity - 30);
             Build();
             _forms.StartHiveCall();
 
             _forms.Tick(1f, _hives);
 
-            Assert.That(_body.Count, Is.EqualTo(_config.MaxWasps), "capped at the maximum");
+            Assert.That(_body.Count, Is.EqualTo(_config.StartingCapacity), "capped at the capacity");
+            Assert.That(_body.Count, Is.LessThan(_body.Max));
             Assert.That(_hives[0].Store + _hives[1].Store, Is.EqualTo((2f * _hiveConfig.StartStore) - 30f).Within(0.001f));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
         }
 
         [Test]
-        public void Tick_HiveCallJustBelowTheMaximum_KeepsCalling()
+        public void Tick_HiveCallJustBelowTheCapacity_KeepsCalling()
         {
-            SetInt("StartingWasps", _config.MaxWasps - 300);
+            SetInt("StartingWasps", _config.StartingCapacity - 300);
             Build();
             _forms.StartHiveCall();
 
             _forms.Tick(0.5f, _hives);
 
-            Assert.That(_body.Count, Is.EqualTo(_config.MaxWasps - 300 + (int)_hiveConfig.CollectPerSecond));
+            Assert.That(_body.Count, Is.EqualTo(_config.StartingCapacity - 300 + (int)_hiveConfig.CollectPerSecond));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
         }
 
@@ -433,7 +438,7 @@ namespace DigitalStory.Tests.EditMode
         {
             Start(SwarmForm.Dome, 5f);
 
-            _body.Lose(_config.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsDomed, Is.False);
@@ -444,7 +449,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Collapse_WhileInTheRiver_GoesToCollapsed()
         {
-            _body.Lose(_config.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsCoreRooted, Is.False);
@@ -455,7 +460,7 @@ namespace DigitalStory.Tests.EditMode
         {
             Start(SwarmForm.Sting, 4f);
 
-            _body.Lose(_config.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             Assert.That(_forms.Slot(SongSlot.Strike).IsActive, Is.False);
         }
@@ -463,7 +468,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Start_WhileCollapsed_IsRefused()
         {
-            _body.Lose(_config.StartingWasps - 100);
+            _body.Lose(_body.Count);
             _changes.Clear();
 
             Start(SwarmForm.Dome, 5f);
@@ -484,7 +489,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_WhileCollapsed_StaysCollapsedWithoutTheBodyRespawning()
         {
-            _body.Lose(_config.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             _forms.Tick(1f, _hives);
 
@@ -494,7 +499,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Respawn_AfterTheBlock_GoesBackToTheRiver()
         {
-            _body.Lose(_config.StartingWasps - 100);
+            _body.Lose(_body.Count);
             _changes.Clear();
 
             _body.Tick(3f, _hives);

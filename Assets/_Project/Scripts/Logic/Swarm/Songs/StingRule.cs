@@ -5,7 +5,8 @@ namespace DigitalStory.Logic
 {
     /// <summary>
     /// The sting: its squad arcs to the target and wraps it, and hurts it each second from the moment it arrives until the
-    /// time is up or the target dies. With no living target in reach it wraps the empty air at the aim for a moment.
+    /// time is up or the target dies. With no living target in reach it wraps the empty air at the aim for a moment. Its
+    /// reach and damage grow with the swarm's level, as it stood at the cast.
     /// </summary>
     internal sealed class StingRule : SongRule
     {
@@ -15,6 +16,7 @@ namespace DigitalStory.Logic
         private FuryMeter _fury;
         private Vector3 _point;
         private float _endSeconds;
+        private float _damagePerSecond;
         private bool _hasArrived;
 
         public StingRule(StingSong song)
@@ -38,7 +40,8 @@ namespace DigitalStory.Logic
             ISwarmTarget aim = context.AimTarget;
             bool isAimAlive = aim != null && aim.IsAlive;
             Vector3 core = context.CorePosition;
-            float range = _song.MaxRange;
+            float range = _song.MaxRange * context.SizeScale;
+            _damagePerSecond = _song.DamagePerSecond * context.DamageScale;
 
             if (isAimAlive && GroundMath.DistanceSquared(aim.Position, core) <= range * range)
             {
@@ -95,7 +98,7 @@ namespace DigitalStory.Logic
         // Only the part of the step from the arrival to the end hurts.
         private void Hurt(float secondsBefore, float seconds)
         {
-            float damage = _song.DamagePerSecond * GroundMath.Overlap(secondsBefore, seconds, _song.ArriveSeconds, _endSeconds);
+            float damage = _damagePerSecond * GroundMath.Overlap(secondsBefore, seconds, _song.ArriveSeconds, _endSeconds);
 
             if (damage > 0f)
             {

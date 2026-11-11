@@ -6,7 +6,8 @@ namespace DigitalStory.Logic
 {
     /// <summary>
     /// The tornado: a column around the core that, once it stands at full height, hurts and throws back every beekeeper in
-    /// reach of where the core stands then, once.
+    /// reach of where the core stands then, once. Its reach, height, wall and damage grow with the swarm's level, as it
+    /// stood at the cast, and the picture gets the grown sizes.
     /// </summary>
     internal sealed class TornadoRule : SongRule
     {
@@ -17,6 +18,10 @@ namespace DigitalStory.Logic
 
         private IReadOnlyList<ISwarmTarget> _enemies;
         private FuryMeter _fury;
+        private float _radius;
+        private float _height;
+        private float _wallRadius;
+        private float _damage;
         private bool _hasHit;
 
         public TornadoRule(TornadoSong song)
@@ -26,15 +31,19 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>The reach, the height, the spin and the hit time.</summary>
-        public override Vector4 ParamA => new Vector4(_song.Radius, _song.Height, _song.SpinRadiansPerSecond, _song.HitSeconds);
+        public override Vector4 ParamA => new Vector4(_radius, _height, _song.SpinRadiansPerSecond, _song.HitSeconds);
 
         /// <summary>The wall's radius and the second hit time, which is -1 with no duet.</summary>
-        public override Vector4 ParamB => new Vector4(_song.WallRadius, NoSecondHit, 0f, 0f);
+        public override Vector4 ParamB => new Vector4(_wallRadius, NoSecondHit, 0f, 0f);
 
         protected override void Begin(in SwarmSongContext context)
         {
             _enemies = context.Enemies ?? throw new ArgumentException("The song context has no beekeeper list.", nameof(context));
             _fury = context.Fury ?? throw new ArgumentException("The song context has no Fury meter.", nameof(context));
+            _radius = _song.Radius * context.SizeScale;
+            _height = _song.Height * context.SizeScale;
+            _wallRadius = _song.WallRadius * context.SizeScale;
+            _damage = _song.Damage * context.DamageScale;
             _hasHit = false;
         }
 
@@ -54,7 +63,7 @@ namespace DigitalStory.Logic
 
         private void Hit(Vector3 core)
         {
-            float reachSquared = _song.Radius * _song.Radius;
+            float reachSquared = _radius * _radius;
             float totalDamage = 0f;
 
             for (int i = 0; i < _enemies.Count; i++)
@@ -66,9 +75,9 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                enemy.TakeDamage(_song.Damage);
+                enemy.TakeDamage(_damage);
                 enemy.Knockback(GroundMath.Direction(core, enemy.Position) * _song.KnockbackSpeed);
-                totalDamage += _song.Damage;
+                totalDamage += _damage;
             }
 
             if (totalDamage > 0f)

@@ -10,7 +10,7 @@ namespace DigitalStory.Data
     public sealed class HiveConfig : ScriptableObject
     {
         [field: SerializeField, Min(1f), Tooltip("Health of one hive.")]
-        public float Health { get; private set; } = 300f;
+        public float Health { get; private set; } = 450f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds after a hit that the hive still counts as under attack.")]
         public float UnderAttackSeconds { get; private set; } = 2f;
@@ -42,6 +42,6 @@ namespace DigitalStory.Data
         public float HealWaspsPerSecond { get; private set; } = 60f;
 
         [field: SerializeField, Min(0.01f), Tooltip("Wasps given for each point of health healed.")]
-        public float WaspsPerHealthPoint { get; private set; } = 2f;
+        public float WaspsPerHealthPoint { get; private set; } = 2.5f;
     }
 }

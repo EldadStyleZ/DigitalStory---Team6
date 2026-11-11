@@ -34,6 +34,9 @@ namespace DigitalStory.Tests.EditMode
         {
             _swarmConfig = Make<SwarmConfig>();
             _config = Make<HiveConfig>();
+
+            // The swarm starts full at its capacity (plan section H), so these start half full to leave room for a store.
+            SetSwarmInt("StartingWasps", _swarmConfig.StartingCapacity / 2);
             Build(AtHive1);
         }
 
@@ -142,12 +145,12 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_NearAHive_StopsWhenTheSwarmIsFull()
         {
-            SetSwarmInt("StartingWasps", _swarmConfig.MaxWasps - 10);
+            SetSwarmInt("StartingWasps", _swarmConfig.StartingCapacity - 10);
             Build(AtHive1);
 
             Tick(0.5f, AtHive0);
 
-            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.MaxWasps));
+            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingCapacity), "full at its capacity");
             Assert.That(_hives[0].Store, Is.EqualTo(_config.StartStore - 10f).Within(0.001f), "the store keeps what the swarm had no room for");
 
             Tick(0.5f, AtHive0);
@@ -246,19 +249,19 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_GiveHeld_NeverTakesTheSwarmBelowItsCollapseLine()
         {
-            _swarm.Lose(_swarmConfig.StartingWasps - _swarmConfig.CollapseBelow - 5);
+            _swarm.Lose(_swarmConfig.StartingWasps - _swarm.CollapseLine - 5);
             float health = _hives[1].Health;
 
             Give(1f, AtHive1);
 
-            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.CollapseBelow));
+            Assert.That(_swarm.Count, Is.EqualTo(_swarm.CollapseLine));
             Assert.That(_swarm.IsCollapsed, Is.False);
             Assert.That(_hives[1].Health, Is.EqualTo(health + (5f / _config.WaspsPerHealthPoint)).Within(0.001f));
 
             Give(1f, AtHive1);
 
             Assert.That(_exchange.IsGiving, Is.False, "nothing left to spare");
-            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.CollapseBelow));
+            Assert.That(_swarm.Count, Is.EqualTo(_swarm.CollapseLine));
         }
 
         [Test]

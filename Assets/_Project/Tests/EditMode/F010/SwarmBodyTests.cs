@@ -5,14 +5,30 @@ using UnityEngine;
 
 namespace DigitalStory.Tests.EditMode
 {
+    /// <summary>
+    /// The swarm's count, its capacity and the lines drawn as shares of the capacity (plan sections H and M), on the default
+    /// SwarmConfig: 800 wasps of a capacity of 800, a ceiling of 4,000, a collapse below 12% of the capacity, a respawn of
+    /// 50% from the stores with a floor of 15%, and a low warning below 30%.
+    /// </summary>
     public sealed class SwarmBodyTests
     {
         // The dome's share of a loss, the default on its song asset.
         private const float DomeShare = 0.15f;
 
+        // What one nest adds to the capacity, the default on NestConfig.
+        private const int NestCapacity = 400;
+
         private static SwarmConfig NewConfig()
         {
             return ScriptableObject.CreateInstance<SwarmConfig>();
+        }
+
+        /// <summary>A config whose swarm starts with half its capacity, so wasps have room to join.</summary>
+        private static SwarmConfig HalfFullConfig()
+        {
+            var config = NewConfig();
+            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":" + (config.StartingCapacity / 2) + "}", config);
+            return config;
         }
 
         private static SwarmBody NewBody()
@@ -35,14 +51,156 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void New_StartsAtStartingWaspsAndNotCollapsed()
+        public void New_StartsAtStartingWaspsAndStartingCapacityAndNotCollapsed()
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
 
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps));
-            Assert.That(body.Max, Is.EqualTo(config.MaxWasps));
+            Assert.That(body.Capacity, Is.EqualTo(config.StartingCapacity));
+            Assert.That(body.Max, Is.EqualTo(config.MaxWasps), "Max stays the ceiling the capacity can reach");
             Assert.That(body.IsCollapsed, Is.False);
+        }
+
+        [Test]
+        public void New_EightHundredOfEightHundred_UnderACeilingOfFourThousand()
+        {
+            var body = NewBody();
+
+            Assert.That(body.Count, Is.EqualTo(800));
+            Assert.That(body.Capacity, Is.EqualTo(800));
+            Assert.That(body.Max, Is.EqualTo(4000));
+        }
+
+        [TestCase("{\"<StartingCapacity>k__BackingField\":4001}")]
+        [TestCase("{\"<StartingCapacity>k__BackingField\":0}")]
+        [TestCase("{\"<StartingWasps>k__BackingField\":801}")]
+        [TestCase("{\"<StartingWasps>k__BackingField\":-1}")]
+        [TestCase("{\"<CollapseShare>k__BackingField\":1.5}")]
+        [TestCase("{\"<CollapseShare>k__BackingField\":-0.1}")]
+        [TestCase("{\"<RespawnShare>k__BackingField\":1.5}")]
+        [TestCase("{\"<LowShare>k__BackingField\":-0.1}")]
+        [TestCase("{\"<MinRespawnShare>k__BackingField\":0.11}")]
+        [TestCase("{\"<MinRespawnShare>k__BackingField\":1.01}")]
+        public void Constructor_CountsOrSharesThatCannotHold_Throw(string json)
+        {
+            var config = NewConfig();
+            JsonUtility.FromJsonOverwrite(json, config);
+
+            Assert.That(() => new SwarmBody(config), Throws.ArgumentException);
+        }
+
+        // ---- The lines are shares of the capacity (plan section H) ----
+
+        [Test]
+        public void Lines_AtTheStartingCapacity_AreTwelveAndThirtyPercentOfIt()
+        {
+            var body = NewBody();
+
+            Assert.That(body.CollapseLine, Is.EqualTo(96), "12% of 800");
+            Assert.That(body.LowLine, Is.EqualTo(240), "30% of 800");
+        }
+
+        [Test]
+        public void Lines_FollowTheCapacityAsItGrows()
+        {
+            var body = NewBody();
+
+            body.GrowCapacity(NestCapacity);
+
+            Assert.That(body.CollapseLine, Is.EqualTo(144), "12% of 1,200");
+            Assert.That(body.LowLine, Is.EqualTo(360), "30% of 1,200");
+        }
+
+        [Test]
+        public void Lose_ToBelowTheLineOfAGrownCapacity_Collapses()
+        {
+            var small = NewBody();
+            var grown = NewBody();
+            grown.GrowCapacity(NestCapacity);
+
+            small.Lose(800 - 140);
+            grown.Lose(800 - 140);
+
+            Assert.That(small.IsCollapsed, Is.False, "140 is above 12% of 800");
+            Assert.That(grown.IsCollapsed, Is.True, "140 is below 12% of 1,200");
+        }
+
+        [Test]
+        public void IsLow_BelowThirtyPercentOfTheCapacity()
+        {
+            var body = NewBody();
+
+            body.Lose(800 - 240);
+            Assert.That(body.IsLow, Is.False, "exactly the low line is not low");
+
+            body.Lose(1);
+            Assert.That(body.IsLow, Is.True);
+
+            body.GrowCapacity(NestCapacity);
+            body.Gain(120f);
+            Assert.That(body.Count, Is.EqualTo(359));
+            Assert.That(body.IsLow, Is.True, "the line grew to 360 with the capacity");
+        }
+
+        // ---- GrowCapacity: a nest raises how many wasps the swarm may hold (plan section H) ----
+
+        [Test]
+        public void GrowCapacity_AddsToTheCapacityAndSaysHowMuch_WithoutAddingWasps()
+        {
+            var body = NewBody();
+
+            int grown = body.GrowCapacity(NestCapacity);
+
+            Assert.That(grown, Is.EqualTo(NestCapacity));
+            Assert.That(body.Capacity, Is.EqualTo(1200));
+            Assert.That(body.Count, Is.EqualTo(800), "the wasps come separately");
+            Assert.That(body.Room, Is.EqualTo(400f).Within(0.001f));
+        }
+
+        [Test]
+        public void GrowCapacity_StopsAtTheCeiling()
+        {
+            var config = NewConfig();
+            var body = new SwarmBody(config);
+            for (int nest = 0; nest < 8; nest++)
+            {
+                body.GrowCapacity(NestCapacity);
+            }
+
+            Assert.That(body.Capacity, Is.EqualTo(config.MaxWasps), "800 + 8 x 400 would be 4,000 exactly");
+            Assert.That(body.GrowCapacity(NestCapacity), Is.EqualTo(0), "nothing past the ceiling");
+            Assert.That(body.Capacity, Is.EqualTo(config.MaxWasps));
+        }
+
+        [Test]
+        public void GrowCapacity_NearTheCeiling_GrowsOnlyToIt()
+        {
+            var body = NewBody();
+            body.GrowCapacity(3000);
+
+            int grown = body.GrowCapacity(NestCapacity);
+
+            Assert.That(grown, Is.EqualTo(200));
+            Assert.That(body.Capacity, Is.EqualTo(4000));
+        }
+
+        [Test]
+        public void GrowCapacity_Negative_Throws()
+        {
+            Assert.That(() => NewBody().GrowCapacity(-1), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+        }
+
+        [Test]
+        public void Gain_AfterGrowCapacity_FillsUpToTheNewCapacity()
+        {
+            var body = NewBody();
+            body.GrowCapacity(NestCapacity);
+
+            int joined = body.Gain(1000f);
+
+            Assert.That(joined, Is.EqualTo(400));
+            Assert.That(body.Count, Is.EqualTo(1200));
         }
 
         // ---- Lose ----
@@ -53,10 +211,10 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            int removed = body.Lose(1000);
+            int removed = body.Lose(300);
 
-            Assert.That(removed, Is.EqualTo(1000));
-            Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 1000));
+            Assert.That(removed, Is.EqualTo(300));
+            Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 300));
         }
 
         [Test]
@@ -145,27 +303,27 @@ namespace DigitalStory.Tests.EditMode
         // ---- Collapse ----
 
         [Test]
-        public void Lose_ToExactlyCollapseBelow_DoesNotCollapse()
+        public void Lose_ToExactlyTheCollapseLine_DoesNotCollapse()
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
             bool collapsed = false;
             body.Collapsed += () => collapsed = true;
 
-            body.Lose(config.StartingWasps - config.CollapseBelow);
+            body.Lose(config.StartingWasps - body.CollapseLine);
 
-            Assert.That(body.Count, Is.EqualTo(config.CollapseBelow));
+            Assert.That(body.Count, Is.EqualTo(body.CollapseLine));
             Assert.That(body.IsCollapsed, Is.False);
             Assert.That(collapsed, Is.False);
         }
 
         [Test]
-        public void Lose_OneBelowCollapseBelow_CollapsesAndCountIsZero()
+        public void Lose_OneBelowTheCollapseLine_CollapsesAndCountIsZero()
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            body.Lose(config.StartingWasps - config.CollapseBelow + 1);
+            body.Lose(config.StartingWasps - body.CollapseLine + 1);
 
             Assert.That(body.IsCollapsed, Is.True);
             Assert.That(body.Count, Is.EqualTo(0));
@@ -201,7 +359,7 @@ namespace DigitalStory.Tests.EditMode
             int lastSeen = -1;
             body.CountChanged += count => lastSeen = count;
 
-            body.Lose(config.StartingWasps - 100);
+            body.Lose(config.StartingWasps - (body.CollapseLine / 2));
 
             Assert.That(lastSeen, Is.EqualTo(0));
         }
@@ -240,7 +398,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            body.Lose(config.StartingWasps - config.CollapseBelow);
+            body.Lose(config.StartingWasps - body.CollapseLine);
 
             body.Lose(1000, DomeShare);
 
@@ -316,7 +474,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            body.Lose(config.StartingWasps - config.CollapseBelow);
+            body.Lose(config.StartingWasps - body.CollapseLine);
             int raised = 0;
             body.Collapsed += () => raised++;
 
@@ -352,12 +510,13 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps));
         }
 
-        // ---- Gain: wasps from the hives' stores, never from nothing (plan section M) ----
+        // ---- Gain: wasps from the hives' stores, never from nothing (plan section M), up to the capacity (section H) ----
+        // The default swarm starts full, so these start half full to leave room.
 
         [Test]
         public void Gain_AddsTheWaspsAndSaysHowManyJoined()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
 
             int joined = body.Gain(150f);
@@ -370,7 +529,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(-20f)]
         public void Gain_NothingOrLess_AddsNothingAndRaisesNothing(float wasps)
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
             int raised = 0;
             body.CountChanged += _ => raised++;
@@ -384,7 +543,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Gain_PartsOfAWasp_AreCarriedBetweenCalls()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
 
             Assert.That(body.Gain(0.5f), Is.EqualTo(0));
@@ -397,7 +556,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Gain_ManySmallParts_AddUpToTheWhole()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
 
             for (int i = 0; i < 60; i++)
@@ -409,34 +568,35 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Gain_CapsAtMax()
+        public void Gain_CapsAtTheCapacity_NotTheCeiling()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
 
             int joined = body.Gain(100000f);
 
-            Assert.That(body.Count, Is.EqualTo(config.MaxWasps));
-            Assert.That(joined, Is.EqualTo(config.MaxWasps - config.StartingWasps));
+            Assert.That(body.Count, Is.EqualTo(config.StartingCapacity));
+            Assert.That(body.Count, Is.LessThan(body.Max), "the live limit is the capacity");
+            Assert.That(joined, Is.EqualTo(config.StartingCapacity - config.StartingWasps));
         }
 
         [Test]
-        public void Gain_JustBelowMax_StopsExactlyAtMax()
+        public void Gain_JustBelowTheCapacity_StopsExactlyAtIt()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
             body.Gain(100000f);
             body.Lose(10);
 
             body.Gain(100f);
 
-            Assert.That(body.Count, Is.EqualTo(config.MaxWasps));
+            Assert.That(body.Count, Is.EqualTo(config.StartingCapacity));
         }
 
         [Test]
-        public void Gain_AtMax_RaisesNoEvent()
+        public void Gain_AtTheCapacity_RaisesNoEvent()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
             body.Gain(100000f);
             int raised = 0;
@@ -445,13 +605,13 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(body.Gain(100f), Is.EqualTo(0));
 
             Assert.That(raised, Is.EqualTo(0));
-            Assert.That(body.Count, Is.EqualTo(config.MaxWasps));
+            Assert.That(body.Count, Is.EqualTo(config.StartingCapacity));
         }
 
         [Test]
         public void Gain_RaisesCountChangedWithTheNewCount()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
             int seen = -1;
             body.CountChanged += count => seen = count;
@@ -464,7 +624,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Gain_WhileCollapsed_AddsNothing()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = CollapsedBody(config);
 
             Assert.That(body.Gain(200f), Is.EqualTo(0));
@@ -474,20 +634,20 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Room_IsWhatIsLeftToTheMaximum_LessThePartOfAWaspOnItsWay()
+        public void Room_IsWhatIsLeftToTheCapacity_LessThePartOfAWaspOnItsWay()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var body = new SwarmBody(config);
 
             body.Gain(0.25f);
 
-            Assert.That(body.Room, Is.EqualTo(config.MaxWasps - config.StartingWasps - 0.25f).Within(0.001f));
+            Assert.That(body.Room, Is.EqualTo(config.StartingCapacity - config.StartingWasps - 0.25f).Within(0.001f));
         }
 
         [Test]
         public void Room_FullOrCollapsed_IsZero()
         {
-            var config = NewConfig();
+            var config = HalfFullConfig();
             var full = new SwarmBody(config);
             full.Gain(100000f);
 
@@ -503,7 +663,7 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            Assert.That(body.Spendable, Is.EqualTo(config.StartingWasps - config.CollapseBelow));
+            Assert.That(body.Spendable, Is.EqualTo(config.StartingWasps - body.CollapseLine));
             Assert.That(CollapsedBody(config).Spendable, Is.EqualTo(0));
         }
 
@@ -527,12 +687,12 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            body.Lose(config.StartingWasps - config.CollapseBelow - 40);
+            body.Lose(config.StartingWasps - body.CollapseLine - 40);
 
             bool paid = body.TrySpend(40);
 
             Assert.That(paid, Is.True);
-            Assert.That(body.Count, Is.EqualTo(config.CollapseBelow));
+            Assert.That(body.Count, Is.EqualTo(body.CollapseLine));
             Assert.That(body.IsCollapsed, Is.False);
         }
 
@@ -541,7 +701,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            body.Lose(config.StartingWasps - config.CollapseBelow - 39);
+            body.Lose(config.StartingWasps - body.CollapseLine - 39);
             int raised = 0;
             body.CountChanged += _ => raised++;
             body.Collapsed += () => raised++;
@@ -549,7 +709,7 @@ namespace DigitalStory.Tests.EditMode
             bool paid = body.TrySpend(40);
 
             Assert.That(paid, Is.False);
-            Assert.That(body.Count, Is.EqualTo(config.CollapseBelow + 39));
+            Assert.That(body.Count, Is.EqualTo(body.CollapseLine + 39));
             Assert.That(body.IsCollapsed, Is.False, "paying can never collapse the swarm");
             Assert.That(raised, Is.EqualTo(0));
         }
@@ -582,9 +742,13 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(() => NewBody().TrySpend(-1), Throws.TypeOf<System.ArgumentOutOfRangeException>());
         }
 
-        // ---- Respawn: taken from the hives' stores, with a floor (plan section M) ----
+        // ---- Respawn: taken from the hives' stores, with a floor (plan section M), both shares of the capacity (section H) ----
 
-        // Rich stores hold more than RespawnWasps between them, so a respawn takes the full RespawnWasps.
+        // At the starting capacity of 800 the respawn takes 50%, 400 wasps, and the floor is 15%, 120 wasps.
+        private const int Respawn = 400;
+        private const int Floor = 120;
+
+        // Rich stores hold more than a respawn takes between them, so a respawn takes its full share.
         private const int RichStore = 600;
 
         // Two standing hives whose stores each hold the given whole wasps.
@@ -607,15 +771,46 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Constructor_MinRespawnWaspsBelowTheCollapseLineOrAboveMax_Throws()
+        public void RespawnLines_AreFiftyAndFifteenPercentOfTheCapacity()
         {
-            var below = NewConfig();
-            JsonUtility.FromJsonOverwrite("{\"<MinRespawnWasps>k__BackingField\":239}", below);
-            var above = NewConfig();
-            JsonUtility.FromJsonOverwrite("{\"<MinRespawnWasps>k__BackingField\":4001}", above);
+            var body = NewBody();
 
-            Assert.That(() => new SwarmBody(below), Throws.ArgumentException);
-            Assert.That(() => new SwarmBody(above), Throws.ArgumentException);
+            Assert.That(body.RespawnWasps, Is.EqualTo(Respawn));
+            Assert.That(body.MinRespawnWasps, Is.EqualTo(Floor));
+
+            body.GrowCapacity(NestCapacity);
+
+            Assert.That(body.RespawnWasps, Is.EqualTo(600), "50% of 1,200");
+            Assert.That(body.MinRespawnWasps, Is.EqualTo(180), "15% of 1,200");
+        }
+
+        [Test]
+        public void Tick_RespawnAfterTheCapacityGrew_TakesHalfTheNewCapacityFromTheStores()
+        {
+            var config = NewConfig();
+            var body = new SwarmBody(config);
+            body.GrowCapacity(NestCapacity);
+            body.Lose(body.Count);
+            HiveSet hives = RichHives();
+
+            body.Tick(config.CollapseBlockSeconds, hives);
+
+            Assert.That(body.Count, Is.EqualTo(600));
+            Assert.That(hives[0].Store + hives[1].Store, Is.EqualTo((2 * RichStore) - 600).Within(0.001f), "no wasp comes from nothing");
+        }
+
+        [Test]
+        public void Tick_RespawnAfterTheCapacityGrew_ComesBackWithAtLeastTheNewFloor()
+        {
+            var config = NewConfig();
+            var body = new SwarmBody(config);
+            body.GrowCapacity(NestCapacity);
+            body.Lose(body.Count);
+
+            body.Tick(config.CollapseBlockSeconds, Hives(0));
+
+            Assert.That(body.Count, Is.EqualTo(180), "15% of 1,200, above the grown collapse line of 144");
+            Assert.That(body.IsCollapsed, Is.False);
         }
 
         [Test]
@@ -648,7 +843,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_BlockEndsExactly_RespawnsWithRespawnWaspsTakenFromTheStores()
+        public void Tick_BlockEndsExactly_RespawnsWithHalfTheCapacityTakenFromTheStores()
         {
             var config = NewConfig();
             var body = CollapsedBody(config);
@@ -657,25 +852,25 @@ namespace DigitalStory.Tests.EditMode
             body.Tick(config.CollapseBlockSeconds, hives);
 
             Assert.That(body.IsCollapsed, Is.False);
-            Assert.That(body.Count, Is.EqualTo(config.RespawnWasps));
-            Assert.That(hives[0].Store + hives[1].Store, Is.EqualTo((2 * RichStore) - config.RespawnWasps).Within(0.001f), "no wasp comes from nothing");
+            Assert.That(body.Count, Is.EqualTo(Respawn));
+            Assert.That(hives[0].Store + hives[1].Store, Is.EqualTo((2 * RichStore) - Respawn).Within(0.001f), "no wasp comes from nothing");
         }
 
         [Test]
-        public void Tick_RespawnWithStoresBelowRespawnWasps_TakesAllTheyHold()
+        public void Tick_RespawnWithStoresBelowWhatARespawnTakes_TakesAllTheyHold()
         {
             var config = NewConfig();
             var body = CollapsedBody(config);
-            HiveSet hives = Hives(300);
+            HiveSet hives = Hives(150);
 
             body.Tick(config.CollapseBlockSeconds, hives);
 
-            Assert.That(body.Count, Is.EqualTo(600));
+            Assert.That(body.Count, Is.EqualTo(300), "less than the 400 a respawn takes, more than the floor");
             Assert.That(hives[0].Store + hives[1].Store, Is.EqualTo(0f));
         }
 
         [Test]
-        public void Tick_RespawnWithStoresBelowTheFloor_ComesBackWithMinRespawnWasps()
+        public void Tick_RespawnWithStoresBelowTheFloor_ComesBackWithTheFloor()
         {
             var config = NewConfig();
             var body = CollapsedBody(config);
@@ -683,12 +878,12 @@ namespace DigitalStory.Tests.EditMode
 
             body.Tick(config.CollapseBlockSeconds, hives);
 
-            Assert.That(body.Count, Is.EqualTo(config.MinRespawnWasps), "the player can always act");
+            Assert.That(body.Count, Is.EqualTo(Floor), "the player can always act");
             Assert.That(hives[0].Store + hives[1].Store, Is.EqualTo(0f), "what the stores held is used first");
         }
 
         [Test]
-        public void Tick_RespawnWithEmptyStores_ComesBackWithMinRespawnWasps()
+        public void Tick_RespawnWithEmptyStores_ComesBackWithTheFloor()
         {
             var config = NewConfig();
             var body = CollapsedBody(config);
@@ -696,7 +891,7 @@ namespace DigitalStory.Tests.EditMode
             body.Tick(config.CollapseBlockSeconds, Hives(0));
 
             Assert.That(body.IsCollapsed, Is.False);
-            Assert.That(body.Count, Is.EqualTo(config.MinRespawnWasps));
+            Assert.That(body.Count, Is.EqualTo(Floor));
         }
 
         [Test]
@@ -712,7 +907,7 @@ namespace DigitalStory.Tests.EditMode
 
             body.Tick(1f, hives);
             Assert.That(body.IsCollapsed, Is.False);
-            Assert.That(body.Count, Is.EqualTo(config.RespawnWasps));
+            Assert.That(body.Count, Is.EqualTo(Respawn));
         }
 
         [Test]
@@ -736,7 +931,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(respawned, Is.EqualTo(1));
             Assert.That(collapsedInHandler, Is.False);
-            Assert.That(seen, Is.EqualTo(config.RespawnWasps));
+            Assert.That(seen, Is.EqualTo(Respawn));
         }
 
         [Test]
@@ -755,7 +950,7 @@ namespace DigitalStory.Tests.EditMode
             body.Tick(0.01f, RichHives());
 
             Assert.That(body.IsCollapsed, Is.False);
-            Assert.That(body.Count, Is.EqualTo(config.RespawnWasps));
+            Assert.That(body.Count, Is.EqualTo(Respawn));
             Assert.That(respawned, Is.EqualTo(1));
         }
 
@@ -775,7 +970,7 @@ namespace DigitalStory.Tests.EditMode
             int removed = body.Lose(100);
 
             Assert.That(removed, Is.EqualTo(100));
-            Assert.That(body.Count, Is.EqualTo(config.RespawnWasps - 100));
+            Assert.That(body.Count, Is.EqualTo(Respawn - 100));
         }
 
         [Test]
@@ -785,7 +980,7 @@ namespace DigitalStory.Tests.EditMode
             var body = CollapsedBody(config);
             HiveSet hives = RichHives();
             body.Tick(config.CollapseBlockSeconds, hives);
-            body.Lose(config.RespawnWasps);
+            body.Lose(body.Count);
             Assert.That(body.IsCollapsed, Is.True);
 
             body.Tick(config.CollapseBlockSeconds - 0.1f, hives);
@@ -806,7 +1001,7 @@ namespace DigitalStory.Tests.EditMode
 
             body.Gain(100f);
 
-            Assert.That(body.Count, Is.EqualTo(config.RespawnWasps + 100));
+            Assert.That(body.Count, Is.EqualTo(Respawn + 100));
         }
 
         [Test]
@@ -829,11 +1024,11 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            body.Lose(1000);
+            body.Lose(300);
 
             body.Tick(5f, RichHives());
 
-            Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 1000));
+            Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 300));
         }
     }
 }

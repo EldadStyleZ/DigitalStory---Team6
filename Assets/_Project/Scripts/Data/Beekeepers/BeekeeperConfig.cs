@@ -12,7 +12,7 @@ namespace DigitalStory.Data
 
         [field: Header("Body")]
         [field: SerializeField, Min(1f), Tooltip("Health of the beekeeper.")]
-        public float Health { get; private set; } = 60f;
+        public float Health { get; private set; } = 90f;
 
         [field: SerializeField, Min(0f), Tooltip("Walking speed in metres per second.")]
         public float Speed { get; private set; } = 2.6f;

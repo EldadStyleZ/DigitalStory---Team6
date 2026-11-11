@@ -251,7 +251,7 @@ namespace DigitalStory.Tests.EditMode
             Tick(0.5f);
             Assert.That(Strike.IsActive, Is.True);
             Assert.That(_aim.DamageTaken, Is.EqualTo(85f).Within(1e-3f));
-            Assert.That(_fury.Value, Is.EqualTo(42.5f).Within(1e-3f));
+            Assert.That(_fury.Value, Is.EqualTo(85f / _furyConfig.DamagePerFuryPoint).Within(1e-3f));
         }
 
         [Test]
@@ -434,11 +434,13 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
         }
 
-        // Hive Call now ends when the stores run dry, so they flow slowly here to outlast the Dome's 5 s.
+        // Hive Call now ends when the stores run dry or the swarm is full, so they flow slowly here to outlast the Dome's
+        // 5 s, and the swarm, which starts full at its capacity, first loses enough to leave room.
         [Test]
         public void Hit_DuringHiveCallInTheGuardSongsReturnBeat_EndsHiveCall()
         {
             JsonUtility.FromJsonOverwrite("{\"<CollectPerSecond>k__BackingField\":1}", _hiveConfig);
+            _body.Lose(_body.Count / 2);
             Cast(_dome);
             Cast(_hiveCall);
             Tick(5.2f);
@@ -685,8 +687,9 @@ namespace DigitalStory.Tests.EditMode
 
         // Rules never read the wasp count
 
-        [TestCase(300)]
-        [TestCase(2000)]
+        // A thin swarm just above the collapse line of 96, and the full starting swarm of 800.
+        [TestCase(120)]
+        [TestCase(800)]
         public void Songs_AtAnyWaspCount_HitAsHardAndTakeTheSameSquad(int wasps)
         {
             _body.Lose(_swarmConfig.StartingWasps - wasps);
@@ -973,7 +976,7 @@ namespace DigitalStory.Tests.EditMode
 
         private void Collapse()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
         }
 
         private void FillFury()

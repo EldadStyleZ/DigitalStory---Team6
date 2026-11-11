@@ -9,17 +9,19 @@ using Object = UnityEngine.Object;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// Plan section L, on the default WaveConfig: waves 3/0, 4/1, 4/3, 6/4, 8/5; each round a farm phase and then its wave;
-    /// the first farm phase lasts FirstFarmSeconds (45 s), later ones FarmSeconds (35 s); beekeepers 1.2 s apart.
+    /// Plan section L, on the default WaveConfig: five waves of sticks and then smokers; each round a farm phase and then its
+    /// wave; the first farm phase lasts FirstFarmSeconds, later ones FarmSeconds; beekeepers SpawnIntervalSeconds apart.
+    /// Every count and time is read from the config, whose numbers the playtest bot sets and OwnerDecidedDefaultsTests pins.
     /// </summary>
     public sealed class WaveDirectorTests
     {
         private const float Step = 0.1f;
         private const int SpawnPoints = 4;
-        private static readonly int[] Sticks = { 3, 4, 4, 6, 8 };
-        private static readonly int[] Smokers = { 0, 1, 3, 4, 5 };
+        private static readonly int[] Sticks = ReadWaves(entry => entry.Sticks);
+        private static readonly int[] Smokers = ReadWaves(entry => entry.Smokers);
         private static readonly float FirstFarm = ReadDefault(config => config.FirstFarmSeconds);
         private static readonly float Farm = ReadDefault(config => config.FarmSeconds);
+        private static readonly float Interval = ReadDefault(config => config.SpawnIntervalSeconds);
 
         private sealed class Recorder
         {
@@ -27,6 +29,7 @@ namespace DigitalStory.Tests.EditMode
             public readonly List<MatchPhase> Phases = new List<MatchPhase>();
             public readonly List<float> CalledEarly = new List<float>();
             public readonly List<(BeekeeperKind Kind, int Point)> Spawns = new List<(BeekeeperKind, int)>();
+            public readonly List<int> WavesCleared = new List<int>();
             public int ClearedCount;
 
             public Recorder(WaveDirector director)
@@ -42,6 +45,7 @@ namespace DigitalStory.Tests.EditMode
                 director.WaveCalledEarly += CalledEarly.Add;
                 director.SpawnRequested += (kind, point) => Spawns.Add((kind, point));
                 director.Cleared += () => ClearedCount++;
+                director.WaveCleared += WavesCleared.Add;
             }
 
             public int Count(BeekeeperKind kind)
@@ -65,6 +69,41 @@ namespace DigitalStory.Tests.EditMode
             float value = read(config);
             Object.DestroyImmediate(config);
             return value;
+        }
+
+        private static int[] ReadWaves(Func<WaveEntry, int> read)
+        {
+            var config = ScriptableObject.CreateInstance<WaveConfig>();
+            var counts = new int[config.Waves.Count];
+            for (int wave = 0; wave < counts.Length; wave++)
+            {
+                counts[wave] = read(config.Waves[wave]);
+            }
+
+            Object.DestroyImmediate(config);
+            return counts;
+        }
+
+        private static int Total(int round)
+        {
+            return Sticks[round - 1] + Smokers[round - 1];
+        }
+
+        // Seconds from a wave's start until all of it has spawned, and a little more.
+        private static float AllSpawnedSeconds(int round)
+        {
+            return (Interval * Total(round)) + 0.5f;
+        }
+
+        private static int Sum(int[] counts)
+        {
+            int sum = 0;
+            foreach (int count in counts)
+            {
+                sum += count;
+            }
+
+            return sum;
         }
 
         private static WaveDirector MakeDirector()
@@ -99,7 +138,7 @@ namespace DigitalStory.Tests.EditMode
         {
             RunUntilWaveStarts(director, round, 0);
 
-            int expected = Sticks[round - 1] + Smokers[round - 1];
+            int expected = Total(round);
             int before = recorder.Spawns.Count - 1;
             int guard = 0;
             while (recorder.Spawns.Count - before < expected && guard++ < 10000)
@@ -160,15 +199,15 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void WaveOne_SpawnsThreeSticksAndNoSmokers()
+        public void WaveOne_SpawnsItsSticksAndItsSmokers()
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            Run(director, FirstFarm + 10f, 3);
+            Run(director, FirstFarm + AllSpawnedSeconds(1), 1);
 
-            Assert.That(recorder.Count(BeekeeperKind.Stick), Is.EqualTo(3));
-            Assert.That(recorder.Count(BeekeeperKind.Smoker), Is.EqualTo(0));
+            Assert.That(recorder.Count(BeekeeperKind.Stick), Is.EqualTo(Sticks[0]));
+            Assert.That(recorder.Count(BeekeeperKind.Smoker), Is.EqualTo(Smokers[0]));
         }
 
         [Test]
@@ -176,15 +215,17 @@ namespace DigitalStory.Tests.EditMode
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
+            Assert.That(Total(1), Is.GreaterThanOrEqualTo(3), "the test needs three beekeepers in wave one");
 
-            // Wave one starts when the first farm phase ends. 0.5 s later only the first has spawned, 1.6 s later two, 2.9 s later three.
-            Run(director, FirstFarm + 0.5f, 1);
+            // Wave one starts when the first farm phase ends. A little later only the first has spawned, one interval more
+            // and two have, another and three have.
+            Run(director, FirstFarm + (Interval * 0.4f), 1);
             Assert.That(recorder.Spawns.Count, Is.EqualTo(1));
 
-            Run(director, 1.1f, 1);
+            Run(director, Interval, 1);
             Assert.That(recorder.Spawns.Count, Is.EqualTo(2));
 
-            Run(director, 1.3f, 1);
+            Run(director, Interval, 1);
             Assert.That(recorder.Spawns.Count, Is.EqualTo(3));
         }
 
@@ -195,13 +236,14 @@ namespace DigitalStory.Tests.EditMode
             var recorder = new Recorder(director);
             RunUntilWaveStarts(director, 1, 0);
 
-            Run(director, 40f, 1);
+            Run(director, AllSpawnedSeconds(1), 1);
 
-            // Wave one has three, and the next farm phase only starts after a clear, which never happens with one alive.
-            Assert.That(recorder.Spawns.Count, Is.EqualTo(3));
-            Assert.That(recorder.Spawns[0].Point, Is.EqualTo(0));
-            Assert.That(recorder.Spawns[1].Point, Is.EqualTo(1));
-            Assert.That(recorder.Spawns[2].Point, Is.EqualTo(2));
+            // The whole of wave one, and the next farm phase only starts after a clear, which never happens with one alive.
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(Total(1)));
+            for (int spawn = 0; spawn < recorder.Spawns.Count; spawn++)
+            {
+                Assert.That(recorder.Spawns[spawn].Point, Is.EqualTo(spawn % SpawnPoints));
+            }
         }
 
         [Test]
@@ -227,8 +269,9 @@ namespace DigitalStory.Tests.EditMode
         {
             var director = new WaveDirector(ScriptableObject.CreateInstance<WaveConfig>(), 2);
             var recorder = new Recorder(director);
+            Assert.That(Total(1), Is.GreaterThanOrEqualTo(3), "the test needs three beekeepers in wave one");
 
-            Run(director, FirstFarm + 10f, 1);
+            Run(director, FirstFarm + AllSpawnedSeconds(1), 1);
 
             Assert.That(recorder.Spawns[0].Point, Is.EqualTo(0));
             Assert.That(recorder.Spawns[1].Point, Is.EqualTo(1));
@@ -236,28 +279,28 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void WaveTwo_SpawnsSticksFirstThenTheSmoker()
+        public void WaveTwo_SpawnsSticksFirstThenTheSmokers()
         {
             var director = MakeDirector();
             var recorder = new Recorder(director);
             PlayWave(director, recorder, 1);
             recorder.Spawns.Clear();
+            Assert.That(Smokers[1], Is.GreaterThan(0), "the test needs a smoker in wave two");
 
             Run(director, Farm + 0.5f, 0);
             int guard = 0;
-            while (recorder.Spawns.Count < 5 && guard++ < 1000)
+            while (recorder.Spawns.Count < Total(2) && guard++ < 10000)
             {
                 director.Tick(Step, recorder.Spawns.Count);
             }
 
             Assert.That(recorder.Started, Is.EqualTo(new[] { 1, 2 }));
-            Assert.That(recorder.Spawns.Count, Is.EqualTo(5));
-            for (int i = 0; i < 4; i++)
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(Total(2)));
+            for (int i = 0; i < recorder.Spawns.Count; i++)
             {
-                Assert.That(recorder.Spawns[i].Kind, Is.EqualTo(BeekeeperKind.Stick));
+                BeekeeperKind expected = i < Sticks[1] ? BeekeeperKind.Stick : BeekeeperKind.Smoker;
+                Assert.That(recorder.Spawns[i].Kind, Is.EqualTo(expected), "spawn " + i);
             }
-
-            Assert.That(recorder.Spawns[4].Kind, Is.EqualTo(BeekeeperKind.Smoker));
         }
 
         [Test]
@@ -279,8 +322,8 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
 
-            // The first stick spawned and was killed at once; two sticks are still to come.
-            Run(director, FirstFarm + 0.5f, 0);
+            // The first stick spawned and was killed at once; the rest of the wave is still to come.
+            Run(director, FirstFarm + (Interval * 0.4f), 0);
 
             Assert.That(recorder.Spawns.Count, Is.EqualTo(1));
             Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive));
@@ -292,11 +335,11 @@ namespace DigitalStory.Tests.EditMode
             var director = MakeDirector();
             var recorder = new Recorder(director);
             RunUntilWaveStarts(director, 1, 0);
-            Run(director, 5f, 3);
+            Run(director, AllSpawnedSeconds(1), 1);
 
             director.Tick(Step, 0);
 
-            Assert.That(recorder.Spawns.Count, Is.EqualTo(3));
+            Assert.That(recorder.Spawns.Count, Is.EqualTo(Total(1)));
             Assert.That(director.Phase, Is.EqualTo(MatchPhase.Farm));
             Assert.That(director.Round, Is.EqualTo(2));
             Assert.That(director.FarmSecondsLeft, Is.EqualTo(Farm).Within(0.001f));
@@ -322,6 +365,65 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(director.Round, Is.EqualTo(2));
             Assert.That(director.Phase, Is.EqualTo(MatchPhase.Survive));
             Assert.That(recorder.Started, Is.EqualTo(new[] { 1, 2 }));
+        }
+
+        // Plan section H: nests open when a wave is cleared, so the clear itself is an event, with the wave's number.
+        [Test]
+        public void WaveCleared_IsRaisedWithTheWavesNumberOnTheTickItIsCleared()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+            RunUntilWaveStarts(director, 1, 0);
+            Run(director, AllSpawnedSeconds(1), 1);
+            Assert.That(recorder.WavesCleared, Is.Empty, "not while beekeepers live");
+            int roundSeen = -1;
+            MatchPhase phaseSeen = MatchPhase.Farm;
+            director.WaveCleared += wave =>
+            {
+                roundSeen = director.Round;
+                phaseSeen = director.Phase;
+            };
+
+            director.Tick(Step, 0);
+
+            Assert.That(recorder.WavesCleared, Is.EqualTo(new[] { 1 }));
+            Assert.That(roundSeen, Is.EqualTo(1), "raised before the next round's farm phase starts");
+            Assert.That(phaseSeen, Is.EqualTo(MatchPhase.Survive));
+        }
+
+        [Test]
+        public void WaveCleared_EveryWaveInOrder_TheLastBeforeCleared()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+            int clearedWhenTheLastWaveWas = -1;
+            director.WaveCleared += wave =>
+            {
+                if (wave == 5)
+                {
+                    clearedWhenTheLastWaveWas = recorder.ClearedCount;
+                }
+            };
+
+            for (int round = 1; round <= 5; round++)
+            {
+                PlayWave(director, recorder, round);
+            }
+
+            Assert.That(recorder.WavesCleared, Is.EqualTo(new[] { 1, 2, 3, 4, 5 }));
+            Assert.That(clearedWhenTheLastWaveWas, Is.EqualTo(0));
+            Assert.That(recorder.ClearedCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void WaveCleared_NotRaisedByCallingAWaveEarly()
+        {
+            var director = MakeDirector();
+            var recorder = new Recorder(director);
+
+            director.CallWave();
+
+            Assert.That(recorder.WavesCleared, Is.Empty);
         }
 
         [Test]
@@ -352,8 +454,8 @@ namespace DigitalStory.Tests.EditMode
                 }
             }
 
-            Assert.That(recorder.Count(BeekeeperKind.Stick), Is.EqualTo(25));
-            Assert.That(recorder.Count(BeekeeperKind.Smoker), Is.EqualTo(13));
+            Assert.That(recorder.Count(BeekeeperKind.Stick), Is.EqualTo(Sum(Sticks)));
+            Assert.That(recorder.Count(BeekeeperKind.Smoker), Is.EqualTo(Sum(Smokers)));
             Assert.That(recorder.Started, Is.EqualTo(new[] { 1, 2, 3, 4, 5 }));
             Assert.That(recorder.ClearedCount, Is.EqualTo(1));
             Assert.That(director.AllWavesCleared, Is.True);
@@ -436,7 +538,7 @@ namespace DigitalStory.Tests.EditMode
             var recorder = new Recorder(director);
             director.CallWave();
 
-            Run(director, 1.1f, 1);
+            Run(director, Interval - 0.1f, 1);
             Assert.That(recorder.Spawns.Count, Is.EqualTo(1));
 
             Run(director, 0.2f, 1);

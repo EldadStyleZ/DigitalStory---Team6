@@ -51,6 +51,15 @@ namespace DigitalStory.Tests.EditMode
                 _world.Core, null, _world.Core, session.Swarm, session.Forms, session.Fury, session.Hives, new List<ISwarmTarget>(), session.Smoke);
         }
 
+        // The swarm starts full at its capacity (plan section H), so a test of wasps flowing in first loses half of them to
+        // leave room. Returns the count left.
+        private int LeaveRoom()
+        {
+            SwarmBody swarm = _world.Session.Swarm;
+            swarm.Lose(swarm.Count / 2);
+            return swarm.Count;
+        }
+
         // A stick that spawns 1 m from the core, which stands at the origin.
         private HiveDefenseWorld StickBesideCore(WaveEntry[] waves = null, bool withSongs = false)
         {
@@ -66,6 +75,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(session.State, Is.EqualTo(HiveDefenseState.Playing));
             Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps));
+            Assert.That(session.Swarm.Count, Is.EqualTo(session.Swarm.Capacity), "full");
             Assert.That(session.Hives.Count, Is.EqualTo(2));
             Assert.That(session.Hives.StandingCount, Is.EqualTo(2));
             Assert.That(session.Hives[0].Position, Is.EqualTo(new Vector3(-40f, 0f, 40f)));
@@ -83,11 +93,11 @@ namespace DigitalStory.Tests.EditMode
             var changes = new List<HiveDefenseState>();
             _world.Session.StateChanged += changes.Add;
 
-            _world.Session.Hives[0].Damage(300f);
+            _world.Session.Hives[0].Damage(_world.Hive.Health);
             _world.Run(HiveDefenseWorld.Step);
             Assert.That(_world.Session.State, Is.EqualTo(HiveDefenseState.Playing), "one hive still stands");
 
-            _world.Session.Hives[1].Damage(300f);
+            _world.Session.Hives[1].Damage(_world.Hive.Health);
             _world.Run(HiveDefenseWorld.Step);
 
             Assert.That(_world.Session.State, Is.EqualTo(HiveDefenseState.Lost));
@@ -98,8 +108,8 @@ namespace DigitalStory.Tests.EditMode
         public void Tick_AfterLost_DoesNothing()
         {
             _world = new HiveDefenseWorld();
-            _world.Session.Hives[0].Damage(300f);
-            _world.Session.Hives[1].Damage(300f);
+            _world.Session.Hives[0].Damage(_world.Hive.Health);
+            _world.Session.Hives[1].Damage(_world.Hive.Health);
             _world.Run(HiveDefenseWorld.Step);
             int wasps = _world.Session.Swarm.Count;
             float untilWave = _world.Session.FarmSecondsLeft;
@@ -141,8 +151,8 @@ namespace DigitalStory.Tests.EditMode
             _world.KillAllBeekeepers();
             _world.Run(0.5f);
             Assert.That(_world.Session.State, Is.EqualTo(HiveDefenseState.Won));
-            _world.Session.Hives[0].Damage(300f);
-            _world.Session.Hives[1].Damage(300f);
+            _world.Session.Hives[0].Damage(_world.Hive.Health);
+            _world.Session.Hives[1].Damage(_world.Hive.Health);
 
             _world.Run(1f);
 
@@ -312,6 +322,7 @@ namespace DigitalStory.Tests.EditMode
         public void HiveCall_ThePlayerAsksToMove_EndsIt_ThoughTheCoreIsHeldInPlace()
         {
             _world = new HiveDefenseWorld();
+            LeaveRoom();
             Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
             _world.Run(HiveDefenseWorld.Step);
             Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall), "standing still keeps it");
@@ -345,6 +356,7 @@ namespace DigitalStory.Tests.EditMode
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
             int hits = 0;
             _world.Session.ActiveBeekeeper(0).CoreHit += brain => hits++;
+            LeaveRoom();
             Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
             bool callingBeforeTheHit = false;
 
@@ -376,11 +388,11 @@ namespace DigitalStory.Tests.EditMode
                 spawns: new[] { new Vector3(1f, 0f, 0f) },
                 core: new Vector3(0f, 0f, 80f));
 
-            bool hit = _world.RunUntil(() => _world.Session.Hives[0].Health < 300f, 15f);
+            bool hit = _world.RunUntil(() => _world.Session.Hives[0].Health < _world.Hive.Health, 15f);
 
             Assert.That(hit, Is.True);
-            Assert.That(_world.Session.Hives[0].Health, Is.EqualTo(300f - _world.Stick.HiveDamage));
-            Assert.That(_world.Session.Hives[1].Health, Is.EqualTo(300f * _world.Hive.DamagedStartFraction), "untouched: the last hive starts hurt");
+            Assert.That(_world.Session.Hives[0].Health, Is.EqualTo(_world.Hive.Health - _world.Stick.HiveDamage));
+            Assert.That(_world.Session.Hives[1].Health, Is.EqualTo(_world.Hive.Health * _world.Hive.DamagedStartFraction), "untouched: the last hive starts hurt");
             Assert.That(_world.Session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps));
         }
 
@@ -402,10 +414,10 @@ namespace DigitalStory.Tests.EditMode
                 SwarmSongContext context = SongContext();
                 shell.Cast(in context);
 
-                bool hit = _world.RunUntil(() => _world.Session.Hives[0].Health < 300f, 15f);
+                bool hit = _world.RunUntil(() => _world.Session.Hives[0].Health < _world.Hive.Health, 15f);
 
                 Assert.That(hit, Is.True);
-                Assert.That(_world.Session.Hives[0].Health, Is.EqualTo(300f - (_world.Stick.HiveDamage * 0.25f)).Within(1e-3f));
+                Assert.That(_world.Session.Hives[0].Health, Is.EqualTo(_world.Hive.Health - (_world.Stick.HiveDamage * 0.25f)).Within(1e-3f));
                 Assert.That(shell.Rule.HiveHitCount, Is.EqualTo(1));
                 Assert.That(shell.Rule.LastHiveHit, Is.EqualTo(0));
                 Assert.That(shell.Rule.LastHiveAttacker, Is.SameAs(_world.Session.ActiveBeekeeper(0)));
@@ -714,7 +726,7 @@ namespace DigitalStory.Tests.EditMode
             Vector3 stood = session.ColossusPosition;
             Assert.That(stood.x, Is.GreaterThan(1f), "the giant walked");
 
-            session.Swarm.Lose(_world.Swarm.StartingWasps - (_world.Swarm.CollapseBelow / 2));
+            session.Swarm.Lose(session.Swarm.Count - (session.Swarm.CollapseLine / 2));
             Assert.That(session.Forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             _world.Run(HiveDefenseWorld.Step);
             _world.Run(HiveDefenseWorld.Step);
@@ -936,12 +948,13 @@ namespace DigitalStory.Tests.EditMode
             try
             {
                 var rules = new HiveDefenseRules(
-                    _world.Swarm, _world.Squads, _world.CoreMove, _world.Fury, _world.Colossus, _world.Hive, _world.Smoke,
-                    _world.WaveConfig, _world.Stick, _world.Smoker, _world.Aim, _world.SongConfig, new SwarmSongEffect[] { dome },
-                    HiveDefenseWorld.HoleCount);
+                    _world.Swarm, _world.Squads, _world.CoreMove, _world.Fury, _world.Colossus, _world.Hive, _world.Nests,
+                    _world.SwarmLevel, _world.Smoke, _world.WaveConfig, _world.Stick, _world.Smoker, _world.Aim, _world.SongConfig,
+                    new SwarmSongEffect[] { dome }, HiveDefenseWorld.HoleCount);
 
                 Assert.That(
-                    () => new HiveDefenseSession(rules, new[] { Vector3.zero }, new[] { Vector3.one }, Vector3.zero, new FixedRandomSource()),
+                    () => new HiveDefenseSession(
+                        rules, new[] { Vector3.zero }, HiveDefenseWorld.DefaultNests, new[] { Vector3.one }, Vector3.zero, new FixedRandomSource()),
                     Throws.ArgumentException);
             }
             finally
@@ -1032,6 +1045,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
+            int before = LeaveRoom();
             float skipped = -1f;
             var granted = new List<int>();
             session.Waves.WaveCalledEarly += seconds => skipped = seconds;
@@ -1045,7 +1059,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(skipped, Is.EqualTo(20f - HiveDefenseWorld.Step).Within(0.001f), "the farm phase's own tick ran first");
             Assert.That(granted, Is.EqualTo(new[] { expected }));
             Assert.That(expected, Is.EqualTo(99), "5 wasps for each of the 19.98 s skipped");
-            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps + expected));
+            Assert.That(session.Swarm.Count, Is.EqualTo(before + expected));
         }
 
         [Test]
@@ -1053,14 +1067,14 @@ namespace DigitalStory.Tests.EditMode
         {
             _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
-            session.Swarm.Gain(session.Swarm.Max - session.Swarm.Count - 30);
+            session.Swarm.Lose(30);
             var granted = new List<int>();
             session.WaspsGranted += granted.Add;
 
             _world.RunWith(HiveDefenseWorld.Step, _world.Frame(callWave: true));
 
             Assert.That(granted, Is.EqualTo(new[] { 30 }));
-            Assert.That(session.Swarm.Count, Is.EqualTo(session.Swarm.Max));
+            Assert.That(session.Swarm.Count, Is.EqualTo(session.Swarm.Capacity), "up to the capacity, not the ceiling");
         }
 
         [Test]
@@ -1105,7 +1119,7 @@ namespace DigitalStory.Tests.EditMode
             _world = new HiveDefenseWorld(withSongs: true);
             HiveDefenseSession session = _world.Session;
             _world.Run(HiveDefenseWorld.ShortFirstFarmSeconds + 0.1f);
-            session.Swarm.Lose(session.Swarm.Count - _world.Swarm.CollapseBelow - 5);
+            session.Swarm.Lose(session.Swarm.Count - session.Swarm.CollapseLine - 5);
             var reasons = new List<SongRefusal>();
             session.Caster.SongNotReady += (refused, reason) => reasons.Add(reason);
 
@@ -1114,7 +1128,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(reasons, Is.EqualTo(new[] { SongRefusal.NotEnoughWasps }));
             Assert.That(session.Discovery.IsKnown(HiveDefenseWorld.DomeIndex), Is.False);
             Assert.That(session.Discovery.KnownNotes(HiveDefenseWorld.DomeIndex), Is.EqualTo(3), "the notes still fill in the table");
-            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.CollapseBelow + 5));
+            Assert.That(session.Swarm.Count, Is.EqualTo(session.Swarm.CollapseLine + 5));
             Assert.That(session.Forms.IsDomed, Is.False);
         }
 
@@ -1160,11 +1174,12 @@ namespace DigitalStory.Tests.EditMode
         {
             _world = new HiveDefenseWorld(hives: new[] { new Vector3(2f, 0f, 0f), new Vector3(40f, 0f, 40f) }, firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
+            int before = LeaveRoom();
 
             _world.Run(1f);
 
             Assert.That(session.NearHive, Is.EqualTo(0));
-            Assert.That(session.Swarm.Count, Is.GreaterThanOrEqualTo(_world.Swarm.StartingWasps + (int)_world.Hive.StartStore));
+            Assert.That(session.Swarm.Count, Is.GreaterThanOrEqualTo(before + (int)_world.Hive.StartStore));
             Assert.That(session.Hives[0].Store, Is.LessThan(1f));
             Assert.That(session.Hives[1].Store, Is.GreaterThan(_world.Hive.StartStore), "the far hive's store is left alone");
         }
@@ -1191,19 +1206,20 @@ namespace DigitalStory.Tests.EditMode
         {
             _world = new HiveDefenseWorld(withAllSongs: true, firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
+            int before = LeaveRoom();
 
             _world.Play(_world.Session.Caster[HiveDefenseWorld.HiveCallIndex].Song.Keys);
             Assert.That(session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall));
             _world.Run(0.3f);
 
-            Assert.That(session.Swarm.Count, Is.GreaterThan(_world.Swarm.StartingWasps + 60), "both far stores flow in");
+            Assert.That(session.Swarm.Count, Is.GreaterThan(before + 60), "both far stores flow in");
             Assert.That(session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall));
 
             bool ended = _world.RunUntil(() => session.Forms.Current != SwarmForm.HiveCall, 2f);
 
             Assert.That(ended, Is.True);
             Assert.That(session.Forms.Current, Is.EqualTo(SwarmForm.River));
-            Assert.That(session.Swarm.Count, Is.GreaterThanOrEqualTo(_world.Swarm.StartingWasps + (2 * (int)_world.Hive.StartStore)));
+            Assert.That(session.Swarm.Count, Is.GreaterThanOrEqualTo(before + (2 * (int)_world.Hive.StartStore)));
         }
 
         // The hurt last hive stands 2 m from the core, so each tick collects from it or gives to it.
@@ -1231,6 +1247,10 @@ namespace DigitalStory.Tests.EditMode
         {
             _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
+
+            // Emptied, the stores make only what the hives produce during the block, less than the floor of 120.
+            session.Hives[0].TakeFromStore(session.Hives[0].Store);
+            session.Hives[1].TakeFromStore(session.Hives[1].Store);
             session.Swarm.Lose(session.Swarm.Count);
             Assert.That(session.Swarm.IsCollapsed, Is.True);
 
@@ -1239,7 +1259,7 @@ namespace DigitalStory.Tests.EditMode
             // The respawn took every whole wasp; a part of a wasp stays, and the hives made a little more later in that tick.
             float left = 1f + (_world.Hive.ProductionPerSecond * HiveDefenseWorld.Step) + 0.001f;
             Assert.That(back, Is.True);
-            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.MinRespawnWasps), "the stores held less than the floor");
+            Assert.That(session.Swarm.Count, Is.EqualTo(session.Swarm.MinRespawnWasps), "the stores held less than the floor");
             Assert.That(session.Hives[0].Store, Is.LessThan(left));
             Assert.That(session.Hives[1].Store, Is.LessThan(left));
         }
@@ -1263,6 +1283,8 @@ namespace DigitalStory.Tests.EditMode
 
             _world.MoveCoreTo(new Vector3(1f, 0f, 0f));
             _world.Play(_world.Sting.Song.Keys);
+            Assert.That(_world.CollectNest(0), Is.True);
+            Assert.That(_world.Session.Swarm.Room, Is.LessThan(1f), "the swarm is full, so the visit takes nothing");
             _world.MoveCoreTo(new Vector3(0f, 0f, 9f));
             _world.MoveCoreTo(new Vector3(0f, 0f, -9f));
             _world.RunWith(0.1f, _world.Frame(give: true));
@@ -1271,7 +1293,43 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(
                 steps,
-                Is.EqualTo(new[] { TutorialStep.PlaySting, TutorialStep.VisitHive, TutorialStep.HealHive, TutorialStep.CallWave, TutorialStep.Done }));
+                Is.EqualTo(new[]
+                {
+                    TutorialStep.PlaySting, TutorialStep.CollectNest, TutorialStep.VisitHive, TutorialStep.HealHive, TutorialStep.CallWave,
+                    TutorialStep.Done,
+                }));
+        }
+
+        // Plan section N, step 3: after the Sting the lesson sends the player to a nest.
+        [Test]
+        public void Tutorial_AfterTheSting_AsksForANestUntilOneIsCollected()
+        {
+            LessonWorld();
+            _world.MoveCoreTo(new Vector3(1f, 0f, 0f));
+            _world.Play(_world.Sting.Song.Keys);
+
+            Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.CollectNest));
+
+            _world.MoveCoreTo(_world.NestPositions[0]);
+            _world.Run(1f);
+            Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.CollectNest), "half the stay is not yet the nest");
+
+            _world.Run(1.1f);
+            Assert.That(_world.Session.Nests[0].IsCollected, Is.True);
+            Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.VisitHive));
+        }
+
+        [Test]
+        public void Tutorial_ANestCollectedBeforeItsTurn_IsDoneWhenTheStepComes()
+        {
+            LessonWorld();
+            _world.MoveCoreTo(new Vector3(1f, 0f, 0f));
+            Assert.That(_world.CollectNest(0), Is.True);
+            Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.PlaySting), "a nest before its turn does not count then");
+
+            _world.Play(_world.Sting.Song.Keys);
+
+            Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.VisitHive), "the nest was already the player's");
         }
 
         [Test]
@@ -1296,6 +1354,7 @@ namespace DigitalStory.Tests.EditMode
 
             _world.MoveCoreTo(new Vector3(1f, 0f, 0f));
             _world.Play(_world.Sting.Song.Keys);
+            _world.CollectNest(0);
             _world.MoveCoreTo(new Vector3(0f, 0f, 9f));
             _world.Run(0.5f);
 
@@ -1314,18 +1373,21 @@ namespace DigitalStory.Tests.EditMode
             var steps = new List<TutorialStep>();
             session.Tutorial.StepChanged += steps.Add;
 
-            _world.RunWith(3f, _world.Frame(give: true));
+            HiveConfig hive = _world.Hive;
+            float healSeconds = hive.Health * (1f - hive.DamagedStartFraction) * hive.WaspsPerHealthPoint / hive.HealWaspsPerSecond;
+            _world.RunWith(healSeconds + 0.5f, _world.Frame(give: true));
             Assert.That(session.Hives[1].IsDamaged, Is.False, "Give healed the hurt hive to full during the first step");
             Assert.That(session.Tutorial.Current, Is.EqualTo(TutorialStep.Move), "a heal before its turn does not count then");
 
             _world.MoveCoreTo(new Vector3(-5f, 0f, 0f));
             _world.Play(_world.Sting.Song.Keys);
+            _world.CollectNest(0);
             _world.MoveCoreTo(new Vector3(0f, 0f, 9f));
 
             Assert.That(session.Tutorial.Current, Is.EqualTo(TutorialStep.CallWave), "with no hive hurt, the heal step has nothing to teach");
             Assert.That(
                 steps,
-                Is.EqualTo(new[] { TutorialStep.PlaySting, TutorialStep.VisitHive, TutorialStep.HealHive, TutorialStep.CallWave }));
+                Is.EqualTo(new[] { TutorialStep.PlaySting, TutorialStep.CollectNest, TutorialStep.VisitHive, TutorialStep.HealHive, TutorialStep.CallWave }));
         }
 
         [Test]
@@ -1346,6 +1408,395 @@ namespace DigitalStory.Tests.EditMode
             _world.RunWith(HiveDefenseWorld.Step, _world.Frame(callWave: true));
 
             Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.Done));
+        }
+
+        // ---- Nests and the swarm's level (plan section H) ----
+
+        // The default nests, with the first one moved to where the core starts, so it is collected in the first 2 s.
+        private static Vector3[] NestUnderTheCore()
+        {
+            var nests = (Vector3[])HiveDefenseWorld.DefaultNests.Clone();
+            nests[0] = Vector3.zero;
+            return nests;
+        }
+
+        [Test]
+        public void New_Session_StartsAtEightHundredOfEightHundredAtLevelOneWithTwoOfEightNestsOpen()
+        {
+            _world = new HiveDefenseWorld();
+            HiveDefenseSession session = _world.Session;
+
+            Assert.That(session.Swarm.Count, Is.EqualTo(800));
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(800));
+            Assert.That(session.Swarm.Max, Is.EqualTo(4000));
+            Assert.That(session.Level, Is.EqualTo(1));
+            Assert.That(session.SizeScale, Is.EqualTo(1f));
+            Assert.That(session.DamageScale, Is.EqualTo(1f));
+            Assert.That(session.ColossusSizeScale, Is.EqualTo(1f));
+            Assert.That(session.Nests.Count, Is.EqualTo(8));
+            Assert.That(session.Nests.OpenCount, Is.EqualTo(2));
+            Assert.That(session.Nests.CollectedCount, Is.EqualTo(0));
+            Assert.That(session.Nests[0].Position, Is.EqualTo(HiveDefenseWorld.DefaultNests[0]));
+        }
+
+        [Test]
+        public void New_WrongNumberOfNestPositions_Throws()
+        {
+            _world = new HiveDefenseWorld();
+            var rules = new HiveDefenseRules(
+                _world.Swarm, _world.Squads, _world.CoreMove, _world.Fury, _world.Colossus, _world.Hive, _world.Nests,
+                _world.SwarmLevel, _world.Smoke, _world.WaveConfig, _world.Stick, _world.Smoker, _world.Aim, _world.SongConfig,
+                _world.Songs, HiveDefenseWorld.HoleCount);
+            Vector3[] hives = { new Vector3(-40f, 0f, 40f) };
+            Vector3[] spawns = { Vector3.one };
+
+            Assert.That(
+                () => new HiveDefenseSession(rules, hives, new Vector3[7], spawns, Vector3.zero, new FixedRandomSource()),
+                Throws.ArgumentException);
+            Assert.That(
+                () => new HiveDefenseSession(rules, hives, null, spawns, Vector3.zero, new FixedRandomSource()),
+                Throws.ArgumentNullException);
+        }
+
+        [Test]
+        public void New_NoNestOrLevelConfig_Throws()
+        {
+            _world = new HiveDefenseWorld();
+
+            Assert.That(
+                () => new HiveDefenseRules(
+                    _world.Swarm, _world.Squads, _world.CoreMove, _world.Fury, _world.Colossus, _world.Hive, null, _world.SwarmLevel,
+                    _world.Smoke, _world.WaveConfig, _world.Stick, _world.Smoker, _world.Aim, _world.SongConfig, _world.Songs,
+                    HiveDefenseWorld.HoleCount),
+                Throws.ArgumentNullException);
+            Assert.That(
+                () => new HiveDefenseRules(
+                    _world.Swarm, _world.Squads, _world.CoreMove, _world.Fury, _world.Colossus, _world.Hive, _world.Nests, null,
+                    _world.Smoke, _world.WaveConfig, _world.Stick, _world.Smoker, _world.Aim, _world.SongConfig, _world.Songs,
+                    HiveDefenseWorld.HoleCount),
+                Throws.ArgumentNullException);
+        }
+
+        [Test]
+        public void TheTestWorldsNests_KeepTheLayoutRules()
+        {
+            _world = new HiveDefenseWorld();
+
+            Assert.That(
+                () => NestLayout.Check(_world.NestPositions, new[] { new Vector3(-40f, 0f, 40f), new Vector3(40f, 0f, 40f) }, _world.Nests, _world.CoreMove.PlayAreaHalfSize),
+                Throws.Nothing);
+        }
+
+        [Test]
+        public void Nests_OpenOnTheTickTheirWaveIsCleared()
+        {
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(1, 0), new WaveEntry(1, 0) });
+            HiveDefenseSession session = _world.Session;
+            var opened = new List<int>();
+            session.Nests.NestOpened += opened.Add;
+            _world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f);
+            _world.Run(1f);
+            Assert.That(session.Nests.OpenCount, Is.EqualTo(2), "not while the wave lives");
+
+            _world.KillAllBeekeepers();
+            bool farm = _world.RunUntil(() => session.Phase == MatchPhase.Farm, 1f);
+
+            Assert.That(farm, Is.True);
+            Assert.That(session.Nests.OpenCount, Is.EqualTo(4), "opened on the tick the wave was cleared");
+            Assert.That(opened, Is.EqualTo(new[] { 2, 3 }));
+        }
+
+        [Test]
+        public void CollectingANest_GivesFourHundredCapacityFourHundredWaspsAndALevel()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            var collected = new List<int>();
+            session.Nests.NestCollected += collected.Add;
+
+            Assert.That(_world.CollectNest(0), Is.True);
+
+            Assert.That(collected, Is.EqualTo(new[] { 0 }));
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(1200));
+            Assert.That(session.Swarm.Count, Is.EqualTo(1200));
+            Assert.That(session.Level, Is.EqualTo(2));
+            Assert.That(session.SizeScale, Is.EqualTo(1.12f).Within(1e-5f));
+            Assert.That(session.DamageScale, Is.EqualTo(1.12f).Within(1e-5f));
+            Assert.That(session.Nests.OpenCount, Is.EqualTo(1), "the nest is gone");
+        }
+
+        [Test]
+        public void CollectingANest_WithAHurtSwarm_AddsFourHundredWaspsNow()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            session.Swarm.Lose(300);
+
+            _world.CollectNest(0);
+
+            Assert.That(session.Swarm.Count, Is.EqualTo(900));
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(1200));
+        }
+
+        [Test]
+        public void CollectingANest_NearTheCeiling_StopsTheCapacityAtFourThousandAndTheWaspsAtTheCapacity()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            session.Swarm.GrowCapacity(3000);
+            session.Swarm.Gain(3000f);
+            Assert.That(session.Swarm.Count, Is.EqualTo(3800));
+
+            _world.CollectNest(0);
+
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(4000), "only 200 more fit under the ceiling");
+            Assert.That(session.Swarm.Count, Is.EqualTo(4000), "and the 400 wasps stop at the capacity");
+            Assert.That(session.Level, Is.EqualTo(2), "the level still rises");
+        }
+
+        [Test]
+        public void CollectingANest_LeavingBeforeTwoSeconds_StartsTheStayAgain()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            Vector3 nest = _world.NestPositions[0];
+
+            _world.MoveCoreTo(nest);
+            _world.Run(1.5f);
+            Assert.That(session.Nests[0].Progress01, Is.GreaterThan(0.7f));
+            _world.MoveCoreTo(nest + new Vector3(3f, 0f, 0f));
+            Assert.That(session.Nests[0].Progress01, Is.EqualTo(0f));
+            _world.MoveCoreTo(nest);
+            _world.Run(1.5f);
+
+            Assert.That(session.Nests[0].IsCollected, Is.False, "two stays of 1.5 s are not one of 2 s");
+            Assert.That(session.Level, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void CollectingANest_AHitOnTheCore_StartsTheStayAgain()
+        {
+            Vector3 nest = HiveDefenseWorld.DefaultNests[0];
+            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { nest + new Vector3(1f, 0f, 0f) });
+            HiveDefenseSession session = _world.Session;
+            _world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f);
+            int hits = 0;
+            session.ActiveBeekeeper(0).CoreHit += brain => hits++;
+            _world.MoveCoreTo(nest);
+            float progressBeforeTheHit = 0f;
+
+            bool hit = _world.RunUntil(
+                () =>
+                {
+                    if (hits == 0)
+                    {
+                        progressBeforeTheHit = session.Nests[0].Progress01;
+                    }
+
+                    return hits > 0;
+                },
+                1.9f);
+
+            Assert.That(hit, Is.True, "the stick struck within the 2 s");
+            Assert.That(progressBeforeTheHit, Is.GreaterThan(0f));
+            Assert.That(session.Nests[0].Progress01, Is.EqualTo(0f));
+            Assert.That(session.Nests[0].IsCollected, Is.False);
+        }
+
+        [Test]
+        public void CollectingANest_WhileTheSwarmIsCollapsed_MakesNoProgress()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            _world.MoveCoreTo(_world.NestPositions[0]);
+            session.Swarm.Lose(session.Swarm.Count);
+
+            _world.Run(_world.Swarm.CollapseBlockSeconds - 0.2f);
+
+            Assert.That(session.Nests[0].Progress01, Is.EqualTo(0f));
+            Assert.That(session.Nests[0].IsCollected, Is.False);
+            Assert.That(_world.RunUntil(() => session.Nests[0].IsCollected, 3f), Is.True, "after the respawn the stay counts again");
+        }
+
+        [Test]
+        public void CollectingANest_ThatIsNotOpenYet_DoesNothing()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+
+            _world.MoveCoreTo(_world.NestPositions[2]);
+            _world.Run(3f);
+
+            Assert.That(session.Nests[2].IsCollected, Is.False);
+            Assert.That(session.Level, Is.EqualTo(1));
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(800));
+        }
+
+        [Test]
+        public void CollectingTwoNestsInReachAtOnce_GivesBoth()
+        {
+            var nests = (Vector3[])HiveDefenseWorld.DefaultNests.Clone();
+            nests[0] = new Vector3(-1f, 0f, 12f);
+            nests[1] = new Vector3(1f, 0f, 12f);
+            _world = new HiveDefenseWorld(nests: nests, firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+
+            _world.MoveCoreTo(new Vector3(0f, 0f, 12f));
+            _world.Run(2.1f);
+
+            Assert.That(session.Nests.CollectedCount, Is.EqualTo(2));
+            Assert.That(session.Level, Is.EqualTo(3));
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(1600));
+            Assert.That(session.Swarm.Count, Is.EqualTo(1600));
+        }
+
+        [Test]
+        public void Level_FollowsTheNestsCollected_NotTheWaspsAlive()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            _world.CollectNest(0);
+            float damage = session.DamageScale;
+
+            session.Swarm.Lose(session.Swarm.Count - session.Swarm.CollapseLine);
+
+            Assert.That(session.Level, Is.EqualTo(2));
+            Assert.That(session.DamageScale, Is.EqualTo(damage), "a hurt swarm does not hit softer");
+            Assert.That(session.SizeScale, Is.EqualTo(1.12f).Within(1e-5f));
+        }
+
+        // The cast takes the level as it is: the Tornado's reach, height and wall reach the picture grown by 12%.
+        [Test]
+        public void Cast_AfterANest_SendsThePictureTheGrownSizes()
+        {
+            _world = new HiveDefenseWorld(withAllSongs: true, firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            _world.CollectNest(0);
+
+            _world.Play(session.Caster[HiveDefenseWorld.TornadoIndex].Song.Keys);
+            _world.Play(DomeHoles);
+
+            SlotState strike = session.Forms.Slot(SongSlot.Strike);
+            Assert.That(strike.Form, Is.EqualTo(SwarmForm.Tornado));
+            Assert.That(strike.ParamA.x, Is.EqualTo(5f * 1.12f).Within(1e-4f));
+            Assert.That(strike.ParamA.y, Is.EqualTo(3f * 1.12f).Within(1e-4f));
+            Assert.That(strike.ParamB.x, Is.EqualTo(1.5f * 1.12f).Within(1e-4f));
+            Assert.That(session.Forms.Slot(SongSlot.Guard).ParamA.x, Is.EqualTo(2.2f * 1.12f).Within(1e-4f), "the Dome too");
+        }
+
+        // The marker and the Sting share the Sting's reach, which grows with the level: 12 m, then 13.44 m.
+        [TestCase(false)]
+        [TestCase(true)]
+        public void AimTarget_ReachGrowsWithTheLevel(bool afterANest)
+        {
+            _world = new HiveDefenseWorld(
+                OneStick(), spawns: new[] { new Vector3(12.6f, 0f, 0f) }, nests: afterANest ? NestUnderTheCore() : null, firstFarmSeconds: 3f);
+            StandStillAsTheySpawn();
+            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 5f);
+            _world.Run(HiveDefenseWorld.Step);
+
+            Assert.That(_world.Session.Level, Is.EqualTo(afterANest ? 2 : 1));
+            if (afterANest)
+            {
+                Assert.That(_world.Session.AimTarget, Is.SameAs(_world.Session.ActiveBeekeeper(0)));
+            }
+            else
+            {
+                Assert.That(_world.Session.AimTarget, Is.Null, "12.6 m is beyond 12 m");
+            }
+        }
+
+        // The stick stands 4.2 m ahead of the giant: beyond a punch at 2.5 m with a 1.5 m reach, within one at 2.8 m with 1.68.
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Colossus_AfterANest_PunchesHarderAndFarther(bool afterANest)
+        {
+            _world = new HiveDefenseWorld(
+                OneStick(), spawns: new[] { new Vector3(0f, 0f, 4.2f) }, nests: afterANest ? NestUnderTheCore() : null, firstFarmSeconds: 3f);
+            HiveDefenseSession session = _world.Session;
+            StandStillAsTheySpawn();
+            _world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f);
+            session.Forms.StartColossus(ColossusSeconds);
+            _world.Run(HiveDefenseWorld.Step);
+            BeekeeperBrain keeper = session.ActiveBeekeeper(0);
+
+            session.Tick(_world.Frame(punch: true), HiveDefenseWorld.Step);
+            _world.Run(_world.Colossus.PunchHitDelay + 0.1f);
+
+            Assert.That(session.ColossusSizeScale, Is.EqualTo(afterANest ? 1.12f : 1f).Within(1e-5f), "the giant's size follows the level");
+            float expected = afterANest ? _world.Stick.Health - (_world.Colossus.PunchDamage * 1.12f) : _world.Stick.Health;
+            Assert.That(keeper.Health, Is.EqualTo(expected).Within(0.01f));
+        }
+
+        [Test]
+        public void Colossus_KeepsTheLevelItStoodUpAt()
+        {
+            var nests = NestUnderTheCore();
+            nests[1] = new Vector3(0f, 0f, 3.5f);
+            _world = new HiveDefenseWorld(nests: nests, firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            _world.Run(2.1f);
+            Assert.That(session.Level, Is.EqualTo(2));
+            session.Forms.StartColossus(ColossusSeconds);
+            _world.Run(HiveDefenseWorld.Step);
+
+            _world.RunWith(1f, _world.Frame(move: new Vector2(0f, 1f)));
+            _world.Run(2.1f);
+
+            Assert.That(session.Nests[1].IsCollected, Is.True, "the core rides inside the giant to the nest");
+            Assert.That(session.Level, Is.EqualTo(3));
+            Assert.That(session.IsColossusActive, Is.True);
+            Assert.That(session.ColossusSizeScale, Is.EqualTo(1.12f).Within(1e-5f), "the giant standing keeps its size");
+        }
+
+        // The world's random source always says 0.5, so the hum picks the middle of the six unfound songs: Dome, Colossus,
+        // Tornado, Meteor, Gust and Hive Call, in the caster's order, have index 3, the Meteor.
+        [Test]
+        public void CollectingANest_HumsTheFirstTwoNotesOfAnUnfoundSongChosenByTheRandomSource()
+        {
+            _world = new HiveDefenseWorld(withAllSongs: true, firstFarmSeconds: 20f);
+            SongDiscovery discovery = _world.Session.Discovery;
+            var hummed = new List<int>();
+            discovery.Hummed += hummed.Add;
+
+            _world.CollectNest(0);
+
+            Assert.That(hummed, Is.EqualTo(new[] { HiveDefenseWorld.MeteorIndex }));
+            Assert.That(discovery.KnownNotes(HiveDefenseWorld.MeteorIndex), Is.EqualTo(2), "J K of J K L K");
+            Assert.That(discovery.IsKnown(HiveDefenseWorld.MeteorIndex), Is.False, "never the whole song");
+            Assert.That(discovery.KnownNotes(HiveDefenseWorld.TornadoIndex), Is.EqualTo(0), "one song only");
+        }
+
+        [Test]
+        public void CollectingANest_WithEverySongFound_HumsNothing()
+        {
+            _world = new HiveDefenseWorld(withAllSongs: true, firstFarmSeconds: 20f);
+            SongDiscovery discovery = _world.Session.Discovery;
+            for (int song = 0; song < discovery.Count; song++)
+            {
+                discovery.NoteCast(song);
+            }
+
+            var hummed = new List<int>();
+            discovery.Hummed += hummed.Add;
+
+            Assert.That(_world.CollectNest(0), Is.True);
+
+            Assert.That(hummed, Is.Empty);
+            Assert.That(_world.Session.Level, Is.EqualTo(2), "the nest still counts");
+        }
+
+        [Test]
+        public void Tick_StayingAtANest_AllocatesNothing()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            _world.MoveCoreTo(_world.NestPositions[0]);
+            _world.Run(0.1f);
+            HiveDefenseFrame stay = _world.Frame();
+
+            Assert.That(() => { session.Tick(stay, HiveDefenseWorld.Step); }, Is.Not.AllocatingGCMemory());
+            Assert.That(session.Nests[0].Progress01, Is.GreaterThan(0f));
         }
     }
 }

@@ -7,14 +7,16 @@ namespace DigitalStory.Data
     [CreateAssetMenu(menuName = "DigitalStory/F010/Wave Config", fileName = "WaveConfig")]
     public sealed class WaveConfig : ScriptableObject
     {
+        // Set by the playtest bot (EconomyPlaytestTests) to the owner's target in plan section H: lost without nests,
+        // winnable with them. Waves 4 and 5 grow most, to match the swarm that nests make stronger.
         [SerializeField, Tooltip("The waves in order, one a round. Each says how many sticks and smokers it sends.")]
         private WaveEntry[] _waves =
         {
-            new WaveEntry(3, 0),
-            new WaveEntry(4, 1),
-            new WaveEntry(4, 3),
-            new WaveEntry(6, 4),
-            new WaveEntry(8, 5)
+            new WaveEntry(4, 0),
+            new WaveEntry(5, 1),
+            new WaveEntry(6, 3),
+            new WaveEntry(12, 8),
+            new WaveEntry(17, 11)
         };
 
         /// <summary>The waves in order, one a round.</summary>
@@ -24,12 +26,12 @@ namespace DigitalStory.Data
         public float FirstFarmSeconds { get; private set; } = 45f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds of every later farm phase, which starts when a wave is cleared.")]
-        public float FarmSeconds { get; private set; } = 35f;
+        public float FarmSeconds { get; private set; } = 40f;
 
         [field: SerializeField, Min(0f), Tooltip("Wasps the swarm gets for each second of a farm phase skipped by calling the wave early, up to its capacity.")]
         public float EarlyBonusPerSecond { get; private set; } = 5f;
 
         [field: SerializeField, Min(0.01f), Tooltip("Seconds between two beekeepers of the same wave appearing.")]
-        public float SpawnIntervalSeconds { get; private set; } = 1.2f;
+        public float SpawnIntervalSeconds { get; private set; } = 3f;
     }
 }

@@ -225,7 +225,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(1.32f, _hives);
 
-            Assert.That(_fury.Value, Is.EqualTo(60f).Within(1e-3f), "two hits of 60 damage at 2 damage per Fury point");
+            Assert.That(_fury.Value, Is.EqualTo(120f / _furyConfig.DamagePerFuryPoint).Within(1e-3f), "two hits of 60 damage, at DamagePerFuryPoint a point");
         }
 
         [Test]
@@ -484,7 +484,7 @@ namespace DigitalStory.Tests.EditMode
             Cast();
             _forms.Tick(1f, _hives);
 
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
             _forms.Tick(1f, _hives);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
@@ -497,7 +497,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_WhileCollapsed_CastsNothing()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             int result = PlayAll();
 
@@ -508,7 +508,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Cast_WhileCollapsed_ChangesNothing()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             Cast();
 

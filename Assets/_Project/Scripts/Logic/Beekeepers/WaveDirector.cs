@@ -58,6 +58,12 @@ namespace DigitalStory.Logic
         /// <summary>Raised when the phase changes: Survive when a wave starts, Farm when a wave other than the last is cleared.</summary>
         public event Action<MatchPhase> PhaseChanged;
 
+        /// <summary>
+        /// Raised with the wave's number, from 1, on the tick the wave is cleared: before the next round's farm phase
+        /// starts, and before <see cref="Cleared"/> after the last wave.
+        /// </summary>
+        public event Action<int> WaveCleared;
+
         /// <summary>Raised for each beekeeper to spawn: its kind and the spawn point index.</summary>
         public event Action<BeekeeperKind, int> SpawnRequested;
 
@@ -156,6 +162,8 @@ namespace DigitalStory.Logic
 
         private void FinishWave()
         {
+            WaveCleared?.Invoke(_round);
+
             if (_round >= _config.Waves.Count)
             {
                 _allCleared = true;

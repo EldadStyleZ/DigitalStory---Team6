@@ -239,7 +239,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(1.6f, _hives);
 
-            Assert.That(_fury.Value, Is.EqualTo(12.5f).Within(1e-3f), "25 damage at 2 damage per Fury point");
+            Assert.That(_fury.Value, Is.EqualTo(25f / _furyConfig.DamagePerFuryPoint).Within(1e-3f), "25 damage, at DamagePerFuryPoint a point");
         }
 
         [Test]
@@ -432,7 +432,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(0.3f, _hives);
 
-            Assert.That(_fury.Value, Is.EqualTo(30f).Within(1e-3f), "60 damage at 2 damage per Fury point");
+            Assert.That(_fury.Value, Is.EqualTo(60f / _furyConfig.DamagePerFuryPoint).Within(1e-3f), "60 damage, at DamagePerFuryPoint a point");
         }
 
         [Test]
@@ -617,7 +617,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(Make<GustSong>());
             _forms.Tick(0.1f, _hives);
 
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
             _forms.Tick(0.7f, _hives);
 
             Assert.That(edge.KnockbackCount, Is.EqualTo(0));
@@ -628,7 +628,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var near = new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f) };
             _enemies.Add(near);
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             Cast(Make<GustSong>());
 
@@ -645,7 +645,7 @@ namespace DigitalStory.Tests.EditMode
             var song = Make<HiveCallSong>();
             _hives[0].Damage(10000f);
             _hives[1].Damage(10000f);
-            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":" + _swarmConfig.MaxWasps + "}", _swarmConfig);
+            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":" + _swarmConfig.StartingCapacity + "}", _swarmConfig);
             _body = new SwarmBody(_swarmConfig);
             _forms = new SwarmFormMachine(_body, _fury, _squads);
             SwarmSongContext context = Context();
@@ -668,7 +668,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void HiveCall_CastWithTheSwarmFull_EndsOnTheNextTick()
         {
-            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":" + _swarmConfig.MaxWasps + "}", _swarmConfig);
+            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":" + _swarmConfig.StartingCapacity + "}", _swarmConfig);
             _body = new SwarmBody(_swarmConfig);
             _forms = new SwarmFormMachine(_body, _fury, _squads);
             Cast(Make<HiveCallSong>());
@@ -686,8 +686,9 @@ namespace DigitalStory.Tests.EditMode
         {
             var song = Make<ColossusSong>();
             SwarmSongContext context = Context();
+            float fillingDamage = _furyConfig.Max * _furyConfig.DamagePerFuryPoint;
 
-            _fury.AddDamage(199.9f);
+            _fury.AddDamage(fillingDamage - 0.1f);
             Assert.That(song.CanCast(in context), Is.False, "just under full");
 
             _fury.AddDamage(1f);

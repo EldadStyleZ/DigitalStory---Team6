@@ -12,6 +12,8 @@ namespace DigitalStory.Logic
     /// <remarks>
     /// The pulse first draws the wasps in, then its ring grows from where the Gust began. Each beekeeper within
     /// <see cref="PushRadius"/> is pushed on the step the ring reaches it, so the push lands where the picture shows it.
+    /// The radius it clears and pulses through, and the push's reach, grow with the swarm's level, as it stood at the cast;
+    /// the ring still starts at <see cref="RingStartRadius"/>, where the shader starts it.
     /// </remarks>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Gust", fileName = "GustSong")]
     public sealed class GustSong : SwarmSongEffect
@@ -51,19 +53,29 @@ namespace DigitalStory.Logic
             Vector3 core = context.CorePosition;
             IReadOnlyList<ISwarmTarget> enemies = context.Enemies ?? throw new ArgumentException("The song context has no beekeeper list.", nameof(context));
 
-            if (!context.Forms.StartGust(this, core, enemies))
+            if (!context.Forms.StartGust(this, core, enemies, context.SizeScale))
             {
                 return;
             }
 
-            context.Smoke?.ClearWithin(core, ClearRadius);
+            context.Smoke?.ClearWithin(core, ClearRadius * context.SizeScale);
         }
 
         /// <summary>
         /// Metres from where the Gust began that its ring has reached <paramref name="seconds"/> after the cast, or -1 while
-        /// the pulse still draws the wasps in. It eases out from <see cref="RingStartRadius"/> to <see cref="ClearRadius"/>.
+        /// the pulse still draws the wasps in. It eases out from <see cref="RingStartRadius"/> to <see cref="ClearRadius"/>,
+        /// at the swarm's first level.
         /// </summary>
         public float RingRadius(float seconds)
+        {
+            return RingRadius(seconds, 1f);
+        }
+
+        /// <summary>
+        /// As <see cref="RingRadius(float)"/>, for a Gust cast at a level that multiplies its sizes by
+        /// <paramref name="sizeScale"/>: the ring eases out from the same start to <see cref="ClearRadius"/> times it.
+        /// </summary>
+        public float RingRadius(float seconds, float sizeScale)
         {
             if (seconds < InhaleSeconds)
             {
@@ -72,15 +84,15 @@ namespace DigitalStory.Logic
 
             float grown = RingSeconds > 0f ? Mathf.Clamp01((seconds - InhaleSeconds) / RingSeconds) : 1f;
             float eased = 1f - ((1f - grown) * (1f - grown));
-            return Mathf.Lerp(RingStartRadius, ClearRadius, eased);
+            return Mathf.Lerp(RingStartRadius, ClearRadius * sizeScale, eased);
         }
 
-        // Pushes every living beekeeper within PushRadius of the centre that the ring reached between the two times. The
-        // ring only grows, so each beekeeper it passes is pushed once.
-        internal void PushWhereTheRingPassed(IReadOnlyList<ISwarmTarget> enemies, Vector3 center, float before, float after)
+        // Pushes every living beekeeper within the grown PushRadius of the centre that the ring reached between the two
+        // times. The ring only grows, so each beekeeper it passes is pushed once.
+        internal void PushWhereTheRingPassed(IReadOnlyList<ISwarmTarget> enemies, Vector3 center, float before, float after, float sizeScale)
         {
-            float inner = RingRadius(before);
-            float outer = Mathf.Min(RingRadius(after), PushRadius);
+            float inner = RingRadius(before, sizeScale);
+            float outer = Mathf.Min(RingRadius(after, sizeScale), PushRadius * sizeScale);
 
             if (outer < 0f || outer <= inner)
             {

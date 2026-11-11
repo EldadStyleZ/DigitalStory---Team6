@@ -9,16 +9,33 @@ using UnityEngine;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// A small match for tests: default configs, a short first farm phase (1 s unless a test says) and the waves, hives and
-    /// spawn points a test chooses. The core stands still at <see cref="Core"/> unless a test moves it. After each tick the
-    /// world puts the core where the session says it is, as the View does, so it rides inside the giant and stays where the
-    /// giant stood.
+    /// A small match for tests: default configs, a short first farm phase (1 s unless a test says) and the waves, hives,
+    /// nests and spawn points a test chooses. The core stands still at <see cref="Core"/> unless a test moves it. After each
+    /// tick the world puts the core where the session says it is, as the View does, so it rides inside the giant and stays
+    /// where the giant stood. The default nests (<see cref="DefaultNests"/>) stand away from where the other tests take the
+    /// core, so none is collected unless a test goes to one.
     /// </summary>
     internal sealed class HiveDefenseWorld : IDisposable
     {
         public const float Step = 1f / 60f;
         public const int HoleCount = 4;
         public const float ShortFirstFarmSeconds = 1f;
+
+        /// <summary>
+        /// The eight nests, in the order they open: two about 12 m from the middle, behind it, then six 22 m out, one every
+        /// 60 degrees. They keep the layout rules (<see cref="NestLayout"/>) for the default hives.
+        /// </summary>
+        public static readonly Vector3[] DefaultNests =
+        {
+            new Vector3(-9f, 0f, -8f),
+            new Vector3(9f, 0f, -8f),
+            new Vector3(0f, 0f, 22f),
+            new Vector3(19f, 0f, 11f),
+            new Vector3(19f, 0f, -11f),
+            new Vector3(0f, 0f, -22f),
+            new Vector3(-19f, 0f, -11f),
+            new Vector3(-19f, 0f, 11f),
+        };
 
         /// <summary>
         /// The song indices when the world is built with songs: Dome H K J, Colossus L J K J L and Sting J K H; with all songs,
@@ -40,6 +57,7 @@ namespace DigitalStory.Tests.EditMode
             Vector3[] hives = null,
             Vector3[] spawns = null,
             Vector3 core = default,
+            Vector3[] nests = null,
             bool smokerForSecondKind = true,
             bool withSongs = false,
             bool withAllSongs = false,
@@ -52,6 +70,8 @@ namespace DigitalStory.Tests.EditMode
             Fury = Make<FuryConfig>();
             Colossus = Make<ColossusConfig>();
             Hive = Make<HiveConfig>();
+            Nests = Make<NestConfig>();
+            SwarmLevel = Make<SwarmLevelConfig>();
             Smoke = Make<SmokeConfig>();
             Stick = Make<BeekeeperConfig>();
             Smoker = Make<BeekeeperConfig>();
@@ -80,12 +100,14 @@ namespace DigitalStory.Tests.EditMode
             }
 
             Songs = songs;
+            NestPositions = nests ?? DefaultNests;
             var rules = new HiveDefenseRules(
-                Swarm, Squads, CoreMove, Fury, Colossus, Hive, Smoke, WaveConfig, Stick, Smoker, Aim,
+                Swarm, Squads, CoreMove, Fury, Colossus, Hive, Nests, SwarmLevel, Smoke, WaveConfig, Stick, Smoker, Aim,
                 SongConfig, songs, HoleCount);
             Session = new HiveDefenseSession(
                 rules,
                 hives ?? new[] { new Vector3(-40f, 0f, 40f), new Vector3(40f, 0f, 40f) },
+                NestPositions,
                 spawns ?? new[] { new Vector3(30f, 0f, -30f), new Vector3(-30f, 0f, -30f) },
                 Core,
                 new FixedRandomSource());
@@ -97,6 +119,8 @@ namespace DigitalStory.Tests.EditMode
         public FuryConfig Fury { get; }
         public ColossusConfig Colossus { get; }
         public HiveConfig Hive { get; }
+        public NestConfig Nests { get; }
+        public SwarmLevelConfig SwarmLevel { get; }
         public SmokeConfig Smoke { get; }
         public BeekeeperConfig Stick { get; }
         public BeekeeperConfig Smoker { get; }
@@ -106,6 +130,9 @@ namespace DigitalStory.Tests.EditMode
 
         /// <summary>The songs the session plays, in caster order.</summary>
         public IReadOnlyList<SwarmSongEffect> Songs { get; }
+
+        /// <summary>Where the nests stand, in the order they open.</summary>
+        public IReadOnlyList<Vector3> NestPositions { get; }
 
         public WaveConfig WaveConfig { get; }
         public HiveDefenseSession Session { get; }
@@ -170,6 +197,16 @@ namespace DigitalStory.Tests.EditMode
             }
 
             return condition();
+        }
+
+        /// <summary>
+        /// Flies the core to nest <paramref name="index"/> and stays until it is collected, or for the time it takes and a
+        /// little more. Returns whether it was collected.
+        /// </summary>
+        public bool CollectNest(int index)
+        {
+            MoveCoreTo(NestPositions[index]);
+            return RunUntil(() => Session.Nests[index].IsCollected, Nests.CollectSeconds + 0.5f);
         }
 
         /// <summary>Kills every living beekeeper on the field.</summary>

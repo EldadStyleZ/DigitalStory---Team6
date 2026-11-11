@@ -230,7 +230,7 @@ These sections were agreed with the owner on 2026-11-11. Where they differ from 
 
 The swarm grows during a match. Strength comes from the **swarm level**, never from the live wasp count, because the count is also the player's health: a hurt swarm must not hit softer.
 
-| Value | Start |
+| Value | Settled |
 |---|---|
 | Starting wasps and capacity | 800 |
 | Nests on the map | 8, in Raz's `WaspNestTree_LowPoly` trees, each at least 12 m from a hive |
@@ -301,11 +301,13 @@ Build order, agreed: the swarm as the player, then phases and the economy, then 
 
 A match is five rounds. Each round is a farm phase and then a survive phase.
 
-| Value | Start |
+| Value | Settled |
 |---|---|
-| Farm phase | 35 s, and 45 s in the first round |
+| Farm phase | 40 s, and 45 s in the first round |
 | Call the wave early | Enter. Each second skipped gives 5 wasps, up to the capacity |
 | Survive phase | The wave. It ends when every beekeeper of the wave is dead |
+| Waves (sticks + smokers) | 4 + 0, 5 + 1, 6 + 3, 12 + 8, 17 + 11. Sticks come first, one beekeeper every 3 s |
+| A stick | 90 health. Hits a hive for 6, or knocks 72 wasps off the core, every 2 s. A smoker has 40 health |
 | Win | The fifth wave is cleared |
 | Lose | Both hives are destroyed |
 
@@ -326,9 +328,9 @@ Wasps are the one currency. They are the player's health, the price of an attack
 | Dome | 40 | |
 | Tornado | 60 | |
 | Meteor | 90 | |
-| Colossus | 0 | Fury is its price |
+| Colossus | 0 | Fury is its price: 1 point per 4 damage, 100 to fill |
 | Hive Call | 0 | |
-| Healing a hive | 2 wasps for each point of health | Hold E within 3 m of a damaged hive: 60 wasps a second flow in |
+| Healing a hive | 2.5 wasps for each point of health | Hold E within 3 m of a damaged hive: 60 wasps a second flow in. A hive has 450 health |
 | Towers (later) | Honeycomb 150, Nest 100 | The wasps stay there |
 
 - Costs apply only in a survive phase.
@@ -354,6 +356,25 @@ Wasps are the one currency. They are the player's health, the price of an attack
 - Later: station wasps as a tower at the hive you are leaving.
 
 The playtest bot plays three plans through whole matches: attack only, heal only, and a mix. The economy is right when none of the three always wins and doing nothing always loses. The numbers above are the starting point for that tuning.
+
+**What the playtest bot measured**
+
+`EconomyPlaytestTests` plays whole matches through the rules at 1/30 s with six plans on five seeds, prints a table to the log (lines starting `[F010] bot:`) and checks the owner's targets here and in section H: doing nothing loses, by round 3; Sting alone wins at most 1 match in 5; attacking only, healing only, and the mix that never fetches a nest each win at most 2 (lost without nests); the same mix fetching the nests wins at least 3 (winnable with them), with clearly more hive health and a higher level. It also checks that in the wins of the plans that heal, healing takes 15 to 45% of the wasps spent, and that a won match lasts 6 to 9 minutes. It knows every song, so it measures the economy, not discovery. Its explicit `WideSweep_ThirtySeeds_HoldsTheRates` plays thirty seeds and holds the same shares.
+
+Changed from the starting numbers: waves 3 + 0, 4 + 1, 4 + 3, 6 + 4, 8 + 5 became the table in section L; one beekeeper every 1.2 s became 3 s; the stick's 60 health 90; a hive's 300 health 450; healing 2 wasps a point 2.5; farm phases 35 s 40 s; Fury 1 point per 2 damage 1 per 4 (section I asked for 3; at 3 attacking only won 9 matches in 30, and the giant stood so often that the songs, and their price, mattered less). Song prices, store, production, collecting, the early call, nests and levels kept their starting numbers.
+
+| Plan | Wins in 5 | Typical round reached | Healing share in wins |
+|---|---|---|---|
+| Idle | 0 | Lost in round 1 | none |
+| Sting only | 0 | Lost in round 2, once in round 3 | none |
+| Attack only (never heals, shields or fetches nests) | 0 | Lost in round 4 or 5; once stalled in round 4 until the 20-minute limit | none, by design |
+| Heal only (never attacks) | 0 | Stuck in round 1: no wave is ever cleared | none |
+| Mixed (no nests) | 0 | Lost in round 5 | none: no wins |
+| Mixed with nests | 5 | Won at level 9; 66% hive health left | 20 to 32% |
+
+Won matches last 7.1 to 7.5 minutes. Over thirty seeds Mixed wins 3 and Mixed with nests all 30; the other plans win none. To get there, waves 4 and 5 grew from 8 + 5 and 11 + 7 to 12 + 8 and 17 + 11: at the old sizes Mixed won 25 of 30. These results come from the rules compiled outside Unity, which gave exactly the Editor's results for the old sizes; an Editor run of `EconomyPlaytestTests` still has to confirm them.
+
+Open for the owner: the mix that fetches every nest won all thirty matches, and still did with waves 4 and 5 at 20 + 14 and 36 + 24. If "none of the three always wins" should cover that plan too, it needs a change beyond the wave sizes.
 
 ### N. Guidance
 

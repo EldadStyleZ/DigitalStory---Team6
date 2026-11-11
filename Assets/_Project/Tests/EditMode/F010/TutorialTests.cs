@@ -39,6 +39,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [TestCase(TutorialStep.PlaySting)]
+        [TestCase(TutorialStep.CollectNest)]
         [TestCase(TutorialStep.VisitHive)]
         [TestCase(TutorialStep.HealHive)]
         [TestCase(TutorialStep.CallWave)]
@@ -67,6 +68,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _tutorial.Complete(TutorialStep.Move);
             _tutorial.Complete(TutorialStep.PlaySting);
+            _tutorial.Complete(TutorialStep.CollectNest);
             _tutorial.Complete(TutorialStep.VisitHive);
             _tutorial.Complete(TutorialStep.HealHive);
             _tutorial.Complete(TutorialStep.CallWave);
@@ -75,7 +77,25 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_tutorial.IsDone, Is.True);
             Assert.That(
                 _changes,
-                Is.EqualTo(new[] { TutorialStep.PlaySting, TutorialStep.VisitHive, TutorialStep.HealHive, TutorialStep.CallWave, TutorialStep.Done }));
+                Is.EqualTo(new[]
+                {
+                    TutorialStep.PlaySting, TutorialStep.CollectNest, TutorialStep.VisitHive, TutorialStep.HealHive, TutorialStep.CallWave,
+                    TutorialStep.Done,
+                }));
+        }
+
+        // Plan section N, step 3: "Fly to the glowing nest and stay until it is yours", right after the Sting.
+        [Test]
+        public void Complete_PlaySting_MovesToCollectNest()
+        {
+            _tutorial.Complete(TutorialStep.Move);
+            _tutorial.Complete(TutorialStep.PlaySting);
+
+            Assert.That(_tutorial.Current, Is.EqualTo(TutorialStep.CollectNest));
+
+            _tutorial.Complete(TutorialStep.CollectNest);
+
+            Assert.That(_tutorial.Current, Is.EqualTo(TutorialStep.VisitHive));
         }
 
         [Test]
@@ -86,7 +106,8 @@ namespace DigitalStory.Tests.EditMode
 
         [TestCase(0)]
         [TestCase(2)]
-        [TestCase(4)]
+        [TestCase(3)]
+        [TestCase(5)]
         public void Finish_FromAnyStep_EndsTheLessonOnce(int stepsDone)
         {
             for (int step = 0; step < stepsDone; step++)

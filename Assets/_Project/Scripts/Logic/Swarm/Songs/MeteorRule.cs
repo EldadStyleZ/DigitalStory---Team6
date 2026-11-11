@@ -8,6 +8,8 @@ namespace DigitalStory.Logic
     /// The meteor: its squad climbs and dives, and on landing hurts and stuns every beekeeper near the impact point. While the
     /// wasps climb the point follows the aimed beekeeper, pulled in to the song's range; it locks when the dive starts, or
     /// where the beekeeper was last seen alive. The rule lets go as it lands: the burst and the flow home are the slot's return beat.
+    /// Its height, reach, radius and damage grow with the swarm's level, as it stood at the cast, and the picture gets the
+    /// grown sizes.
     /// </summary>
     internal sealed class MeteorRule : SongRule
     {
@@ -18,6 +20,10 @@ namespace DigitalStory.Logic
         private ISwarmTarget _follow;
         private Vector3 _core;
         private Vector3 _impact;
+        private float _height;
+        private float _maxRange;
+        private float _radius;
+        private float _damage;
 
         public MeteorRule(MeteorSong song)
             : base(song)
@@ -26,20 +32,24 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>The impact point and the height the meteors climb to.</summary>
-        public override Vector4 ParamA => new Vector4(_impact.x, _impact.y, _impact.z, _song.Height);
+        public override Vector4 ParamA => new Vector4(_impact.x, _impact.y, _impact.z, _height);
 
         /// <summary>The climb, the dive and the impact radius.</summary>
-        public override Vector4 ParamB => new Vector4(_song.RiseSeconds, _song.DiveSeconds, _song.Radius, 0f);
+        public override Vector4 ParamB => new Vector4(_song.RiseSeconds, _song.DiveSeconds, _radius, 0f);
 
         protected override void Begin(in SwarmSongContext context)
         {
             _enemies = context.Enemies ?? throw new ArgumentException("The song context has no beekeeper list.", nameof(context));
             _fury = context.Fury ?? throw new ArgumentException("The song context has no Fury meter.", nameof(context));
+            _height = _song.Height * context.SizeScale;
+            _maxRange = _song.MaxRange * context.SizeScale;
+            _radius = _song.Radius * context.SizeScale;
+            _damage = _song.Damage * context.DamageScale;
             ISwarmTarget aim = context.AimTarget;
             bool isAimAlive = aim != null && aim.IsAlive;
             _core = context.CorePosition;
             _follow = isAimAlive ? aim : null;
-            _impact = GroundMath.PullIn(isAimAlive ? aim.Position : context.AimPoint, _core, _song.MaxRange);
+            _impact = GroundMath.PullIn(isAimAlive ? aim.Position : context.AimPoint, _core, _maxRange);
         }
 
         protected internal override void Tick(in SongTick tick)
@@ -64,7 +74,7 @@ namespace DigitalStory.Logic
 
             if (_follow.IsAlive)
             {
-                _impact = GroundMath.PullIn(_follow.Position, _core, _song.MaxRange);
+                _impact = GroundMath.PullIn(_follow.Position, _core, _maxRange);
             }
 
             if (!_follow.IsAlive || seconds >= _song.RiseSeconds)
@@ -75,7 +85,7 @@ namespace DigitalStory.Logic
 
         private void Impact()
         {
-            float radiusSquared = _song.Radius * _song.Radius;
+            float radiusSquared = _radius * _radius;
 
             for (int i = 0; i < _enemies.Count; i++)
             {
@@ -86,14 +96,14 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                enemy.TakeDamage(_song.Damage);
+                enemy.TakeDamage(_damage);
 
                 if (enemy.IsAlive)
                 {
                     enemy.Stun(_song.StunSeconds);
                 }
 
-                _fury.AddDamage(_song.Damage);
+                _fury.AddDamage(_damage);
             }
 
             Land(_impact);

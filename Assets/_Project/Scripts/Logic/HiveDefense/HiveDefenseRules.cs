@@ -15,6 +15,8 @@ namespace DigitalStory.Logic
             FuryConfig fury,
             ColossusConfig colossus,
             HiveConfig hive,
+            NestConfig nests,
+            SwarmLevelConfig swarmLevel,
             SmokeConfig smoke,
             WaveConfig waves,
             BeekeeperConfig stick,
@@ -30,6 +32,8 @@ namespace DigitalStory.Logic
             Fury = fury ?? throw new ArgumentNullException(nameof(fury));
             Colossus = colossus ?? throw new ArgumentNullException(nameof(colossus));
             Hive = hive ?? throw new ArgumentNullException(nameof(hive));
+            Nests = nests ?? throw new ArgumentNullException(nameof(nests));
+            SwarmLevel = swarmLevel ?? throw new ArgumentNullException(nameof(swarmLevel));
             Smoke = smoke ?? throw new ArgumentNullException(nameof(smoke));
             Waves = waves ?? throw new ArgumentNullException(nameof(waves));
             Stick = stick ?? throw new ArgumentNullException(nameof(stick));
@@ -57,6 +61,12 @@ namespace DigitalStory.Logic
 
         /// <summary>Each hive's numbers.</summary>
         public HiveConfig Hive { get; }
+
+        /// <summary>The nests: when they open, how the core collects one and what it gives.</summary>
+        public NestConfig Nests { get; }
+
+        /// <summary>What each swarm level multiplies the songs' sizes and damage by.</summary>
+        public SwarmLevelConfig SwarmLevel { get; }
 
         /// <summary>The smoke grenade and cloud numbers.</summary>
         public SmokeConfig Smoke { get; }

@@ -52,6 +52,9 @@ namespace DigitalStory.Tests.EditMode
         private readonly List<SongRefusal> _reasons = new List<SongRefusal>();
         private bool _areSongsFree;
 
+        // Damage that fills the Fury meter, read from the config.
+        private float FillingDamage => _furyConfig.Max * _furyConfig.DamagePerFuryPoint;
+
         [SetUp]
         public void SetUp()
         {
@@ -237,19 +240,19 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_ColossusWithFuryNotFull_CastsNothing()
         {
-            _fury.AddDamage(199.8f);
+            _fury.AddDamage(FillingDamage - 0.2f);
 
             int result = PlayAll(SongKeys[5]);
 
             Assert.That(result, Is.EqualTo(SongBook.NoSong));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
-            Assert.That(_fury.Value, Is.EqualTo(99.9f).Within(1e-3f), "nothing was used");
+            Assert.That(_fury.Value, Is.EqualTo((FillingDamage - 0.2f) / _furyConfig.DamagePerFuryPoint).Within(1e-3f), "nothing was used");
         }
 
         [Test]
         public void Press_ColossusWithFullFury_CastsAndEmptiesTheMeter()
         {
-            _fury.AddDamage(200f);
+            _fury.AddDamage(FillingDamage);
 
             int result = PlayAll(SongKeys[5]);
 
@@ -260,7 +263,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_ColossusRightAfterUsingFury_CannotBeCastAgain()
         {
-            _fury.AddDamage(200f);
+            _fury.AddDamage(FillingDamage);
             PlayAll(SongKeys[5]);
             _cast.Clear();
 
@@ -296,7 +299,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_WhileCollapsed_CastsNothingAndRemembersNothing()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             int result = PlayAll(SongKeys[0]);
 
@@ -310,7 +313,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_AfterTheRespawn_CastsAgain()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
             PlayAll(SongKeys[0]);
             _body.Tick(3f, _hives);
 
@@ -362,7 +365,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_NotesCompletedWhileCollapsed_IsRaisedAndNothingIsRemembered()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             PlayAll(SongKeys[0]);
 
@@ -375,7 +378,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_CollapsedAndOnlyPartOfASong_IsNotRaised()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
 
             Press(SongKeys[0][0]);
             Press(SongKeys[0][1]);
@@ -386,7 +389,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_CollapsedNotesTooOld_AreNotCounted()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
             Press(SongKeys[0][0]);
             Press(SongKeys[0][1]);
             _caster.Tick(3f);
@@ -421,7 +424,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_ColossusWithoutFullFury_IsRaisedWithTheColossusAndNeedsFury()
         {
-            _fury.AddDamage(199.8f);
+            _fury.AddDamage(FillingDamage - 0.2f);
 
             PlayAll(SongKeys[5]);
 
@@ -476,7 +479,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_cast, Is.Empty);
             Assert.That(_notReady, Is.EqualTo(new[] { 0 }));
             Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.NotEnoughWasps }));
-            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.CollapseBelow + 39), "nothing is paid");
+            Assert.That(_body.Count, Is.EqualTo(_body.CollapseLine + 39), "nothing is paid");
             Assert.That(_body.IsCollapsed, Is.False);
             Assert.That(_caster.CooldownFraction(0), Is.EqualTo(0f), "a refused cast starts no cooldown");
             Assert.That(_forms.IsDomed, Is.False);
@@ -491,7 +494,7 @@ namespace DigitalStory.Tests.EditMode
             int result = PlayAll(SongKeys[0]);
 
             Assert.That(result, Is.EqualTo(0));
-            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.CollapseBelow));
+            Assert.That(_body.Count, Is.EqualTo(_body.CollapseLine));
             Assert.That(_body.IsCollapsed, Is.False);
         }
 
@@ -505,7 +508,7 @@ namespace DigitalStory.Tests.EditMode
             int result = PlayAll(SongKeys[0]);
 
             Assert.That(result, Is.EqualTo(0), "no cooldown to wait for");
-            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.CollapseBelow));
+            Assert.That(_body.Count, Is.EqualTo(_body.CollapseLine));
         }
 
         [Test]
@@ -515,7 +518,7 @@ namespace DigitalStory.Tests.EditMode
             _areSongsFree = true;
 
             Assert.That(PlayAll(SongKeys[6]), Is.EqualTo(6));
-            Assert.That(_body.Count, Is.EqualTo(_swarmConfig.CollapseBelow));
+            Assert.That(_body.Count, Is.EqualTo(_body.CollapseLine));
         }
 
         [Test]
@@ -565,7 +568,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_WhileCollapsedWithNotesPlayed_AllocatesNothing()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _body.Lose(_body.Count);
             SwarmSongContext context = Context();
 
             Assert.That(() => { _caster.Press(L, in context); }, Is.Not.AllocatingGCMemory());
@@ -715,7 +718,7 @@ namespace DigitalStory.Tests.EditMode
         // Loses wasps until only the given number stand above the collapse line.
         private void LeaveAboveTheCollapseLine(int wasps)
         {
-            _body.Lose(_body.Count - _swarmConfig.CollapseBelow - wasps);
+            _body.Lose(_body.Count - _body.CollapseLine - wasps);
             Assert.That(_body.Spendable, Is.EqualTo(wasps));
         }
     }

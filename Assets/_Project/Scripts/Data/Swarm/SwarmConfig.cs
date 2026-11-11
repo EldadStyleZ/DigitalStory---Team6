@@ -3,33 +3,41 @@ using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>The wasp swarm: how many wasps there are, what makes it collapse, and how it looks, flows and glows.</summary>
+    /// <summary>
+    /// The wasp swarm: how many wasps there are, how many it may hold, what makes it collapse, and how it looks, flows and
+    /// glows. The swarm grows during a match (plan section H): each nest collected raises its capacity, up to MaxWasps, so
+    /// the collapse line, the low warning and the respawn are shares of the capacity, not fixed counts.
+    /// </summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Swarm Config", fileName = "SwarmConfig")]
     public sealed class SwarmConfig : ScriptableObject
     {
-        // The counts are 0.4 of the first tuning and each wasp is drawn twice as long, so the swarm has fewer, bigger
-        // wasps that read one by one, and the balance between losses, gains and the collapse stays the same.
+        // Each wasp is drawn twice as long as in the first tuning, so the swarm has fewer, bigger wasps that read one by one.
+        // The shares are the old fixed counts over the old 2,000 start (240, 600, 1,000 and 300), so the balance between
+        // losses, gains and the collapse stays the same as the swarm grows.
         [field: Header("Rules")]
-        [field: SerializeField, Min(1), Tooltip("Wasps at the start of a run.")]
-        public int StartingWasps { get; private set; } = 2000;
+        [field: SerializeField, Min(0), Tooltip("Wasps at the start of a run. Keep it at most StartingCapacity.")]
+        public int StartingWasps { get; private set; } = 800;
 
-        [field: SerializeField, Min(1), Tooltip("Most wasps the swarm can hold. Also the size of the GPU buffers.")]
+        [field: SerializeField, Min(1), Tooltip("How many wasps the swarm may hold at the start of a run. Each nest collected raises it, up to MaxWasps.")]
+        public int StartingCapacity { get; private set; } = 800;
+
+        [field: SerializeField, Min(1), Tooltip("Most wasps the swarm's capacity can ever reach. Also the size of the GPU buffers.")]
         public int MaxWasps { get; private set; } = 4000;
 
-        [field: SerializeField, Min(0), Tooltip("The swarm collapses when a loss leaves fewer wasps than this. A song or a gift to a hive that would leave fewer is refused, so paying never collapses it.")]
-        public int CollapseBelow { get; private set; } = 240;
+        [field: SerializeField, Range(0f, 1f), Tooltip("The swarm collapses when a loss leaves fewer wasps than this share of its capacity. A song or a gift to a hive that would leave fewer is refused, so paying never collapses it.")]
+        public float CollapseShare { get; private set; } = 0.12f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the swarm stays collapsed before it can respawn.")]
         public float CollapseBlockSeconds { get; private set; } = 3f;
 
-        [field: SerializeField, Min(0), Tooltip("Most wasps the swarm takes from the hives' stores when it comes back after a collapse, while a hive still stands.")]
-        public int RespawnWasps { get; private set; } = 1000;
+        [field: SerializeField, Range(0f, 1f), Tooltip("Share of its capacity that the swarm takes, at most, from the hives' stores when it comes back after a collapse, while a hive still stands.")]
+        public float RespawnShare { get; private set; } = 0.5f;
 
-        [field: SerializeField, Min(0), Tooltip("Fewest wasps the swarm comes back with after a collapse, however little the stores hold, so the player can always act. Keep it from CollapseBelow to MaxWasps; the collapse line plus 60 by default.")]
-        public int MinRespawnWasps { get; private set; } = 300;
+        [field: SerializeField, Range(0f, 1f), Tooltip("Share of its capacity that the swarm comes back with at least after a collapse, however little the stores hold, so the player can always act. Keep it from CollapseShare to 1.")]
+        public float MinRespawnShare { get; private set; } = 0.15f;
 
-        [field: SerializeField, Min(0), Tooltip("The HUD warns that the swarm is low while it has fewer wasps than this.")]
-        public int LowWasps { get; private set; } = 600;
+        [field: SerializeField, Range(0f, 1f), Tooltip("The HUD warns that the swarm is low while it has fewer wasps than this share of its capacity.")]
+        public float LowShare { get; private set; } = 0.3f;
 
         [field: Header("River and shapes")]
         [field: SerializeField, Min(0f), Tooltip("Spring strength pulling a wasp toward its place in the river.")]

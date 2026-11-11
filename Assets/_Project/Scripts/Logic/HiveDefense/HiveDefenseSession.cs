@@ -22,9 +22,13 @@ namespace DigitalStory.Logic
     /// songs cost wasps only in a survive phase, the hives' stores pay for Hive Call, the respawn and what the core collects
     /// beside a hive, Give pays wasps into a hive's health, and calling a wave early earns wasps. The last hive starts hurt so
     /// the first round's lesson (section N) has a hive to heal; once no standing hive is hurt, the lesson's heal step is done.
+    /// The swarm grows (section H): each cleared wave opens more nests, and a collected nest raises the swarm's capacity,
+    /// brings wasps, hums an unfound song and raises the swarm's level. The level, never the live wasp count, makes the songs
+    /// and the giant bigger and stronger: each cast takes <see cref="SizeScale"/> and <see cref="DamageScale"/> as they are
+    /// then, and the giant keeps the level it stood up at.
     /// Each tick runs in this order: the core, the song caster and the aim, the notes pressed, the swarm's respawn, its form
-    /// (Hive Call), the giant, the hive the core stands at, the lesson's heal step, smoke, the hives' stores, the beekeepers,
-    /// the wave timeline, a wave called early, and last the state.
+    /// (Hive Call), the giant, the nests the core stands at, the hive the core stands at, the lesson's catch-up steps, smoke,
+    /// the hives' stores, the beekeepers, the wave timeline, a wave called early, and last the state.
     /// </remarks>
     public sealed class HiveDefenseSession : ISongAim
     {
@@ -63,11 +67,18 @@ namespace DigitalStory.Logic
         private bool _furyHasFilled;
         private Vector3 _colossusPosition;
         private Vector3 _colossusFacing = Vector3.forward;
+        private float _colossusSizeScale = 1f;
+        private float _colossusDamageScale = 1f;
 
-        /// <summary>Builds the hives, the beekeeper pools and every other class from the rules.</summary>
+        /// <summary>
+        /// Builds the hives, the nests, the beekeeper pools and every other class from the rules. The nest positions come in
+        /// the order the nests open (<see cref="NestField"/>), as many as <see cref="NestConfig.NestCount"/>; the scene checks
+        /// where they stand with <see cref="NestLayout.Check"/>.
+        /// </summary>
         public HiveDefenseSession(
             HiveDefenseRules rules,
             IReadOnlyList<Vector3> hivePositions,
+            IReadOnlyList<Vector3> nestPositions,
             IReadOnlyList<Vector3> spawnPoints,
             Vector3 coreStart,
             IRandomSource random)
@@ -113,6 +124,7 @@ namespace DigitalStory.Logic
             }
 
             Hives = new HiveSet(hives);
+            Nests = new NestField(rules.Nests, nestPositions);
             _exchange = new HiveExchange(rules.Hive, Hives, Swarm);
             Waves = new WaveDirector(rules.Waves, spawnPoints.Count);
             Caster = new SwarmSongCaster(rules.Songs, rules.SongConfig, rules.HoleCount);
@@ -125,7 +137,8 @@ namespace DigitalStory.Logic
             Caster.NotePlayed += OnNotePlayed;
             Fury.Changed += OnFuryChanged;
             Waves.PhaseChanged += OnPhaseChanged;
-            _exchange.Collected += OnCollected;
+            Waves.WaveCleared += Nests.OpenAfterWave;
+            Nests.NestCollected += OnNestCollected;
             _exchange.Gave += OnGave;
 
             int sticks = 0;
@@ -177,6 +190,18 @@ namespace DigitalStory.Logic
 
         /// <summary>The hives.</summary>
         public HiveSet Hives { get; }
+
+        /// <summary>The wild nests: which are open, which are collected, and how far the collecting has got.</summary>
+        public NestField Nests { get; }
+
+        /// <summary>The swarm's level: 1 plus the nests collected. It, never the live wasp count, sets the songs' strength.</summary>
+        public int Level => 1 + Nests.CollectedCount;
+
+        /// <summary>What the level multiplies every song's radius, reach and height by, now (plan section H).</summary>
+        public float SizeScale => _rules.SwarmLevel.SizeScale(Level);
+
+        /// <summary>What the level multiplies every song's damage by, now (plan section H).</summary>
+        public float DamageScale => _rules.SwarmLevel.DamageScale(Level);
 
         /// <summary>The rounds: each a farm phase and then a wave.</summary>
         public WaveDirector Waves { get; }
@@ -320,6 +345,12 @@ namespace DigitalStory.Logic
         /// <summary>The direction the giant faces, a unit vector on the ground.</summary>
         public Vector3 ColossusFacing => _colossusFacing;
 
+        /// <summary>
+        /// What the giant's size, and the reach of its hits, is multiplied by: <see cref="SizeScale"/> as it was when the
+        /// giant stood up, kept while it stands. 1 before the first giant.
+        /// </summary>
+        public float ColossusSizeScale => _colossusSizeScale;
+
         /// <summary>Raised when a giant attack starts, for the animation.</summary>
         public event Action<ColossusAttack> ColossusAttackStarted;
 
@@ -343,13 +374,16 @@ namespace DigitalStory.Logic
             _isMouseLive = frame.IsMouseLive;
             _mousePoint = frame.AimPoint;
             _autoAim.Tick(dt);
-            Choose(_markerSong.AimRule, _markerSong.AimRange);
+            Choose(_markerSong.AimRule, _markerSong.AimRange * SizeScale);
             PressHoles(frame.PressedHoleMask);
 
             Swarm.Tick(dt, Hives);
             Forms.Tick(dt, Hives);
 
             TickColossus(frame, dt);
+
+            // A collapsed swarm has nothing to take a nest with, so its stay starts again.
+            Nests.Tick(dt, _corePosition, !Swarm.IsCollapsed);
             _exchange.Tick(dt, _corePosition, frame.Give, Forms.Current == SwarmForm.HiveCall);
             TickLesson();
             Smoke.Tick(dt, Hives, Swarm, _corePosition, Forms);
@@ -396,6 +430,17 @@ namespace DigitalStory.Logic
             }
         }
 
+        // Plan section H: the nest is gone, and the swarm can hold more, has more, and is one level stronger. It hums a song
+        // the player has not found, chosen with the session's random source.
+        private void OnNestCollected(int nest)
+        {
+            NestConfig config = _rules.Nests;
+            Swarm.GrowCapacity(config.CapacityPerNest);
+            Swarm.Gain(config.WaspsPerNest);
+            Discovery.HumUnfound(_random, config.HummedNotes);
+            Tutorial.Complete(TutorialStep.CollectNest);
+        }
+
         // The song table fills in from every note the flute hears, before the note can cast a song and use the notes up.
         private void OnNotePlayed(int hole)
         {
@@ -410,22 +455,30 @@ namespace DigitalStory.Logic
             }
         }
 
-        private void OnCollected(int hive)
-        {
-            Tutorial.Complete(TutorialStep.VisitHive);
-        }
-
         private void OnGave(int hive)
         {
             Tutorial.Complete(TutorialStep.HealHive);
         }
 
-        // Gave is raised only while a hive is hurt, and a full hive stays full in the first farm phase, so a hurt hive healed
-        // before the heal step came (or one that fell) would leave that step's prompt up until the first wave. With no
-        // standing hive hurt the step has nothing to teach, so it is done. Checked each tick, not when the step changes, so
-        // StepChanged is never raised from inside itself.
+        // Each step that the player may have done before its turn, or that may have nothing to teach, is caught up here.
+        // Checked each tick, not when the step changes, so StepChanged is never raised from inside itself.
+        // A nest collected before its step came would leave the nest prompt up, and with every open nest taken it has
+        // nothing to teach. The swarm starts full and a nest keeps it full, so a visit often takes nothing: reaching a
+        // standing hive is the visit, and its store flows in by itself whenever there is room. Gave is raised only while a
+        // hive is hurt, and a full hive stays full in the first farm phase, so with no standing hive hurt the heal step has
+        // nothing to teach either.
         private void TickLesson()
         {
+            if (Tutorial.Current == TutorialStep.CollectNest && (Nests.CollectedCount > 0 || Nests.OpenCount == 0))
+            {
+                Tutorial.Complete(TutorialStep.CollectNest);
+            }
+
+            if (Tutorial.Current == TutorialStep.VisitHive && _exchange.NearHive >= 0)
+            {
+                Tutorial.Complete(TutorialStep.VisitHive);
+            }
+
             if (Tutorial.Current == TutorialStep.HealHive && !Hives.HasDamagedHive)
             {
                 Tutorial.Complete(TutorialStep.HealHive);
@@ -557,7 +610,8 @@ namespace DigitalStory.Logic
                 }
 
                 var context = new SwarmSongContext(
-                    _corePosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke, this, AreSongsFree);
+                    _corePosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke, this, AreSongsFree,
+                    SizeScale, DamageScale);
                 Caster.Press(hole, context);
             }
         }
@@ -570,6 +624,8 @@ namespace DigitalStory.Logic
                 _isColossusActive = true;
                 _colossusPosition = new Vector3(_corePosition.x, 0f, _corePosition.z);
                 _colossusFacing = Vector3.forward;
+                _colossusSizeScale = SizeScale;
+                _colossusDamageScale = DamageScale;
             }
             else if (!formIsColossus && _isColossusActive)
             {
@@ -719,6 +775,7 @@ namespace DigitalStory.Logic
         {
             Swarm.Lose(brain.Config.WaspsKnockedOff, Forms.WaspLossFraction);
             Forms.NotifyHit(brain.Position);
+            Nests.NotifyCoreHit();
             _lastHitPoint = _corePosition;
         }
 
@@ -771,6 +828,10 @@ namespace DigitalStory.Logic
                     return;
             }
 
+            // The giant hits as hard, and as far, as the level it stood up at.
+            damage *= _colossusDamageScale;
+            radius *= _colossusSizeScale;
+            reach *= _colossusSizeScale;
             Vector3 center = _colossusPosition + _colossusFacing * reach;
             float radiusSqr = radius * radius;
             float dealt = 0f;

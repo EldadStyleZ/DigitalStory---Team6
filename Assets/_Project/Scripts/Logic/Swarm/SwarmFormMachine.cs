@@ -13,7 +13,7 @@ namespace DigitalStory.Logic
     /// <remarks>
     /// The session ticks <see cref="SwarmBody"/> itself. While Hive Call lasts, this machine calls every standing hive's store
     /// into the swarm (<see cref="HiveSet.HandOutAll"/>, then <see cref="SwarmBody.Gain"/>), so the call makes no wasp from
-    /// nothing, and ends the call when the stores are empty or the swarm is full. Nothing starts while the swarm is
+    /// nothing, and ends the call when the stores are empty or the swarm is full: at its capacity, which nests raise. Nothing starts while the swarm is
     /// collapsed or the Colossus stands: the Start methods then return false and change nothing.
     /// Hive Call ends the Strike song and keeps the Guard and Post songs; an Attack or Power cast ends Hive Call, and a
     /// Defense cast keeps it. The Colossus ends the Strike and Guard songs and Hive Call, and keeps the Post song. A collapse
@@ -38,6 +38,7 @@ namespace DigitalStory.Logic
         private float _gustDuration;
         private Vector3 _gustCenter;
         private float _gustRadius;
+        private float _gustSizeScale = 1f;
         private GustSong _gustSong;
         private IReadOnlyList<ISwarmTarget> _gustEnemies;
 
@@ -84,7 +85,7 @@ namespace DigitalStory.Logic
         /// <summary>Where the last Gust began.</summary>
         public Vector3 GustCenter => _gustCenter;
 
-        /// <summary>Metres the last Gust reaches.</summary>
+        /// <summary>Metres the last Gust reaches, grown by the swarm's level when it was cast.</summary>
         public float GustRadius => _gustRadius;
 
         private bool IsBlocked => _current == SwarmForm.Collapsed || _current == SwarmForm.Colossus;
@@ -158,14 +159,15 @@ namespace DigitalStory.Logic
         /// </summary>
         public bool StartGust(Vector3 center, float radius, float seconds)
         {
-            return StartPulse(center, radius, seconds, null, null);
+            return StartPulse(center, radius, seconds, null, null, 1f);
         }
 
         /// <summary>
         /// Starts <paramref name="song"/>'s pulse at <paramref name="center"/>, as <see cref="StartGust(Vector3, float, float)"/>
-        /// does, and lets the song push each beekeeper in <paramref name="enemies"/> on the step its ring reaches them.
+        /// does, and lets the song push each beekeeper in <paramref name="enemies"/> on the step its ring reaches them. The
+        /// swarm's level multiplies the pulse's reach by <paramref name="sizeScale"/>.
         /// </summary>
-        internal bool StartGust(GustSong song, Vector3 center, IReadOnlyList<ISwarmTarget> enemies)
+        internal bool StartGust(GustSong song, Vector3 center, IReadOnlyList<ISwarmTarget> enemies, float sizeScale)
         {
             if (song == null)
             {
@@ -177,7 +179,7 @@ namespace DigitalStory.Logic
                 throw new ArgumentNullException(nameof(enemies));
             }
 
-            return StartPulse(center, song.ClearRadius, song.Seconds, song, enemies);
+            return StartPulse(center, song.ClearRadius * sizeScale, song.Seconds, song, enemies, sizeScale);
         }
 
         /// <summary>
@@ -279,7 +281,7 @@ namespace DigitalStory.Logic
             }
         }
 
-        private bool StartPulse(Vector3 center, float radius, float seconds, GustSong pusher, IReadOnlyList<ISwarmTarget> enemies)
+        private bool StartPulse(Vector3 center, float radius, float seconds, GustSong pusher, IReadOnlyList<ISwarmTarget> enemies, float sizeScale)
         {
             RequireSeconds(seconds);
 
@@ -297,6 +299,7 @@ namespace DigitalStory.Logic
             _gustDuration = seconds;
             _gustCenter = center;
             _gustRadius = radius;
+            _gustSizeScale = sizeScale;
             _gustSong = pusher;
             _gustEnemies = enemies;
             return true;
@@ -315,7 +318,7 @@ namespace DigitalStory.Logic
             {
                 _body.Gain(hives.HandOutAll(deltaTime, _body.Room));
 
-                if (_body.Count >= _body.Max || !hives.HasStoredWasps)
+                if (_body.Count >= _body.Capacity || !hives.HasStoredWasps)
                 {
                     SetForm(SwarmForm.River);
                 }
@@ -339,7 +342,7 @@ namespace DigitalStory.Logic
             // The push lands with the ring the picture draws, not on the cast frame.
             if (_gustSong != null)
             {
-                _gustSong.PushWhereTheRingPassed(_gustEnemies, _gustCenter, before, _gustSeconds);
+                _gustSong.PushWhereTheRingPassed(_gustEnemies, _gustCenter, before, _gustSeconds, _gustSizeScale);
             }
 
             if (_gustSeconds >= _gustDuration)

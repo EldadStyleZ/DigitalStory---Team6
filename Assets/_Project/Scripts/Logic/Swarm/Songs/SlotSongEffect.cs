@@ -34,18 +34,22 @@ namespace DigitalStory.Logic
         /// <summary>How auto-aim chooses the song's target (plan section E). Only read while <see cref="IsAimed"/>.</summary>
         public virtual AimRule AimRule => AimRule.Threat;
 
-        /// <summary>Metres from the core within which auto-aim may choose the song's target. Only read while <see cref="IsAimed"/>.</summary>
+        /// <summary>
+        /// Metres from the core within which auto-aim may choose the song's target, at the swarm's first level: each level
+        /// grows it as it grows the song's reach. Only read while <see cref="IsAimed"/>.
+        /// </summary>
         public virtual float AimRange => 0f;
 
         /// <summary>
         /// Starts the song in its slot. An aimed song first asks the context's aim chooser, when there is one, for its
-        /// target by its own rule. Nothing happens while the swarm is collapsed or the Colossus stands.
+        /// target by its own rule, within its reach at the context's level. Nothing happens while the swarm is collapsed or
+        /// the Colossus stands.
         /// </summary>
         public override void Cast(in SwarmSongContext context)
         {
             if (IsAimed && context.Aim != null)
             {
-                context.Aim.Choose(AimRule, AimRange, out ISwarmTarget target, out Vector3 point);
+                context.Aim.Choose(AimRule, AimRange * context.SizeScale, out ISwarmTarget target, out Vector3 point);
                 SwarmSongContext aimed = context.AimedAt(target, point);
                 context.Forms.StartSong(this, in aimed);
                 return;

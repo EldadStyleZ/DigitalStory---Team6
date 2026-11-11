@@ -454,6 +454,132 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(() => { _discovery.RecordNotes(_caster); }, Is.Not.AllocatingGCMemory());
         }
 
+        // ---- A collected nest hums (plan section H) ----
+
+        private const int HiveCall = 4;
+
+        [Test]
+        public void Hum_AnUnfoundSong_FillsInItsFirstNotesButDoesNotMakeItKnown()
+        {
+            var hummed = new List<int>();
+            _discovery.Hummed += hummed.Add;
+
+            _discovery.Hum(Tornado, 2);
+
+            Assert.That(_discovery.KnownNotes(Tornado), Is.EqualTo(2), "J K of J K K H");
+            Assert.That(_discovery.IsKnown(Tornado), Is.False);
+            Assert.That(_discovery.KnownCount, Is.EqualTo(1));
+            Assert.That(hummed, Is.EqualTo(new[] { Tornado }));
+            Assert.That(_discovered, Is.Empty);
+        }
+
+        [TestCase(2)]
+        [TestCase(3)]
+        [TestCase(9)]
+        public void Hum_NeverFillsInTheWholeSong(int notes)
+        {
+            _discovery.Hum(Dome, notes);
+
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(2), "at most all but the last of H K J");
+            Assert.That(_discovery.IsKnown(Dome), Is.False);
+        }
+
+        [Test]
+        public void Hum_FewerNotesThanThePlayerHasPlayed_NeverLowersTheTableAndRaisesNothing()
+        {
+            RecordEveryNote();
+            Play(1, 2, 2);
+            Assert.That(_discovery.KnownNotes(Tornado), Is.EqualTo(3));
+            var hummed = new List<int>();
+            _discovery.Hummed += hummed.Add;
+
+            _discovery.Hum(Tornado, 2);
+
+            Assert.That(_discovery.KnownNotes(Tornado), Is.EqualTo(3), "KnownNotes never falls");
+            Assert.That(hummed, Is.Empty, "it taught nothing");
+        }
+
+        [Test]
+        public void Hum_AKnownSong_ChangesNothingAndRaisesNothing()
+        {
+            var hummed = new List<int>();
+            _discovery.Hummed += hummed.Add;
+
+            _discovery.Hum(Sting, 2);
+
+            Assert.That(_discovery.KnownNotes(Sting), Is.EqualTo(3));
+            Assert.That(hummed, Is.Empty);
+        }
+
+        [Test]
+        public void Hum_OutOfRangeSongOrNegativeNotes_Throws()
+        {
+            Assert.That(() => _discovery.Hum(7, 2), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+            Assert.That(() => _discovery.Hum(Dome, -1), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+        }
+
+        // The six songs the player has not found, in order: Dome, Tornado, Gust, Hive Call, Colossus and Meteor.
+        [TestCase(0.0, Dome)]
+        [TestCase(0.5, HiveCall)]
+        [TestCase(0.999, Meteor)]
+        public void HumUnfound_ChoosesTheSongThroughTheRandomSource(double roll, int expected)
+        {
+            int song = _discovery.HumUnfound(new FixedRandomSource(roll), 2);
+
+            Assert.That(song, Is.EqualTo(expected));
+            Assert.That(_discovery.KnownNotes(expected), Is.EqualTo(2));
+            for (int other = 0; other < _songs.Count; other++)
+            {
+                if (other != expected && other != Sting)
+                {
+                    Assert.That(_discovery.KnownNotes(other), Is.EqualTo(0), "one song only: " + _songs[other].Song.Title);
+                }
+            }
+        }
+
+        [Test]
+        public void HumUnfound_SkipsASongWhoseTableAlreadyShowsTheNotes()
+        {
+            RecordEveryNote();
+            Play(0, 2);
+            Assert.That(_discovery.KnownNotes(Dome), Is.EqualTo(2));
+
+            int song = _discovery.HumUnfound(new FixedRandomSource(0.0), 2);
+
+            Assert.That(song, Is.EqualTo(Tornado), "Dome's H K is already on the table, so the first song it can teach");
+        }
+
+        [Test]
+        public void HumUnfound_EverySongFound_HumsNothing()
+        {
+            for (int song = 0; song < _songs.Count; song++)
+            {
+                _discovery.NoteCast(song);
+            }
+
+            var hummed = new List<int>();
+            _discovery.Hummed += hummed.Add;
+
+            int chosen = _discovery.HumUnfound(new FixedRandomSource(0.5), 2);
+
+            Assert.That(chosen, Is.EqualTo(SongBook.NoSong));
+            Assert.That(hummed, Is.Empty);
+        }
+
+        [Test]
+        public void HumUnfound_NoRandomSource_Throws()
+        {
+            Assert.That(() => _discovery.HumUnfound(null, 2), Throws.ArgumentNullException);
+        }
+
+        [Test]
+        public void HumUnfound_AllocatesNothing()
+        {
+            var random = new FixedRandomSource(0.5);
+
+            Assert.That(() => { _discovery.HumUnfound(random, 1); }, Is.Not.AllocatingGCMemory());
+        }
+
         private void Play(params int[] holes)
         {
             foreach (int hole in holes)
