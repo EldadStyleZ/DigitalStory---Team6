@@ -39,7 +39,8 @@ namespace DigitalStory.Tests.EditMode
 
         /// <summary>
         /// The song indices when the world is built with songs: Dome H K J, Colossus L J K J L and Sting J K H; with all songs,
-        /// also Tornado J K K H, Meteor J K L K, Gust H L K and Hive Call L J L. Without either, the world holds only the Sting
+        /// also Tornado J K K H, Meteor J K L K, Gust H L K and Hive Call L J L; with the new songs, all those and then Hydra
+        /// J J L, Scythe K L H, Lance K L L H, Nest K L J H and Honeycomb H J L K. Without any, the world holds only the Sting
         /// (index 0), because the session's aim marker takes its reach from the starting aimed song.
         /// </summary>
         public const int DomeIndex = 0;
@@ -49,6 +50,11 @@ namespace DigitalStory.Tests.EditMode
         public const int MeteorIndex = 4;
         public const int GustIndex = 5;
         public const int HiveCallIndex = 6;
+        public const int HydraIndex = 7;
+        public const int ScytheIndex = 8;
+        public const int LanceIndex = 9;
+        public const int NestIndex = 10;
+        public const int HoneycombIndex = 11;
 
         private readonly List<ScriptableObject> _created = new List<ScriptableObject>();
 
@@ -61,7 +67,8 @@ namespace DigitalStory.Tests.EditMode
             bool smokerForSecondKind = true,
             bool withSongs = false,
             bool withAllSongs = false,
-            float firstFarmSeconds = ShortFirstFarmSeconds)
+            float firstFarmSeconds = ShortFirstFarmSeconds,
+            bool withNewSongs = false)
         {
             Core = core;
             Swarm = Make<SwarmConfig>();
@@ -87,7 +94,15 @@ namespace DigitalStory.Tests.EditMode
             Sting = Make<StingSong>();
             SongConfig = Make<SongConfig>();
             SwarmSongEffect[] songs = { Sting };
-            if (withAllSongs)
+            if (withNewSongs)
+            {
+                songs = new SwarmSongEffect[]
+                {
+                    Make<DomeSong>(), Make<ColossusSong>(), Sting, Make<TornadoSong>(), Make<MeteorSong>(), Make<GustSong>(), Make<HiveCallSong>(),
+                    Make<HydraSong>(), Make<ScytheSong>(), Make<LanceSong>(), Make<NestSong>(), Make<HoneycombSong>(),
+                };
+            }
+            else if (withAllSongs)
             {
                 songs = new SwarmSongEffect[]
                 {

@@ -43,6 +43,23 @@ namespace DigitalStory.Tests.EditMode
             return keepers;
         }
 
+        // Five sticks that stand still 3, 4, 5, 8 and 9.5 m from the core, in spawn order, once all have come.
+        private List<BeekeeperBrain> FiveStandingForTheHydra(Vector3[] nests)
+        {
+            _world = new HiveDefenseWorld(
+                new[] { new WaveEntry(5, 0) },
+                spawns: new[]
+                {
+                    new Vector3(0f, 0f, 3f), new Vector3(4f, 0f, 0f), new Vector3(0f, 0f, -5f), new Vector3(-8f, 0f, 0f), new Vector3(9.5f, 0f, 0f),
+                },
+                nests: nests,
+                firstFarmSeconds: 3f,
+                withNewSongs: true);
+            List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
+            Assert.That(_world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 5, 16f), Is.True);
+            return keepers;
+        }
+
         // A cast context on the session's own swarm, forms and hives, with no beekeepers, for a test's own song.
         private SwarmSongContext SongContext()
         {
@@ -298,13 +315,16 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(dome.z, Is.EqualTo(0f).Within(0.3f));
         }
 
-        // Hive Call now ends when the stores run dry, so the stores flow slowly here to last until the stick's hit.
+        // Hive Call now ends when the stores run dry, so the stores flow slowly here to last until the stick's hit. Changed
+        // with the first-cast rule: the Dome's first cast is free and no longer makes room in a full swarm, which would end
+        // Hive Call at once, so wasps are lost first.
         [Test]
         public void StickHitOnCore_DuringHiveCallUnderTheDome_KeepsHiveCall()
         {
             StickBesideCore(withSongs: true);
             JsonUtility.FromJsonOverwrite("{\"<CollectPerSecond>k__BackingField\":1}", _world.Hive);
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
+            LeaveRoom();
             int hits = 0;
             _world.Session.ActiveBeekeeper(0).CoreHit += brain => hits++;
             _world.Play(DomeHoles);
@@ -1113,8 +1133,11 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps - _world.Sting.WaspCost));
         }
 
+        // Changed with the first-cast rule: a song's first cast in a match is free in any phase, so a song the player has not
+        // found is never refused for want of wasps, and finding it is never punished. Its second cast can be, and the refusal
+        // costs nothing.
         [Test]
-        public void Cast_RefusedForWantOfWasps_FillsTheTableButDoesNotMakeTheSongKnown()
+        public void Cast_TheFirstOfASongWithFewWaspsInASurvivePhase_IsFreeAndMakesItKnown_TheSecondIsRefused()
         {
             _world = new HiveDefenseWorld(withSongs: true);
             HiveDefenseSession session = _world.Session;
@@ -1125,11 +1148,219 @@ namespace DigitalStory.Tests.EditMode
 
             _world.Play(DomeHoles);
 
+            Assert.That(session.Forms.IsDomed, Is.True, "the first Dome is free");
+            Assert.That(session.Discovery.IsKnown(HiveDefenseWorld.DomeIndex), Is.True);
+            Assert.That(session.Swarm.Count, Is.EqualTo(session.Swarm.CollapseLine + 5));
+
+            _world.Run(8.1f);
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Survive));
+            _world.Play(DomeHoles);
+
             Assert.That(reasons, Is.EqualTo(new[] { SongRefusal.NotEnoughWasps }));
-            Assert.That(session.Discovery.IsKnown(HiveDefenseWorld.DomeIndex), Is.False);
             Assert.That(session.Discovery.KnownNotes(HiveDefenseWorld.DomeIndex), Is.EqualTo(3), "the notes still fill in the table");
             Assert.That(session.Swarm.Count, Is.EqualTo(session.Swarm.CollapseLine + 5));
             Assert.That(session.Forms.IsDomed, Is.False);
+        }
+
+        [Test]
+        public void Cast_TheFirstOfASongInASurvivePhase_IsFree_AndTheSecondCostsItsWasps()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            _world.Run(HiveDefenseWorld.ShortFirstFarmSeconds + 0.1f);
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Survive));
+
+            _world.Play(_world.Sting.Song.Keys);
+            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps));
+
+            _world.Run(1.6f);
+            _world.Play(_world.Sting.Song.Keys);
+
+            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps - _world.Sting.WaspCost));
+        }
+
+        [Test]
+        public void SongPrice_IsWhatTheSongsNextCastWouldCostNow()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.SongPrice(HiveDefenseWorld.StingIndex), Is.EqualTo(0), "the first cast is free");
+
+            _world.Play(_world.Sting.Song.Keys);
+            Assert.That(session.SongPrice(HiveDefenseWorld.StingIndex), Is.EqualTo(0), "songs cost nothing in a farm phase");
+
+            _world.Run(1.6f);
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Survive));
+            Assert.That(session.SongPrice(HiveDefenseWorld.StingIndex), Is.EqualTo(_world.Sting.WaspCost));
+            Assert.That(session.SongPrice(HiveDefenseWorld.DomeIndex), Is.EqualTo(0), "the Dome was never cast");
+        }
+
+        // ---- The new attacks, aimed by their own rules (plan section E) ----
+
+        [TestCase(HiveDefenseWorld.HydraIndex)]
+        [TestCase(HiveDefenseWorld.ScytheIndex)]
+        [TestCase(HiveDefenseWorld.LanceIndex)]
+        public void Cast_EachNewAttack_CastsWithNobodyOnTheField(int song)
+        {
+            _world = new HiveDefenseWorld(withNewSongs: true);
+            var cast = new List<int>();
+            var notReady = new List<int>();
+            _world.Session.Caster.SongCast += cast.Add;
+            _world.Session.Caster.SongNotReady += (refused, reason) => notReady.Add(refused);
+
+            _world.Play(_world.Session.Caster[song].Song.Keys);
+
+            Assert.That(_world.Session.ActiveBeekeeperCount, Is.EqualTo(0));
+            Assert.That(cast, Is.EqualTo(new[] { song }));
+            Assert.That(notReady, Is.Empty);
+        }
+
+        // ThreeNearest: the three beekeepers nearest the core within 9 m, chosen as the Hydra is cast.
+        [Test]
+        public void Cast_Hydra_BitesTheThreeBeekeepersNearestTheCoreWithinItsReach()
+        {
+            List<BeekeeperBrain> keepers = FiveStandingForTheHydra(null);
+
+            _world.Play(_world.Session.Caster[HiveDefenseWorld.HydraIndex].Song.Keys);
+            _world.Run(0.8f);
+
+            float bitten = _world.Stick.Health - 40f;
+            Assert.That(keepers[0].Health, Is.EqualTo(bitten).Within(0.01f), "3 m");
+            Assert.That(keepers[1].Health, Is.EqualTo(bitten).Within(0.01f), "4 m");
+            Assert.That(keepers[2].Health, Is.EqualTo(bitten).Within(0.01f), "5 m");
+            Assert.That(keepers[3].Health, Is.EqualTo(_world.Stick.Health), "8 m: a fourth, and the Hydra has three heads");
+            Assert.That(keepers[4].Health, Is.EqualTo(_world.Stick.Health), "9.5 m is beyond its reach");
+        }
+
+        // The session hands the cast its level, which grows the Hydra's heads: here a fourth from level 2.
+        [Test]
+        public void Cast_Hydra_GrowsAHeadAtTheLevelTheSessionIsAt()
+        {
+            List<BeekeeperBrain> keepers = FiveStandingForTheHydra(NestUnderTheCore());
+            var hydra = (HydraSong)_world.Songs[HiveDefenseWorld.HydraIndex];
+            JsonUtility.FromJsonOverwrite("{\"<ExtraHeadFromLevel>k__BackingField\":2}", hydra);
+            Assert.That(_world.Session.Level, Is.EqualTo(2));
+
+            _world.Play(_world.Session.Caster[HiveDefenseWorld.HydraIndex].Song.Keys);
+            _world.Run(0.8f);
+
+            float bitten = _world.Stick.Health - (40f * 1.12f);
+            Assert.That(keepers[3].Health, Is.EqualTo(bitten).Within(0.01f), "the fourth head bites the fourth nearest");
+            Assert.That(keepers[4].Health, Is.EqualTo(_world.Stick.Health));
+        }
+
+        // Line: the strip from the core that holds the most beekeepers, over a nearer loner.
+        [Test]
+        public void Cast_Lance_ThrustsDownTheLineThatHoldsTheMostBeekeepers()
+        {
+            _world = new HiveDefenseWorld(
+                new[] { new WaveEntry(4, 0) },
+                spawns: new[] { new Vector3(0f, 0f, -3f), new Vector3(6f, 0f, 0f), new Vector3(9f, 0f, 0f), new Vector3(12f, 0f, 0f) },
+                withNewSongs: true);
+            List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
+            Assert.That(_world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 4, 12f), Is.True);
+
+            _world.Play(_world.Session.Caster[HiveDefenseWorld.LanceIndex].Song.Keys);
+            _world.Run(0.6f);
+
+            float hit = _world.Stick.Health - 60f;
+            Assert.That(keepers[0].Health, Is.EqualTo(_world.Stick.Health), "the nearer loner");
+            Assert.That(keepers[1].Health, Is.EqualTo(hit).Within(0.01f));
+            Assert.That(keepers[2].Health, Is.EqualTo(hit).Within(0.01f));
+            Assert.That(keepers[3].Health, Is.EqualTo(hit).Within(0.01f));
+        }
+
+        // Threat: the blade faces the most threatening beekeeper within 6 m, so one behind the core is not cut.
+        [Test]
+        public void Cast_Scythe_CutsTowardTheThreatAndSparesTheOneBehind()
+        {
+            _world = new HiveDefenseWorld(
+                new[] { new WaveEntry(2, 0) }, spawns: new[] { new Vector3(0f, 0f, -3f), new Vector3(0f, 0f, 4f) }, withNewSongs: true);
+            List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
+            Assert.That(_world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 2, 6f), Is.True);
+
+            _world.Play(_world.Session.Caster[HiveDefenseWorld.ScytheIndex].Song.Keys);
+            _world.Run(0.4f);
+
+            Assert.That(keepers[0].Health, Is.EqualTo(_world.Stick.Health - 45f).Within(0.01f));
+            Assert.That(keepers[1].Health, Is.EqualTo(_world.Stick.Health), "behind the core");
+        }
+
+        // ---- The towers in the Post slot ----
+
+        // The session tells the running songs of each change of phase, so a Honeycomb cast in a wave stands until that wave
+        // is cleared, however long it takes, and then lets go.
+        [Test]
+        public void Cast_HoneycombInAWave_StandsUntilTheWaveIsCleared()
+        {
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(1, 0), new WaveEntry(1, 0) }, withNewSongs: true);
+            HiveDefenseSession session = _world.Session;
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 6f), Is.True);
+
+            _world.Play(session.Caster[HiveDefenseWorld.HoneycombIndex].Song.Keys);
+            _world.Run(2f);
+            Assert.That(IsTowerStanding(SwarmForm.Honeycomb), Is.True);
+
+            _world.KillAllBeekeepers();
+            _world.Run(HiveDefenseWorld.Step * 2f);
+
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(IsTowerStanding(SwarmForm.Honeycomb), Is.False);
+            Assert.That(session.Forms.Slot(SongSlot.Post).ReleasedSeconds, Is.GreaterThanOrEqualTo(0f), "it plays its return beat");
+        }
+
+        // A shell cast in a farm phase hears the wave come, so it guards that wave to its end rather than for its farm seconds.
+        [Test]
+        public void Cast_HoneycombInAFarmPhase_StandsThroughTheWaveThatComes_AndLetsGoWhenItIsCleared()
+        {
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(1, 0), new WaveEntry(1, 0) }, withNewSongs: true);
+            HiveDefenseSession session = _world.Session;
+
+            _world.Play(session.Caster[HiveDefenseWorld.HoneycombIndex].Song.Keys);
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 6f), Is.True);
+            _world.Run(2f);
+            Assert.That(IsTowerStanding(SwarmForm.Honeycomb), Is.True);
+
+            _world.KillAllBeekeepers();
+            _world.Run(HiveDefenseWorld.Step * 2f);
+
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(IsTowerStanding(SwarmForm.Honeycomb), Is.False);
+        }
+
+        // A tower's wasps stay on the map, so after its free first cast it costs its price in a farm phase too; an attack
+        // there stays free.
+        [Test]
+        public void Cast_NestTwiceInAFarmPhase_TheFirstIsFree_TheSecondCostsItsWasps()
+        {
+            _world = new HiveDefenseWorld(withNewSongs: true, firstFarmSeconds: 30f);
+            HiveDefenseSession session = _world.Session;
+            SwarmSongEffect nest = session.Caster[HiveDefenseWorld.NestIndex];
+            int before = session.Swarm.Count;
+            Assert.That(session.SongPrice(HiveDefenseWorld.NestIndex), Is.EqualTo(0));
+
+            _world.Play(nest.Song.Keys);
+            Assert.That(IsTowerStanding(SwarmForm.Nest), Is.True);
+            Assert.That(session.Swarm.Count, Is.EqualTo(before), "the first cast is free");
+            Assert.That(session.SongPrice(HiveDefenseWorld.NestIndex), Is.EqualTo(nest.WaspCost));
+
+            _world.Run(nest.Song.CooldownSeconds + 0.1f);
+            _world.Play(nest.Song.Keys);
+
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(session.Swarm.Count, Is.EqualTo(before - nest.WaspCost));
+            _world.Play(session.Caster[HiveDefenseWorld.ScytheIndex].Song.Keys);
+            _world.Run(5f);
+            _world.Play(session.Caster[HiveDefenseWorld.ScytheIndex].Song.Keys);
+            Assert.That(session.Swarm.Count, Is.EqualTo(before - nest.WaspCost), "an attack costs nothing in a farm phase");
+        }
+
+        // True while the Post slot's song of this form runs, not counting its return beat.
+        private bool IsTowerStanding(SwarmForm form)
+        {
+            SlotState post = _world.Session.Forms.Slot(SongSlot.Post);
+            return post.IsActive && post.Form == form && post.ReleasedSeconds < 0f;
         }
 
         // ---- The song table fills in (plan section N) ----

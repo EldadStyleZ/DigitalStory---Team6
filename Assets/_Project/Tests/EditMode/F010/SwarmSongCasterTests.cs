@@ -16,6 +16,9 @@ namespace DigitalStory.Tests.EditMode
         private const int K = 2;
         private const int L = 3;
         private const int GustIndex = 3;
+        private const int ColossusIndex = 5;
+        private const int NestIndex = 10;
+        private const int HoneycombIndex = 11;
 
         private static readonly int[][] SongKeys =
         {
@@ -26,11 +29,17 @@ namespace DigitalStory.Tests.EditMode
             new[] { L, J, L },
             new[] { L, J, K, J, L },
             new[] { J, K, L, K },
+            new[] { J, J, L },
+            new[] { K, L, H },
+            new[] { K, L, L, H },
+            new[] { K, L, J, H },
+            new[] { H, J, L, K },
         };
 
         private static readonly SwarmForm[] SongForms =
         {
             SwarmForm.Dome, SwarmForm.Sting, SwarmForm.Tornado, SwarmForm.Gust, SwarmForm.HiveCall, SwarmForm.Colossus, SwarmForm.Meteor,
+            SwarmForm.Hydra, SwarmForm.Scythe, SwarmForm.Lance, SwarmForm.Nest, SwarmForm.Honeycomb,
         };
 
         private SwarmConfig _swarmConfig;
@@ -76,6 +85,11 @@ namespace DigitalStory.Tests.EditMode
             _songs.Add(ScriptableObject.CreateInstance<HiveCallSong>());
             _songs.Add(ScriptableObject.CreateInstance<ColossusSong>());
             _songs.Add(ScriptableObject.CreateInstance<MeteorSong>());
+            _songs.Add(ScriptableObject.CreateInstance<HydraSong>());
+            _songs.Add(ScriptableObject.CreateInstance<ScytheSong>());
+            _songs.Add(ScriptableObject.CreateInstance<LanceSong>());
+            _songs.Add(ScriptableObject.CreateInstance<NestSong>());
+            _songs.Add(ScriptableObject.CreateInstance<HoneycombSong>());
             _caster = new SwarmSongCaster(_songs, _songConfig, HoleCount);
             _cast.Clear();
             _played.Clear();
@@ -107,9 +121,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Count_SevenSongs_AreExposedByIndex()
+        public void Count_TwelveSongs_AreExposedByIndex()
         {
-            Assert.That(_caster.Count, Is.EqualTo(7));
+            Assert.That(_caster.Count, Is.EqualTo(12));
             Assert.That(_caster[0], Is.SameAs(_songs[0]));
             Assert.That(_caster[5], Is.SameAs(_songs[5]));
         }
@@ -121,6 +135,11 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(4)]
         [TestCase(5)]
         [TestCase(6)]
+        [TestCase(7)]
+        [TestCase(8)]
+        [TestCase(9)]
+        [TestCase(10)]
+        [TestCase(11)]
         public void Press_EachSongsKeysFromSilence_CastExactlyThatSong(int song)
         {
             _fury.AddDamage(1000f);
@@ -139,6 +158,11 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(4)]
         [TestCase(5)]
         [TestCase(6)]
+        [TestCase(7)]
+        [TestCase(8)]
+        [TestCase(9)]
+        [TestCase(10)]
+        [TestCase(11)]
         public void Press_EachSongsKeysBeforeTheLastNote_CastNothing(int song)
         {
             _fury.AddDamage(1000f);
@@ -167,6 +191,11 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(3)]
         [TestCase(4)]
         [TestCase(6)]
+        [TestCase(7)]
+        [TestCase(8)]
+        [TestCase(9)]
+        [TestCase(10)]
+        [TestCase(11)]
         public void Press_WhileTheColossusStands_CastsNothingAndStartsNoCooldown(int song)
         {
             _fury.AddDamage(1000f);
@@ -434,7 +463,8 @@ namespace DigitalStory.Tests.EditMode
 
         // ---- Costs (plan section M) ----
 
-        // The song at each index costs the plan's price: Dome 40, Sting 10, Tornado 60, Gust 20, Hive Call 0, Colossus 0 (Fury is its price), Meteor 90.
+        // The song at each index costs the plan's price: Dome 40, Sting 10, Tornado 60, Gust 20, Hive Call 0, Colossus 0 (Fury
+        // is its price), Meteor 90, Hydra 60, Scythe 30, Lance 70, Nest 100 and Honeycomb 150.
         [TestCase(0, 40)]
         [TestCase(1, 10)]
         [TestCase(2, 60)]
@@ -442,7 +472,55 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(4, 0)]
         [TestCase(5, 0)]
         [TestCase(6, 90)]
-        public void Press_InASurvivePhase_LowersTheCountByTheSongsCostAtTheCast(int song, int cost)
+        [TestCase(7, 60)]
+        [TestCase(8, 30)]
+        [TestCase(9, 70)]
+        [TestCase(10, 100)]
+        [TestCase(11, 150)]
+        public void WaspCost_IsThePlansPrice(int song, int cost)
+        {
+            Assert.That(_songs[song].WaspCost, Is.EqualTo(cost));
+        }
+
+        // Changed with the first-cast rule: a song's first cast in a match is free, so finding a song is never punished. The
+        // price is paid from the second cast on.
+        [TestCase(0, 40)]
+        [TestCase(1, 10)]
+        [TestCase(2, 60)]
+        [TestCase(3, 20)]
+        [TestCase(4, 0)]
+        [TestCase(6, 90)]
+        [TestCase(7, 60)]
+        [TestCase(8, 30)]
+        [TestCase(9, 70)]
+        [TestCase(10, 100)]
+        [TestCase(11, 150)]
+        public void Press_ASecondCastInASurvivePhase_LowersTheCountByTheSongsCostAtTheCast(int song, int cost)
+        {
+            UseUpTheFreeCast(song);
+            int before = _body.Count;
+            int countAtTheCast = -1;
+            _caster.SongCast += _ => countAtTheCast = _body.Count;
+
+            PlayAll(SongKeys[song]);
+
+            Assert.That(_cast, Is.EqualTo(new[] { song }));
+            Assert.That(countAtTheCast, Is.EqualTo(before - cost), "paid by the time the cast is reported");
+        }
+
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        [TestCase(4)]
+        [TestCase(5)]
+        [TestCase(6)]
+        [TestCase(7)]
+        [TestCase(8)]
+        [TestCase(9)]
+        [TestCase(10)]
+        [TestCase(11)]
+        public void Press_TheFirstCastOfEachSongInASurvivePhase_IsFree(int song)
         {
             _fury.AddDamage(1000f);
             int countAtTheCast = -1;
@@ -450,15 +528,16 @@ namespace DigitalStory.Tests.EditMode
 
             PlayAll(SongKeys[song]);
 
-            Assert.That(_songs[song].WaspCost, Is.EqualTo(cost));
             Assert.That(_cast, Is.EqualTo(new[] { song }));
-            Assert.That(countAtTheCast, Is.EqualTo(_swarmConfig.StartingWasps - cost), "paid by the time the cast is reported");
+            Assert.That(countAtTheCast, Is.EqualTo(_swarmConfig.StartingWasps), "finding a song is never punished");
         }
 
         [TestCase(0)]
         [TestCase(1)]
         [TestCase(6)]
-        public void Press_SongsAreFree_CostsNothing(int song)
+        [TestCase(NestIndex)]
+        [TestCase(HoneycombIndex)]
+        public void Press_SongsAreFree_TheFirstCostsNothing(int song)
         {
             _areSongsFree = true;
 
@@ -468,9 +547,125 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_body.Count, Is.EqualTo(_swarmConfig.StartingWasps));
         }
 
+        // Plan section M: a tower's wasps stay on the map, so from its second cast on it costs its price in a farm phase too.
+        [TestCase(0, 0)]
+        [TestCase(1, 0)]
+        [TestCase(6, 0)]
+        [TestCase(7, 0)]
+        [TestCase(NestIndex, 100)]
+        [TestCase(HoneycombIndex, 150)]
+        public void Press_ASecondCastInAFarmPhase_CostsNothing_UnlessItIsATower(int song, int cost)
+        {
+            _areSongsFree = true;
+            UseUpTheFreeCast(song);
+            int before = _body.Count;
+
+            PlayAll(SongKeys[song]);
+
+            Assert.That(_cast, Is.EqualTo(new[] { song }));
+            Assert.That(_body.Count, Is.EqualTo(before - cost));
+        }
+
+        [Test]
+        public void Press_ATowerInAFarmPhaseWithTooFewWasps_IsRefusedWithNotEnoughWasps()
+        {
+            _areSongsFree = true;
+            UseUpTheFreeCast(NestIndex);
+            LeaveAboveTheCollapseLine(99);
+
+            int result = PlayAll(SongKeys[NestIndex]);
+
+            Assert.That(result, Is.EqualTo(SongBook.NoSong));
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.NotEnoughWasps }));
+            Assert.That(_body.Count, Is.EqualTo(_body.CollapseLine + 99));
+        }
+
+        [TestCase(0, false)]
+        [TestCase(1, false)]
+        [TestCase(3, false)]
+        [TestCase(4, false)]
+        [TestCase(5, false)]
+        [TestCase(7, false)]
+        [TestCase(8, false)]
+        [TestCase(9, false)]
+        [TestCase(NestIndex, true)]
+        [TestCase(HoneycombIndex, true)]
+        public void CostsInFarmPhase_IsTrueForTheTowersInThePostSlotOnly(int song, bool isTower)
+        {
+            Assert.That(_songs[song].CostsInFarmPhase, Is.EqualTo(isTower));
+        }
+
+        [Test]
+        public void Press_ACastRefusedWhileTheGiantStands_DoesNotUseUpTheFreeCast()
+        {
+            _forms.StartColossus(1f);
+            PlayAll(SongKeys[0]);
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.GiantStanding }));
+            _forms.Tick(1.1f, _hives);
+            LeaveAboveTheCollapseLine(0);
+
+            int result = PlayAll(SongKeys[0]);
+
+            Assert.That(result, Is.EqualTo(0), "the Dome's first cast is still free");
+            Assert.That(_body.Count, Is.EqualTo(_body.CollapseLine));
+        }
+
+        [Test]
+        public void Press_ACastRefusedWhileCollapsed_DoesNotUseUpTheFreeCast()
+        {
+            _body.Lose(_body.Count);
+            PlayAll(SongKeys[0]);
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.Collapsed }));
+            _body.Tick(3f, _hives);
+            LeaveAboveTheCollapseLine(0);
+
+            int result = PlayAll(SongKeys[0]);
+
+            Assert.That(result, Is.EqualTo(0));
+            Assert.That(_body.Count, Is.EqualTo(_body.CollapseLine));
+        }
+
+        [Test]
+        public void Press_ACastRefusedWhileCooling_DoesNotChangeThePriceOfTheNext()
+        {
+            PlayAll(SongKeys[1]);
+            PlayAll(SongKeys[1]);
+            _caster.Tick(1.6f);
+            int before = _body.Count;
+
+            PlayAll(SongKeys[1]);
+
+            Assert.That(_body.Count, Is.EqualTo(before - 10), "the second cast that happened pays the Sting's 10");
+        }
+
+        [Test]
+        public void Price_IsNothingBeforeTheFirstCast_ThenTheSongsCostInASurvivePhase()
+        {
+            Assert.That(_caster.Price(0, false), Is.EqualTo(0));
+            Assert.That(_caster.Price(0, true), Is.EqualTo(0));
+
+            PlayAll(SongKeys[0]);
+
+            Assert.That(_caster.Price(0, false), Is.EqualTo(40));
+            Assert.That(_caster.Price(0, true), Is.EqualTo(0), "free in a farm phase");
+            Assert.That(_caster.Price(1, false), Is.EqualTo(0), "other songs keep their free cast");
+        }
+
+        [Test]
+        public void Price_OfATowerAfterItsFirstCast_IsItsCostInEitherPhase()
+        {
+            _areSongsFree = true;
+            PlayAll(SongKeys[HoneycombIndex]);
+
+            Assert.That(_caster.Price(HoneycombIndex, true), Is.EqualTo(150));
+            Assert.That(_caster.Price(HoneycombIndex, false), Is.EqualTo(150));
+        }
+
+        // Changed with the first-cast rule: the Dome's first cast is free, so it is cast once and rested first.
         [Test]
         public void Press_CostWouldLeaveFewerThanTheCollapseLine_IsRefusedWithNotEnoughWasps()
         {
+            UseUpTheFreeCast(0);
             LeaveAboveTheCollapseLine(39);
 
             int result = PlayAll(SongKeys[0]);
@@ -486,9 +681,11 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(0), "the notes are used up, as for every refusal");
         }
 
+        // Changed with the first-cast rule, as above.
         [Test]
         public void Press_CostLeavesExactlyTheCollapseLine_CastsWithoutCollapsing()
         {
+            UseUpTheFreeCast(0);
             LeaveAboveTheCollapseLine(40);
 
             int result = PlayAll(SongKeys[0]);
@@ -498,9 +695,11 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_body.IsCollapsed, Is.False);
         }
 
+        // Changed with the first-cast rule, as above.
         [Test]
         public void Press_RefusedForWasps_StartsNoCooldown_SoItCastsOnceTheWaspsAreBack()
         {
+            UseUpTheFreeCast(0);
             LeaveAboveTheCollapseLine(39);
             PlayAll(SongKeys[0]);
 
@@ -713,6 +912,17 @@ namespace DigitalStory.Tests.EditMode
         {
             return new SwarmSongContext(
                 Vector3.zero, _aim, Vector3.zero, _body, _forms, _fury, _hives, _enemies, new FakeSmokeClearer(), null, _areSongsFree);
+        }
+
+        // Casts the song once, which is free, then lets its cooldown and its rule run out, and forgets what the test recorded.
+        private void UseUpTheFreeCast(int song)
+        {
+            Assert.That(PlayAll(SongKeys[song]), Is.EqualTo(song), "the free cast");
+            _caster.Tick(_songs[song].Song.CooldownSeconds + 0.01f);
+            _forms.Tick(10f, _hives);
+            _cast.Clear();
+            _notReady.Clear();
+            _reasons.Clear();
         }
 
         // Loses wasps until only the given number stand above the collapse line.

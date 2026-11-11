@@ -149,6 +149,18 @@ namespace DigitalStory.Logic
             }
         }
 
+        /// <summary>Tells every running rule that the match entered <paramref name="phase"/>.</summary>
+        public void NotifyPhase(MatchPhase phase)
+        {
+            for (int index = 0; index < SlotCount; index++)
+            {
+                if (TryGetRunning(index, out SongRule rule))
+                {
+                    rule.NotifyPhase(phase, _seconds[index]);
+                }
+            }
+        }
+
         /// <summary>The share of each wasp loss that the running rules let through, multiplied together. 1 with none.</summary>
         public float WaspLossFraction()
         {

@@ -12,5 +12,10 @@ namespace DigitalStory.Logic
         Colossus = 6,
         Collapsed = 7,
         Meteor = 8,
+        Hydra = 9,
+        Scythe = 10,
+        Lance = 11,
+        Nest = 12,
+        Honeycomb = 13,
     }
 }

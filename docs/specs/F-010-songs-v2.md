@@ -13,16 +13,22 @@ Sting     A   J K H     1.5s  4s or target dies    .30   S  Arcs to the target (
 Tornado   A   J K K H   10s   1.5s                 .37   S  At 0.3 s, when the column is at full height: 30 dmg and 6 m/s knockback within 5 m. | surrounded.
 Meteor    A   J K L K   9s    1.9s                 .35   S  As today: lands at 1.3 s on a point 18 m away at most, 60 dmg and 0.5 s stun within 3 m. | a crowd at the far hive.
 Hydra     A   J J L     6s    1.6s                 .37   S  Three heads bite the 3 nearest within 9 m at 0.7 s, 40 dmg each. A spare head strikes the ground. | several spread out.
+                                                          Built: 60 wasps; 4 heads from level 4 and 5 from level 7 (section H).
 Scythe    A   K L H     4s    1.0s                 .37   S  At 0.3 s, 45 dmg to everyone within 4.5 m in the half-disc facing the aim. | a pack in front of you.
+                                                          Built: 30 wasps; the aim faces the most threatening beekeeper within 6 m.
 Lance     A   K L L H   8s    1.3s                 .37   S  0.4 s draw, then at 0.5 s a line 14 m long and 1.2 m wide: 60 dmg to each beekeeper on it, pushed sideways at 5 m/s. | a far smoker, a file walking in.
-Nest      A   K L J H   8s    up to 15s            .15   P  Lobbed to the aim (10 m max), arms at 0.6 s. The first beekeeper within 2.5 m sets it off; 0.3 s later 70 dmg and 1 s stun within 3.5 m. | a spawn lane.
+                                                          Built: 70 wasps.
+Nest      A   K L J H   8s    until set off, 60s   .15   P  Lobbed to the aim (10 m max), arms at 0.6 s. The first beekeeper within 2.5 m sets it off; 0.3 s later 70 dmg and 1 s stun within 3.5 m. | a spawn lane.
+                                                          Built: 100 wasps, in a farm phase too; it stays armed until a beekeeper sets it off, 60 s at most.
 Dome      D   H K J     8s    5s                   .35   G  As today: hits on the Piper cost 85% fewer wasps, Piper at x0.5. | a melee crowd on you.
 Maelstrom D   H K K J   14s   3s                   .35   G  A 5 m disc at the aim (12 m max). Beekeepers inside are pulled to its centre at 3 m/s and cannot start an attack (0.2 s stun, renewed). | a crowd on a hive.
 Gust      D   H L K     6s    0.8s                 pulse -  Clears smoke within 6 m (as today). Beekeepers within 3 m are pushed out at 4 m/s. | smoke on you or on a hive.
 Wings     D   H L L K   12s   5s                   .30   G  Piper at x1.6 speed, stick hits cost 50% fewer wasps, and smoke does not slow the Piper. | running between hives.
-Honeycomb D   H J L K   15s   10s                  .20   P  A shell on one hive: 75% less damage from sticks and smoke, and each stick hit on it deals 10 back. | both hives attacked.
+Honeycomb D   H J L K   15s   its wave; farm 60s   .20   P  A shell on one hive: 75% less damage from sticks and smoke, and each stick hit on it deals 10 back. | both hives attacked.
+                                                          Built: 150 wasps, in a farm phase too; it lasts until the wave it guards is over, or 60 s cast in a farm phase with no wave.
 Hive Call P   L J L     3s    see C                rest  -  As today: rooted, +100 wasps/s per standing hive. Ends when the Piper moves, an Attack or Power song is cast, the swarm is full, or the Piper is hit while no Guard song runs.
 Colossus  P   L J K J L Fury  12s                  rest  -  As today; its category moves from Attack to Power. Its notes are revealed when Fury first fills, or when it is played whole before that.
+Built for the five new songs: every size, reach and damage follows the swarm level (section H), and every song's first cast in a match is free (section M).
 Every song except the Colossus casts even with nothing to hit. An aimed song strikes 6 m ahead of where the Piper faces, and Sting wraps air there for 1 s.
 This lets the player find every song in a wave break, and no cast is ever refused. That matters because SwarmSongCaster starts the cooldown even on a refusal. It changes Sting's CanCast.
 
@@ -306,7 +312,7 @@ A match is five rounds. Each round is a farm phase and then a survive phase.
 | Farm phase | 40 s, and 45 s in the first round |
 | Call the wave early | Enter. Each second skipped gives 5 wasps, up to the capacity |
 | Survive phase | The wave. It ends when every beekeeper of the wave is dead |
-| Waves (sticks + smokers) | 4 + 0, 5 + 1, 6 + 3, 12 + 8, 17 + 11. Sticks come first, one beekeeper every 3 s |
+| Waves (sticks + smokers) | 4 + 0, 5 + 1, 5 + 3, 16 + 11, 18 + 12. Sticks come first, one beekeeper every 3 s |
 | A stick | 90 health. Hits a hive for 6, or knocks 72 wasps off the core, every 2 s. A smoker has 40 health |
 | Win | The fifth wave is cleared |
 | Lose | Both hives are destroyed |
@@ -328,12 +334,16 @@ Wasps are the one currency. They are the player's health, the price of an attack
 | Dome | 40 | |
 | Tornado | 60 | |
 | Meteor | 90 | |
+| Hydra | 60 | |
+| Scythe | 30 | |
+| Lance | 70 | |
 | Colossus | 0 | Fury is its price: 1 point per 4 damage, 100 to fill |
 | Hive Call | 0 | |
 | Healing a hive | 2.5 wasps for each point of health | Hold E within 3 m of a damaged hive: 60 wasps a second flow in. A hive has 450 health |
-| Towers (later) | Honeycomb 150, Nest 100 | The wasps stay there |
+| Towers | Honeycomb 150, Nest 100 | The wasps stay there, so a tower costs its price in a farm phase too. One Post slot: a new tower replaces the old one |
 
-- Costs apply only in a survive phase.
+- Costs apply only in a survive phase, except a tower's.
+- The first cast of each song in a match is free, in either phase, so finding a song is never punished.
 - The spent wasps are the ones that do not come home: when the song releases, that many of its squad burn out.
 - A cast that would take the swarm below its collapse line is refused with "Not enough wasps". A refused cast starts no cooldown and teaches nothing false: the notes still fill in the table.
 
@@ -353,28 +363,41 @@ Wasps are the one currency. They are the player's health, the price of an attack
 - Spend on attacks to end the wave fast, or keep the wasps as health.
 - Heal a hive now, which costs wasps, to keep its income, or let it stop producing.
 - Fly back to collect a store, or stay in the fight.
-- Later: station wasps as a tower at the hive you are leaving.
+- Station wasps as a tower: a shell on the hive you are leaving, or a nest on the lane the wave comes from.
 
-The playtest bot plays three plans through whole matches: attack only, heal only, and a mix. The economy is right when none of the three always wins and doing nothing always loses. The numbers above are the starting point for that tuning.
+The playtest bot plays three plans through whole matches: attack only, heal only, and a mix. The economy is right when none of the three always wins and doing nothing always loses. The numbers above are the starting point for that tuning. With the towers it also plays towers with healing only.
 
 **What the playtest bot measured**
 
-`EconomyPlaytestTests` plays whole matches through the rules at 1/30 s with six plans on five seeds, prints a table to the log (lines starting `[F010] bot:`) and checks the owner's targets here and in section H: doing nothing loses, by round 3; Sting alone wins at most 1 match in 5; attacking only, healing only, and the mix that never fetches a nest each win at most 2 (lost without nests); the same mix fetching the nests wins at least 3 (winnable with them), with clearly more hive health and a higher level. It also checks that in the wins of the plans that heal, healing takes 15 to 45% of the wasps spent, and that a won match lasts 6 to 9 minutes. It knows every song, so it measures the economy, not discovery. Its explicit `WideSweep_ThirtySeeds_HoldsTheRates` plays thirty seeds and holds the same shares.
+`EconomyPlaytestTests` plays whole matches through the rules at 1/30 s with seven plans on five seeds, prints a table to the log (lines starting `[F010] bot:`, with one line per plan of the damage each song dealt) and checks the owner's targets here and in section H: doing nothing loses, by round 3; Sting alone wins at most 1 match in 5; attacking only, healing only, towers with healing only, and the mix that never fetches a nest each win at most 2 (lost without nests); the same mix fetching the nests wins at least 4 (winnable with them), with clearly more hive health and a higher level. In the wins of the two mixes, healing takes 15 to 45% of the wasps spent and the towers at least 8%; every won match lasts 6 to 9 minutes; and across all the wins no one song, the giant included, deals more than half the damage. It knows every song, so it measures the economy, not discovery. Its explicit `WideSweep_ThirtySeeds_HoldsTheRates` plays thirty seeds and holds the same shares.
 
-Changed from the starting numbers: waves 3 + 0, 4 + 1, 4 + 3, 6 + 4, 8 + 5 became the table in section L; one beekeeper every 1.2 s became 3 s; the stick's 60 health 90; a hive's 300 health 450; healing 2 wasps a point 2.5; farm phases 35 s 40 s; Fury 1 point per 2 damage 1 per 4 (section I asked for 3; at 3 attacking only won 9 matches in 30, and the giant stood so often that the songs, and their price, mattered less). Song prices, store, production, collecting, the early call, nests and levels kept their starting numbers.
+How the plans use the new songs. Every attacking plan plays, of the Strike songs whose shape is in front of it and that it can pay for, the one that would deal the most damage: the Meteor at a crowd, the Scythe at two or more in the half-disc in front (with the Scythe ready it steps in to the blade's reach), the Tornado when surrounded, the Lance at a file of two or more or at a smoker beyond the Sting's reach, the Hydra at two or more within its reach. Both mixes keep the one Post slot busy: before each wave a Nest on the lane the wave's first beekeeper walks, 6 m out from the hive it walks to; in the wave, once that nest has gone off, the Honeycomb on the hive they leave (the threatened hive they are not guarding, once auto-aim would shell it), or a Nest lobbed onto a pack. Towers only does the same with towers alone and heals. The bot plays from the keyboard, so it places a tower as auto-aim does: it faces the spot and plays the song 6 m from it.
 
-| Plan | Wins in 5 | Typical round reached | Healing share in wins |
-|---|---|---|---|
-| Idle | 0 | Lost in round 1 | none |
-| Sting only | 0 | Lost in round 2, once in round 3 | none |
-| Attack only (never heals, shields or fetches nests) | 0 | Lost in round 4 or 5; once stalled in round 4 until the 20-minute limit | none, by design |
-| Heal only (never attacks) | 0 | Stuck in round 1: no wave is ever cleared | none |
-| Mixed (no nests) | 0 | Lost in round 5 | none: no wins |
-| Mixed with nests | 5 | Won at level 9; 66% hive health left | 20 to 32% |
+Changed from the starting numbers: waves 3 + 0, 4 + 1, 4 + 3, 6 + 4, 8 + 5 became the table in section L; one beekeeper every 1.2 s became 3 s; the stick's 60 health 90; a hive's 300 health 450; healing 2 wasps a point 2.5; farm phases 35 s 40 s; Fury 1 point per 2 damage 1 per 4 (section I asked for 3; at 3 attacking only won 9 matches in 30, and the giant stood so often that the songs, and their price, mattered less); with the towers, wave 4 12 + 8 became 16 + 10, and once the bot shelled the hive auto-aim really shells, waves 3 to 5 became 5 + 3, 16 + 11 and 18 + 12. Song prices, the five new songs' numbers, store, production, collecting, the early call, nests and levels kept their starting numbers.
 
-Won matches last 7.1 to 7.5 minutes. Over thirty seeds Mixed wins 3 and Mixed with nests all 30; the other plans win none. To get there, waves 4 and 5 grew from 8 + 5 and 11 + 7 to 12 + 8 and 17 + 11: at the old sizes Mixed won 25 of 30. These results come from the rules compiled outside Unity, which gave exactly the Editor's results for the old sizes; an Editor run of `EconomyPlaytestTests` still has to confirm them.
+| Plan | Wins in 5 | Typical round reached | Healing share in wins | Towers share in wins |
+|---|---|---|---|---|
+| Idle | 0 | Lost in round 1 | none | none |
+| Sting only | 0 | Lost in round 2, once in round 3 | none | none |
+| Attack only (never heals, shields, places towers or fetches nests) | 0 | Lost in round 4 or 5; once stalled in round 4 until the 20-minute limit | none, by design | none, by design |
+| Heal only (never attacks) | 0 | Stuck in round 1: no wave is ever cleared | none | none |
+| Towers only (towers and healing, no Strike song) | 0 | Stuck in round 1 until the 20-minute limit, or lost in round 2 | none: no wins | none: no wins |
+| Mixed (no nests) | 1 | Lost in round 5; twice stalled in round 5 until the limit | 17% | 20% |
+| Mixed with nests | 5 | Won at level 9; 63% hive health left | 18 to 27% | 8 to 11% |
 
-Open for the owner: the mix that fetches every nest won all thirty matches, and still did with waves 4 and 5 at 20 + 14 and 36 + 24. If "none of the three always wins" should cover that plan too, it needs a change beyond the wave sizes.
+Won matches last 7.4 to 7.9 minutes (7.0 to 7.9 over thirty seeds). Over thirty seeds Mixed wins 5 and Mixed with nests all 30; the other plans win none. The damage in the wins (five seeds): with nests, the giant 47%, the Meteor 26%, the Sting 11%, the Lance and the Nest 6% each, the Tornado 2%, the Honeycomb 1%, the Hydra and the Scythe nothing; in Mixed's win, the giant 48%, the Meteor 17%, the Sting 14%, the Honeycomb and the Hydra 5% each, the Lance 4%, the Tornado and the Nest 3% each, the Scythe nothing. Across every win the giant deals 47.5% on five seeds and 48.5% on thirty. In thirty seeds two of Mixed's wins (seeds 11 and 19) heal with 11% and 14.9% of their wasps and one win with nests (seed 14) spends 3% on the towers; the 15% and 8% targets are checked on the five seeds, which all hold them.
+
+Tuning log, one group at a time. With the new plans and the starting numbers Mixed won 4 in 5 and 21 in 30; every other target held. Taking one song out of Mixed's hands: without the Honeycomb it won 8 in 30, without the Nest 22, without the three new attacks 20, so the shell made the difference. The five songs first: the Honeycomb at 250 wasps won Mixed 19 in 30, at 350 22; letting through 50% of the damage instead of 25% 19, 75% 19; 250 wasps and 40% 18. Only a shell Mixed could no longer afford (450 wasps) or one that protects nothing brought it to 8 to 11 in 30, which throws the song away, so the five songs kept their numbers. Then the wave table: wave 4 at 16 + 10 holds every target on five and thirty seeds. Also tried: waves 4 and 5 at 14 + 9 and 20 + 13 (12 in 30, but a win with nests spent 7% on towers), wave 4 at 15 + 10 (14 in 30), 16 + 9 (18), 17 + 10 (16, the giant 50.4%), 18 + 11 (10, the giant 51 to 52%), and wave 3 at 7 + 4 or 8 + 4 (19 to 24).
+
+Measured again on 2026-11-12. Until then the bot read a hive that had never been hit as the one hit last, so until both hives had been hit it expected the Honeycomb on the hive auto-aim would not shell. With that fixed (`PlaytestBotTests`) the five-seed targets still held, but Mixed won 13 in 30, and the Towers only row did not change. The shell now lands where it protects, which helps Mixed most. About 400 wave tables for waves 3 to 5 were tried outside Unity, then the best ones again with the beekeepers' speed nudged by 0.0001 to 0.0003 m/s, because the Editor's runtime rounds floats a little differently and a long match can end the other way. At 16 + 10 and 17 + 13 Mixed won 12 in 30 outside Unity but 13 in the Editor, and 10 to 17 with the nudges, so a table at the limit is luck. At 5 + 3, 16 + 11 and 18 + 12 Mixed wins 4 to 8 in 30 with every nudge, and the five seeds hold every target; with two of the six nudges Mixed also wins seed 3 while healing with 13%, below the 15% target, so that target is the thin one. Also tried: wave 5 at 17 + 12 or 18 + 11 (13 and 15 in 30), 18 + 12 or 18 + 14 (11 and 10, but a five-seed win with nests spends 6% on towers), 21 + 13 (9, the giant 49.9%); wave 4 at 15 + 10 or 17 + 10 (14 and 17); waves 3 to 5 at 5 + 3, 16 + 11 and 18 + 11 (8 in 30, 12 with one nudge). The Honeycomb experiments above were not repeated with the fixed bot.
+
+Open for the owner:
+- The giant carries half the damage, and it stands about 60% of every wave once the swarm has its nests (14 giants a match, 12 s each), because its own hits refill Fury. The half-the-damage target holds by about a point and a half, and bigger waves push it over; the lever is the Fury rate or the giant's length, which this round did not tune.
+- The Scythe is played less than once a match: beekeepers come one every 3 s from four lanes, so two stand within its 4.5 m in front of the swarm only about 1% of a wave. A 6 m blade changed that little and helped Mixed win more, so it stayed. It needs packs, such as a wave that sends beekeepers in pairs.
+- The Hydra is played 3 to 4 times a match without nests and almost never with them: at level 9 the Meteor reaches 35 m and its blast 5.9 m, so it is the bigger hit wherever the Hydra's heads would bite.
+- Mixed with nests still wins all thirty matches.
+- The towers share of a win with nests rests on how many lane nests are paid for: three of the five seeds spend 8 to 9%, and one win in thirty 3%. The healing share of Mixed's rare wins is as thin (11 to 21% over thirty seeds).
+- Without nests the mix now wins about one match in six (5 in 30); the target allows two in five.
 
 ### N. Guidance
 

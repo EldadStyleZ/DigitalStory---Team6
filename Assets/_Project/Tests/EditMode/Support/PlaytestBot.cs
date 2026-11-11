@@ -9,10 +9,12 @@ namespace DigitalStory.Tests.EditMode
     /// <summary>
     /// Plays a whole match through the rules, as a player at the keyboard would: each tick it asks a plan what to do, moves
     /// the core toward where the plan wants it at the core's speed, presses the holes of a song's real keys one by one, holds
-    /// Give, calls the wave and swings the giant, then ticks the session at a fixed 1/30 s and measures. It knows every song,
-    /// so finding songs is not what it measures. Like a person it is not instant, and each seed is a different person: how
-    /// long it takes to react after a song, how fast it plays its notes, how close it dares stand to a beekeeper and which
-    /// way it turns when it runs from one are drawn from the seed.
+    /// Give, calls the wave and swings the giant, then ticks the session at a fixed 1/30 s and measures: where the wasps came
+    /// from and went (the towers among the songs), and which song dealt each point of damage. It knows every song, so
+    /// finding songs is not what it measures. It plays from the keyboard only, so it places a tower as auto-aim would: it
+    /// faces the spot and plays the song that far from it, and it reads which hive a Honeycomb would shell. Like a person it
+    /// is not instant, and each seed is a different person: how long it takes to react after a song, how fast it plays its
+    /// notes, how close it dares stand to a beekeeper and which way it turns when it runs from one are drawn from the seed.
     /// </summary>
     internal sealed class PlaytestBot
     {
@@ -48,6 +50,14 @@ namespace DigitalStory.Tests.EditMode
         // More notes than the longest song has.
         private const int LongestSong = 8;
 
+        // A tower is lobbed this far ahead of where the core faces (auto-aim's empty aim) once the core is within this much
+        // of that distance from the spot and faces it this well.
+        private const float PlaceToleranceMetres = 0.5f;
+        private const float PlaceFacingCosine = 0.97f;
+
+        // Not game tuning: no hive has been hit yet. Minus infinity, so a hive never hit is never one hit recently.
+        private const float NeverHit = float.NegativeInfinity;
+
         private readonly PlaytestMatch _match;
         private readonly HiveDefenseSession _session;
         private readonly IRandomSource _random;
@@ -57,7 +67,17 @@ namespace DigitalStory.Tests.EditMode
         private readonly float _evadeSide;
         private readonly int[] _typing = new int[LongestSong];
         private readonly float[] _hiveHealth;
+        private readonly int[] _pricesBeforePress;
+        private readonly float[] _hiveHitAt;
         private readonly PlaytestRun _run = new PlaytestRun();
+
+        // Damage by song: every beekeeper the match has spawned and its health as last measured. A song's strike is measured
+        // as it lands, the giant's as its blow lands, a shell's thorn as the stick's hit lands, and whatever is left at the end
+        // of a tick belongs to the song in the Strike slot (the Sting hurts as it holds on, with nothing that lands).
+        private readonly List<BeekeeperBrain> _brains = new List<BeekeeperBrain>();
+        private readonly List<float> _brainHealth = new List<float>();
+        private readonly int[] _songOfForm;
+        private readonly int _colossusSong = -1;
 
         // Ticks played. Time is counted in whole ticks, so adding up floats cannot end a match a tick early on one runtime.
         private int _ticks;
@@ -77,6 +97,7 @@ namespace DigitalStory.Tests.EditMode
         private float _healedHealth;
         private int _lost;
         private float _quietSeconds;
+        private int _spawned;
 
         /// <summary>Gets the bot ready to play <paramref name="match"/>, timing itself from <paramref name="seed"/>.</summary>
         public PlaytestBot(PlaytestMatch match, uint seed)
@@ -90,14 +111,49 @@ namespace DigitalStory.Tests.EditMode
             _evadeSide = _random.NextDouble() < 0.5 ? -1f : 1f;
             _core = _session.CorePosition;
             _hiveHealth = new float[_session.Hives.Count];
+            _pricesBeforePress = new int[_session.Caster.Count];
+            _hiveHitAt = new float[_session.Hives.Count];
+            for (int hive = 0; hive < _hiveHitAt.Length; hive++)
+            {
+                _hiveHealth[hive] = _session.Hives[hive].Health;
+                _hiveHitAt[hive] = NeverHit;
+            }
+
             _run.Seed = seed;
             _lastCount = _session.Swarm.Count;
             _knownCapacity = _session.Swarm.Capacity;
+
+            int songs = _session.Caster.Count;
+            _run.SongNames = new string[songs];
+            _run.DamageBySong = new float[songs];
+            _run.CastsBySong = new int[songs];
+            _songOfForm = new int[Enum.GetValues(typeof(SwarmForm)).Length];
+            for (int form = 0; form < _songOfForm.Length; form++)
+            {
+                _songOfForm[form] = -1;
+            }
+
+            for (int song = 0; song < songs; song++)
+            {
+                SwarmSongEffect effect = _session.Caster[song];
+                _run.SongNames[song] = effect.Song.Title;
+                if (effect is SlotSongEffect slotSong)
+                {
+                    _songOfForm[(int)slotSong.Form] = song;
+                }
+                else if (effect is ColossusSong)
+                {
+                    _colossusSong = song;
+                }
+            }
 
             _session.Swarm.CountChanged += OnCountChanged;
             _session.Swarm.Collapsed += OnCollapsed;
             _session.Caster.SongCast += OnSongCast;
             _session.WaspsGranted += OnWaspsGranted;
+            _session.BeekeeperSpawned += OnBeekeeperSpawned;
+            _session.Forms.Landed += OnSongLanded;
+            _session.ColossusAttackLanded += OnColossusLanded;
         }
 
         /// <summary>The match being played.</summary>
@@ -208,6 +264,45 @@ namespace DigitalStory.Tests.EditMode
         }
 
         /// <summary>
+        /// Lobs an aimed song onto <paramref name="spot"/> with no beekeeper in its reach, as a player at the keyboard does:
+        /// auto-aim then strikes the ground a fixed distance ahead of where the core faces, so the bot flies toward the spot,
+        /// stands once that far from it and facing it, and plays the song. Flies back first when it is too close. Returns
+        /// true once it started the song's notes; until then it has only moved.
+        /// </summary>
+        public bool TryPlayAhead(int song, Vector3 spot)
+        {
+            if (IsTyping)
+            {
+                return false;
+            }
+
+            float ahead = _match.Aim.EmptyAimDistance;
+            Vector3 offset = Flat(spot - _core);
+            float distance = offset.magnitude;
+            if (distance > ahead + PlaceToleranceMetres)
+            {
+                FlyTo(spot);
+                return false;
+            }
+
+            Vector3 toward = distance > 0f ? offset / distance : _session.CoreFacing;
+            if (distance < ahead - PlaceToleranceMetres)
+            {
+                FlyTo(spot - (toward * (ahead + 1f)));
+                return false;
+            }
+
+            if (Vector3.Dot(toward, _session.CoreFacing) < PlaceFacingCosine)
+            {
+                // Turns by stepping toward the spot, as the giant does: the core faces the way it last moved.
+                FlyTo(_core + (toward * TurnStepMetres));
+                return false;
+            }
+
+            return TryPlay(song);
+        }
+
+        /// <summary>
         /// Swings the giant at the nearest beekeeper: walks it there and, once the beekeeper is where its fists land, punches
         /// and kicks. Does nothing while the giant does not stand.
         /// </summary>
@@ -313,13 +408,16 @@ namespace DigitalStory.Tests.EditMode
             return _session.Caster.CooldownFraction(song) <= 0f;
         }
 
-        /// <summary>True when the swarm can pay the song's price now: always in a farm phase, when songs are free.</summary>
+        /// <summary>
+        /// True when the swarm can pay what the song costs now (<see cref="HiveDefenseSession.SongPrice"/>): nothing for its
+        /// first cast, nothing in a farm phase unless it is a tower, and its price otherwise.
+        /// </summary>
         public bool CanAfford(int song)
         {
-            return _session.AreSongsFree || _session.Swarm.Spendable >= _session.Caster[song].WaspCost;
+            return _session.Swarm.Spendable >= _session.SongPrice(song);
         }
 
-        /// <summary>Wasps the song costs.</summary>
+        /// <summary>Wasps the song costs when it is paid for: its list price, which a plan budgets with.</summary>
         public int CostOf(int song)
         {
             return _session.Caster[song].WaspCost;
@@ -366,6 +464,171 @@ namespace DigitalStory.Tests.EditMode
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// How many living beekeepers stand within <paramref name="metres"/> of the core in the half-disc facing
+        /// <paramref name="toward"/>, the line across it included: what the Scythe would cut.
+        /// </summary>
+        public int CountInFront(Vector3 toward, float metres)
+        {
+            Vector3 facing = Flat(toward - _core);
+            facing = facing.sqrMagnitude > 0f ? facing.normalized : _session.CoreFacing;
+            int count = 0;
+            float squared = metres * metres;
+            for (int index = 0; index < _session.ActiveBeekeeperCount; index++)
+            {
+                BeekeeperBrain brain = _session.ActiveBeekeeper(index);
+                Vector3 offset = Flat(brain.Position - _core);
+                if (brain.IsAlive && offset.sqrMagnitude <= squared && Vector3.Dot(offset, facing) >= 0f)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// The beekeeper the Threat aim rule would choose within <paramref name="metres"/> of the core, or null: the nearest,
+        /// counting one that stands near a standing hive as <see cref="AimConfig.HiveThreatBonus"/> nearer.
+        /// </summary>
+        public BeekeeperBrain MostThreatening(float metres)
+        {
+            BeekeeperBrain best = null;
+            float bestScore = float.MaxValue;
+            float squared = metres * metres;
+            float hiveSquared = _match.Aim.HiveThreatRadius * _match.Aim.HiveThreatRadius;
+            for (int index = 0; index < _session.ActiveBeekeeperCount; index++)
+            {
+                BeekeeperBrain brain = _session.ActiveBeekeeper(index);
+                float distanceSquared = Flat(brain.Position - _core).sqrMagnitude;
+                if (!brain.IsAlive || distanceSquared > squared)
+                {
+                    continue;
+                }
+
+                float score = Mathf.Sqrt(distanceSquared);
+                for (int hive = 0; hive < _session.Hives.Count; hive++)
+                {
+                    Hive candidate = _session.Hives[hive];
+                    if (!candidate.IsDestroyed && Flat(brain.Position - candidate.Position).sqrMagnitude <= hiveSquared)
+                    {
+                        score -= _match.Aim.HiveThreatBonus;
+                        break;
+                    }
+                }
+
+                if (score < bestScore)
+                {
+                    best = brain;
+                    bestScore = score;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// The most beekeepers one straight line from the core through a beekeeper within <paramref name="length"/> would
+        /// pierce, <paramref name="width"/> wide: what the Lance would hit.
+        /// </summary>
+        public int BestLine(float length, float width)
+        {
+            int best = 0;
+            float squared = length * length;
+            float half = width * 0.5f;
+            for (int index = 0; index < _session.ActiveBeekeeperCount; index++)
+            {
+                BeekeeperBrain through = _session.ActiveBeekeeper(index);
+                Vector3 offset = Flat(through.Position - _core);
+                if (!through.IsAlive || offset.sqrMagnitude > squared || offset.sqrMagnitude <= 0f)
+                {
+                    continue;
+                }
+
+                Vector3 direction = offset.normalized;
+                int count = 0;
+                for (int other = 0; other < _session.ActiveBeekeeperCount; other++)
+                {
+                    BeekeeperBrain brain = _session.ActiveBeekeeper(other);
+                    Vector3 to = Flat(brain.Position - _core);
+                    float along = Vector3.Dot(to, direction);
+                    float across = Mathf.Abs((to.x * direction.z) - (to.z * direction.x));
+                    if (brain.IsAlive && along >= 0f && along <= length && across <= half)
+                    {
+                        count++;
+                    }
+                }
+
+                best = Math.Max(best, count);
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// True when a living smoker stands further than <paramref name="near"/> from the core but within
+        /// <paramref name="far"/>: out of the Sting's reach, in the Lance's.
+        /// </summary>
+        public bool IsSmokerBetween(float near, float far)
+        {
+            for (int index = 0; index < _session.ActiveBeekeeperCount; index++)
+            {
+                BeekeeperBrain brain = _session.ActiveBeekeeper(index);
+                float distance = Flat(brain.Position - _core).magnitude;
+                if (brain.IsAlive && brain.Config.Kind == BeekeeperKind.Smoker && distance > near && distance <= far)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The hive a Honeycomb cast now would shell, as the Hive aim rule chooses it: the standing hive hit most recently,
+        /// within <see cref="AimConfig.HiveRecentSeconds"/>, otherwise the standing hive nearest the core; -1 when none stands.
+        /// </summary>
+        public int ShellHive()
+        {
+            int recent = -1;
+            for (int hive = 0; hive < _hiveHitAt.Length; hive++)
+            {
+                bool isRecent = !_session.Hives[hive].IsDestroyed && Time - _hiveHitAt[hive] <= _match.Aim.HiveRecentSeconds;
+                if (isRecent && (recent < 0 || _hiveHitAt[hive] > _hiveHitAt[recent]))
+                {
+                    recent = hive;
+                }
+            }
+
+            if (recent >= 0)
+            {
+                return recent;
+            }
+
+            return _session.Hives.TryGetNearestStanding(_core, out int nearest) ? nearest : -1;
+        }
+
+        /// <summary>The spawn point the next beekeeper comes from: the points take turns, one beekeeper each.</summary>
+        public Vector3 NextSpawnPoint => _match.SpawnPoints[_spawned % _match.SpawnPoints.Count];
+
+        /// <summary>
+        /// A spot on the lane the next beekeeper walks, <paramref name="metres"/> out from the hive it walks to (the standing
+        /// hive nearest its spawn point) toward that spawn point; -1 in <paramref name="hive"/> and the spawn point itself
+        /// when no hive stands.
+        /// </summary>
+        public Vector3 LaneSpot(float metres, out int hive)
+        {
+            Vector3 spawn = NextSpawnPoint;
+            if (!_session.Hives.TryGetNearestStanding(spawn, out hive))
+            {
+                return spawn;
+            }
+
+            Vector3 from = _session.Hives[hive].Position;
+            Vector3 lane = Flat(spawn - from);
+            return from + (lane.normalized * Mathf.Min(metres, lane.magnitude));
         }
 
         /// <summary>
@@ -561,9 +824,12 @@ namespace DigitalStory.Tests.EditMode
                 _core += direction * Mathf.Min(speed * Step, distance);
             }
 
-            for (int hive = 0; hive < _hiveHealth.Length; hive++)
+            if (holes != 0)
             {
-                _hiveHealth[hive] = _session.Hives[hive].Health;
+                for (int song = 0; song < _pricesBeforePress.Length; song++)
+                {
+                    _pricesBeforePress[song] = _session.SongPrice(song);
+                }
             }
 
             var frame = new HiveDefenseFrame(
@@ -571,13 +837,22 @@ namespace DigitalStory.Tests.EditMode
             _session.Tick(in frame, Step);
             _core = _session.CorePosition;
             _ticks++;
+            MeasureRestOfDamage();
 
+            // Measured against the health at the end of the last tick, as auto-aim notes a hit, so a change between ticks
+            // counts too. In a match only the session's tick changes a hive's health.
             for (int hive = 0; hive < _hiveHealth.Length; hive++)
             {
-                float healed = _session.Hives[hive].Health - _hiveHealth[hive];
-                if (healed > 0f)
+                float health = _session.Hives[hive].Health;
+                float change = health - _hiveHealth[hive];
+                _hiveHealth[hive] = health;
+                if (change > 0f)
                 {
-                    _healedHealth += healed;
+                    _healedHealth += change;
+                }
+                else if (change < 0f)
+                {
+                    _hiveHitAt[hive] = Time;
                 }
             }
 
@@ -632,21 +907,95 @@ namespace DigitalStory.Tests.EditMode
             _run.Collapses++;
         }
 
+        // A cast pays the price it had just before the note that cast it: the first cast of a song is free, and a tower costs
+        // in a farm phase too.
         private void OnSongCast(int song)
         {
-            if (_session.AreSongsFree)
+            _run.SpentOnSongs += _pricesBeforePress[song];
+            _run.CastsBySong[song]++;
+            if (_session.Caster[song] is SlotSongEffect slotSong && slotSong.Slot == SongSlot.Post)
             {
-                return;
+                _run.SpentOnTowers += _pricesBeforePress[song];
             }
 
-            _run.SongsCast++;
-            _run.SpentOnSongs += _session.Caster[song].WaspCost;
+            if (!_session.AreSongsFree)
+            {
+                _run.SongsCast++;
+            }
         }
 
         private void OnWaspsGranted(int wasps)
         {
             _run.EarnedFromStores -= wasps;
             _run.EarnedFromEarlyCalls += wasps;
+        }
+
+        // A beekeeper is measured from the health it spawns with. The bot hears a stick's hive hit after the session, which has
+        // applied any shell's thorn by then.
+        private void OnBeekeeperSpawned(BeekeeperBrain brain)
+        {
+            _spawned++;
+            int index = _brains.IndexOf(brain);
+            if (index < 0)
+            {
+                _brains.Add(brain);
+                _brainHealth.Add(brain.Health);
+                brain.HiveHit += OnHiveHit;
+                return;
+            }
+
+            _brainHealth[index] = brain.Health;
+        }
+
+        private void OnSongLanded(SwarmForm form, Vector3 point)
+        {
+            MeasureDamage(_songOfForm[(int)form], null);
+        }
+
+        private void OnColossusLanded(ColossusAttack attack)
+        {
+            MeasureDamage(_colossusSong, null);
+        }
+
+        private void OnHiveHit(BeekeeperBrain brain, int hive)
+        {
+            SlotState post = _session.Forms.Slot(SongSlot.Post);
+            if (post.IsActive && post.Form == SwarmForm.Honeycomb)
+            {
+                MeasureDamage(_songOfForm[(int)SwarmForm.Honeycomb], brain);
+            }
+        }
+
+        // What is left at the end of a tick is the Sting's, which hurts while it holds on and lands nothing.
+        private void MeasureRestOfDamage()
+        {
+            SlotState strike = _session.Forms.Slot(SongSlot.Strike);
+            MeasureDamage(strike.IsActive ? _songOfForm[(int)strike.Form] : -1, null);
+        }
+
+        // Gives every beekeeper's health lost since it was last measured (only <paramref name="only"/>'s when given) to song
+        // number <paramref name="song"/>, or to nobody when it is -1.
+        private void MeasureDamage(int song, BeekeeperBrain only)
+        {
+            for (int index = 0; index < _brains.Count; index++)
+            {
+                BeekeeperBrain brain = _brains[index];
+                float lost = _brainHealth[index] - brain.Health;
+                if (lost <= 0f || (only != null && brain != only))
+                {
+                    continue;
+                }
+
+                _brainHealth[index] = brain.Health;
+                if (song >= 0)
+                {
+                    _run.DamageBySong[song] += lost;
+                }
+                else
+                {
+                    _run.UnattributedDamage += lost;
+                }
+            }
         }
 
         private PlaytestRun Finish()

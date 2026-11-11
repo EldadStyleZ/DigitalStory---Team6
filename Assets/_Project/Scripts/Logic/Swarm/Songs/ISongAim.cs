@@ -11,5 +11,15 @@ namespace DigitalStory.Logic
         /// <paramref name="point"/> is where the song strikes: the mouse's ground point, or the ground ahead of the core.
         /// </summary>
         void Choose(AimRule rule, float range, out ISwarmTarget target, out Vector3 point);
+
+        /// <summary>
+        /// Chooses several targets by the <see cref="AimRule.ThreeNearest"/> rule, for a song that strikes one each (the
+        /// Hydra's heads): the living beekeepers within <paramref name="range"/> metres of the core that stand nearest the
+        /// core, or nearest the mouse's ground point while the mouse is live, nearest first. Writes up to
+        /// <paramref name="count"/> of them, and no more than <paramref name="targets"/> holds, into
+        /// <paramref name="targets"/> from index 0, and returns how many it wrote. <paramref name="point"/> is the aim, as
+        /// <see cref="Choose"/> gives it.
+        /// </summary>
+        int ChooseNearest(float range, int count, ISwarmTarget[] targets, out Vector3 point);
     }
 }

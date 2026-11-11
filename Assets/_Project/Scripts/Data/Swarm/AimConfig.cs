@@ -33,7 +33,7 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Metres from the mouse's ground point within which a beekeeper is picked while the mouse is live.")]
         public float MouseRadius { get; private set; } = 3f;
 
-        [field: SerializeField, Min(1), Tooltip("How many beekeepers ThreeNearest picks.")]
-        public int NearestCount { get; private set; } = 3;
+        [field: SerializeField, Min(1), Tooltip("The most beekeepers ThreeNearest picks, nearest first: one for each of the Hydra's most heads (5 from level 7). A Hydra with fewer heads takes the nearest of them.")]
+        public int NearestCount { get; private set; } = 5;
     }
 }

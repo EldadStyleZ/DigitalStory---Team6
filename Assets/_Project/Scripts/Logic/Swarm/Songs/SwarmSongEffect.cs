@@ -13,7 +13,7 @@ namespace DigitalStory.Logic
         [SerializeField, Tooltip("What the song is for. The wasps take its colour while the song's form is active.")]
         private SongCategory _category;
 
-        [SerializeField, Min(0), Tooltip("Wasps the song costs, paid when it is cast in a survive phase. Songs cost nothing in a farm phase, and a cast that would take the swarm below its collapse line is refused.")]
+        [SerializeField, Min(0), Tooltip("Wasps the song costs, paid when it is cast in a survive phase, and in a farm phase too for a tower. A song's first cast in a match is free, and a cast that would take the swarm below its collapse line is refused.")]
         private int _waspCost;
 
         [SerializeField, Tooltip("True when the player knows the song at the start of a match.")]
@@ -38,8 +38,18 @@ namespace DigitalStory.Logic
         /// <summary>What the song is for: Attack, Defense or Power.</summary>
         public SongCategory Category => _category;
 
-        /// <summary>Wasps the song costs, paid when it is cast in a survive phase (plan section M).</summary>
+        /// <summary>
+        /// Wasps the song costs, paid when it is cast in a survive phase, and in a farm phase too while
+        /// <see cref="CostsInFarmPhase"/> (plan section M). <see cref="SwarmSongCaster.Price"/> says what a cast costs now:
+        /// a song's first cast in a match is free.
+        /// </summary>
         public int WaspCost => _waspCost;
+
+        /// <summary>
+        /// True for a tower, a song whose wasps stay on the map: it costs its price in a farm phase too, where other songs are
+        /// free. False unless a song says otherwise.
+        /// </summary>
+        public virtual bool CostsInFarmPhase => false;
 
         /// <summary>True when the player knows the song at the start of a match.</summary>
         public bool KnownFromStart => _knownFromStart;

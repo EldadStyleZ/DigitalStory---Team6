@@ -91,6 +91,15 @@ namespace DigitalStory.Logic
         {
         }
 
+        /// <summary>
+        /// The match entered <paramref name="phase"/> <paramref name="seconds"/> after the cast: a wave started (Survive) or
+        /// ended (Farm). Called only while the rule runs, on each change of phase, never twice for the same phase in a row.
+        /// A tower that guards a wave uses it to know when the wave is over.
+        /// </summary>
+        protected internal virtual void NotifyPhase(MatchPhase phase, float seconds)
+        {
+        }
+
         /// <summary>Lets go at <paramref name="seconds"/> after the cast. Only the first call counts.</summary>
         protected void Release(float seconds)
         {

@@ -7,9 +7,9 @@ using UnityEngine;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// Replays plan section D's key-table proof (check_final.py) on the real song assets' keys, for the songs built so far:
-    /// no song lies inside another, every song casts exactly itself from silence, a cooling song casts nothing, one stray
-    /// note never casts another song, and the three laws. Holes 0 to 3 are H, J, K and L.
+    /// Replays plan section D's key-table proof (check_final.py) on the real song assets' keys, for the twelve songs built
+    /// so far, in the plan's order: no song lies inside another, every song casts exactly itself from silence, a cooling song
+    /// casts nothing, one stray note never casts another song, and the three laws. Holes 0 to 3 are H, J, K and L.
     /// </summary>
     public sealed class SongKeyTableTests
     {
@@ -40,8 +40,13 @@ namespace DigitalStory.Tests.EditMode
             _songs.Add(Make<StingSong>());
             _songs.Add(Make<TornadoSong>());
             _songs.Add(Make<MeteorSong>());
+            _songs.Add(Make<HydraSong>());
+            _songs.Add(Make<ScytheSong>());
+            _songs.Add(Make<LanceSong>());
+            _songs.Add(Make<NestSong>());
             _songs.Add(Make<DomeSong>());
             _songs.Add(Make<GustSong>());
+            _songs.Add(Make<HoneycombSong>());
             _songs.Add(Make<HiveCallSong>());
             _songs.Add(Make<ColossusSong>());
         }
@@ -55,6 +60,20 @@ namespace DigitalStory.Tests.EditMode
             }
 
             _assets.Clear();
+        }
+
+        [Test]
+        public void Songs_AreTheTwelveBuiltSoFar_InThePlansOrder()
+        {
+            var titles = new List<string>();
+            for (int song = 0; song < _songs.Count; song++)
+            {
+                titles.Add(Title(song));
+            }
+
+            Assert.That(
+                titles,
+                Is.EqualTo(new[] { "Sting", "Tornado", "Meteor", "Hydra", "Scythe", "Lance", "Nest", "Dome", "Gust", "Honeycomb", "Hive Call", "Colossus" }));
         }
 
         [Test]
@@ -183,10 +202,50 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void LawTwo_TheDomeIsTheStingPlayedBackwards()
         {
-            var backwards = new List<int>(Keys(Index<StingSong>()));
-            backwards.Reverse();
+            Assert.That(Keys(Index<DomeSong>()), Is.EqualTo(Backwards(Index<StingSong>())));
+        }
 
-            Assert.That(Keys(Index<DomeSong>()), Is.EqualTo(backwards));
+        [Test]
+        public void LawTwo_TheHoneycombIsTheNestPlayedBackwards()
+        {
+            Assert.That(Keys(Index<HoneycombSong>()), Is.EqualTo(Backwards(Index<NestSong>())));
+        }
+
+        [Test]
+        public void LawTwo_TheGustIsTheScythePlayedBackwards()
+        {
+            Assert.That(Keys(Index<GustSong>()), Is.EqualTo(Backwards(Index<ScytheSong>())));
+        }
+
+        [Test]
+        public void LawTwo_EveryBlueSongIsARedSongPlayedBackwards()
+        {
+            for (int blue = 0; blue < _songs.Count; blue++)
+            {
+                if (_songs[blue].Category != SongCategory.Defense)
+                {
+                    continue;
+                }
+
+                int twin = SongWithKeys(Backwards(blue));
+
+                Assert.That(twin, Is.Not.EqualTo(-1), Title(blue) + " played backwards is no song");
+                Assert.That(_songs[twin].Category, Is.EqualTo(SongCategory.Attack), Title(blue) + "'s twin");
+            }
+        }
+
+        // An attack ends on H exactly when it has a twin: the Hydra and the Meteor end on other notes, and their backwards
+        // notes are no song. (The Tornado and the Lance end on H for the Maelstrom and the Wings, which are not built yet.)
+        [Test]
+        public void LawTwo_TheHydraAndTheMeteorEndOffH_AndPlayedBackwardsAreNoSong()
+        {
+            foreach (int song in new[] { Index<HydraSong>(), Index<MeteorSong>() })
+            {
+                IReadOnlyList<int> keys = Keys(song);
+
+                Assert.That(keys[keys.Count - 1], Is.Not.EqualTo(H), Title(song));
+                Assert.That(SongWithKeys(Backwards(song)), Is.EqualTo(-1), Title(song));
+            }
         }
 
         [Test]
@@ -218,6 +277,39 @@ namespace DigitalStory.Tests.EditMode
             }
 
             return true;
+        }
+
+        private List<int> Backwards(int song)
+        {
+            var backwards = new List<int>(Keys(song));
+            backwards.Reverse();
+            return backwards;
+        }
+
+        // The index of the song played with exactly these keys, or -1.
+        private int SongWithKeys(IReadOnlyList<int> keys)
+        {
+            for (int song = 0; song < _songs.Count; song++)
+            {
+                IReadOnlyList<int> candidate = Keys(song);
+                if (candidate.Count != keys.Count)
+                {
+                    continue;
+                }
+
+                bool same = true;
+                for (int key = 0; key < keys.Count && same; key++)
+                {
+                    same = candidate[key] == keys[key];
+                }
+
+                if (same)
+                {
+                    return song;
+                }
+            }
+
+            return -1;
         }
 
         private static bool ReadsTheSameBothWays(IReadOnlyList<int> keys)

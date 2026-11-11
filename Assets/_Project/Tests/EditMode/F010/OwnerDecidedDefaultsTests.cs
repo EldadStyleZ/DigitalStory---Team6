@@ -82,13 +82,14 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // The playtest bot's waves: later ones bigger, because the swarm grows, and waves 4 and 5 most, so a player without
-        // nests loses (plan section H); a beekeeper every 3 s, so a wave comes in over time instead of all at once.
+        // nests loses (plan section H), even with the towers; a beekeeper every 3 s, so a wave comes in over time instead of
+        // all at once.
         [Test]
         public void WaveConfig_HoldsTheFarmPhasesAndWavesOfPlanSectionL()
         {
             var config = ScriptableObject.CreateInstance<WaveConfig>();
-            int[] sticks = { 4, 5, 6, 12, 17 };
-            int[] smokers = { 0, 1, 3, 8, 11 };
+            int[] sticks = { 4, 5, 5, 16, 18 };
+            int[] smokers = { 0, 1, 3, 11, 12 };
 
             Assert.AreEqual(45f, config.FirstFarmSeconds);
             Assert.AreEqual(40f, config.FarmSeconds);
@@ -140,6 +141,11 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(typeof(DomeSong), 40)]
         [TestCase(typeof(TornadoSong), 60)]
         [TestCase(typeof(MeteorSong), 90)]
+        [TestCase(typeof(HydraSong), 60)]
+        [TestCase(typeof(ScytheSong), 30)]
+        [TestCase(typeof(LanceSong), 70)]
+        [TestCase(typeof(NestSong), 100)]
+        [TestCase(typeof(HoneycombSong), 150)]
         [TestCase(typeof(ColossusSong), 0)]
         [TestCase(typeof(HiveCallSong), 0)]
         public void SongAssets_CostThePricesOfPlanSectionM(System.Type songType, int cost)
@@ -149,6 +155,35 @@ namespace DigitalStory.Tests.EditMode
             Assert.AreEqual(cost, song.WaspCost);
 
             Object.DestroyImmediate(song);
+        }
+
+        // Plan section H: the Hydra has 3 heads, then 4 from level 4 and 5 from level 7.
+        [Test]
+        public void HydraSong_GrowsTheHeadsOfPlanSectionH()
+        {
+            var hydra = ScriptableObject.CreateInstance<HydraSong>();
+
+            Assert.AreEqual(3, hydra.HeadCount(1));
+            Assert.AreEqual(3, hydra.HeadCount(3));
+            Assert.AreEqual(4, hydra.HeadCount(4));
+            Assert.AreEqual(4, hydra.HeadCount(6));
+            Assert.AreEqual(5, hydra.HeadCount(7));
+
+            Object.DestroyImmediate(hydra);
+        }
+
+        // Auto-aim's ThreeNearest rule holds as many beekeepers as the Hydra's most heads, so a fifth head has one to bite.
+        [Test]
+        public void AimConfig_HoldsANearestBeekeeperForEachOfTheHydrasMostHeads()
+        {
+            var config = ScriptableObject.CreateInstance<AimConfig>();
+            var hydra = ScriptableObject.CreateInstance<HydraSong>();
+
+            Assert.AreEqual(5, config.NearestCount);
+            Assert.That(config.NearestCount, Is.GreaterThanOrEqualTo(hydra.HeadCount(int.MaxValue)));
+
+            Object.DestroyImmediate(config);
+            Object.DestroyImmediate(hydra);
         }
     }
 }

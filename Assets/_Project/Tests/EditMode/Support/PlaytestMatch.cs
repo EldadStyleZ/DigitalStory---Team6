@@ -14,14 +14,19 @@ namespace DigitalStory.Tests.EditMode
     /// </summary>
     internal sealed class PlaytestMatch : IDisposable
     {
-        /// <summary>The song indices, in the scene builder's order: the spec's table.</summary>
-        public const int DomeIndex = 0;
-        public const int StingIndex = 1;
-        public const int TornadoIndex = 2;
-        public const int GustIndex = 3;
-        public const int MeteorIndex = 4;
-        public const int HiveCallIndex = 5;
-        public const int ColossusIndex = 6;
+        /// <summary>The song indices, in the scene builder's order: the attacks, the defenses, then the gold songs.</summary>
+        public const int StingIndex = 0;
+        public const int TornadoIndex = 1;
+        public const int MeteorIndex = 2;
+        public const int HydraIndex = 3;
+        public const int ScytheIndex = 4;
+        public const int LanceIndex = 5;
+        public const int NestIndex = 6;
+        public const int DomeIndex = 7;
+        public const int GustIndex = 8;
+        public const int HoneycombIndex = 9;
+        public const int HiveCallIndex = 10;
+        public const int ColossusIndex = 11;
 
         /// <summary>The flute's holes: H J K L.</summary>
         public const int HoleCount = 4;
@@ -69,6 +74,7 @@ namespace DigitalStory.Tests.EditMode
         public PlaytestMatch(uint seed)
         {
             CoreMove = Make<CoreMoveConfig>();
+            Aim = Make<AimConfig>();
             Colossus = Make<ColossusConfig>();
             Hive = Make<HiveConfig>();
             Nests = Make<NestConfig>();
@@ -78,13 +84,13 @@ namespace DigitalStory.Tests.EditMode
 
             _songs = new SwarmSongEffect[]
             {
-                Make<DomeSong>(), Make<StingSong>(), Make<TornadoSong>(), Make<GustSong>(), Make<MeteorSong>(),
-                Make<HiveCallSong>(), Make<ColossusSong>(),
+                Make<StingSong>(), Make<TornadoSong>(), Make<MeteorSong>(), Make<HydraSong>(), Make<ScytheSong>(), Make<LanceSong>(),
+                Make<NestSong>(), Make<DomeSong>(), Make<GustSong>(), Make<HoneycombSong>(), Make<HiveCallSong>(), Make<ColossusSong>(),
             };
 
             var rules = new HiveDefenseRules(
                 Make<SwarmConfig>(), Make<SquadConfig>(), CoreMove, Make<FuryConfig>(), Colossus, Hive, Nests, Make<SwarmLevelConfig>(),
-                Make<SmokeConfig>(), Waves, Make<BeekeeperConfig>(), smoker, Make<AimConfig>(), Make<SongConfig>(), _songs,
+                Make<SmokeConfig>(), Waves, Make<BeekeeperConfig>(), smoker, Aim, Make<SongConfig>(), _songs,
                 HoleCount);
             Session = new HiveDefenseSession(rules, HivePositions, NestPositions, SpawnPositions, Vector3.zero, new Mulberry32Random(seed));
         }
@@ -93,6 +99,7 @@ namespace DigitalStory.Tests.EditMode
         public HiveDefenseSession Session { get; }
 
         public CoreMoveConfig CoreMove { get; }
+        public AimConfig Aim { get; }
         public ColossusConfig Colossus { get; }
         public HiveConfig Hive { get; }
         public NestConfig Nests { get; }
@@ -106,6 +113,24 @@ namespace DigitalStory.Tests.EditMode
 
         /// <summary>The Meteor's asset.</summary>
         public MeteorSong Meteor => (MeteorSong)_songs[MeteorIndex];
+
+        /// <summary>The Hydra's asset.</summary>
+        public HydraSong Hydra => (HydraSong)_songs[HydraIndex];
+
+        /// <summary>The Scythe's asset.</summary>
+        public ScytheSong Scythe => (ScytheSong)_songs[ScytheIndex];
+
+        /// <summary>The Lance's asset.</summary>
+        public LanceSong Lance => (LanceSong)_songs[LanceIndex];
+
+        /// <summary>The Nest's asset: the trap left on a lane.</summary>
+        public NestSong Nest => (NestSong)_songs[NestIndex];
+
+        /// <summary>The Honeycomb's asset: the shell on a hive.</summary>
+        public HoneycombSong Honeycomb => (HoneycombSong)_songs[HoneycombIndex];
+
+        /// <summary>Where the beekeepers appear, in the order the waves use them: they take turns, one beekeeper each.</summary>
+        public IReadOnlyList<Vector3> SpawnPoints => SpawnPositions;
 
         public void Dispose()
         {

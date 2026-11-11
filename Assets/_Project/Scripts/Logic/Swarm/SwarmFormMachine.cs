@@ -245,6 +245,15 @@ namespace DigitalStory.Logic
             }
         }
 
+        /// <summary>
+        /// The match entered <paramref name="phase"/>: a wave started (Survive) or ended (Farm). Running songs hear of it, so a
+        /// tower that guards a wave knows when the wave is over. Call it once on each change of phase.
+        /// </summary>
+        public void NotifyPhase(MatchPhase phase)
+        {
+            _slots.NotifyPhase(phase);
+        }
+
         /// <summary>The core moved. Ends Hive Call.</summary>
         public void NotifyCoreMoved()
         {

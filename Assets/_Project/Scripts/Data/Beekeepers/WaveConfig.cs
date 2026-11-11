@@ -8,15 +8,17 @@ namespace DigitalStory.Data
     public sealed class WaveConfig : ScriptableObject
     {
         // Set by the playtest bot (EconomyPlaytestTests) to the owner's target in plan section H: lost without nests,
-        // winnable with them. Waves 4 and 5 grow most, to match the swarm that nests make stronger.
+        // winnable with them. Waves 4 and 5 grow most, to match the swarm that nests make stronger. They grew again (from
+        // 12 + 8 and 17 + 11) when the towers came, because a Honeycomb let a player without nests win most matches, and
+        // wave 3 lost a stick (from 6 + 3) so the player reaches them with a few more wasps.
         [SerializeField, Tooltip("The waves in order, one a round. Each says how many sticks and smokers it sends.")]
         private WaveEntry[] _waves =
         {
             new WaveEntry(4, 0),
             new WaveEntry(5, 1),
-            new WaveEntry(6, 3),
-            new WaveEntry(12, 8),
-            new WaveEntry(17, 11)
+            new WaveEntry(5, 3),
+            new WaveEntry(16, 11),
+            new WaveEntry(18, 12)
         };
 
         /// <summary>The waves in order, one a round.</summary>

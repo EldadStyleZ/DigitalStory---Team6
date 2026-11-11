@@ -8,7 +8,8 @@ namespace DigitalStory.Logic
     /// <summary>
     /// Everything a swarm song may read or change when it is cast, and how strong the swarm's level makes it (plan section
     /// H): a song multiplies its radius, reach and height by <see cref="SizeScale"/> and its damage by
-    /// <see cref="DamageScale"/>, and keeps them for that cast. No song reads the live wasp count for its strength.
+    /// <see cref="DamageScale"/>, and takes what grows by whole steps, such as the Hydra's heads, from <see cref="Level"/>,
+    /// and keeps them for that cast. No song reads the live wasp count for its strength.
     /// </summary>
     public readonly struct SwarmSongContext
     {
@@ -68,8 +69,8 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>
-        /// Makes a context at a swarm level whose sizes are multiplied by <paramref name="sizeScale"/> and whose damage by
-        /// <paramref name="damageScale"/> (<see cref="SwarmLevelConfig"/>). Both must be above 0.
+        /// Makes a context whose sizes are multiplied by <paramref name="sizeScale"/> and whose damage by
+        /// <paramref name="damageScale"/>, at the first level for what grows by whole levels (three Hydra heads).
         /// </summary>
         /// <exception cref="ArgumentOutOfRangeException">A scale is 0 or less, or not a number.</exception>
         public SwarmSongContext(
@@ -86,6 +87,31 @@ namespace DigitalStory.Logic
             bool areSongsFree,
             float sizeScale,
             float damageScale)
+            : this(corePosition, aimTarget, aimPoint, swarm, forms, fury, hives, enemies, smoke, aim, areSongsFree, sizeScale, damageScale, 1)
+        {
+        }
+
+        /// <summary>
+        /// Makes a context at swarm level <paramref name="level"/>, whose sizes are multiplied by <paramref name="sizeScale"/>
+        /// and whose damage by <paramref name="damageScale"/> (<see cref="SwarmLevelConfig"/>). Both scales must be above 0,
+        /// and the level at least 1.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">A scale is 0 or less, or not a number, or the level is below 1.</exception>
+        public SwarmSongContext(
+            Vector3 corePosition,
+            ISwarmTarget aimTarget,
+            Vector3 aimPoint,
+            SwarmBody swarm,
+            SwarmFormMachine forms,
+            FuryMeter fury,
+            HiveSet hives,
+            IReadOnlyList<ISwarmTarget> enemies,
+            ISmokeClearer smoke,
+            ISongAim aim,
+            bool areSongsFree,
+            float sizeScale,
+            float damageScale,
+            int level)
         {
             if (!(sizeScale > 0f) || float.IsInfinity(sizeScale))
             {
@@ -95,6 +121,11 @@ namespace DigitalStory.Logic
             if (!(damageScale > 0f) || float.IsInfinity(damageScale))
             {
                 throw new ArgumentOutOfRangeException(nameof(damageScale), damageScale, "A song's damage scale must be above 0.");
+            }
+
+            if (level < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(level), level, "The swarm's level starts at 1.");
             }
 
             CorePosition = corePosition;
@@ -110,6 +141,7 @@ namespace DigitalStory.Logic
             AreSongsFree = areSongsFree;
             SizeScale = sizeScale;
             DamageScale = damageScale;
+            Level = level;
         }
 
         /// <summary>Where the core stands.</summary>
@@ -145,7 +177,10 @@ namespace DigitalStory.Logic
         /// <summary>Chooses an aimed song's target by the song's aim rule as it is cast. May be null.</summary>
         public ISongAim Aim { get; }
 
-        /// <summary>True while a cast costs no wasps: in a farm phase (plan section L).</summary>
+        /// <summary>
+        /// True in a farm phase (plan section L), when a cast costs no wasps unless the song is a tower
+        /// (<see cref="SwarmSongEffect.CostsInFarmPhase"/>). A song's first cast in a match is free in either phase.
+        /// </summary>
         public bool AreSongsFree { get; }
 
         /// <summary>What the swarm's level multiplies a song's radius, reach and height by. 1 at the first level.</summary>
@@ -154,11 +189,17 @@ namespace DigitalStory.Logic
         /// <summary>What the swarm's level multiplies a song's damage by. 1 at the first level.</summary>
         public float DamageScale { get; }
 
+        /// <summary>
+        /// The swarm's level, from 1: one more for each nest collected. Only for what grows by whole steps, such as the
+        /// Hydra's heads; sizes and damage grow by <see cref="SizeScale"/> and <see cref="DamageScale"/>.
+        /// </summary>
+        public int Level { get; }
+
         /// <summary>The same context, aimed at <paramref name="target"/> (or null) and <paramref name="point"/>.</summary>
         public SwarmSongContext AimedAt(ISwarmTarget target, Vector3 point)
         {
             return new SwarmSongContext(
-                CorePosition, target, point, Swarm, Forms, Fury, Hives, Enemies, Smoke, Aim, AreSongsFree, SizeScale, DamageScale);
+                CorePosition, target, point, Swarm, Forms, Fury, Hives, Enemies, Smoke, Aim, AreSongsFree, SizeScale, DamageScale, Level);
         }
     }
 }

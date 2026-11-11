@@ -13,15 +13,18 @@ namespace DigitalStory.Logic
     /// song is refused before any cooldown starts. When a song's notes are completed but it cannot cast,
     /// <see cref="SongNotReady"/> is raised with the reason, in this order: the Colossus stands, the song cools down,
     /// <see cref="SwarmSongEffect.CanCast"/> is false (it needs Fury), or its price would take the swarm below its collapse
-    /// line. A refused song still uses up its notes and starts no cooldown. A cast pays the song's price as it happens,
-    /// unless songs are free (<see cref="SwarmSongContext.AreSongsFree"/>). Nothing is cast, or even remembered, while the
-    /// swarm is collapsed.
+    /// line. A refused song still uses up its notes and starts no cooldown. A cast pays its <see cref="Price"/> as it
+    /// happens: nothing for a song's first cast in the match (the caster lives one match), so finding a song is never
+    /// punished; nothing in a farm phase (<see cref="SwarmSongContext.AreSongsFree"/>) unless the song is a tower
+    /// (<see cref="SwarmSongEffect.CostsInFarmPhase"/>); and its <see cref="SwarmSongEffect.WaspCost"/> otherwise. A refused
+    /// cast keeps the song's free cast. Nothing is cast, or even remembered, while the swarm is collapsed.
     /// </remarks>
     public sealed class SwarmSongCaster
     {
         private readonly IReadOnlyList<SwarmSongEffect> _songs;
         private readonly SongBook _book;
         private readonly float[] _cooldownLeft;
+        private readonly bool[] _hasBeenCast;
         private readonly int[] _noteHoles;
         private readonly float[] _noteAges;
         private readonly int[] _missedHoles;
@@ -59,6 +62,7 @@ namespace DigitalStory.Logic
 
             _book = new SongBook(definitions, config, holeCount);
             _cooldownLeft = new float[songs.Count];
+            _hasBeenCast = new bool[songs.Count];
             _noteHoles = new int[config.NotesRemembered];
             _noteAges = new float[config.NotesRemembered];
             _missedHoles = new int[config.NotesRemembered];
@@ -89,6 +93,23 @@ namespace DigitalStory.Logic
         {
             float total = _songs[song].Song.CooldownSeconds;
             return total > 0f ? Math.Min(1f, _cooldownLeft[song] / total) : 0f;
+        }
+
+        /// <summary>
+        /// The wasps casting the song would cost now: nothing for its first cast in the match, nothing while
+        /// <paramref name="areSongsFree"/> (a farm phase) unless it is a tower, and its <see cref="SwarmSongEffect.WaspCost"/>
+        /// otherwise. A cast that goes ahead pays exactly this.
+        /// </summary>
+        public int Price(int song, bool areSongsFree)
+        {
+            SwarmSongEffect effect = _songs[song];
+
+            if (!_hasBeenCast[song] || (areSongsFree && !effect.CostsInFarmPhase))
+            {
+                return 0;
+            }
+
+            return effect.WaspCost;
         }
 
         /// <summary>The hole of a recent note, 0 being the oldest.</summary>
@@ -158,13 +179,16 @@ namespace DigitalStory.Logic
                 return Refuse(song, SongRefusal.NeedsFury);
             }
 
-            // Paid last, so a song refused for any other reason costs nothing. Paying never collapses the swarm.
-            if (!context.AreSongsFree && !context.Swarm.TrySpend(effect.WaspCost))
+            // Paid last, so a song refused for any other reason costs nothing and keeps its free cast. Paying never
+            // collapses the swarm.
+            int price = Price(song, context.AreSongsFree);
+            if (price > 0 && !context.Swarm.TrySpend(price))
             {
                 return Refuse(song, SongRefusal.NotEnoughWasps);
             }
 
             _cooldownLeft[song] = effect.Song.CooldownSeconds;
+            _hasBeenCast[song] = true;
             effect.Cast(in context);
             SongCast?.Invoke(song);
             return song;

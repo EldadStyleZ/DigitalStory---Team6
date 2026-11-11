@@ -66,6 +66,27 @@ namespace DigitalStory.Tests.EditMode
             return hive;
         }
 
+        [Test]
+        public void ThreeNearest_WithTheDefaultConfig_HoldsUpToFiveForTheHydrasMostHeads()
+        {
+            for (int index = 1; index <= 6; index++)
+            {
+                Add(0f, index);
+            }
+
+            Build();
+
+            Select(AimRule.ThreeNearest, 9f);
+
+            Assert.That(_aim.NearestCount, Is.EqualTo(5));
+            Assert.That(_aim.GetNearest(4), Is.EqualTo(4));
+        }
+
+        private void HoldNearest(int count)
+        {
+            JsonUtility.FromJsonOverwrite("{\"<NearestCount>k__BackingField\":" + count + "}", _config);
+        }
+
         // Builds the aim after the test has placed its targets and hives.
         private AutoAim Build()
         {
@@ -280,9 +301,11 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_aim.Target, Is.SameAs(newcomer), "free after a second");
         }
 
+        // The config holds as many as the Hydra's most heads (five); this test holds three to show the cut-off.
         [Test]
         public void ThreeNearest_FillsTheNearestThreeToTheCore_NearestFirst()
         {
+            HoldNearest(3);
             Add(0f, 4f);
             Add(0f, 2f);
             Add(0f, 6f);
@@ -331,6 +354,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void ThreeNearest_WhileMouseLive_UsesTheNearestToTheCursor()
         {
+            HoldNearest(3);
             Add(0f, 4f);
             Add(0f, 2f);
             Add(0f, 6f);

@@ -28,6 +28,12 @@ namespace DigitalStory.Logic
         /// <summary>The song's picture: the form id its squad flies in the compute shader.</summary>
         public abstract SwarmForm Form { get; }
 
+        /// <summary>
+        /// True for a song in the Post slot: a tower, whose wasps stay on the map, so it costs its price in a farm phase too
+        /// (plan section M).
+        /// </summary>
+        public override bool CostsInFarmPhase => Slot == SongSlot.Post;
+
         /// <summary>True when the song strikes a target that auto-aim chooses; false for a song around the core.</summary>
         public virtual bool IsAimed => false;
 

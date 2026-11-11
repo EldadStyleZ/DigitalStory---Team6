@@ -16,16 +16,20 @@ namespace DigitalStory.Logic
     /// the View puts it where <see cref="CorePosition"/> says; when the giant ends, the core stays where it stood. The core
     /// and the giant keep to the play area, so a core the View moved past its edge is put back at the edge the same way.
     /// It is also the aim chooser of the songs it casts (<see cref="ISongAim"/>): an aimed song asks it for its target by the
-    /// song's own rule, and the mouse wins while it is live. The marker's target, chosen every tick, uses the rule and reach
-    /// of the aimed song the player knows from the start (the Sting), read from its asset, so the marker and that song agree.
+    /// song's own rule, and the Hydra for one beekeeper a head by the ThreeNearest rule; the mouse wins while it is live. The
+    /// marker's target, chosen every tick, uses the rule and reach of the aimed song the player knows from the start (the
+    /// Sting), read from its asset, so the marker and that song agree.
     /// A match is rounds of a farm phase and a survive phase (plan section L), and wasps are its one currency (section M):
-    /// songs cost wasps only in a survive phase, the hives' stores pay for Hive Call, the respawn and what the core collects
-    /// beside a hive, Give pays wasps into a hive's health, and calling a wave early earns wasps. The last hive starts hurt so
-    /// the first round's lesson (section N) has a hive to heal; once no standing hive is hurt, the lesson's heal step is done.
+    /// songs cost wasps only in a survive phase, except a tower, which costs in a farm phase too, and each song's first cast
+    /// in the match is free (<see cref="SongPrice"/>); the hives' stores pay for Hive Call, the respawn and what the core
+    /// collects beside a hive, Give pays wasps into a hive's health, and calling a wave early earns wasps. The last hive
+    /// starts hurt so the first round's lesson (section N) has a hive to heal; once no standing hive is hurt, the lesson's
+    /// heal step is done. The running songs hear of each change of phase (<see cref="SwarmFormMachine.NotifyPhase"/>), so a
+    /// Honeycomb guards its hive until the wave is cleared.
     /// The swarm grows (section H): each cleared wave opens more nests, and a collected nest raises the swarm's capacity,
     /// brings wasps, hums an unfound song and raises the swarm's level. The level, never the live wasp count, makes the songs
-    /// and the giant bigger and stronger: each cast takes <see cref="SizeScale"/> and <see cref="DamageScale"/> as they are
-    /// then, and the giant keeps the level it stood up at.
+    /// and the giant bigger and stronger: each cast takes <see cref="Level"/>, <see cref="SizeScale"/> and
+    /// <see cref="DamageScale"/> as they are then, and the giant keeps the level it stood up at.
     /// Each tick runs in this order: the core, the song caster and the aim, the notes pressed, the swarm's respawn, its form
     /// (Hive Call), the giant, the nests the core stands at, the hive the core stands at, the lesson's catch-up steps, smoke,
     /// the hives' stores, the beekeepers, the wave timeline, a wave called early, and last the state.
@@ -218,11 +222,23 @@ namespace DigitalStory.Logic
         /// <summary>How many rounds the match has.</summary>
         public int RoundCount => Waves.RoundCount;
 
-        /// <summary>True while songs cost no wasps: in a farm phase, so trying phrases is always free.</summary>
+        /// <summary>
+        /// True in a farm phase, when songs cost no wasps, so trying phrases is always free; a tower still costs its price
+        /// there. <see cref="SongPrice"/> says what a song costs now.
+        /// </summary>
         public bool AreSongsFree => Waves.Phase == MatchPhase.Farm;
 
         /// <summary>The song caster, for the HUD.</summary>
         public SwarmSongCaster Caster { get; }
+
+        /// <summary>
+        /// The wasps casting song number <paramref name="song"/> would cost now, for the HUD's chips: nothing for its first
+        /// cast in the match, nothing in a farm phase unless it is a tower, and its price otherwise.
+        /// </summary>
+        public int SongPrice(int song)
+        {
+            return Caster.Price(song, AreSongsFree);
+        }
 
         /// <summary>
         /// Which songs the player knows, and how much of each song's beginning was played (the song table). A cast makes a
@@ -447,8 +463,11 @@ namespace DigitalStory.Logic
             Discovery.RecordNotes(Caster);
         }
 
+        // The running songs hear of every change of phase, so a tower that guards a wave knows when the wave is over.
         private void OnPhaseChanged(MatchPhase phase)
         {
+            Forms.NotifyPhase(phase);
+
             if (phase == MatchPhase.Survive)
             {
                 Tutorial.Finish();
@@ -581,6 +600,29 @@ namespace DigitalStory.Logic
             point = _aimPoint;
         }
 
+        /// <summary>
+        /// Chooses the Hydra's targets by the ThreeNearest rule, as it is cast: auto-aim's nearest beekeepers within reach,
+        /// nearest first, as many as asked for and auto-aim holds (<see cref="AimConfig.NearestCount"/>). Its single pick
+        /// becomes <see cref="AimTarget"/>, as for any cast.
+        /// </summary>
+        int ISongAim.ChooseNearest(float range, int count, ISwarmTarget[] targets, out Vector3 point)
+        {
+            if (targets == null)
+            {
+                throw new ArgumentNullException(nameof(targets));
+            }
+
+            Choose(AimRule.ThreeNearest, range);
+            point = _aimPoint;
+            int chosen = Mathf.Min(Mathf.Min(count, targets.Length), _autoAim.NearestCount);
+            for (int slot = 0; slot < chosen; slot++)
+            {
+                targets[slot] = _enemies[_autoAim.GetNearest(slot)];
+            }
+
+            return Mathf.Max(0, chosen);
+        }
+
         private void Choose(AimRule rule, float range)
         {
             _autoAim.Select(rule, range, _corePosition, _coreFacing, _isMouseLive, _mousePoint);
@@ -611,7 +653,7 @@ namespace DigitalStory.Logic
 
                 var context = new SwarmSongContext(
                     _corePosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke, this, AreSongsFree,
-                    SizeScale, DamageScale);
+                    SizeScale, DamageScale, Level);
                 Caster.Press(hole, context);
             }
         }

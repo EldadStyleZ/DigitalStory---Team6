@@ -1,17 +1,23 @@
 using DigitalStory.Logic;
+using UnityEngine;
 
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
     /// Plays as a careful player who never fetches a nest. In a wave it guards the weaker of the hives under attack, flying
     /// at the beekeeper nearest it (or at the aimed beekeeper while no hive is threatened), and attacks: the giant when Fury
-    /// is full, the Meteor at a crowd, the Tornado when it is surrounded and the Sting otherwise, keeping a reserve of wasps;
-    /// with plenty to spare above it, it spends the big songs on a lone beekeeper too. It raises the Dome when sticks are on
-    /// the core and runs from them while the Dome cannot rise, blows smoke off the core with the Gust, and calls the stores
-    /// home with Hive Call when the swarm runs low and nobody is near. Between waves it heals a hive that has stopped making
-    /// wasps just past the line where it makes them again, spending almost all it has since the income pays it back, then a
-    /// hive below 60% to full as far as its reserve allows. It takes the stores in, and calls the wave once the bonus for
-    /// calling early would fill the swarm and the stores are banked again, waiting beside the fullest store until then.
+    /// is full, then the Strike song that fits (<see cref="StrikeChoice"/>: the Meteor at a crowd, the Scythe at a pack in
+    /// front, the Tornado when it is surrounded, the Lance at a file or a far smoker, the Hydra at several spread out) and the
+    /// Sting otherwise, keeping a reserve of wasps; with plenty to spare above it, it spends the Meteor and the Tornado on a
+    /// lone beekeeper too. It raises the Dome when sticks are on the core and runs from them while the Dome cannot rise, blows
+    /// smoke off the core with the Gust, and calls the stores home with Hive Call when the swarm runs low and nobody is near.
+    /// It keeps the one Post slot busy: before each wave it leaves a Nest on the lane the wave's first beekeeper walks, and
+    /// in the wave, once that nest has gone off, it shells the hive it leaves with the Honeycomb (the threatened hive it is
+    /// not guarding, once auto-aim would shell it), or lobs a Nest onto a pack. Between waves it heals a hive that has
+    /// stopped making wasps just past the line where it makes them again, spending almost all it has since the income pays
+    /// it back, then a hive below 60% to full as far as its reserve allows. It takes the stores in, and calls the wave once
+    /// the bonus for calling early would fill the swarm and the stores are banked again, waiting beside the fullest store
+    /// until then.
     /// </summary>
     internal sealed class MixedPlan : IPlaytestPlan
     {
@@ -39,6 +45,11 @@ namespace DigitalStory.Tests.EditMode
         // A stick this close and on the core is the moment for the Dome, or, while the Dome cannot rise, to run.
         private const float DomeMetres = 3f;
 
+        // The nest left before a wave lies this many metres out from the hive along the first beekeeper's lane, where the
+        // beekeeper walks through it on its way in. In a wave, a nest is lobbed onto this many beekeepers or more.
+        private const float LaneNestMetres = 6f;
+        private const int NestPack = 2;
+
         // Beekeepers within this many metres of a hive threaten it.
         private const float ThreatMetres = 8f;
 
@@ -50,6 +61,10 @@ namespace DigitalStory.Tests.EditMode
         // flit between two hurt hives.
         private int _healing = NoHive;
         private float _healTo;
+
+        // Once ready for the wave it stays ready for the rest of the farm phase, so leaving the store to lay the lane's
+        // nest does not make it wait there again.
+        private bool _isReadyForWave;
 
         /// <summary>
         /// Makes the plan. Played on its own it never collects a nest, so it steps off one it strays onto;
@@ -71,6 +86,7 @@ namespace DigitalStory.Tests.EditMode
             else if (bot.IsSurvive)
             {
                 _healing = NoHive;
+                _isReadyForWave = false;
                 Survive(bot);
             }
             else
@@ -129,9 +145,14 @@ namespace DigitalStory.Tests.EditMode
 
             // Ready once calling early would fill the swarm (the bonus for the seconds skipped covers the room left) and the
             // stores are banked for the wave's Hive Calls. Until then it waits beside the fullest store, which keeps filling.
-            if (swarm.Room <= session.FarmSecondsLeft * bot.Match.Waves.EarlyBonusPerSecond && AreStoresBanked(bot))
+            _isReadyForWave |= swarm.Room <= session.FarmSecondsLeft * bot.Match.Waves.EarlyBonusPerSecond && AreStoresBanked(bot);
+            if (_isReadyForWave)
             {
-                bot.CallWave();
+                if (!LeaveLaneNest(bot))
+                {
+                    bot.CallWave();
+                }
+
                 return;
             }
 
@@ -152,6 +173,11 @@ namespace DigitalStory.Tests.EditMode
             }
 
             if (session.Smoke.IsCoreInSmoke && bot.TryPlay(PlaytestMatch.GustIndex))
+            {
+                return;
+            }
+
+            if (PlaceTower(bot))
             {
                 return;
             }
@@ -185,7 +211,7 @@ namespace DigitalStory.Tests.EditMode
                 return;
             }
 
-            bot.Approach(target.Position, bot.StandOffMetres);
+            bot.Approach(target.Position, StrikeChoice.StandOff(bot, target, Reserve(bot)));
             Attack(bot);
         }
 
@@ -197,30 +223,60 @@ namespace DigitalStory.Tests.EditMode
                 return;
             }
 
-            float size = session.SizeScale;
-            bool isBigStrikeRunning = bot.IsRunning(SongSlot.Strike) && session.Forms.Slot(SongSlot.Strike).Form != SwarmForm.Sting;
-            if (!isBigStrikeRunning)
+            if (StrikeChoice.TryBigStrike(bot, Reserve(bot), RichInCasts))
             {
-                MeteorSong meteor = bot.Match.Meteor;
-                int crowd = bot.BiggestCrowd(meteor.MaxRange * size, meteor.Radius * size);
-                if (CanSpare(bot, PlaytestMatch.MeteorIndex) && (crowd > 1 || (crowd > 0 && IsRich(bot, PlaytestMatch.MeteorIndex)))
-                    && bot.TryPlay(PlaytestMatch.MeteorIndex))
-                {
-                    return;
-                }
-
-                int close = bot.CountWithin(bot.Core, bot.Match.Tornado.Radius * size);
-                if (CanSpare(bot, PlaytestMatch.TornadoIndex) && (close > 1 || (close > 0 && IsRich(bot, PlaytestMatch.TornadoIndex)))
-                    && bot.TryPlay(PlaytestMatch.TornadoIndex))
-                {
-                    return;
-                }
+                return;
             }
 
             if (!bot.IsRunning(SongSlot.Strike) && session.AimTarget != null)
             {
                 bot.TryPlay(PlaytestMatch.StingIndex);
             }
+        }
+
+        // Before the wave: a nest on the lane its first beekeeper walks, while the Post slot is free and the nest is ready and
+        // affordable; a nest the last wave left unset still lies armed, so it stays. True while it is still flying there or
+        // playing it, so the wave waits for it.
+        private static bool LeaveLaneNest(PlaytestBot bot)
+        {
+            if (bot.IsTyping)
+            {
+                return true;
+            }
+
+            if (bot.IsRunning(SongSlot.Post) || !bot.IsReady(PlaytestMatch.NestIndex)
+                || !StrikeChoice.CanSpare(bot, PlaytestMatch.NestIndex, Reserve(bot)))
+            {
+                return false;
+            }
+
+            bot.TryPlayAhead(PlaytestMatch.NestIndex, bot.LaneSpot(LaneNestMetres, out _));
+            return true;
+        }
+
+        // In a wave, while the Post slot is free: the Honeycomb on the hive it leaves, the threatened hive it is not guarding,
+        // once auto-aim would shell that one; otherwise a nest lobbed onto a pack.
+        private static bool PlaceTower(PlaytestBot bot)
+        {
+            if (bot.IsRunning(SongSlot.Post))
+            {
+                return false;
+            }
+
+            HiveDefenseSession session = bot.Session;
+            int reserve = Reserve(bot);
+            int shell = bot.ShellHive();
+            bool isLeft = shell >= 0 && shell != WeakestHiveUnderThreat(bot) && IsThreatened(bot, shell);
+            if (isLeft && StrikeChoice.CanSpare(bot, PlaytestMatch.HoneycombIndex, reserve) && bot.TryPlay(PlaytestMatch.HoneycombIndex))
+            {
+                return true;
+            }
+
+            NestSong nest = bot.Match.Nest;
+            float size = session.SizeScale;
+            return bot.BiggestCrowd(nest.MaxRange * size, nest.BlastRadius * size) >= NestPack
+                && StrikeChoice.CanSpare(bot, PlaytestMatch.NestIndex, reserve)
+                && bot.TryPlay(PlaytestMatch.NestIndex);
         }
 
         private void ChooseHiveToHeal(PlaytestBot bot)
@@ -252,14 +308,19 @@ namespace DigitalStory.Tests.EditMode
             int weakest = NoHive;
             for (int hive = 0; hive < hives.Count; hive++)
             {
-                bool isThreatened = !hives[hive].IsDestroyed && bot.CountWithin(hives[hive].Position, ThreatMetres) > 0;
-                if (isThreatened && (weakest == NoHive || HealthShare(hives[hive]) < HealthShare(hives[weakest])))
+                if (IsThreatened(bot, hive) && (weakest == NoHive || HealthShare(hives[hive]) < HealthShare(hives[weakest])))
                 {
                     weakest = hive;
                 }
             }
 
             return weakest;
+        }
+
+        private static bool IsThreatened(PlaytestBot bot, int hive)
+        {
+            Hive candidate = bot.Session.Hives[hive];
+            return !candidate.IsDestroyed && bot.CountWithin(candidate.Position, ThreatMetres) > 0;
         }
 
         private static float HealthShare(Hive hive)
@@ -281,16 +342,10 @@ namespace DigitalStory.Tests.EditMode
             return true;
         }
 
-        private static bool CanSpare(PlaytestBot bot, int song)
+        // The wasps the big songs and the towers leave behind: a share of the capacity.
+        private static int Reserve(PlaytestBot bot)
         {
-            SwarmBody swarm = bot.Session.Swarm;
-            return swarm.Count - bot.CostOf(song) >= swarm.Capacity * ReserveShare;
-        }
-
-        private static bool IsRich(PlaytestBot bot, int song)
-        {
-            SwarmBody swarm = bot.Session.Swarm;
-            return swarm.Count - (swarm.Capacity * ReserveShare) >= bot.CostOf(song) * RichInCasts;
+            return Mathf.CeilToInt(bot.Session.Swarm.Capacity * ReserveShare);
         }
     }
 }
