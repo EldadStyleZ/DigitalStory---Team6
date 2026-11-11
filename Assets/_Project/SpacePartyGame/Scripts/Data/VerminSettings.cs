@@ -64,6 +64,13 @@ namespace SpacePartyGame
         [SerializeField, Min(0f), Tooltip("How far each follower's own spot may sit from its leader's position.")]
         private float _followOffsetRadius = 0.4f;
 
+        [Header("Squeezing out of a cage")]
+        [SerializeField, Min(0f), Tooltip("How long a caged vermin pushes against the bars before it squeezes through, when another player calls it, in seconds.")]
+        private float _squeezeSeconds = 0.75f;
+
+        [SerializeField, Range(0f, 0.9f), Tooltip("How much its sprite flattens against the bars just before it gets through (0.2 = 20% thinner).")]
+        private float _squeezeAmount = 0.2f;
+
         [Header("Spacing")]
         [SerializeField, Min(0f), Tooltip("Vermin closer together than this steer apart, in units (about one vermin's width).")]
         private float _spacingRadius = 0.45f;
@@ -71,6 +78,8 @@ namespace SpacePartyGame
         [SerializeField, Min(0f), Tooltip("How hard they steer apart at most, in units per second.")]
         private float _spacingStrength = 2f;
 
+        public float SqueezeSeconds => _squeezeSeconds;
+        public float SqueezeAmount => _squeezeAmount;
         public float FollowDistanceSpread => _followDistanceSpread;
         public float FollowOffsetRadius => _followOffsetRadius;
         public float SpacingRadius => _spacingRadius;

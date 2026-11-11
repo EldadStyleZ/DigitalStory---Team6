@@ -6,7 +6,8 @@ namespace SpacePartyGame
     /// <summary>
     /// One vermin. It strolls at random (see <see cref="VerminWander"/>) and flips its sprite to face the way it
     /// walks. When it hears a player's call it follows that player (see <see cref="VerminFollow"/>), shows a thin
-    /// outline in their colour, and passes through cage walls; once it stops following it first moves clear of any
+    /// outline in their colour, and passes through cage walls; if it was caged, it first pushes against the bars for
+    /// a moment, flattening as it does, before it squeezes through. Once it stops following it first moves clear of any
     /// wall, then the walls are solid to it again.
     /// </summary>
     /// <remarks>Its root sits on the Vermin layer, so cages count it and the map's edge stops it.</remarks>
@@ -46,6 +47,10 @@ namespace SpacePartyGame
         private CageManager _cages;
         private VerminWander _wander;
         private VerminFollow _follow;
+        private CageSqueeze _squeeze;
+        private Vector2 _squeezeNormal = Vector2.right;
+        private Vector3 _bodyScale;
+        private Vector3 _outlineScale;
         private PlayerIdentity _leader;
         private ContactFilter2D _wallFilter;
         private float _startFacingLeftChance = 0.5f;
@@ -81,6 +86,7 @@ namespace SpacePartyGame
             _wander = new VerminWander(settings.WanderSpeed, settings.MinWanderSeconds, settings.MaxWanderSeconds,
                 settings.PauseChance, () => Random.value);
             _follow = new VerminFollow(settings.FollowSeconds);
+            _squeeze = new CageSqueeze(settings.SqueezeSeconds);
             _startFacingLeftChance = settings.StartFacingLeftChance;
         }
 
@@ -114,7 +120,19 @@ namespace SpacePartyGame
                 }
 
                 _leader = caller;
-                SetPassThroughCages(true);
+
+                // A caged vermin has to squeeze out through the bars first; a free one just passes through walls.
+                if (!_passesThroughCages && !_squeeze.IsActive)
+                {
+                    if (cage != null)
+                    {
+                        _squeeze.Begin();
+                    }
+                    else
+                    {
+                        SetPassThroughCages(true);
+                    }
+                }
             }
         }
 
@@ -128,6 +146,7 @@ namespace SpacePartyGame
         public void Blow(Vector2 velocity, float seconds)
         {
             StopFollowing();
+            _squeeze?.End();
             _blown = new Knockback(velocity, Time.time, seconds);
             SetPassThroughCages(true);
         }
@@ -148,7 +167,11 @@ namespace SpacePartyGame
             if (_body == null || _appearance == null || _outline == null)
             {
                 Debug.LogError($"{name}: Vermin is missing its body sprite, appearance or outline.", this);
+                return;
             }
+
+            _bodyScale = _body.transform.localScale;
+            _outlineScale = _outline.transform.localScale;
         }
 
         // A reused vermin starts fresh: a new direction, a random facing, following no one, walls solid again
@@ -157,6 +180,7 @@ namespace SpacePartyGame
         {
             _wander?.Restart();
             _follow?.Stop();
+            _squeeze?.End();
             _blown = default;
             _leader = null;
             _passesThroughCages = false;
@@ -197,9 +221,17 @@ namespace SpacePartyGame
                     Vector2 spot = (Vector2)_leader.transform.position + _spotOffset;
                     Vector2 follow = Steering.Toward(_rigidbody.position, spot, _spotDistance, _settings.FollowSpeed);
                     _rigidbody.linearVelocity = WithSpacing(follow);
+
+                    if (_squeeze.IsActive)
+                    {
+                        PushAgainstBars(spot - _rigidbody.position);
+                    }
+
                     return;
                 }
             }
+
+            _squeeze.End();
 
             if (_passesThroughCages && MoveClearOfWalls())
             {
@@ -239,26 +271,74 @@ namespace SpacePartyGame
             _facing = FacingRule.Next(_facing, _rigidbody.linearVelocity.x);
             ShowFacing();
             ShowOutline();
+            ShowSqueeze();
+        }
+
+        // While squeezing out of a cage, the walls stay solid. Time counts only while it touches a wall and heads
+        // out through it; once it has pushed long enough, the walls open to it.
+        private void PushAgainstBars(Vector2 heading)
+        {
+            Physics2D.OverlapCircle(_rigidbody.position, WorldRadius() * 1.15f, _wallFilter, _wallHits);
+            Cage cage = CageAmong(_wallHits);
+
+            if (cage == null)
+            {
+                return;
+            }
+
+            Vector2 normal = CageSqueeze.WallNormal(_rigidbody.position - cage.Centre, cage.InnerHalfSize);
+
+            if (Vector2.Dot(heading, normal) <= 0f)
+            {
+                return;
+            }
+
+            _squeezeNormal = normal;
+
+            if (_squeeze.Press(Time.fixedDeltaTime))
+            {
+                _squeeze.End();
+                SetPassThroughCages(true);
+            }
+        }
+
+        // Flattens the sprite and outline against the bars as the squeeze goes on; back to normal once through.
+        private void ShowSqueeze()
+        {
+            if (_squeeze == null)
+            {
+                return;
+            }
+
+            Vector2 scale = CageSqueeze.Scale(_squeezeNormal, _squeeze.Progress, _settings.SqueezeAmount);
+            var factor = new Vector3(scale.x, scale.y, 1f);
+            _body.transform.localScale = Vector3.Scale(_bodyScale, factor);
+            _outline.transform.localScale = Vector3.Scale(_outlineScale, factor);
+        }
+
+        private float WorldRadius() => _collider.radius * Mathf.Max(transform.lossyScale.x, transform.lossyScale.y);
+
+        private static Cage CageAmong(List<Collider2D> hits)
+        {
+            foreach (Collider2D hit in hits)
+            {
+                Cage cage = hit.GetComponentInParent<Cage>();
+
+                if (cage != null)
+                {
+                    return cage;
+                }
+            }
+
+            return null;
         }
 
         // After following, it may stand in a wall. Until it is clear it keeps passing through walls and walks out
         // of the wall: into the cage if it is more inside than out, away from it otherwise. Then walls are solid.
         private bool MoveClearOfWalls()
         {
-            float radius = _collider.radius * Mathf.Max(transform.lossyScale.x, transform.lossyScale.y);
-            Physics2D.OverlapCircle(_rigidbody.position, radius, _wallFilter, _wallHits);
-
-            Cage cage = null;
-
-            foreach (Collider2D hit in _wallHits)
-            {
-                cage = hit.GetComponentInParent<Cage>();
-
-                if (cage != null)
-                {
-                    break;
-                }
-            }
+            Physics2D.OverlapCircle(_rigidbody.position, WorldRadius(), _wallFilter, _wallHits);
+            Cage cage = CageAmong(_wallHits);
 
             if (cage == null)
             {

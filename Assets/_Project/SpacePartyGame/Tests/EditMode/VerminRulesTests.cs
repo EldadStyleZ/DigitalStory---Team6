@@ -208,4 +208,72 @@ namespace SpacePartyGame.Tests
             Assert.That(calls, Is.EqualTo(6));
         }
     }
+
+    public sealed class CageSqueezeTests
+    {
+        [Test]
+        public void Press_BeforeTheSqueezeTime_IsNotThroughYet()
+        {
+            var squeeze = new CageSqueeze(0.25f);
+            squeeze.Begin();
+
+            Assert.That(squeeze.Press(0.2f), Is.False);
+            Assert.That(squeeze.Progress, Is.EqualTo(0.8f).Within(1e-4f));
+        }
+
+        [Test]
+        public void Press_OnceTheSqueezeTimeIsUp_IsThrough()
+        {
+            var squeeze = new CageSqueeze(0.25f);
+            squeeze.Begin();
+            squeeze.Press(0.2f);
+
+            Assert.That(squeeze.Press(0.06f), Is.True);
+        }
+
+        [Test]
+        public void End_ForgetsThePressing()
+        {
+            var squeeze = new CageSqueeze(0.25f);
+            squeeze.Begin();
+            squeeze.Press(0.2f);
+
+            squeeze.End();
+
+            Assert.That(squeeze.IsActive, Is.False);
+            Assert.That(squeeze.Progress, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void WallNormal_NearTheRightWall_PointsRight()
+        {
+            Vector2 normal = CageSqueeze.WallNormal(new Vector2(0.9f, 0.3f), new Vector2(1f, 1f));
+
+            Assert.That(normal, Is.EqualTo(Vector2.right));
+        }
+
+        [Test]
+        public void WallNormal_NearTheBottomOfAWideCage_PointsDown()
+        {
+            // 0.8 of the way down beats 0.5 of the way across.
+            Vector2 normal = CageSqueeze.WallNormal(new Vector2(1f, -0.8f), new Vector2(2f, 1f));
+
+            Assert.That(normal, Is.EqualTo(Vector2.down));
+        }
+
+        [Test]
+        public void Scale_PressingASideWall_FlattensAcrossAndWidensAlong()
+        {
+            Vector2 scale = CageSqueeze.Scale(Vector2.left, progress: 1f, amount: 0.2f);
+
+            Assert.That(scale.x, Is.EqualTo(0.8f).Within(1e-4f));
+            Assert.That(scale.y, Is.EqualTo(1.1f).Within(1e-4f));
+        }
+
+        [Test]
+        public void Scale_NotPressing_IsUnchanged()
+        {
+            Assert.That(CageSqueeze.Scale(Vector2.up, progress: 0f, amount: 0.2f), Is.EqualTo(Vector2.one));
+        }
+    }
 }

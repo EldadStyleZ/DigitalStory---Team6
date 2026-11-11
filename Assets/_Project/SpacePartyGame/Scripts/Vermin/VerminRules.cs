@@ -154,6 +154,76 @@ namespace SpacePartyGame
         }
     }
 
+    /// <summary>
+    /// A caged vermin called by another player does not slip straight through the bars: it has to push against a
+    /// wall for a while first, flattening a little as it does, before it gets through.
+    /// </summary>
+    public sealed class CageSqueeze
+    {
+        private readonly float _seconds;
+        private float _pressed;
+
+        public CageSqueeze(float seconds)
+        {
+            _seconds = seconds;
+        }
+
+        /// <summary>Whether it is trying to squeeze out now.</summary>
+        public bool IsActive { get; private set; }
+
+        /// <summary>How far through the squeeze it is, from 0 to 1.</summary>
+        public float Progress => !IsActive ? 0f : _seconds <= 0f ? 1f : Mathf.Clamp01(_pressed / _seconds);
+
+        /// <summary>Starts trying to squeeze out, with no pushing done yet.</summary>
+        public void Begin()
+        {
+            IsActive = true;
+            _pressed = 0f;
+        }
+
+        /// <summary>It pushes against a wall for a while; returns whether it has now pushed long enough to get through.</summary>
+        public bool Press(float deltaTime)
+        {
+            _pressed += deltaTime;
+            return _pressed >= _seconds;
+        }
+
+        /// <summary>Stops squeezing, such as once it is through or no longer called.</summary>
+        public void End()
+        {
+            IsActive = false;
+            _pressed = 0f;
+        }
+
+        /// <summary>
+        /// The outward direction of the wall nearest a point, given its offset from the cage's centre and the
+        /// cage's inner half size.
+        /// </summary>
+        public static Vector2 WallNormal(Vector2 offset, Vector2 innerHalfSize)
+        {
+            float across = Mathf.Abs(offset.x) / Mathf.Max(innerHalfSize.x, 1e-4f);
+            float along = Mathf.Abs(offset.y) / Mathf.Max(innerHalfSize.y, 1e-4f);
+
+            if (across >= along)
+            {
+                return offset.x >= 0f ? Vector2.right : Vector2.left;
+            }
+
+            return offset.y >= 0f ? Vector2.up : Vector2.down;
+        }
+
+        /// <summary>
+        /// How to scale the sprite while it pushes on a wall: flattened toward the wall by the amount at full
+        /// progress, and widened along the wall by half that.
+        /// </summary>
+        public static Vector2 Scale(Vector2 wallNormal, float progress, float amount)
+        {
+            float squash = 1f - (amount * progress);
+            float bulge = 1f + (amount * progress * 0.5f);
+            return Mathf.Abs(wallNormal.x) >= Mathf.Abs(wallNormal.y) ? new Vector2(squash, bulge) : new Vector2(bulge, squash);
+        }
+    }
+
     /// <summary>Who can call a vermin.</summary>
     public static class CallRules
     {
