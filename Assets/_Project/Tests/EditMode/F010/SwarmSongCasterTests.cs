@@ -10,17 +10,22 @@ namespace DigitalStory.Tests.EditMode
 {
     public sealed class SwarmSongCasterTests
     {
-        private const int HoleCount = 6;
+        private const int HoleCount = 4;
+        private const int H = 0;
+        private const int J = 1;
+        private const int K = 2;
+        private const int L = 3;
+        private const int GustIndex = 3;
 
         private static readonly int[][] SongKeys =
         {
-            new[] { 0, 1, 0 },
-            new[] { 2, 3, 4 },
-            new[] { 5, 4, 3, 5 },
-            new[] { 1, 1, 2 },
-            new[] { 0, 5, 0 },
-            new[] { 3, 4, 5, 4, 3 },
-            new[] { 4, 2, 0 },
+            new[] { H, K, J },
+            new[] { J, K, H },
+            new[] { J, K, K, H },
+            new[] { H, L, K },
+            new[] { L, J, L },
+            new[] { L, J, K, J, L },
+            new[] { J, K, L, K },
         };
 
         private static readonly SwarmForm[] SongForms =
@@ -32,6 +37,7 @@ namespace DigitalStory.Tests.EditMode
         private FuryConfig _furyConfig;
         private HiveConfig _hiveConfig;
         private SongConfig _songConfig;
+        private SquadConfig _squads;
         private SwarmBody _body;
         private FuryMeter _fury;
         private SwarmFormMachine _forms;
@@ -51,9 +57,10 @@ namespace DigitalStory.Tests.EditMode
             _furyConfig = ScriptableObject.CreateInstance<FuryConfig>();
             _hiveConfig = ScriptableObject.CreateInstance<HiveConfig>();
             _songConfig = ScriptableObject.CreateInstance<SongConfig>();
+            _squads = ScriptableObject.CreateInstance<SquadConfig>();
             _body = new SwarmBody(_swarmConfig);
             _fury = new FuryMeter(_furyConfig);
-            _forms = new SwarmFormMachine(_body, _fury);
+            _forms = new SwarmFormMachine(_body, _fury, _squads);
             _hives = new HiveSet(new List<Hive> { new Hive(_hiveConfig, new Vector3(-10f, 0f, 0f)), new Hive(_hiveConfig, new Vector3(10f, 0f, 0f)) });
             _aim = new FakeSwarmTarget();
             _songs.Clear();
@@ -80,6 +87,7 @@ namespace DigitalStory.Tests.EditMode
             Object.DestroyImmediate(_furyConfig);
             Object.DestroyImmediate(_hiveConfig);
             Object.DestroyImmediate(_songConfig);
+            Object.DestroyImmediate(_squads);
 
             foreach (SwarmSongEffect song in _songs)
             {
@@ -110,7 +118,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(result, Is.EqualTo(song));
             Assert.That(_cast, Is.EqualTo(new[] { song }), "one cast, and it is this song");
-            Assert.That(_forms.Current, Is.EqualTo(SongForms[song]));
+            Assert.That(Showing(song), Is.EqualTo(SongForms[song]));
         }
 
         [TestCase(0)]
@@ -257,24 +265,23 @@ namespace DigitalStory.Tests.EditMode
         // CanCast and collapse
 
         [Test]
-        public void Press_StingWithNothingAimedAt_CastsNothing()
+        public void Press_StingWithNothingAimedAt_StillCasts()
         {
             _aim = null;
 
             int result = PlayAll(SongKeys[1]);
 
-            Assert.That(result, Is.EqualTo(SongBook.NoSong));
-            Assert.That(_cast, Is.Empty);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(result, Is.EqualTo(1));
+            Assert.That(_cast, Is.EqualTo(new[] { 1 }));
+            Assert.That(Showing(1), Is.EqualTo(SwarmForm.Sting), "it wraps the air ahead");
         }
 
         [Test]
         public void Press_SongThatCannotBeCast_UsesUpTheNotes()
         {
-            _aim = null;
+            PlayAll(SongKeys[5]);
 
-            PlayAll(SongKeys[1]);
-
+            Assert.That(_cast, Is.Empty, "the Colossus needs full Fury");
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
         }
 
@@ -379,11 +386,9 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_CanCastIsFalse_IsRaisedAndTheNotesAreUsedUp()
         {
-            _aim = null;
+            PlayAll(SongKeys[5]);
 
-            PlayAll(SongKeys[1]);
-
-            Assert.That(_notReady, Is.EqualTo(new[] { 1 }));
+            Assert.That(_notReady, Is.EqualTo(new[] { 5 }));
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
         }
 
@@ -409,14 +414,14 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_NotesThatMatchNothing_IsNotRaised()
         {
-            Press(4);
-            Press(4);
-            Press(4);
+            Press(L);
+            Press(L);
+            Press(L);
             PlayAll(SongKeys[0]);
             _notReady.Clear();
-            Press(4);
-            Press(4);
-            Press(4);
+            Press(L);
+            Press(L);
+            Press(L);
 
             Assert.That(_notReady, Is.Empty);
         }
@@ -427,7 +432,7 @@ namespace DigitalStory.Tests.EditMode
             _body.Lose(_swarmConfig.StartingWasps - 100, false);
             SwarmSongContext context = Context();
 
-            Assert.That(() => { _caster.Press(4, in context); }, Is.Not.AllocatingGCMemory());
+            Assert.That(() => { _caster.Press(L, in context); }, Is.Not.AllocatingGCMemory());
         }
 
         // Notes for the HUD
@@ -435,31 +440,31 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_AnyNote_RaisesNotePlayedWithTheHole()
         {
-            Press(4);
-            Press(2);
+            Press(L);
+            Press(K);
 
-            Assert.That(_played, Is.EqualTo(new[] { 4, 2 }));
+            Assert.That(_played, Is.EqualTo(new[] { L, K }));
         }
 
         [Test]
         public void RecentNotes_Played_AreRememberedOldestFirst()
         {
-            Press(4);
-            Press(2);
+            Press(L);
+            Press(K);
 
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(2));
-            Assert.That(_caster.RecentNoteHole(0), Is.EqualTo(4));
-            Assert.That(_caster.RecentNoteHole(1), Is.EqualTo(2));
+            Assert.That(_caster.RecentNoteHole(0), Is.EqualTo(L));
+            Assert.That(_caster.RecentNoteHole(1), Is.EqualTo(K));
         }
 
         [Test]
         public void RecentNoteAge01_AsTimePasses_RunsFromZeroToOneOverTheNoteWindow()
         {
-            Press(4);
+            Press(L);
             Assert.That(_caster.RecentNoteAge01(0), Is.EqualTo(0f));
 
             _caster.Tick(1.5f);
-            Press(2);
+            Press(K);
 
             Assert.That(_caster.RecentNoteAge01(0), Is.EqualTo(0.5f).Within(1e-4f), "1.5 s of a 3 s window");
             Assert.That(_caster.RecentNoteAge01(1), Is.EqualTo(0f));
@@ -468,22 +473,22 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void RecentNotes_OlderThanTheWindow_AreForgotten()
         {
-            Press(4);
+            Press(L);
             _caster.Tick(3f);
 
-            Press(2);
+            Press(K);
 
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(1));
-            Assert.That(_caster.RecentNoteHole(0), Is.EqualTo(2));
+            Assert.That(_caster.RecentNoteHole(0), Is.EqualTo(K));
         }
 
         [Test]
         public void RecentNotes_JustInsideTheWindow_AreKept()
         {
-            Press(4);
+            Press(L);
             _caster.Tick(2.5f);
 
-            Press(2);
+            Press(K);
 
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(2));
         }
@@ -491,7 +496,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void RecentNotes_MoreThanTheFluteRemembers_DropTheOldest()
         {
-            int[] notes = { 4, 4, 2, 4, 2, 4 };
+            int[] notes = { L, L, K, L, K, L };
 
             foreach (int note in notes)
             {
@@ -499,9 +504,9 @@ namespace DigitalStory.Tests.EditMode
             }
 
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(5));
-            Assert.That(_caster.RecentNoteHole(0), Is.EqualTo(4));
-            Assert.That(_caster.RecentNoteHole(1), Is.EqualTo(2));
-            Assert.That(_caster.RecentNoteHole(4), Is.EqualTo(4));
+            Assert.That(_caster.RecentNoteHole(0), Is.EqualTo(L));
+            Assert.That(_caster.RecentNoteHole(1), Is.EqualTo(K));
+            Assert.That(_caster.RecentNoteHole(4), Is.EqualTo(L));
         }
 
         [Test]
@@ -517,17 +522,34 @@ namespace DigitalStory.Tests.EditMode
         {
             PlayAll(SongKeys[0]);
 
-            Assert.That(_played, Is.EqualTo(new[] { 0, 1, 0 }));
+            Assert.That(_played, Is.EqualTo(new[] { H, K, J }));
         }
 
         [Test]
         public void Tick_AndPressWithoutACast_AllocateNothing()
         {
-            Press(4);
+            Press(L);
             SwarmSongContext context = Context();
 
             Assert.That(() => { _caster.Tick(0.016f); }, Is.Not.AllocatingGCMemory());
-            Assert.That(() => { _caster.Press(4, in context); }, Is.Not.AllocatingGCMemory());
+            Assert.That(() => { _caster.Press(L, in context); }, Is.Not.AllocatingGCMemory());
+        }
+
+        // What the swarm shows for a song: a slot song's form while its slot is active, the Gust while its pulse runs, otherwise the whole swarm's form.
+        private SwarmForm Showing(int song)
+        {
+            if (_songs[song] is SlotSongEffect slotSong)
+            {
+                SlotState state = _forms.Slot(slotSong.Slot);
+                return state.IsActive ? state.Form : SwarmForm.River;
+            }
+
+            if (song == GustIndex)
+            {
+                return _forms.GustSeconds >= 0f ? SwarmForm.Gust : SwarmForm.River;
+            }
+
+            return _forms.Current;
         }
 
         private int PlayAll(int[] keys)

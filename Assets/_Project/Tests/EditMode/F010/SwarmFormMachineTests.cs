@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using NUnit.Framework;
@@ -8,10 +9,19 @@ using Is = UnityEngine.TestTools.Constraints.Is;
 
 namespace DigitalStory.Tests.EditMode
 {
+    /// <summary>
+    /// The whole swarm's form (the river, Hive Call, the Colossus and the collapse), the Gust pulse, and how they meet the
+    /// slot songs. The slot engine itself is in <see cref="SongSlotsTests"/>, and each song's own rule in <see cref="SwarmSongTests"/>.
+    /// </summary>
     public sealed class SwarmFormMachineTests
     {
+        private readonly List<Object> _assets = new List<Object>();
+
         private SwarmConfig _config;
         private FuryConfig _furyConfig;
+        private SquadConfig _squads;
+        private HiveConfig _hiveConfig;
+        private HiveSet _hives;
         private SwarmBody _body;
         private FuryMeter _fury;
         private SwarmFormMachine _forms;
@@ -22,6 +32,9 @@ namespace DigitalStory.Tests.EditMode
         {
             _config = ScriptableObject.CreateInstance<SwarmConfig>();
             _furyConfig = ScriptableObject.CreateInstance<FuryConfig>();
+            _squads = ScriptableObject.CreateInstance<SquadConfig>();
+            _hiveConfig = ScriptableObject.CreateInstance<HiveConfig>();
+            _hives = new HiveSet(new List<Hive> { new Hive(_hiveConfig, new Vector3(-10f, 0f, 0f)), new Hive(_hiveConfig, new Vector3(10f, 0f, 0f)) });
             Build();
         }
 
@@ -30,57 +43,94 @@ namespace DigitalStory.Tests.EditMode
         {
             Object.DestroyImmediate(_config);
             Object.DestroyImmediate(_furyConfig);
+            Object.DestroyImmediate(_squads);
+            Object.DestroyImmediate(_hiveConfig);
+
+            foreach (Object asset in _assets)
+            {
+                Object.DestroyImmediate(asset);
+            }
+
+            _assets.Clear();
         }
 
         [Test]
-        public void New_Machine_StartsInTheRiver()
+        public void New_Machine_StartsInTheRiverWithEverySlotEmpty()
         {
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_forms.SecondsInForm, Is.EqualTo(0f));
             Assert.That(_forms.IsDomed, Is.False);
             Assert.That(_forms.IsPiperRooted, Is.False);
-            Assert.That(_forms.StingTarget, Is.Null);
-            Assert.That(_forms.StingFraction, Is.EqualTo(0f));
+            Assert.That(_forms.GustSeconds, Is.EqualTo(-1f));
+            Assert.That(_forms.Slot(SongSlot.Post).IsActive, Is.False);
+            Assert.That(_forms.Slot(SongSlot.Guard).IsActive, Is.False);
+            Assert.That(_forms.Slot(SongSlot.Strike).IsActive, Is.False);
         }
 
         [Test]
-        public void StartDome_InTheRiver_DomesTheSwarmAndRaisesFormChanged()
+        public void New_MissingBodyOrFury_Throws()
         {
-            bool started = _forms.StartDome(5f);
-
-            Assert.That(started, Is.True);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Dome));
-            Assert.That(_forms.IsDomed, Is.True);
-            Assert.That(_forms.IsPiperRooted, Is.False);
-            Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Dome }));
+            Assert.That(() => new SwarmFormMachine(null, _fury, _squads), Throws.ArgumentNullException);
+            Assert.That(() => new SwarmFormMachine(_body, null, _squads), Throws.ArgumentNullException);
         }
 
-        [TestCase(SwarmForm.Dome)]
-        [TestCase(SwarmForm.Sting)]
-        [TestCase(SwarmForm.Tornado)]
-        [TestCase(SwarmForm.Gust)]
-        [TestCase(SwarmForm.Colossus)]
-        public void Tick_FormReachesItsDuration_ReturnsToTheRiver(SwarmForm form)
+        [Test]
+        public void CastDome_InTheRiver_DomesTheSwarmButLeavesItsFormAlone()
+        {
+            Start(SwarmForm.Dome, 5f);
+
+            Assert.That(_forms.IsDomed, Is.True);
+            Assert.That(_forms.IsPiperRooted, Is.False);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River), "the Dome runs in the Guard slot beside the river");
+            Assert.That(_changes, Is.Empty);
+        }
+
+        [TestCase(SwarmForm.Dome, SongSlot.Guard)]
+        [TestCase(SwarmForm.Sting, SongSlot.Strike)]
+        [TestCase(SwarmForm.Tornado, SongSlot.Strike)]
+        public void Tick_SlotSongReachesItsDuration_LetsGo(SwarmForm form, SongSlot slot)
         {
             Start(form, 4f);
 
             _forms.Tick(3.5f, 2);
-            Assert.That(_forms.Current, Is.EqualTo(form), "still running before its duration");
+            Assert.That(_forms.Slot(slot).ReleasedSeconds, Is.EqualTo(-1f), "still running before its duration");
+
+            _forms.Tick(0.5f, 2);
+            Assert.That(_forms.Slot(slot).ReleasedSeconds, Is.EqualTo(0f).Within(1e-4f));
+            Assert.That(_forms.IsDomed, Is.False);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+        }
+
+        [Test]
+        public void Tick_GustReachesItsDuration_EndsThePulse()
+        {
+            Start(SwarmForm.Gust, 4f);
+
+            _forms.Tick(3.5f, 2);
+            Assert.That(_forms.GustSeconds, Is.EqualTo(3.5f).Within(1e-4f));
+
+            _forms.Tick(0.5f, 2);
+            Assert.That(_forms.GustSeconds, Is.EqualTo(-1f));
+        }
+
+        [Test]
+        public void Tick_ColossusReachesItsDuration_ReturnsToTheRiver()
+        {
+            Start(SwarmForm.Colossus, 4f);
+
+            _forms.Tick(3.5f, 2);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus), "still standing before its duration");
 
             _forms.Tick(0.5f, 2);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_changes[_changes.Count - 1], Is.EqualTo(SwarmForm.River));
-            Assert.That(_forms.IsDomed, Is.False);
             Assert.That(_forms.IsPiperRooted, Is.False);
         }
 
-        [TestCase(SwarmForm.Dome)]
-        [TestCase(SwarmForm.Tornado)]
-        [TestCase(SwarmForm.Gust)]
-        [TestCase(SwarmForm.Colossus)]
-        public void Tick_OneStepLongerThanTheDuration_EndsTheFormOnce(SwarmForm form)
+        [Test]
+        public void Tick_OneStepLongerThanTheColossus_EndsItOnce()
         {
-            Start(form, 1f);
+            Start(SwarmForm.Colossus, 1f);
             _changes.Clear();
 
             _forms.Tick(30f, 2);
@@ -92,7 +142,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_InAForm_CountsSecondsInForm()
         {
-            _forms.StartDome(5f);
+            _forms.StartHiveCall();
 
             _forms.Tick(1.5f, 2);
             _forms.Tick(0.5f, 2);
@@ -109,155 +159,51 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Tick_NegativeTime_Throws()
+        {
+            Assert.That(() => _forms.Tick(-0.1f, 2), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+        }
+
+        [Test]
         public void SecondsInForm_FormChanges_StartsAgainFromZero()
         {
-            _forms.StartDome(5f);
+            _forms.StartHiveCall();
             _forms.Tick(2f, 2);
 
-            _forms.StartGust(1f);
+            _forms.StartColossus(12f);
 
             Assert.That(_forms.SecondsInForm, Is.EqualTo(0f));
         }
 
         [Test]
-        public void StartGust_WhileDomed_ReplacesTheDome()
+        public void StartGust_WhileDomed_KeepsTheDome()
         {
-            _forms.StartDome(5f);
+            Start(SwarmForm.Dome, 5f);
 
-            bool started = _forms.StartGust(0.8f);
+            bool started = _forms.StartGust(Vector3.zero, 6f, 0.8f);
 
             Assert.That(started, Is.True);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Gust));
-            Assert.That(_forms.IsDomed, Is.False);
-            Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Dome, SwarmForm.Gust }));
-        }
-
-        [Test]
-        public void StartingAnyForm_WhileTheColossusStands_IsRefused()
-        {
-            _forms.StartColossus(12f);
-
-            Assert.That(_forms.StartDome(5f), Is.False);
-            Assert.That(_forms.StartGust(0.8f), Is.False);
-            Assert.That(_forms.StartHiveCall(), Is.False);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
-            Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Colossus }));
-        }
-
-        // Sting
-
-        [Test]
-        public void StartSting_AliveTarget_WrapsTheTarget()
-        {
-            var target = new FakeSwarmTarget();
-
-            bool started = _forms.StartSting(target, 4f, 0.4f, 25f);
-
-            Assert.That(started, Is.True);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Sting));
-            Assert.That(_forms.StingTarget, Is.SameAs(target));
-            Assert.That(_forms.StingFraction, Is.EqualTo(0.4f));
-        }
-
-        [Test]
-        public void StartSting_NoTarget_ChangesNothing()
-        {
-            bool started = _forms.StartSting(null, 4f, 0.4f, 25f);
-
-            Assert.That(started, Is.False);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(_forms.IsDomed, Is.True, "the Gust is a pulse on top of the Dome, not a form that replaces it");
+            Assert.That(_forms.GustSeconds, Is.EqualTo(0f));
             Assert.That(_changes, Is.Empty);
         }
 
         [Test]
-        public void StartSting_DeadTarget_ChangesNothing()
+        public void StartingAnything_WhileTheColossusStands_IsRefused()
         {
-            var target = new FakeSwarmTarget { IsAlive = false };
+            _forms.StartColossus(12f);
+            DomeSong dome = Song<DomeSong>(5f);
+            SwarmSongContext context = Context();
 
-            bool started = _forms.StartSting(target, 4f, 0.4f, 25f);
-
-            Assert.That(started, Is.False);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(_forms.StartSong(dome, in context), Is.False);
+            Assert.That(_forms.StartGust(Vector3.zero, 6f, 0.8f), Is.False);
+            Assert.That(_forms.StartHiveCall(), Is.False);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
+            Assert.That(_forms.IsDomed, Is.False);
+            Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Colossus }));
         }
 
-        [Test]
-        public void Tick_Sting_DamagesTheTargetByDamagePerSecond()
-        {
-            var target = new FakeSwarmTarget();
-            _forms.StartSting(target, 4f, 0.4f, 25f);
-
-            _forms.Tick(0.5f, 2);
-
-            Assert.That(target.DamageTaken, Is.EqualTo(12.5f).Within(1e-3f));
-        }
-
-        [Test]
-        public void Tick_Sting_FillsFuryFromTheDamage()
-        {
-            var target = new FakeSwarmTarget();
-            _forms.StartSting(target, 4f, 0.4f, 25f);
-
-            _forms.Tick(1f, 2);
-
-            Assert.That(_fury.Value, Is.EqualTo(12.5f).Within(1e-3f), "25 damage at 2 damage per Fury point");
-        }
-
-        [Test]
-        public void Tick_StingStepPastItsEnd_OnlyDamagesForTheTimeLeft()
-        {
-            var target = new FakeSwarmTarget();
-            _forms.StartSting(target, 4f, 0.4f, 25f);
-
-            _forms.Tick(10f, 2);
-
-            Assert.That(target.DamageTaken, Is.EqualTo(100f).Within(1e-2f), "4 s at 25 a second, not 10 s");
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
-        }
-
-        [Test]
-        public void Tick_StingTargetDies_EndsTheStingAndDealsNoMoreDamage()
-        {
-            var target = new FakeSwarmTarget();
-            _forms.StartSting(target, 4f, 0.4f, 25f);
-            _forms.Tick(0.5f, 2);
-            target.IsAlive = false;
-
-            _forms.Tick(0.5f, 2);
-
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
-            Assert.That(target.DamageTaken, Is.EqualTo(12.5f).Within(1e-3f));
-        }
-
-        [Test]
-        public void Tick_StingEnds_ForgetsTheTarget()
-        {
-            _forms.StartSting(new FakeSwarmTarget(), 1f, 0.4f, 25f);
-
-            _forms.Tick(1f, 2);
-
-            Assert.That(_forms.StingTarget, Is.Null);
-            Assert.That(_forms.StingFraction, Is.EqualTo(0f));
-        }
-
-        // Tornado and Colossus fill Fury
-
-        [Test]
-        public void StartTornado_DamageDealt_FillsFury()
-        {
-            _forms.StartTornado(1.5f, 60f);
-
-            Assert.That(_fury.Value, Is.EqualTo(30f).Within(1e-3f));
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Tornado));
-        }
-
-        [Test]
-        public void StartTornado_NoDamage_StillSpins()
-        {
-            bool started = _forms.StartTornado(1.5f, 0f);
-
-            Assert.That(started, Is.True);
-            Assert.That(_fury.Value, Is.EqualTo(0f));
-        }
+        // Colossus and Fury
 
         [Test]
         public void AddColossusDamage_WhileColossus_FillsFury()
@@ -272,7 +218,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void AddColossusDamage_OutsideTheColossus_IsIgnored()
         {
-            _forms.StartDome(5f);
+            Start(SwarmForm.Dome, 5f);
 
             _forms.AddColossusDamage(45f);
 
@@ -336,7 +282,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _forms.StartHiveCall();
 
-            _forms.NotifyHit();
+            _forms.NotifyHit(Vector3.right);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_forms.IsPiperRooted, Is.False);
@@ -358,26 +304,28 @@ namespace DigitalStory.Tests.EditMode
         public void NotifyHit_AfterACancel_RaisesNothingMore()
         {
             _forms.StartHiveCall();
-            _forms.NotifyHit();
+            _forms.NotifyHit(Vector3.right);
 
-            _forms.NotifyHit();
+            _forms.NotifyHit(Vector3.right);
             _forms.NotifyPiperMoved();
 
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.HiveCall, SwarmForm.River }));
         }
 
-        [TestCase(SwarmForm.Dome)]
-        [TestCase(SwarmForm.Colossus)]
-        [TestCase(SwarmForm.River)]
-        public void NotifyHitAndMoved_OutsideHiveCall_ChangeNothing(SwarmForm form)
+        [TestCase(SwarmForm.Dome, SwarmForm.River)]
+        [TestCase(SwarmForm.Colossus, SwarmForm.Colossus)]
+        [TestCase(SwarmForm.River, SwarmForm.River)]
+        public void NotifyHitAndMoved_OutsideHiveCall_ChangeNothing(SwarmForm started, SwarmForm wholeSwarm)
         {
-            Start(form, 5f);
+            Start(started, 5f);
+            bool wasDomed = _forms.IsDomed;
             _changes.Clear();
 
-            _forms.NotifyHit();
+            _forms.NotifyHit(Vector3.right);
             _forms.NotifyPiperMoved();
 
-            Assert.That(_forms.Current, Is.EqualTo(form));
+            Assert.That(_forms.Current, Is.EqualTo(wholeSwarm));
+            Assert.That(_forms.IsDomed, Is.EqualTo(wasDomed));
             Assert.That(_changes, Is.Empty);
         }
 
@@ -412,13 +360,14 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Collapse_WhileDomed_GoesToCollapsedAndDropsTheDome()
         {
-            _forms.StartDome(5f);
+            Start(SwarmForm.Dome, 5f);
 
             _body.Lose(_config.StartingWasps - 100, false);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsDomed, Is.False);
-            Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Dome, SwarmForm.Collapsed }));
+            Assert.That(_forms.Slot(SongSlot.Guard).IsActive, Is.False);
+            Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Collapsed }));
         }
 
         [Test]
@@ -431,13 +380,13 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Collapse_WhileStinging_ForgetsTheTarget()
+        public void Collapse_WhileStinging_EndsTheSting()
         {
-            _forms.StartSting(new FakeSwarmTarget(), 4f, 0.4f, 25f);
+            Start(SwarmForm.Sting, 4f);
 
             _body.Lose(_config.StartingWasps - 100, false);
 
-            Assert.That(_forms.StingTarget, Is.Null);
+            Assert.That(_forms.Slot(SongSlot.Strike).IsActive, Is.False);
         }
 
         [Test]
@@ -446,14 +395,18 @@ namespace DigitalStory.Tests.EditMode
             _body.Lose(_config.StartingWasps - 100, false);
             _changes.Clear();
 
-            Assert.That(_forms.StartDome(5f), Is.False);
-            Assert.That(_forms.StartSting(new FakeSwarmTarget(), 4f, 0.4f, 25f), Is.False);
-            Assert.That(_forms.StartTornado(1.5f, 30f), Is.False);
-            Assert.That(_forms.StartGust(0.8f), Is.False);
+            Start(SwarmForm.Dome, 5f);
+            Start(SwarmForm.Sting, 4f);
+            Start(SwarmForm.Tornado, 1.5f);
+
+            Assert.That(_forms.StartGust(Vector3.zero, 6f, 0.8f), Is.False);
             Assert.That(_forms.StartHiveCall(), Is.False);
             Assert.That(_forms.StartColossus(12f), Is.False);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
+            Assert.That(_forms.Slot(SongSlot.Guard).IsActive, Is.False);
+            Assert.That(_forms.Slot(SongSlot.Strike).IsActive, Is.False);
             Assert.That(_changes, Is.Empty);
+            _forms.Tick(1f, 2);
             Assert.That(_fury.Value, Is.EqualTo(0f), "a refused tornado fills no Fury");
         }
 
@@ -477,7 +430,8 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.River }));
-            Assert.That(_forms.StartDome(5f), Is.True, "songs work again after the respawn");
+            Start(SwarmForm.Dome, 5f);
+            Assert.That(_forms.IsDomed, Is.True, "songs work again after the respawn");
         }
 
         // Allocation
@@ -485,8 +439,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_StingAndHiveCall_AllocateNothing()
         {
-            var target = new FakeSwarmTarget();
-            _forms.StartSting(target, 100f, 0.4f, 25f);
+            Start(SwarmForm.Sting, 100f);
             Assert.That(() => _forms.Tick(0.016f, 2), Is.Not.AllocatingGCMemory());
 
             _forms.StartHiveCall();
@@ -497,7 +450,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _body = new SwarmBody(_config);
             _fury = new FuryMeter(_furyConfig);
-            _forms = new SwarmFormMachine(_body, _fury);
+            _forms = new SwarmFormMachine(_body, _fury, _squads);
             _changes = new List<SwarmForm>();
             _forms.FormChanged += form => _changes.Add(form);
         }
@@ -507,21 +460,22 @@ namespace DigitalStory.Tests.EditMode
             JsonUtility.FromJsonOverwrite("{\"<" + name + ">k__BackingField\":" + value + "}", _config);
         }
 
+        // Starts a form or a song as its song asset would, with its seconds changed. The Sting's target stands 1 m away.
         private void Start(SwarmForm form, float seconds)
         {
             switch (form)
             {
                 case SwarmForm.Dome:
-                    _forms.StartDome(seconds);
+                    Cast(Song<DomeSong>(seconds));
                     break;
                 case SwarmForm.Sting:
-                    _forms.StartSting(new FakeSwarmTarget(), seconds, 0.4f, 25f);
+                    Cast(Song<StingSong>(seconds));
                     break;
                 case SwarmForm.Tornado:
-                    _forms.StartTornado(seconds, 0f);
+                    Cast(Song<TornadoSong>(seconds));
                     break;
                 case SwarmForm.Gust:
-                    _forms.StartGust(seconds);
+                    Cast(Song<GustSong>(seconds));
                     break;
                 case SwarmForm.HiveCall:
                     _forms.StartHiveCall();
@@ -530,6 +484,26 @@ namespace DigitalStory.Tests.EditMode
                     _forms.StartColossus(seconds);
                     break;
             }
+        }
+
+        private T Song<T>(float seconds) where T : SwarmSongEffect
+        {
+            var song = ScriptableObject.CreateInstance<T>();
+            _assets.Add(song);
+            JsonUtility.FromJsonOverwrite("{\"<Seconds>k__BackingField\":" + seconds.ToString("R", CultureInfo.InvariantCulture) + "}", song);
+            return song;
+        }
+
+        private void Cast(SwarmSongEffect song)
+        {
+            SwarmSongContext context = Context();
+            song.Cast(in context);
+        }
+
+        private SwarmSongContext Context()
+        {
+            var aim = new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f) };
+            return new SwarmSongContext(Vector3.zero, aim, Vector3.zero, _body, _forms, _fury, _hives, new List<ISwarmTarget>(), null);
         }
     }
 }

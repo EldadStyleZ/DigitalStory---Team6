@@ -3,12 +3,13 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>The swarm forms a dome around the Piper, so hits cost far fewer wasps.</summary>
+    /// <summary>A Guard squad forms a dome around the Piper, so hits cost far fewer wasps.</summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Dome", fileName = "DomeSong")]
-    public sealed class DomeSong : SwarmSongEffect
+    public sealed class DomeSong : SlotSongEffect
     {
+        // H K J: the Sting played backwards.
         public DomeSong()
-            : base(new SongDefinition("Dome", "A dome of wasps shields the Piper", 8f, 0, 1, 0), SongCategory.Defense)
+            : base(new SongDefinition("Dome", "A dome of wasps shields the Piper", 8f, 0, 2, 1), SongCategory.Defense, 0.35f)
         {
         }
 
@@ -18,9 +19,15 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Metres from the Piper to the dome.")]
         public float Radius { get; private set; } = 2.2f;
 
-        public override void Cast(in SwarmSongContext context)
+        /// <summary>The Guard slot.</summary>
+        public override SongSlot Slot => SongSlot.Guard;
+
+        /// <summary>The dome's picture.</summary>
+        public override SwarmForm Form => SwarmForm.Dome;
+
+        protected internal override SongRule CreateRule()
         {
-            context.Forms.StartDome(Seconds);
+            return new DomeRule(this);
         }
     }
 }

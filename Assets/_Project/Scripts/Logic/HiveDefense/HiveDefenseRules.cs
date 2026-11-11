@@ -10,6 +10,7 @@ namespace DigitalStory.Logic
         /// <summary>Bundles the configs. None of them may be null.</summary>
         public HiveDefenseRules(
             SwarmConfig swarm,
+            SquadConfig squads,
             PiperMoveConfig piperMove,
             FuryConfig fury,
             ColossusConfig colossus,
@@ -18,11 +19,13 @@ namespace DigitalStory.Logic
             WaveConfig waves,
             BeekeeperConfig stick,
             BeekeeperConfig smoker,
+            AimConfig aim,
             SongConfig songConfig,
             IReadOnlyList<SwarmSongEffect> songs,
             int holeCount)
         {
             Swarm = swarm ?? throw new ArgumentNullException(nameof(swarm));
+            Squads = squads ?? throw new ArgumentNullException(nameof(squads));
             PiperMove = piperMove ?? throw new ArgumentNullException(nameof(piperMove));
             Fury = fury ?? throw new ArgumentNullException(nameof(fury));
             Colossus = colossus ?? throw new ArgumentNullException(nameof(colossus));
@@ -31,6 +34,7 @@ namespace DigitalStory.Logic
             Waves = waves ?? throw new ArgumentNullException(nameof(waves));
             Stick = stick ?? throw new ArgumentNullException(nameof(stick));
             Smoker = smoker ?? throw new ArgumentNullException(nameof(smoker));
+            Aim = aim ?? throw new ArgumentNullException(nameof(aim));
             SongConfig = songConfig ?? throw new ArgumentNullException(nameof(songConfig));
             Songs = songs ?? throw new ArgumentNullException(nameof(songs));
             HoleCount = holeCount;
@@ -38,6 +42,9 @@ namespace DigitalStory.Logic
 
         /// <summary>The swarm's numbers.</summary>
         public SwarmConfig Swarm { get; }
+
+        /// <summary>The song slots' seed bands and the return beat after a song lets go.</summary>
+        public SquadConfig Squads { get; }
 
         /// <summary>How fast the Piper moves and what slows it.</summary>
         public PiperMoveConfig PiperMove { get; }
@@ -62,6 +69,9 @@ namespace DigitalStory.Logic
 
         /// <summary>The smoker beekeeper's numbers.</summary>
         public BeekeeperConfig Smoker { get; }
+
+        /// <summary>The aiming numbers, such as how far ahead of the Piper an aimed song strikes when there is nothing to hit.</summary>
+        public AimConfig Aim { get; }
 
         /// <summary>How long the song window is and how many notes it remembers.</summary>
         public SongConfig SongConfig { get; }

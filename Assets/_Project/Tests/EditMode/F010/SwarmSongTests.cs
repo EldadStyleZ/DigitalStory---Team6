@@ -6,18 +6,28 @@ using UnityEngine;
 
 namespace DigitalStory.Tests.EditMode
 {
+    /// <summary>The songs' own rows of plan section A. The Meteor has its own <see cref="MeteorSongTests"/>.</summary>
     public sealed class SwarmSongTests
     {
+        private const int H = 0;
+        private const int J = 1;
+        private const int K = 2;
+        private const int L = 3;
+
+        private readonly List<Object> _assets = new List<Object>();
+
         private SwarmConfig _swarmConfig;
         private FuryConfig _furyConfig;
         private HiveConfig _hiveConfig;
+        private SquadConfig _squads;
         private SwarmBody _body;
         private FuryMeter _fury;
         private SwarmFormMachine _forms;
         private HiveSet _hives;
         private List<ISwarmTarget> _enemies;
         private FakeSmokeClearer _smoke;
-        private readonly List<Object> _assets = new List<Object>();
+
+        private SlotState Strike => _forms.Slot(SongSlot.Strike);
 
         [SetUp]
         public void SetUp()
@@ -25,9 +35,10 @@ namespace DigitalStory.Tests.EditMode
             _swarmConfig = ScriptableObject.CreateInstance<SwarmConfig>();
             _furyConfig = ScriptableObject.CreateInstance<FuryConfig>();
             _hiveConfig = ScriptableObject.CreateInstance<HiveConfig>();
+            _squads = ScriptableObject.CreateInstance<SquadConfig>();
             _body = new SwarmBody(_swarmConfig);
             _fury = new FuryMeter(_furyConfig);
-            _forms = new SwarmFormMachine(_body, _fury);
+            _forms = new SwarmFormMachine(_body, _fury, _squads);
             _hives = new HiveSet(new List<Hive> { new Hive(_hiveConfig, new Vector3(-10f, 0f, 0f)), new Hive(_hiveConfig, new Vector3(10f, 0f, 0f)) });
             _enemies = new List<ISwarmTarget>();
             _smoke = new FakeSmokeClearer();
@@ -39,26 +50,29 @@ namespace DigitalStory.Tests.EditMode
             Object.DestroyImmediate(_swarmConfig);
             Object.DestroyImmediate(_furyConfig);
             Object.DestroyImmediate(_hiveConfig);
+            Object.DestroyImmediate(_squads);
 
             foreach (Object asset in _assets)
             {
                 Object.DestroyImmediate(asset);
             }
+
+            _assets.Clear();
         }
 
         [Test]
-        public void Songs_Defaults_MatchTheSpecsKeysAndCooldowns()
+        public void Songs_Defaults_MatchThePlansKeysAndCooldowns()
         {
-            AssertSong(Make<DomeSong>(), "Dome", 8f, 0, 1, 0);
-            AssertSong(Make<StingSong>(), "Sting", 1.5f, 2, 3, 4);
-            AssertSong(Make<TornadoSong>(), "Tornado", 10f, 5, 4, 3, 5);
-            AssertSong(Make<GustSong>(), "Gust", 6f, 1, 1, 2);
-            AssertSong(Make<HiveCallSong>(), "Hive Call", 3f, 0, 5, 0);
-            AssertSong(Make<ColossusSong>(), "Colossus", 0f, 3, 4, 5, 4, 3);
+            AssertSong(Make<StingSong>(), "Sting", 1.5f, J, K, H);
+            AssertSong(Make<TornadoSong>(), "Tornado", 10f, J, K, K, H);
+            AssertSong(Make<DomeSong>(), "Dome", 8f, H, K, J);
+            AssertSong(Make<GustSong>(), "Gust", 6f, H, L, K);
+            AssertSong(Make<HiveCallSong>(), "Hive Call", 3f, L, J, L);
+            AssertSong(Make<ColossusSong>(), "Colossus", 0f, L, J, K, J, L);
         }
 
         [Test]
-        public void Songs_Defaults_MatchTheSpecsNumbers()
+        public void Songs_Defaults_MatchThePlansNumbers()
         {
             var dome = Make<DomeSong>();
             var sting = Make<StingSong>();
@@ -68,16 +82,45 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(dome.Seconds, Is.EqualTo(5f));
             Assert.That(dome.Radius, Is.EqualTo(2.2f));
+            Assert.That(dome.Share, Is.EqualTo(0.35f));
             Assert.That(sting.Seconds, Is.EqualTo(4f));
-            Assert.That(sting.Fraction, Is.EqualTo(0.4f));
+            Assert.That(sting.Share, Is.EqualTo(0.3f));
+            Assert.That(sting.ArriveSeconds, Is.EqualTo(0.6f));
             Assert.That(sting.DamagePerSecond, Is.EqualTo(25f));
+            Assert.That(sting.MaxRange, Is.EqualTo(12f));
+            Assert.That(sting.AirSeconds, Is.EqualTo(1f));
             Assert.That(tornado.Seconds, Is.EqualTo(1.5f));
+            Assert.That(tornado.Share, Is.EqualTo(0.37f));
             Assert.That(tornado.Radius, Is.EqualTo(5f));
+            Assert.That(tornado.Height, Is.EqualTo(3f));
+            Assert.That(tornado.SpinRadiansPerSecond, Is.EqualTo(6f));
+            Assert.That(tornado.HitSeconds, Is.EqualTo(0.3f));
+            Assert.That(tornado.WallRadius, Is.EqualTo(1.5f));
             Assert.That(tornado.Damage, Is.EqualTo(30f));
             Assert.That(tornado.KnockbackSpeed, Is.EqualTo(6f));
             Assert.That(gust.Seconds, Is.EqualTo(0.8f));
             Assert.That(gust.ClearRadius, Is.EqualTo(6f));
+            Assert.That(gust.PushRadius, Is.EqualTo(3f));
+            Assert.That(gust.PushSpeed, Is.EqualTo(4f));
             Assert.That(colossus.Seconds, Is.EqualTo(12f));
+        }
+
+        [Test]
+        public void Songs_SlotsAndForms_MatchThePlan()
+        {
+            var sting = Make<StingSong>();
+            var tornado = Make<TornadoSong>();
+            var dome = Make<DomeSong>();
+
+            Assert.That(sting.Slot, Is.EqualTo(SongSlot.Strike));
+            Assert.That(sting.Form, Is.EqualTo(SwarmForm.Sting));
+            Assert.That(tornado.Slot, Is.EqualTo(SongSlot.Strike));
+            Assert.That(tornado.Form, Is.EqualTo(SwarmForm.Tornado));
+            Assert.That(dome.Slot, Is.EqualTo(SongSlot.Guard));
+            Assert.That(dome.Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(Make<GustSong>(), Is.Not.InstanceOf<SlotSongEffect>(), "the Gust is a pulse with no slot");
+            Assert.That(Make<HiveCallSong>(), Is.Not.InstanceOf<SlotSongEffect>(), "Hive Call is a whole-swarm form");
+            Assert.That(Make<ColossusSong>(), Is.Not.InstanceOf<SlotSongEffect>(), "the Colossus is a whole-swarm form");
         }
 
         // Dome
@@ -96,10 +139,24 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.IsDomed, Is.False);
         }
 
+        [Test]
+        public void Dome_Cast_TakesThirtyFivePercentAsTheGuardSquad()
+        {
+            var song = Make<DomeSong>();
+            SwarmSongContext context = Context();
+
+            song.Cast(in context);
+
+            SlotState guard = _forms.Slot(SongSlot.Guard);
+            Assert.That(guard.Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(guard.Low, Is.EqualTo(0.2f).Within(1e-5f));
+            Assert.That(guard.High, Is.EqualTo(0.55f).Within(1e-5f));
+        }
+
         // Sting
 
         [Test]
-        public void Sting_CanCast_NeedsAnAimedLivingTarget()
+        public void Sting_CanCast_EvenWithNothingToHit()
         {
             var song = Make<StingSong>();
             var dead = new FakeSwarmTarget { IsAlive = false };
@@ -108,41 +165,176 @@ namespace DigitalStory.Tests.EditMode
             SwarmSongContext deadAim = Context(aim: dead);
             SwarmSongContext alive = Context(aim: new FakeSwarmTarget());
 
-            Assert.That(song.CanCast(in none), Is.False);
-            Assert.That(song.CanCast(in deadAim), Is.False);
+            Assert.That(song.CanCast(in none), Is.True);
+            Assert.That(song.CanCast(in deadAim), Is.True);
             Assert.That(song.CanCast(in alive), Is.True);
         }
 
         [Test]
-        public void Sting_Cast_StreamsFortyPercentToTheTargetForFourSeconds()
+        public void Sting_Cast_WrapsAThirtyPercentStrikeSquadAroundTheTarget()
         {
-            var song = Make<StingSong>();
-            var target = new FakeSwarmTarget();
-            SwarmSongContext context = Context(aim: target);
+            var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 1f) };
 
-            song.Cast(in context);
+            Cast(Make<StingSong>(), aim: target);
 
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Sting));
-            Assert.That(_forms.StingTarget, Is.SameAs(target));
-            Assert.That(_forms.StingFraction, Is.EqualTo(0.4f));
+            Assert.That(Strike.IsActive, Is.True);
+            Assert.That(Strike.Form, Is.EqualTo(SwarmForm.Sting));
+            Assert.That(Strike.Low, Is.EqualTo(0.55f).Within(1e-5f));
+            Assert.That(Strike.High, Is.EqualTo(0.85f).Within(1e-5f));
+            Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(2f, 0f, 1f)));
+        }
+
+        [Test]
+        public void Sting_Tick_HurtsNothingBeforeItArrives()
+        {
+            var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
+            Cast(Make<StingSong>(), aim: target);
+
+            _forms.Tick(0.59f, 2);
+
+            Assert.That(target.DamageTaken, Is.EqualTo(0f));
+            Assert.That(_fury.Value, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Sting_Tick_HurtsByDamagePerSecondFromItsArrival()
+        {
+            var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
+            Cast(Make<StingSong>(), aim: target);
+            _forms.Tick(0.6f, 2);
+
+            _forms.Tick(0.5f, 2);
+
+            Assert.That(target.DamageTaken, Is.EqualTo(12.5f).Within(1e-3f));
+        }
+
+        [Test]
+        public void Sting_Tick_FillsFuryFromTheDamage()
+        {
+            var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
+            Cast(Make<StingSong>(), aim: target);
+
+            _forms.Tick(1.6f, 2);
+
+            Assert.That(_fury.Value, Is.EqualTo(12.5f).Within(1e-3f), "25 damage at 2 damage per Fury point");
+        }
+
+        [Test]
+        public void Sting_StepPastItsEnd_OnlyHurtsUntilItsEnd()
+        {
+            var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
+            Cast(Make<StingSong>(), aim: target);
+
+            _forms.Tick(10f, 2);
+
+            Assert.That(target.DamageTaken, Is.EqualTo(85f).Within(1e-2f), "3.4 s at 25 a second, from 0.6 s to 4 s");
+            Assert.That(Strike.IsActive, Is.False);
+        }
+
+        [Test]
+        public void Sting_TargetDies_LetsGoAndHurtsNoMore()
+        {
+            var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
+            Cast(Make<StingSong>(), aim: target);
+            _forms.Tick(1.1f, 2);
+            target.IsAlive = false;
+
+            _forms.Tick(0.5f, 2);
+
+            Assert.That(target.DamageTaken, Is.EqualTo(12.5f).Within(1e-3f));
+            Assert.That(Strike.ReleasedSeconds, Is.GreaterThanOrEqualTo(0f));
+        }
+
+        [Test]
+        public void Sting_NoTarget_WrapsTheAirAtTheAimForOneSecond()
+        {
+            var bystander = new FakeSwarmTarget { Position = new Vector3(6f, 0f, 0f) };
+            _enemies.Add(bystander);
+
+            Cast(Make<StingSong>(), aimPoint: new Vector3(6f, 0f, 0f));
+
+            Assert.That(Strike.Form, Is.EqualTo(SwarmForm.Sting));
+            Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(6f, 0f, 0f)));
+            _forms.Tick(0.99f, 2);
+            Assert.That(Strike.ReleasedSeconds, Is.EqualTo(-1f));
+            _forms.Tick(0.02f, 2);
+            Assert.That(Strike.ReleasedSeconds, Is.GreaterThanOrEqualTo(0f));
+            _forms.Tick(1f, 2);
+            Assert.That(bystander.DamageTaken, Is.EqualTo(0f), "the air is wrapped, not the beekeeper standing in it");
+        }
+
+        [Test]
+        public void Sting_DeadTarget_WrapsTheAirAtTheAim()
+        {
+            var dead = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f), IsAlive = false };
+
+            Cast(Make<StingSong>(), aim: dead, aimPoint: new Vector3(-5f, 0f, 0f));
+
+            Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(-5f, 0f, 0f)));
             _forms.Tick(4f, 2);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
-            Assert.That(target.DamageTaken, Is.EqualTo(100f).Within(1e-2f));
+            Assert.That(dead.DamageTaken, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Sting_TargetBeyondItsReach_WrapsTheAirTwelveMetresTowardIt()
+        {
+            var far = new FakeSwarmTarget { Position = new Vector3(20f, 0f, 0f) };
+
+            Cast(Make<StingSong>(), aim: far);
+
+            Assert.That(Strike.ParamA.x, Is.EqualTo(12f).Within(1e-3f));
+            Assert.That(Strike.ParamA.z, Is.EqualTo(0f).Within(1e-3f));
+            _forms.Tick(4f, 2);
+            Assert.That(far.DamageTaken, Is.EqualTo(0f));
+            Assert.That(Strike.IsActive, Is.False, "the air is wrapped for one second, then the wasps fly home");
+        }
+
+        [Test]
+        public void Sting_TargetExactlyTwelveMetresAway_IsWrapped()
+        {
+            var target = new FakeSwarmTarget { Position = new Vector3(0f, 0f, 12f) };
+            Cast(Make<StingSong>(), aim: target);
+
+            _forms.Tick(1.6f, 2);
+
+            Assert.That(target.DamageTaken, Is.EqualTo(25f).Within(1e-3f));
+        }
+
+        [Test]
+        public void Sting_AimBeyondItsReach_WrapsTheAirTwelveMetresAway()
+        {
+            Cast(Make<StingSong>(), piper: new Vector3(1f, 0f, 1f), aimPoint: new Vector3(1f, 0f, -29f));
+
+            Assert.That(Strike.ParamA.x, Is.EqualTo(1f).Within(1e-3f));
+            Assert.That(Strike.ParamA.z, Is.EqualTo(-11f).Within(1e-3f));
         }
 
         // Tornado
 
         [Test]
-        public void Tornado_Cast_HurtsAndThrowsEveryBeekeeperWithinFiveMetres()
+        public void Tornado_Cast_HurtsNobodyBeforeItsHit()
         {
-            var song = Make<TornadoSong>();
+            var near = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 0f) };
+            _enemies.Add(near);
+            Cast(Make<TornadoSong>());
+
+            _forms.Tick(0.29f, 2);
+
+            Assert.That(near.DamageTaken, Is.EqualTo(0f));
+            Assert.That(near.LastKnockback, Is.EqualTo(Vector3.zero));
+            Assert.That(_fury.Value, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Tornado_AtItsHitTime_HurtsAndThrowsEveryBeekeeperWithinFiveMetres()
+        {
             var near = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 0f) };
             var far = new FakeSwarmTarget { Position = new Vector3(5.5f, 0f, 0f) };
             _enemies.Add(near);
             _enemies.Add(far);
-            SwarmSongContext context = Context();
+            Cast(Make<TornadoSong>());
 
-            song.Cast(in context);
+            _forms.Tick(0.3f, 2);
 
             Assert.That(near.DamageTaken, Is.EqualTo(30f));
             Assert.That(near.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f), "6 m/s straight away from the Piper");
@@ -152,92 +344,132 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tornado_Cast_ReachIncludesExactlyFiveMetresAndIgnoresHeight()
+        public void Tornado_ReachIncludesExactlyFiveMetresAndIgnoresHeight()
         {
-            var song = Make<TornadoSong>();
             var edge = new FakeSwarmTarget { Position = new Vector3(0f, 9f, 5f) };
             _enemies.Add(edge);
-            SwarmSongContext context = Context();
+            Cast(Make<TornadoSong>());
 
-            song.Cast(in context);
+            _forms.Tick(0.3f, 2);
 
             Assert.That(edge.DamageTaken, Is.EqualTo(30f), "5 m on the ground counts, however high");
             Assert.That(edge.LastKnockback.y, Is.EqualTo(0f), "thrown along the ground");
         }
 
         [Test]
-        public void Tornado_Cast_MeasuresFromThePiper()
+        public void Tornado_MeasuresFromThePiper()
         {
-            var song = Make<TornadoSong>();
             var target = new FakeSwarmTarget { Position = new Vector3(21f, 0f, 20f) };
             _enemies.Add(target);
-            SwarmSongContext context = Context(piper: new Vector3(20f, 0f, 20f));
+            Cast(Make<TornadoSong>(), piper: new Vector3(20f, 0f, 20f));
 
-            song.Cast(in context);
+            _forms.Tick(0.3f, 2);
 
             Assert.That(target.DamageTaken, Is.EqualTo(30f));
             Assert.That(target.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f));
         }
 
         [Test]
-        public void Tornado_Cast_SkipsTheDead()
+        public void Tornado_PiperWalksBeforeItsHit_HitsAroundWhereThePiperStandsThen()
         {
-            var song = Make<TornadoSong>();
+            var ahead = new FakeSwarmTarget { Position = new Vector3(7f, 0f, 0f) };
+            var behind = new FakeSwarmTarget { Position = new Vector3(-4.5f, 0f, 0f) };
+            _enemies.Add(ahead);
+            _enemies.Add(behind);
+            Cast(Make<TornadoSong>());
+
+            _forms.SetPiper(new Vector3(3f, 0f, 0f));
+            _forms.Tick(0.3f, 2);
+
+            Assert.That(ahead.DamageTaken, Is.EqualTo(30f), "4 m from where the column stands when it hits");
+            Assert.That(ahead.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f));
+            Assert.That(behind.DamageTaken, Is.EqualTo(0f), "within 5 m of the cast, but 7.5 m from the column");
+        }
+
+        [Test]
+        public void Tornado_SkipsTheDead()
+        {
             var dead = new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f), IsAlive = false };
             _enemies.Add(dead);
-            SwarmSongContext context = Context();
+            Cast(Make<TornadoSong>());
 
-            song.Cast(in context);
+            _forms.Tick(0.3f, 2);
 
             Assert.That(dead.DamageTaken, Is.EqualTo(0f));
             Assert.That(_fury.Value, Is.EqualTo(0f));
         }
 
         [Test]
-        public void Tornado_Cast_FillsFuryFromTheTotalDamage()
+        public void Tornado_FillsFuryFromTheTotalDamage()
         {
-            var song = Make<TornadoSong>();
             _enemies.Add(new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f) });
             _enemies.Add(new FakeSwarmTarget { Position = new Vector3(0f, 0f, -2f) });
             _enemies.Add(new FakeSwarmTarget { Position = new Vector3(30f, 0f, 0f) });
-            SwarmSongContext context = Context();
+            Cast(Make<TornadoSong>());
 
-            song.Cast(in context);
+            _forms.Tick(0.3f, 2);
 
             Assert.That(_fury.Value, Is.EqualTo(30f).Within(1e-3f), "60 damage at 2 damage per Fury point");
         }
 
         [Test]
-        public void Tornado_Cast_WithNobodyAroundStillSpinsForItsSeconds()
+        public void Tornado_HitsOnlyOnce()
         {
-            var song = Make<TornadoSong>();
-            SwarmSongContext context = Context();
+            var near = new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f) };
+            _enemies.Add(near);
+            Cast(Make<TornadoSong>());
 
-            song.Cast(in context);
+            _forms.Tick(0.3f, 2);
+            _forms.Tick(1f, 2);
 
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Tornado));
-            _forms.Tick(1.5f, 2);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(near.DamageTaken, Is.EqualTo(30f));
         }
 
         [Test]
-        public void Tornado_Cast_BeekeeperOnTheSpotIsStillThrownSixMetresPerSecond()
+        public void Tornado_WithNobodyAround_StillSpinsForItsSeconds()
         {
-            var song = Make<TornadoSong>();
+            Cast(Make<TornadoSong>());
+
+            Assert.That(Strike.Form, Is.EqualTo(SwarmForm.Tornado));
+            _forms.Tick(1.5f, 2);
+            Assert.That(Strike.ReleasedSeconds, Is.EqualTo(0f).Within(1e-4f));
+            _forms.Tick(0.5f, 2);
+            Assert.That(Strike.IsActive, Is.True, "the 0.6 s return beat");
+            _forms.Tick(0.2f, 2);
+            Assert.That(Strike.IsActive, Is.False);
+        }
+
+        [Test]
+        public void Tornado_BeekeeperOnTheSpot_IsStillThrownSixMetresPerSecond()
+        {
             var onTop = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 2f) };
             _enemies.Add(onTop);
-            SwarmSongContext context = Context(piper: new Vector3(2f, 0f, 2f));
+            Cast(Make<TornadoSong>(), piper: new Vector3(2f, 0f, 2f));
 
-            song.Cast(in context);
+            _forms.Tick(0.3f, 2);
 
             Assert.That(onTop.LastKnockback.magnitude, Is.EqualTo(6f).Within(1e-3f));
             Assert.That(float.IsNaN(onTop.LastKnockback.x), Is.False);
         }
 
+        [Test]
+        public void Tornado_Landed_IsRaisedAtItsHitTimeWhereThePiperStands()
+        {
+            var landings = new List<Vector3>();
+            _forms.Landed += (form, point) => landings.Add(point);
+            Cast(Make<TornadoSong>(), piper: new Vector3(2f, 0f, 2f));
+
+            _forms.Tick(0.29f, 2);
+            Assert.That(landings, Is.Empty);
+            _forms.Tick(0.02f, 2);
+
+            Assert.That(landings, Is.EqualTo(new[] { new Vector3(2f, 0f, 2f) }));
+        }
+
         // Gust
 
         [Test]
-        public void Gust_Cast_ClearsSmokeWithinSixMetresOfThePiper()
+        public void Gust_Cast_ClearsSmokeWithinSixMetresOfThePiperAndPulses()
         {
             var song = Make<GustSong>();
             SwarmSongContext context = Context(piper: new Vector3(4f, 0f, 7f));
@@ -247,48 +479,75 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_smoke.CallCount, Is.EqualTo(1));
             Assert.That(_smoke.LastCenter, Is.EqualTo(new Vector3(4f, 0f, 7f)));
             Assert.That(_smoke.LastRadius, Is.EqualTo(6f));
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Gust));
+            Assert.That(_forms.GustSeconds, Is.EqualTo(0f));
+            Assert.That(_forms.GustCenter, Is.EqualTo(new Vector3(4f, 0f, 7f)));
+            Assert.That(_forms.GustRadius, Is.EqualTo(6f));
             _forms.Tick(0.8f, 2);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(_forms.GustSeconds, Is.EqualTo(-1f));
         }
 
         [Test]
-        public void Gust_Cast_WithNoSmokeSystemStillBursts()
+        public void Gust_Cast_WithNoSmokeSystemStillPulses()
         {
             var song = Make<GustSong>();
             SwarmSongContext context = Context(smoke: false);
 
             song.Cast(in context);
 
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Gust));
+            Assert.That(_forms.GustSeconds, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Gust_Cast_PushesBeekeepersWithinThreeMetresOutAtFourMetresPerSecond()
+        {
+            var near = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 1f) };
+            var edge = new FakeSwarmTarget { Position = new Vector3(1f, 2f, 4f) };
+            var far = new FakeSwarmTarget { Position = new Vector3(4.5f, 0f, 1f) };
+            var dead = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 1f), IsAlive = false };
+            _enemies.Add(near);
+            _enemies.Add(edge);
+            _enemies.Add(far);
+            _enemies.Add(dead);
+
+            Cast(Make<GustSong>(), piper: new Vector3(1f, 0f, 1f));
+
+            Assert.That(near.LastKnockback.x, Is.EqualTo(4f).Within(1e-3f));
+            Assert.That(near.LastKnockback.z, Is.EqualTo(0f).Within(1e-3f));
+            Assert.That(edge.LastKnockback.z, Is.EqualTo(4f).Within(1e-3f), "3 m on the ground counts, however high");
+            Assert.That(edge.LastKnockback.y, Is.EqualTo(0f));
+            Assert.That(far.LastKnockback, Is.EqualTo(Vector3.zero));
+            Assert.That(dead.LastKnockback, Is.EqualTo(Vector3.zero));
+            Assert.That(near.DamageTaken, Is.EqualTo(0f), "a gust pushes, it does not hurt");
+        }
+
+        [Test]
+        public void Gust_Cast_WhileCollapsed_DoesNothing()
+        {
+            var near = new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f) };
+            _enemies.Add(near);
+            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+
+            Cast(Make<GustSong>());
+
+            Assert.That(_smoke.CallCount, Is.EqualTo(0));
+            Assert.That(near.LastKnockback, Is.EqualTo(Vector3.zero));
+            Assert.That(_forms.GustSeconds, Is.EqualTo(-1f));
         }
 
         // Hive Call
 
         [Test]
-        public void HiveCall_CanCast_NeedsAStandingHive()
+        public void HiveCall_CanCast_EvenWithNoStandingHiveOrAFullSwarm()
         {
             var song = Make<HiveCallSong>();
-            SwarmSongContext context = Context();
-            Assert.That(song.CanCast(in context), Is.True);
-
             _hives[0].Damage(10000f);
-            Assert.That(song.CanCast(in context), Is.True, "one hive still stands");
-
             _hives[1].Damage(10000f);
-            Assert.That(song.CanCast(in context), Is.False);
-        }
-
-        [Test]
-        public void HiveCall_CanCast_NotWhenTheSwarmIsFull()
-        {
-            var song = Make<HiveCallSong>();
             JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":" + _swarmConfig.MaxWasps + "}", _swarmConfig);
             _body = new SwarmBody(_swarmConfig);
-            _forms = new SwarmFormMachine(_body, _fury);
+            _forms = new SwarmFormMachine(_body, _fury, _squads);
             SwarmSongContext context = Context();
 
-            Assert.That(song.CanCast(in context), Is.False);
+            Assert.That(song.CanCast(in context), Is.True);
         }
 
         [Test]
@@ -301,6 +560,20 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
             Assert.That(_forms.IsPiperRooted, Is.True);
+        }
+
+        [Test]
+        public void HiveCall_CastWithTheSwarmFull_EndsOnTheNextTick()
+        {
+            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":" + _swarmConfig.MaxWasps + "}", _swarmConfig);
+            _body = new SwarmBody(_swarmConfig);
+            _forms = new SwarmFormMachine(_body, _fury, _squads);
+            Cast(Make<HiveCallSong>());
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
+
+            _forms.Tick(0.1f, 2);
+
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
         }
 
         // Colossus
@@ -338,13 +611,65 @@ namespace DigitalStory.Tests.EditMode
         // Defaults that every song shares
 
         [Test]
-        public void CanCast_SongsWithNoCondition_AlwaysAllow()
+        public void CanCast_EverySongButTheColossus_AlwaysAllowsEvenWithNothingToHit()
         {
             SwarmSongContext context = Context();
 
             Assert.That(Make<DomeSong>().CanCast(in context), Is.True);
+            Assert.That(Make<StingSong>().CanCast(in context), Is.True);
             Assert.That(Make<TornadoSong>().CanCast(in context), Is.True);
+            Assert.That(Make<MeteorSong>().CanCast(in context), Is.True);
             Assert.That(Make<GustSong>().CanCast(in context), Is.True);
+            Assert.That(Make<HiveCallSong>().CanCast(in context), Is.True);
+        }
+
+        // Aiming: an aimed song asks for its target by its own rule as it is cast (plan section E)
+
+        [Test]
+        public void Sting_CastWithAnAimChooser_AsksForTheThreatWithinItsRangeAndStingsTheAnswer()
+        {
+            var chosen = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 4f) };
+            var aim = new FakeSongAim { Target = chosen, Point = chosen.Position };
+            var ignored = new FakeSwarmTarget { Position = new Vector3(-2f, 0f, 0f) };
+            var song = Make<StingSong>();
+
+            var context = new SwarmSongContext(default, ignored, ignored.Position, _body, _forms, _fury, _hives, _enemies, _smoke, aim);
+            song.Cast(in context);
+
+            Assert.That(aim.Calls, Is.EqualTo(1));
+            Assert.That(aim.LastRule, Is.EqualTo(AimRule.Threat));
+            Assert.That(aim.LastRange, Is.EqualTo(song.MaxRange));
+            Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(3f, 0f, 4f)));
+        }
+
+        [Test]
+        public void Meteor_CastWithAnAimChooser_AsksForTheCrowdWithinItsRangeAndLandsOnTheAnswer()
+        {
+            var aim = new FakeSongAim { Target = null, Point = new Vector3(0f, 0f, 9f) };
+            var ignored = new FakeSwarmTarget { Position = new Vector3(-2f, 0f, 0f) };
+            var song = Make<MeteorSong>();
+
+            var context = new SwarmSongContext(default, ignored, ignored.Position, _body, _forms, _fury, _hives, _enemies, _smoke, aim);
+            song.Cast(in context);
+
+            Assert.That(aim.Calls, Is.EqualTo(1));
+            Assert.That(aim.LastRule, Is.EqualTo(AimRule.Crowd));
+            Assert.That(aim.LastRange, Is.EqualTo(song.MaxRange));
+            Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(0f, 0f, 9f)));
+        }
+
+        [Test]
+        public void Cast_SongsAroundThePiper_NeverAskTheAimChooser()
+        {
+            var aim = new FakeSongAim();
+            var context = new SwarmSongContext(default, null, default, _body, _forms, _fury, _hives, _enemies, _smoke, aim);
+
+            Make<DomeSong>().Cast(in context);
+            Make<TornadoSong>().Cast(in context);
+
+            Assert.That(aim.Calls, Is.EqualTo(0));
+            Assert.That(_forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(Strike.Form, Is.EqualTo(SwarmForm.Tornado));
         }
 
         private T Make<T>() where T : SwarmSongEffect
@@ -352,6 +677,12 @@ namespace DigitalStory.Tests.EditMode
             var song = ScriptableObject.CreateInstance<T>();
             _assets.Add(song);
             return song;
+        }
+
+        private void Cast(SwarmSongEffect song, Vector3 piper = default, ISwarmTarget aim = null, Vector3 aimPoint = default)
+        {
+            SwarmSongContext context = Context(piper, aim, true, aimPoint);
+            song.Cast(in context);
         }
 
         private SwarmSongContext Context(Vector3 piper = default, ISwarmTarget aim = null, bool smoke = true, Vector3 aimPoint = default)

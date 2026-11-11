@@ -10,7 +10,11 @@ namespace DigitalStory.Logic
     /// wasp loss, smoke throws, spawns from a pool of beekeepers), drives the giant, and decides Playing, Won or Lost.
     /// After Won or Lost, <see cref="Tick"/> does nothing.
     /// </summary>
-    public sealed class HiveDefenseSession
+    /// <remarks>
+    /// It is also the aim chooser of the songs it casts (<see cref="ISongAim"/>): an aimed song asks it for its target by the
+    /// song's own rule, and the mouse wins while it is live.
+    /// </remarks>
+    public sealed class HiveDefenseSession : ISongAim
     {
         // Not game tuning: a Piper that moved less than this (squared metres) since the last tick counts as standing still.
         private const float MovedSqrMetres = 0.0001f;
@@ -26,12 +30,16 @@ namespace DigitalStory.Logic
         private readonly int _stickPoolSize;
         private readonly ColossusAttackChain _chain;
         private readonly IReadOnlyList<SwarmSongEffect> _songs;
+        private readonly AutoAim _autoAim;
 
         private HiveDefenseState _state = HiveDefenseState.Playing;
         private Vector3 _piperPosition;
+        private Vector3 _piperFacing = Vector3.forward;
         private Vector3 _lastHitPoint;
         private Vector3 _aimPoint;
-        private BeekeeperBrain _aimTarget;
+        private ISwarmTarget _aimTarget;
+        private bool _isMouseLive;
+        private Vector3 _mousePoint;
         private int _activeCount;
         private bool _isColossusActive;
         private bool _furyHasFilled;
@@ -75,7 +83,7 @@ namespace DigitalStory.Logic
 
             Swarm = new SwarmBody(rules.Swarm);
             Fury = new FuryMeter(rules.Fury);
-            Forms = new SwarmFormMachine(Swarm, Fury);
+            Forms = new SwarmFormMachine(Swarm, Fury, rules.Squads);
 
             var hives = new List<Hive>(hivePositions.Count);
             for (int index = 0; index < hivePositions.Count; index++)
@@ -120,6 +128,7 @@ namespace DigitalStory.Logic
             _chain.Started += OnColossusStarted;
             _chain.Landed += OnColossusLanded;
 
+            _autoAim = new AutoAim(rules.Aim, _enemies, Hives);
             Waves.SpawnRequested += OnSpawnRequested;
         }
 
@@ -179,8 +188,17 @@ namespace DigitalStory.Logic
         /// <summary>True while the Piper must stand still (Hive Call and the giant).</summary>
         public bool IsPiperRooted => Forms.IsPiperRooted;
 
-        /// <summary>The living beekeeper nearest the aim point as of the last tick, or null when none is alive.</summary>
+        /// <summary>
+        /// The beekeeper an aimed song would strike as of the last tick, or null when there is none: while the mouse is live
+        /// the living beekeeper nearest its ground point within reach, otherwise auto-aim's most threatening beekeeper.
+        /// </summary>
         public ISwarmTarget AimTarget => _aimTarget != null && _aimTarget.IsAlive ? _aimTarget : null;
+
+        /// <summary>
+        /// Where an aimed song strikes as of the last tick: the aimed beekeeper, the mouse's ground point while the mouse is
+        /// live, or else the ground ahead of where the Piper faces.
+        /// </summary>
+        public Vector3 AimPoint => _aimPoint;
 
         /// <summary>Where the swarm was last hit, for the scatter effect.</summary>
         public Vector3 LastHitPoint => _lastHitPoint;
@@ -254,10 +272,14 @@ namespace DigitalStory.Logic
             }
 
             _piperPosition = frame.PiperPosition;
+            _piperFacing = GroundFacing(frame.PiperFacing, _piperFacing);
+            Forms.SetPiper(_piperPosition);
 
             Caster.Tick(dt);
-            _aimPoint = frame.AimPoint;
-            _aimTarget = FindAimTarget(frame.AimPoint);
+            _isMouseLive = frame.IsMouseLive;
+            _mousePoint = frame.AimPoint;
+            _autoAim.Tick(dt);
+            Choose(AimRule.Threat, _rules.Aim.StingRange);
             PressHoles(frame.PressedHoleMask);
 
             int standing = Hives.StandingCount;
@@ -297,34 +319,33 @@ namespace DigitalStory.Logic
             }
         }
 
+        // Only the direction on the ground counts. A facing with no length keeps the last one.
+        private static Vector3 GroundFacing(Vector3 facing, Vector3 last)
+        {
+            facing.y = 0f;
+            float sqr = facing.sqrMagnitude;
+            return sqr > CoincidentSqrMetres ? facing / Mathf.Sqrt(sqr) : last;
+        }
+
         private void SetState(HiveDefenseState state)
         {
             _state = state;
             StateChanged?.Invoke(state);
         }
 
-        private BeekeeperBrain FindAimTarget(Vector3 aimPoint)
+        /// <summary>Chooses an aimed song's target by its rule, as the song is cast. The choice becomes <see cref="AimTarget"/>.</summary>
+        void ISongAim.Choose(AimRule rule, float range, out ISwarmTarget target, out Vector3 point)
         {
-            BeekeeperBrain best = null;
-            float bestSqr = float.MaxValue;
-            for (int slot = 0; slot < _pool.Length; slot++)
-            {
-                if (!_isActive[slot] || !_pool[slot].IsAlive)
-                {
-                    continue;
-                }
+            Choose(rule, range);
+            target = AimTarget;
+            point = _aimPoint;
+        }
 
-                Vector3 offset = _pool[slot].Position - aimPoint;
-                offset.y = 0f;
-                float sqr = offset.sqrMagnitude;
-                if (sqr < bestSqr)
-                {
-                    bestSqr = sqr;
-                    best = _pool[slot];
-                }
-            }
-
-            return best;
+        private void Choose(AimRule rule, float range)
+        {
+            _autoAim.Select(rule, range, _piperPosition, _piperFacing, _isMouseLive, _mousePoint);
+            _aimTarget = _autoAim.Target;
+            _aimPoint = _autoAim.AimPoint;
         }
 
         private void PressHoles(int mask)
@@ -341,7 +362,14 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                var context = new SwarmSongContext(_piperPosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke);
+                // While the giant stands no note reaches the caster, so presses made out of habit cannot leak into the
+                // next song's window.
+                if (Forms.Current == SwarmForm.Colossus)
+                {
+                    return;
+                }
+
+                var context = new SwarmSongContext(_piperPosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke, this);
                 Caster.Press(hole, context);
             }
         }
@@ -494,7 +522,7 @@ namespace DigitalStory.Logic
         private void OnPiperHit(BeekeeperBrain brain)
         {
             Swarm.Lose(brain.Config.WaspsKnockedOff, Forms.IsDomed);
-            Forms.NotifyHit();
+            Forms.NotifyHit(brain.Position);
             _lastHitPoint = _piperPosition;
         }
 

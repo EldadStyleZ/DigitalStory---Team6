@@ -3,29 +3,24 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>Part of the swarm climbs into the sky and falls on the target like meteors.</summary>
+    /// <summary>A Strike squad climbs into the sky and falls on the target like meteors.</summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Meteor", fileName = "MeteorSong")]
-    public sealed class MeteorSong : SwarmSongEffect
+    public sealed class MeteorSong : SlotSongEffect
     {
+        // J K L K.
         public MeteorSong()
-            : base(new SongDefinition("Meteor", "Wasps fall from the sky on the target", 9f, 4, 2, 0), SongCategory.Attack)
+            : base(new SongDefinition("Meteor", "Wasps fall from the sky on the target", 9f, 1, 2, 3, 2), SongCategory.Attack, 0.35f)
         {
         }
-
-        [field: SerializeField, Range(0f, 1f), Tooltip("The share of the swarm that climbs and falls.")]
-        public float Fraction { get; private set; } = 0.3f;
 
         [field: SerializeField, Min(0f), Tooltip("Metres above the Piper the meteors climb to.")]
         public float Height { get; private set; } = 12f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds the meteors climb.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds the meteors climb. The impact point follows the aimed beekeeper until the climb ends.")]
         public float RiseSeconds { get; private set; } = 0.8f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds the meteors dive. They land when the dive ends.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds the meteors dive. They land when the dive ends; the burst after it is the slot's return beat.")]
         public float DiveSeconds { get; private set; } = 0.5f;
-
-        [field: SerializeField, Min(0f), Tooltip("Seconds the wasps burst outward and flow back into the river.")]
-        public float AfterSeconds { get; private set; } = 0.6f;
 
         [field: SerializeField, Min(0f), Tooltip("Furthest metres from the Piper that the impact can be.")]
         public float MaxRange { get; private set; } = 18f;
@@ -39,30 +34,24 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Seconds every beekeeper in reach is stunned.")]
         public float StunSeconds { get; private set; } = 0.5f;
 
-        public override void Cast(in SwarmSongContext context)
+        /// <summary>The Strike slot.</summary>
+        public override SongSlot Slot => SongSlot.Strike;
+
+        /// <summary>Auto-aim chooses what it strikes.</summary>
+        public override bool IsAimed => true;
+
+        /// <summary>The beekeeper with the most others close by, within reach (plan section E, Crowd).</summary>
+        public override AimRule AimRule => AimRule.Crowd;
+
+        /// <summary>As far as it flies: <see cref="MaxRange"/>.</summary>
+        public override float AimRange => MaxRange;
+
+        /// <summary>The meteor's picture.</summary>
+        public override SwarmForm Form => SwarmForm.Meteor;
+
+        protected internal override SongRule CreateRule()
         {
-            if (context.Swarm.IsCollapsed)
-            {
-                return;
-            }
-
-            bool hasTarget = context.AimTarget != null && context.AimTarget.IsAlive;
-            Vector3 point = hasTarget ? context.AimTarget.Position : context.AimPoint;
-
-            context.Forms.StartMeteor(
-                SwarmFormMachine.PullIn(point, context.PiperPosition, MaxRange),
-                hasTarget ? context.AimTarget : null,
-                context.PiperPosition,
-                MaxRange,
-                Fraction,
-                RiseSeconds,
-                DiveSeconds,
-                AfterSeconds,
-                Height,
-                context.Enemies,
-                Radius,
-                Damage,
-                StunSeconds);
+            return new MeteorRule(this);
         }
     }
 }

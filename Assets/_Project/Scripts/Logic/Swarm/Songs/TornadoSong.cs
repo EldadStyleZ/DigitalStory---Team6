@@ -3,12 +3,13 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>A spinning column of wasps hurts and throws back every beekeeper near the Piper.</summary>
+    /// <summary>A spinning column of wasps hurts and throws back every beekeeper near the Piper once it stands at full height.</summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Tornado", fileName = "TornadoSong")]
-    public sealed class TornadoSong : SwarmSongEffect
+    public sealed class TornadoSong : SlotSongEffect
     {
+        // J K K H.
         public TornadoSong()
-            : base(new SongDefinition("Tornado", "A column of wasps throws beekeepers back", 10f, 5, 4, 3, 5), SongCategory.Attack)
+            : base(new SongDefinition("Tornado", "A column of wasps throws beekeepers back", 10f, 1, 2, 2, 0), SongCategory.Attack, 0.37f)
         {
         }
 
@@ -18,58 +19,33 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Metres around the Piper that the column reaches.")]
         public float Radius { get; private set; } = 5f;
 
+        [field: SerializeField, Min(0f), Tooltip("Metres the column stands tall.")]
+        public float Height { get; private set; } = 3f;
+
+        [field: SerializeField, Min(0f), Tooltip("Radians per second the column spins.")]
+        public float SpinRadiansPerSecond { get; private set; } = 6f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds after the cast when the column stands at full height and hits.")]
+        public float HitSeconds { get; private set; } = 0.3f;
+
+        [field: SerializeField, Min(0f), Tooltip("Metres from the Piper to the column's wall.")]
+        public float WallRadius { get; private set; } = 1.5f;
+
         [field: SerializeField, Min(0f), Tooltip("Damage to every beekeeper in reach.")]
         public float Damage { get; private set; } = 30f;
 
         [field: SerializeField, Min(0f), Tooltip("Metres per second a beekeeper is thrown away from the Piper.")]
         public float KnockbackSpeed { get; private set; } = 6f;
 
-        public override void Cast(in SwarmSongContext context)
+        /// <summary>The Strike slot.</summary>
+        public override SongSlot Slot => SongSlot.Strike;
+
+        /// <summary>The tornado's picture.</summary>
+        public override SwarmForm Form => SwarmForm.Tornado;
+
+        protected internal override SongRule CreateRule()
         {
-            if (context.Swarm.IsCollapsed)
-            {
-                return;
-            }
-
-            Vector3 piper = context.PiperPosition;
-            float reachSquared = Radius * Radius;
-            float totalDamage = 0f;
-
-            for (int i = 0; i < context.Enemies.Count; i++)
-            {
-                ISwarmTarget enemy = context.Enemies[i];
-
-                if (!enemy.IsAlive)
-                {
-                    continue;
-                }
-
-                float dx = enemy.Position.x - piper.x;
-                float dz = enemy.Position.z - piper.z;
-                float distanceSquared = dx * dx + dz * dz;
-
-                if (distanceSquared > reachSquared)
-                {
-                    continue;
-                }
-
-                enemy.TakeDamage(Damage);
-                enemy.Knockback(AwayFrom(dx, dz, distanceSquared) * KnockbackSpeed);
-                totalDamage += Damage;
-            }
-
-            context.Forms.StartTornado(Seconds, totalDamage);
-        }
-
-        private static Vector3 AwayFrom(float dx, float dz, float distanceSquared)
-        {
-            if (distanceSquared < 1e-8f)
-            {
-                return Vector3.forward;
-            }
-
-            float inverse = 1f / Mathf.Sqrt(distanceSquared);
-            return new Vector3(dx * inverse, 0f, dz * inverse);
+            return new TornadoRule(this);
         }
     }
 }

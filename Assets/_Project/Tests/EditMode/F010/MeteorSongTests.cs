@@ -8,14 +8,16 @@ namespace DigitalStory.Tests.EditMode
 {
     public sealed class MeteorSongTests
     {
-        private const int HoleCount = 6;
+        private const int HoleCount = 4;
 
-        private static readonly int[] Keys = { 4, 2, 0 };
+        // J K L K.
+        private static readonly int[] Keys = { 1, 2, 3, 2 };
 
         private SwarmConfig _swarmConfig;
         private FuryConfig _furyConfig;
         private HiveConfig _hiveConfig;
         private SongConfig _songConfig;
+        private SquadConfig _squads;
         private SwarmBody _body;
         private FuryMeter _fury;
         private SwarmFormMachine _forms;
@@ -36,9 +38,10 @@ namespace DigitalStory.Tests.EditMode
             _furyConfig = ScriptableObject.CreateInstance<FuryConfig>();
             _hiveConfig = ScriptableObject.CreateInstance<HiveConfig>();
             _songConfig = ScriptableObject.CreateInstance<SongConfig>();
+            _squads = ScriptableObject.CreateInstance<SquadConfig>();
             _body = new SwarmBody(_swarmConfig);
             _fury = new FuryMeter(_furyConfig);
-            _forms = new SwarmFormMachine(_body, _fury);
+            _forms = new SwarmFormMachine(_body, _fury, _squads);
             _hives = new HiveSet(new List<Hive> { new Hive(_hiveConfig, new Vector3(-10f, 0f, 0f)), new Hive(_hiveConfig, new Vector3(10f, 0f, 0f)) });
             _song = ScriptableObject.CreateInstance<MeteorSong>();
             _songs.Clear();
@@ -55,7 +58,13 @@ namespace DigitalStory.Tests.EditMode
             _aim = null;
             _aimPoint = Vector3.zero;
             _piper = Vector3.zero;
-            _forms.MeteorLanded += _landings.Add;
+            _forms.Landed += (form, point) =>
+            {
+                if (form == SwarmForm.Meteor)
+                {
+                    _landings.Add(point);
+                }
+            };
         }
 
         [TearDown]
@@ -65,6 +74,7 @@ namespace DigitalStory.Tests.EditMode
             Object.DestroyImmediate(_furyConfig);
             Object.DestroyImmediate(_hiveConfig);
             Object.DestroyImmediate(_songConfig);
+            Object.DestroyImmediate(_squads);
 
             foreach (SwarmSongEffect song in _songs)
             {
@@ -78,11 +88,13 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_song.Song.Title, Is.EqualTo("Meteor"));
             Assert.That(_song.Song.CooldownSeconds, Is.EqualTo(9f));
             Assert.That(_song.Song.Keys, Is.EqualTo(Keys));
-            Assert.That(_song.Fraction, Is.EqualTo(0.3f));
+            Assert.That(_song.Category, Is.EqualTo(SongCategory.Attack));
+            Assert.That(_song.Slot, Is.EqualTo(SongSlot.Strike));
+            Assert.That(_song.Form, Is.EqualTo(SwarmForm.Meteor));
+            Assert.That(_song.Share, Is.EqualTo(0.35f));
             Assert.That(_song.Height, Is.EqualTo(12f));
             Assert.That(_song.RiseSeconds, Is.EqualTo(0.8f));
             Assert.That(_song.DiveSeconds, Is.EqualTo(0.5f));
-            Assert.That(_song.AfterSeconds, Is.EqualTo(0.6f));
             Assert.That(_song.MaxRange, Is.EqualTo(18f));
             Assert.That(_song.Radius, Is.EqualTo(3f));
             Assert.That(_song.Damage, Is.EqualTo(60f));
@@ -99,22 +111,26 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(result, Is.EqualTo(6));
             Assert.That(cast, Is.EqualTo(new[] { 6 }), "one cast, and it is Meteor");
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Meteor));
+            Assert.That(Strike().IsActive, Is.True);
+            Assert.That(Strike().Form, Is.EqualTo(SwarmForm.Meteor));
         }
 
         [Test]
-        public void Cast_BecomesMeteorAndExposesTheMachinesNumbers()
+        public void Cast_RunsInTheStrikeSlotAndGivesItsNumbersToThePicture()
         {
             _aimPoint = new Vector3(6f, 0f, 2f);
 
             Cast();
 
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Meteor));
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(6f, 0f, 2f)));
-            Assert.That(_forms.MeteorFraction, Is.EqualTo(0.3f));
-            Assert.That(_forms.MeteorRiseSeconds, Is.EqualTo(0.8f));
-            Assert.That(_forms.MeteorDiveSeconds, Is.EqualTo(0.5f));
-            Assert.That(_forms.MeteorHeight, Is.EqualTo(12f));
+            SlotState strike = Strike();
+            Assert.That(strike.IsActive, Is.True);
+            Assert.That(strike.Form, Is.EqualTo(SwarmForm.Meteor));
+            Assert.That(strike.Category, Is.EqualTo(SongCategory.Attack));
+            Assert.That(strike.Low, Is.EqualTo(0.55f).Within(1e-5f));
+            Assert.That(strike.High, Is.EqualTo(0.9f).Within(1e-5f), "35% of the swarm from the start of the Strike band");
+            Assert.That(strike.ParamA, Is.EqualTo(new Vector4(6f, 0f, 2f, 12f)), "the impact point and the height");
+            Assert.That(strike.ParamB, Is.EqualTo(new Vector4(0.8f, 0.5f, 3f, 0f)), "the rise, the dive and the radius");
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River), "the rest of the swarm stays the river");
         }
 
         [Test]
@@ -126,7 +142,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(1.29f, 2);
 
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Meteor));
+            Assert.That(Strike().ReleasedSeconds, Is.EqualTo(-1f), "still falling");
             Assert.That(enemy.DamageTaken, Is.EqualTo(0f));
             Assert.That(enemy.LastStunSeconds, Is.EqualTo(0f));
             Assert.That(_fury.Value, Is.EqualTo(0f));
@@ -235,7 +251,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(enemy.DamageTaken, Is.EqualTo(60f));
             Assert.That(_landings.Count, Is.EqualTo(1));
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(Strike().IsActive, Is.False);
         }
 
         [Test]
@@ -244,12 +260,13 @@ namespace DigitalStory.Tests.EditMode
             Cast();
 
             _forms.Tick(1.89f, 2);
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Meteor), "1.9 s in all: rise, dive, then the flow back");
+            Assert.That(Strike().IsActive, Is.True, "1.9 s in all: rise, dive, then the burst and flow back, which is the slot's return beat");
+            Assert.That(Strike().ReleasedSeconds, Is.GreaterThan(0f), "it let go when it landed");
 
             _forms.Tick(0.02f, 2);
 
-            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
-            Assert.That(_forms.MeteorFraction, Is.EqualTo(0f));
+            Assert.That(Strike().IsActive, Is.False);
+            Assert.That(Strike().High, Is.EqualTo(Strike().Low), "no wasps left in the squad");
         }
 
         // The impact point
@@ -262,7 +279,7 @@ namespace DigitalStory.Tests.EditMode
 
             Cast();
 
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(5f, 0f, 2f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(5f, 0f, 2f)));
         }
 
         [Test]
@@ -272,7 +289,7 @@ namespace DigitalStory.Tests.EditMode
 
             Cast();
 
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(-8f, 0f, 3f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(-8f, 0f, 3f)));
         }
 
         [Test]
@@ -283,7 +300,7 @@ namespace DigitalStory.Tests.EditMode
 
             Cast();
 
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(-8f, 0f, 3f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(-8f, 0f, 3f)));
         }
 
         [Test]
@@ -294,8 +311,8 @@ namespace DigitalStory.Tests.EditMode
 
             Cast();
 
-            Assert.That(_forms.MeteorTarget.x, Is.EqualTo(28f).Within(1e-3f));
-            Assert.That(_forms.MeteorTarget.z, Is.EqualTo(10f).Within(1e-3f));
+            Assert.That(Impact().x, Is.EqualTo(28f).Within(1e-3f));
+            Assert.That(Impact().z, Is.EqualTo(10f).Within(1e-3f));
         }
 
         [Test]
@@ -305,8 +322,8 @@ namespace DigitalStory.Tests.EditMode
 
             Cast();
 
-            Assert.That(_forms.MeteorTarget.x, Is.EqualTo(0f).Within(1e-3f));
-            Assert.That(_forms.MeteorTarget.z, Is.EqualTo(18f).Within(1e-3f));
+            Assert.That(Impact().x, Is.EqualTo(0f).Within(1e-3f));
+            Assert.That(Impact().z, Is.EqualTo(18f).Within(1e-3f));
         }
 
         [Test]
@@ -316,7 +333,7 @@ namespace DigitalStory.Tests.EditMode
 
             Cast();
 
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(0f, 0f, -18f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(0f, 0f, -18f)));
         }
 
         // Following the aimed beekeeper
@@ -338,17 +355,17 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Follow_MeteorTarget_ReportsTheFollowedPointEachTickDuringTheClimb()
+        public void Follow_TheImpactPoint_FollowsTheTargetEachTickDuringTheClimb()
         {
             FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
 
             walker.Position = new Vector3(6f, 0f, 1f);
             _forms.Tick(0.2f, 2);
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(6f, 0f, 1f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(6f, 0f, 1f)));
 
             walker.Position = new Vector3(7f, 0f, 2f);
             _forms.Tick(0.2f, 2);
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(7f, 0f, 2f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(7f, 0f, 2f)));
         }
 
         [Test]
@@ -360,7 +377,7 @@ namespace DigitalStory.Tests.EditMode
             walker.Position = new Vector3(12f, 0f, 0f);
             _forms.Tick(0.2f, 2);
 
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(5f, 0f, 0f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(5f, 0f, 0f)));
 
             _forms.Tick(0.31f, 2);
 
@@ -392,7 +409,7 @@ namespace DigitalStory.Tests.EditMode
             walker.IsAlive = false;
             walker.Position = new Vector3(9f, 0f, 0f);
             _forms.Tick(0.2f, 2);
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(7f, 0f, 0f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(7f, 0f, 0f)));
 
             _forms.Tick(0.62f, 2);
 
@@ -409,8 +426,8 @@ namespace DigitalStory.Tests.EditMode
             walker.Position = new Vector3(30f, 0f, 0f);
             _forms.Tick(0.3f, 2);
 
-            Assert.That(_forms.MeteorTarget.x, Is.EqualTo(18f).Within(1e-3f));
-            Assert.That(_forms.MeteorTarget.z, Is.EqualTo(0f).Within(1e-3f));
+            Assert.That(Impact().x, Is.EqualTo(18f).Within(1e-3f));
+            Assert.That(Impact().z, Is.EqualTo(0f).Within(1e-3f));
         }
 
         [Test]
@@ -424,7 +441,7 @@ namespace DigitalStory.Tests.EditMode
             walker.Position = new Vector3(8.4f, 0f, 0f);
             _forms.Tick(0.5f, 2);
 
-            Assert.That(_forms.MeteorTarget, Is.EqualTo(new Vector3(5f, 0f, 0f)));
+            Assert.That(Impact(), Is.EqualTo(new Vector3(5f, 0f, 0f)));
 
             _forms.Tick(0.82f, 2);
 
@@ -474,7 +491,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(enemy.DamageTaken, Is.EqualTo(0f));
             Assert.That(_fury.Value, Is.EqualTo(0f));
             Assert.That(_landings, Is.Empty);
-            Assert.That(_forms.MeteorFraction, Is.EqualTo(0f));
+            Assert.That(Strike().IsActive, Is.False, "the collapse ends the slot at once");
         }
 
         [Test]
@@ -496,6 +513,7 @@ namespace DigitalStory.Tests.EditMode
             Cast();
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
+            Assert.That(Strike().IsActive, Is.False);
         }
 
         [Test]
@@ -518,8 +536,14 @@ namespace DigitalStory.Tests.EditMode
             Cast();
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
+            Assert.That(Strike().IsActive, Is.False);
             Assert.That(_landings, Is.Empty);
         }
+
+        private SlotState Strike() => _forms.Slot(SongSlot.Strike);
+
+        // Where the meteors will land, as the Strike slot gives it to the picture.
+        private Vector3 Impact() => Strike().ParamA;
 
         private void Cast()
         {

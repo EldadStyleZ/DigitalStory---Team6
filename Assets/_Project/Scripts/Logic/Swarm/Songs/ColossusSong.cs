@@ -7,8 +7,9 @@ namespace DigitalStory.Logic
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Colossus", fileName = "ColossusSong")]
     public sealed class ColossusSong : SwarmSongEffect
     {
+        // L J K J L.
         public ColossusSong()
-            : base(new SongDefinition("Colossus", "Needs full Fury: the swarm becomes a giant", 0f, 3, 4, 5, 4, 3), SongCategory.Attack, revealedWhenFuryFills: true)
+            : base(new SongDefinition("Colossus", "Needs full Fury: the swarm becomes a giant", 0f, 3, 1, 2, 1, 3), SongCategory.Power, revealedWhenFuryFills: true)
         {
         }
 

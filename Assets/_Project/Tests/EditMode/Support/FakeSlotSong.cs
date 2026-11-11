@@ -1,0 +1,49 @@
+using System.Globalization;
+using DigitalStory.Data;
+using DigitalStory.Logic;
+using UnityEngine;
+
+namespace DigitalStory.Tests.EditMode
+{
+    /// <summary>
+    /// A slot song whose slot, category and share a test chooses, for the Post slot that no real song uses yet.
+    /// It is a Defense taking 15% of the Post band unless a test says otherwise, and its rule runs until <see cref="ReleaseAfter"/>.
+    /// </summary>
+    internal sealed class FakeSlotSong : SlotSongEffect
+    {
+        public FakeSlotSong()
+            : base(new SongDefinition("Fake slot song", string.Empty, 0f, 0), SongCategory.Defense, 0.15f)
+        {
+        }
+
+        public SongSlot SlotToUse { get; set; } = SongSlot.Post;
+
+        public SwarmForm FormToShow { get; set; } = SwarmForm.River;
+
+        /// <summary>Seconds after its cast at which the rule lets go. Infinity keeps it running.</summary>
+        public float ReleaseAfter { get; set; } = float.PositiveInfinity;
+
+        /// <summary>The rule the slot engine made, once the song has been cast.</summary>
+        public FakeSongRule Rule { get; private set; }
+
+        public override SongSlot Slot => SlotToUse;
+
+        public override SwarmForm Form => FormToShow;
+
+        public void SetShare(float share)
+        {
+            JsonUtility.FromJsonOverwrite("{\"_share\":" + share.ToString("R", CultureInfo.InvariantCulture) + "}", this);
+        }
+
+        public void SetCategory(SongCategory category)
+        {
+            JsonUtility.FromJsonOverwrite("{\"_category\":" + (int)category + "}", this);
+        }
+
+        protected override SongRule CreateRule()
+        {
+            Rule = new FakeSongRule(this);
+            return Rule;
+        }
+    }
+}

@@ -13,6 +13,10 @@ namespace DigitalStory.Tests.EditMode
     public sealed class HiveDefenseSessionTests
     {
         private static readonly Vector3 Origin = Vector3.zero;
+
+        // H K J.
+        private static readonly int[] DomeHoles = { 0, 2, 1 };
+
         private HiveDefenseWorld _world;
 
         [TearDown]
@@ -25,9 +29,9 @@ namespace DigitalStory.Tests.EditMode
         private static WaveEntry[] OneStick() => new[] { new WaveEntry(1, 0) };
 
         // A stick that spawns 1 m from the Piper, who stands at the origin.
-        private HiveDefenseWorld StickBesidePiper(WaveEntry[] waves = null)
+        private HiveDefenseWorld StickBesidePiper(WaveEntry[] waves = null, bool withSongs = false)
         {
-            _world = new HiveDefenseWorld(waves ?? OneStick(), spawns: new[] { new Vector3(1f, 0f, 0f) });
+            _world = new HiveDefenseWorld(waves ?? OneStick(), spawns: new[] { new Vector3(1f, 0f, 0f) }, withSongs: withSongs);
             return _world;
         }
 
@@ -215,9 +219,10 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void StickHitOnPiper_UnderTheDome_RemovesFewerWasps()
         {
-            StickBesidePiper();
+            StickBesidePiper(withSongs: true);
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
-            Assert.That(_world.Session.Forms.StartDome(30f), Is.True);
+            _world.Play(DomeHoles);
+            Assert.That(_world.Session.Forms.IsDomed, Is.True);
 
             bool hit = _world.RunUntil(() => _world.Session.Swarm.Count < _world.Swarm.StartingWasps, 10f);
 
@@ -225,6 +230,38 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(hit, Is.True);
             Assert.That(lost, Is.EqualTo(Mathf.RoundToInt(_world.Stick.WaspsKnockedOff * _world.Swarm.DomeLossFraction)));
             Assert.That(lost, Is.LessThan(_world.Stick.WaspsKnockedOff));
+        }
+
+        [Test]
+        public void StickHitOnPiper_UnderTheDome_RipplesTheDomeFromTheHittersSide()
+        {
+            StickBesidePiper(withSongs: true);
+            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
+            _world.Play(DomeHoles);
+
+            bool hit = _world.RunUntil(() => _world.Session.Swarm.Count < _world.Swarm.StartingWasps, 10f);
+
+            Vector4 dome = _world.Session.Forms.Slot(SongSlot.Guard).ParamA;
+            Assert.That(hit, Is.True);
+            Assert.That(dome.w, Is.GreaterThan(0f), "the dome's seconds when it blocked the hit");
+            Assert.That(dome.y, Is.EqualTo(1f).Within(0.05f), "the stick stands on the Piper's +x side");
+            Assert.That(dome.z, Is.EqualTo(0f).Within(0.3f));
+        }
+
+        [Test]
+        public void StickHitOnPiper_DuringHiveCallUnderTheDome_KeepsHiveCall()
+        {
+            StickBesidePiper(withSongs: true);
+            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
+            int hits = 0;
+            _world.Session.ActiveBeekeeper(0).PiperHit += brain => hits++;
+            _world.Play(DomeHoles);
+            Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
+
+            bool hit = _world.RunUntil(() => hits > 0, 10f);
+
+            Assert.That(hit, Is.True);
+            Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall), "Dome then Hive Call is the safe refill");
         }
 
         [Test]
@@ -283,23 +320,41 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(notes, Is.EqualTo(new[] { 2 }));
         }
 
+        // Plan section E: the mouse wins while it is live, and picks the beekeeper nearest its ground point within 3 m.
         [Test]
-        public void AimTarget_IsTheLivingBeekeeperNearestTheAimPoint()
+        public void AimTarget_WhileTheMouseIsLive_IsTheLivingBeekeeperNearTheMousePoint()
         {
             _world = new HiveDefenseWorld(new[] { new WaveEntry(2, 0) }, spawns: new[] { new Vector3(30f, 0f, -30f), new Vector3(-30f, 0f, -30f) });
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 2, 10f);
             BeekeeperBrain east = _world.Session.ActiveBeekeeper(0);
             BeekeeperBrain west = _world.Session.ActiveBeekeeper(1);
 
-            _world.Session.Tick(_world.Frame(aim: west.Position), HiveDefenseWorld.Step);
+            _world.Session.Tick(_world.Frame(aim: west.Position, isMouseLive: true), HiveDefenseWorld.Step);
             Assert.That(_world.Session.AimTarget, Is.SameAs(west));
 
-            _world.Session.Tick(_world.Frame(aim: east.Position), HiveDefenseWorld.Step);
+            _world.Session.Tick(_world.Frame(aim: east.Position, isMouseLive: true), HiveDefenseWorld.Step);
             Assert.That(_world.Session.AimTarget, Is.SameAs(east));
 
+            Vector3 eastPoint = east.Position;
             east.TakeDamage(10000f);
-            _world.Session.Tick(_world.Frame(aim: east.Position), HiveDefenseWorld.Step);
-            Assert.That(_world.Session.AimTarget, Is.SameAs(west), "a dead beekeeper cannot be aimed at");
+            _world.Session.Tick(_world.Frame(aim: eastPoint, isMouseLive: true), HiveDefenseWorld.Step);
+            Assert.That(_world.Session.AimTarget, Is.Null, "a dead beekeeper cannot be aimed at, and the other is far from the mouse");
+            Assert.That(_world.Session.AimPoint, Is.EqualTo(eastPoint), "with nobody near the mouse, the song strikes where it points");
+        }
+
+        [Test]
+        public void AimTarget_WithTheMouseIdle_IsTheNearestBeekeeperWithinTheStingsReach()
+        {
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(2, 0) }, spawns: new[] { new Vector3(5f, 0f, -5f), new Vector3(-30f, 0f, -30f) });
+            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 2, 10f);
+            BeekeeperBrain near = _world.Session.ActiveBeekeeper(0);
+
+            _world.Session.Tick(_world.Frame(aim: new Vector3(-30f, 0f, -30f)), HiveDefenseWorld.Step);
+
+            Assert.That(_world.Session.AimTarget, Is.SameAs(near), "an idle mouse point is ignored");
+
+            // Chosen before the beekeepers stepped in the same tick, so it trails the walking target by one step.
+            Assert.That(Vector3.Distance(_world.Session.AimPoint, near.Position), Is.LessThan(0.1f));
         }
 
         private const float ColossusSeconds = 12f;
@@ -368,11 +423,7 @@ namespace DigitalStory.Tests.EditMode
 
         private void PlayDome()
         {
-            int[] holes = { 0, 1, 0 };
-            foreach (int hole in holes)
-            {
-                _world.RunWith(HiveDefenseWorld.Step, _world.Frame(holes: HiveDefenseFrame.HoleBit(hole)));
-            }
+            _world.Play(DomeHoles);
         }
 
         [Test]
@@ -397,7 +448,7 @@ namespace DigitalStory.Tests.EditMode
 
             PlayDome();
 
-            Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(_world.Session.Forms.IsDomed, Is.True);
             Assert.That(_world.Session.Discovery.IsKnown(HiveDefenseWorld.DomeIndex), Is.True);
             Assert.That(discovered, Is.EqualTo(new[] { HiveDefenseWorld.DomeIndex }));
         }
@@ -408,12 +459,7 @@ namespace DigitalStory.Tests.EditMode
             _world = new HiveDefenseWorld(withSongs: true);
             var notReady = new List<int>();
             _world.Session.Caster.SongNotReady += notReady.Add;
-            int[] holes = { 3, 4, 5, 4, 3 };
-
-            foreach (int hole in holes)
-            {
-                _world.RunWith(HiveDefenseWorld.Step, _world.Frame(holes: HiveDefenseFrame.HoleBit(hole)));
-            }
+            _world.Play(new[] { 3, 1, 2, 1, 3 });
 
             Assert.That(notReady, Is.EqualTo(new[] { HiveDefenseWorld.ColossusIndex }), "Fury is empty");
             Assert.That(_world.Session.Discovery.IsKnown(HiveDefenseWorld.ColossusIndex), Is.False);
@@ -450,6 +496,112 @@ namespace DigitalStory.Tests.EditMode
             _world.Session.Fury.AddDamage(full);
 
             Assert.That(revealed.Count, Is.EqualTo(1));
+        }
+
+        // ---- The giant takes no notes ----
+
+        [Test]
+        public void Tick_WhileTheColossusStands_NoNoteReachesTheCaster()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            var notes = new List<int>();
+            var notReady = new List<int>();
+            _world.Session.Caster.NotePlayed += notes.Add;
+            _world.Session.Caster.SongNotReady += notReady.Add;
+            Assert.That(_world.Session.Forms.StartColossus(ColossusSeconds), Is.True);
+
+            _world.Play(new[] { 0, 2, 1, 3, 1, 2, 1, 3 });
+
+            Assert.That(notes, Is.Empty);
+            Assert.That(notReady, Is.Empty);
+            Assert.That(_world.Session.Caster.RecentNoteCount, Is.EqualTo(0));
+            Assert.That(_world.Session.Forms.IsDomed, Is.False);
+        }
+
+        [Test]
+        public void Tick_NotesPlayedWhileTheColossusStood_DoNotFinishASongAfterIt()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            var cast = new List<int>();
+            _world.Session.Caster.SongCast += cast.Add;
+            _world.Session.Forms.StartColossus(0.5f);
+            _world.Play(new[] { 0, 2 });
+            _world.Run(0.6f);
+            Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.River), "the giant has gone");
+
+            _world.Play(new[] { 1 });
+
+            Assert.That(cast, Is.Empty, "H K were played to the giant, so J alone casts no Dome");
+            Assert.That(_world.Session.Forms.IsDomed, Is.False);
+        }
+
+        // ---- Songs cast even with nothing to hit ----
+
+        [TestCase(HiveDefenseWorld.MeteorIndex)]
+        [TestCase(HiveDefenseWorld.StingIndex)]
+        public void Cast_AimedSongWithNothingToHit_StrikesSixMetresAheadOfThePipersFacing(int song)
+        {
+            _world = new HiveDefenseWorld(piper: new Vector3(5f, 0f, 5f), withAllSongs: true);
+            _world.Facing = Vector3.right;
+            var cast = new List<int>();
+            _world.Session.Caster.SongCast += cast.Add;
+
+            _world.Play(_world.Session.Caster[song].Song.Keys);
+
+            Assert.That(_world.Session.ActiveBeekeeperCount, Is.EqualTo(0));
+            Assert.That(cast, Is.EqualTo(new[] { song }));
+            Vector4 strike = _world.Session.Forms.Slot(SongSlot.Strike).ParamA;
+            Assert.That(strike.x, Is.EqualTo(11f).Within(1e-3f));
+            Assert.That(strike.y, Is.EqualTo(0f).Within(1e-3f));
+            Assert.That(strike.z, Is.EqualTo(5f).Within(1e-3f));
+        }
+
+        [Test]
+        public void Cast_FacingWithHeightAndAnyLength_StillStrikesSixMetresAheadOnTheGround()
+        {
+            _world = new HiveDefenseWorld(withAllSongs: true);
+            _world.Facing = new Vector3(0f, 3f, -0.5f);
+
+            _world.Play(_world.Session.Caster[HiveDefenseWorld.MeteorIndex].Song.Keys);
+
+            Vector4 strike = _world.Session.Forms.Slot(SongSlot.Strike).ParamA;
+            Assert.That(strike.x, Is.EqualTo(0f).Within(1e-3f));
+            Assert.That(strike.z, Is.EqualTo(-6f).Within(1e-3f));
+        }
+
+        [Test]
+        public void Cast_MeteorWithABeekeeperOnTheField_StrikesTheBeekeeper()
+        {
+            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(8f, 0f, 3f) }, withAllSongs: true);
+            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
+            BeekeeperBrain keeper = _world.Session.ActiveBeekeeper(0);
+
+            _world.Play(_world.Session.Caster[HiveDefenseWorld.MeteorIndex].Song.Keys);
+
+            Vector4 strike = _world.Session.Forms.Slot(SongSlot.Strike).ParamA;
+            Assert.That(strike.x, Is.EqualTo(keeper.Position.x).Within(0.1f));
+            Assert.That(strike.z, Is.EqualTo(keeper.Position.z).Within(0.1f));
+        }
+
+        [TestCase(HiveDefenseWorld.DomeIndex)]
+        [TestCase(HiveDefenseWorld.StingIndex)]
+        [TestCase(HiveDefenseWorld.TornadoIndex)]
+        [TestCase(HiveDefenseWorld.MeteorIndex)]
+        [TestCase(HiveDefenseWorld.GustIndex)]
+        [TestCase(HiveDefenseWorld.HiveCallIndex)]
+        public void Cast_EverySongButTheColossus_CastsWithNobodyOnTheField(int song)
+        {
+            _world = new HiveDefenseWorld(withAllSongs: true);
+            var cast = new List<int>();
+            var notReady = new List<int>();
+            _world.Session.Caster.SongCast += cast.Add;
+            _world.Session.Caster.SongNotReady += notReady.Add;
+
+            _world.Play(_world.Session.Caster[song].Song.Keys);
+
+            Assert.That(_world.Session.ActiveBeekeeperCount, Is.EqualTo(0));
+            Assert.That(cast, Is.EqualTo(new[] { song }));
+            Assert.That(notReady, Is.Empty);
         }
     }
 }

@@ -9,12 +9,13 @@ using Is = UnityEngine.TestTools.Constraints.Is;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// Seven songs in this order: Dome 0,1,0; Sting 2,3,4; Tornado 5,4,3,5; Gust 1,1,2; Hive Call 0,5,0; Colossus 3,4,5,4,3; Meteor 4,2,0.
-    /// Only the Sting is known from the start, and only the Colossus is revealed when Fury fills.
+    /// Seven songs in this order, with H J K L as holes 0 to 3: Dome H K J; Sting J K H; Tornado J K K H; Gust H L K;
+    /// Hive Call L J L; Colossus L J K J L; Meteor J K L K. Only the Sting is known from the start, and only the Colossus is
+    /// revealed when Fury fills.
     /// </summary>
     public sealed class SongDiscoveryTests
     {
-        private const int HoleCount = 6;
+        private const int HoleCount = 4;
         private const int Dome = 0;
         private const int Sting = 1;
         private const int Colossus = 5;
@@ -24,6 +25,7 @@ namespace DigitalStory.Tests.EditMode
         private FuryConfig _furyConfig;
         private HiveConfig _hiveConfig;
         private SongConfig _songConfig;
+        private SquadConfig _squads;
         private SwarmBody _body;
         private FuryMeter _fury;
         private SwarmFormMachine _forms;
@@ -42,9 +44,10 @@ namespace DigitalStory.Tests.EditMode
             _furyConfig = ScriptableObject.CreateInstance<FuryConfig>();
             _hiveConfig = ScriptableObject.CreateInstance<HiveConfig>();
             _songConfig = ScriptableObject.CreateInstance<SongConfig>();
+            _squads = ScriptableObject.CreateInstance<SquadConfig>();
             _body = new SwarmBody(_swarmConfig);
             _fury = new FuryMeter(_furyConfig);
-            _forms = new SwarmFormMachine(_body, _fury);
+            _forms = new SwarmFormMachine(_body, _fury, _squads);
             _hives = new HiveSet(new List<Hive> { new Hive(_hiveConfig, new Vector3(-10f, 0f, 0f)), new Hive(_hiveConfig, new Vector3(10f, 0f, 0f)) });
             _songs.Clear();
             _songs.Add(ScriptableObject.CreateInstance<DomeSong>());
@@ -69,6 +72,7 @@ namespace DigitalStory.Tests.EditMode
             Object.DestroyImmediate(_furyConfig);
             Object.DestroyImmediate(_hiveConfig);
             Object.DestroyImmediate(_songConfig);
+            Object.DestroyImmediate(_squads);
 
             foreach (SwarmSongEffect song in _songs)
             {
@@ -84,7 +88,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_songs[Sting].Category, Is.EqualTo(SongCategory.Attack));
             Assert.That(_songs[2].Category, Is.EqualTo(SongCategory.Attack), "Tornado");
             Assert.That(_songs[Meteor].Category, Is.EqualTo(SongCategory.Attack));
-            Assert.That(_songs[Colossus].Category, Is.EqualTo(SongCategory.Attack));
+            Assert.That(_songs[Colossus].Category, Is.EqualTo(SongCategory.Power), "the Colossus moved from Attack to Power");
             Assert.That(_songs[Dome].Category, Is.EqualTo(SongCategory.Defense));
             Assert.That(_songs[3].Category, Is.EqualTo(SongCategory.Defense), "Gust");
             Assert.That(_songs[4].Category, Is.EqualTo(SongCategory.Power), "Hive Call");
@@ -203,13 +207,14 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [TestCase(new[] { 0 }, 1)]
-        [TestCase(new[] { 0, 1 }, 2)]
-        [TestCase(new[] { 5 }, 1)]
-        [TestCase(new[] { 5, 4 }, 2)]
-        [TestCase(new[] { 5, 4, 3 }, 3)]
-        [TestCase(new[] { 2, 3 }, 2)]
-        [TestCase(new[] { 3, 4, 5, 4 }, 4)]
-        [TestCase(new[] { 4, 2 }, 2)]
+        [TestCase(new[] { 0, 2 }, 2)]
+        [TestCase(new[] { 1 }, 1)]
+        [TestCase(new[] { 1, 2 }, 2)]
+        [TestCase(new[] { 1, 2, 2 }, 3)]
+        [TestCase(new[] { 1, 2, 3 }, 3)]
+        [TestCase(new[] { 3, 1 }, 2)]
+        [TestCase(new[] { 3, 1, 2 }, 3)]
+        [TestCase(new[] { 3, 1, 2, 1 }, 4)]
         public void HintNotes_EveryPrefixOfASong_IsItsLength(int[] notes, int expected)
         {
             Play(notes);
@@ -222,15 +227,15 @@ namespace DigitalStory.Tests.EditMode
         {
             Play(0);
 
-            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(1), "Dome and Hive Call both begin with hole 0");
+            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(1), "Dome and Gust both begin with hole 0");
         }
 
         [Test]
         public void HintNotes_AfterTheSharedPrefixSplits_FollowsTheSongThatStillFits()
         {
-            Play(0, 5);
+            Play(0, 3);
 
-            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(2), "only Hive Call begins with 0, 5");
+            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(2), "only Gust begins with 0, 3");
         }
 
         [Test]
@@ -244,15 +249,15 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void HintNotes_JunkBeforeTheBeginningOfASong_IsIgnored()
         {
-            Play(3, 3, 0, 1);
+            Play(3, 3, 0, 2);
 
-            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(2), "0, 1 begins the Dome");
+            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(2), "0, 2 begins the Dome");
         }
 
         [Test]
         public void HintNotes_AfterACast_IsZero()
         {
-            Play(0, 1, 0);
+            Play(0, 2, 1);
 
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
             Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(0));
@@ -261,7 +266,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void HintNotes_NotesOlderThanTheWindow_DoNotCount()
         {
-            Play(0, 1);
+            Play(0, 2);
             _caster.Tick(3f);
 
             Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(0));
@@ -275,14 +280,14 @@ namespace DigitalStory.Tests.EditMode
             Play(1);
             _caster.Tick(1.5f);
 
-            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(1), "only 1 is left, and Gust begins with 1");
+            Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(1), "only 1 is left, and the Sting begins with 1");
         }
 
         [Test]
         public void HintNotes_WholeSongPlayedWhileItCools_NeverReturnsTheSongsLength()
         {
-            Play(0, 1, 0);
-            Play(0, 1, 0);
+            Play(0, 2, 1);
+            Play(0, 2, 1);
 
             Assert.That(_caster.RecentNoteCount, Is.EqualTo(3), "the cooling song's notes stay");
             Assert.That(_discovery.HintNotes(_caster), Is.EqualTo(1));
@@ -297,7 +302,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void HintNotes_Asked_AllocatesNothing()
         {
-            Play(5, 4);
+            Play(3, 1);
 
             Assert.That(() => { _discovery.HintNotes(_caster); }, Is.Not.AllocatingGCMemory());
         }
