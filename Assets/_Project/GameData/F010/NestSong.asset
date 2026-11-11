@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b14a58d3188764ef5a99daa952659f98, type: 3}
+  m_Name: NestSong
+  m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.NestSong
+  _song:
+    _title: Nest
+    _description: A trap of wasps waits on the lane
+    _cooldownSeconds: 8
+    _keys: 02000000030000000100000000000000i
+  _category: 0
+  _waspCost: 100
+  _knownFromStart: 0
+  _revealedWhenFuryFills: 0
+  _share: 0.15
+  <MaxRange>k__BackingField: 10
+  <ArmSeconds>k__BackingField: 0.6
+  <TriggerRadius>k__BackingField: 2.5
+  <FuseSeconds>k__BackingField: 0.3
+  <BlastRadius>k__BackingField: 3.5
+  <Damage>k__BackingField: 70
+  <StunSeconds>k__BackingField: 1
+  <MaxSeconds>k__BackingField: 60

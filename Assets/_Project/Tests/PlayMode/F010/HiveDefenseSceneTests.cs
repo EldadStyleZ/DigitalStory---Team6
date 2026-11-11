@@ -228,6 +228,58 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(_root.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Meteor));
         }
 
+        // The five songs added after the Meteor: each one's keys, played in the first farm phase with nobody on the field,
+        // put its form in its own slot: the attacks in Strike, the trap and the shell in Post.
+        [UnityTest]
+        public IEnumerator PressHole_WithTheHydraKeys_FormsTheHydra()
+        {
+            return ExpectSlotAfterKeys<HydraSong>(SongSlot.Strike, SwarmForm.Hydra);
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_WithTheScytheKeys_FormsTheScythe()
+        {
+            return ExpectSlotAfterKeys<ScytheSong>(SongSlot.Strike, SwarmForm.Scythe);
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_WithTheLanceKeys_FormsTheLance()
+        {
+            return ExpectSlotAfterKeys<LanceSong>(SongSlot.Strike, SwarmForm.Lance);
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_WithTheNestKeys_LeavesTheNestInThePostSlot()
+        {
+            return ExpectSlotAfterKeys<NestSong>(SongSlot.Post, SwarmForm.Nest);
+        }
+
+        [UnityTest]
+        public IEnumerator PressHole_WithTheHoneycombKeys_LeavesTheHoneycombInThePostSlot()
+        {
+            return ExpectSlotAfterKeys<HoneycombSong>(SongSlot.Post, SwarmForm.Honeycomb);
+        }
+
+        // The scene holds all twelve songs, each once, in the song table's order: the attacks, the defenses, the gold songs.
+        [UnityTest]
+        public IEnumerator Scene_OnLoad_HoldsTheTwelveSongsInTheTablesOrder()
+        {
+            yield return null;
+            var expected = new[]
+            {
+                typeof(StingSong), typeof(TornadoSong), typeof(MeteorSong), typeof(HydraSong), typeof(ScytheSong), typeof(LanceSong),
+                typeof(NestSong), typeof(DomeSong), typeof(GustSong), typeof(HoneycombSong), typeof(HiveCallSong), typeof(ColossusSong),
+            };
+            SwarmSongCaster caster = _root.Session.Caster;
+            var actual = new System.Type[caster.Count];
+            for (int song = 0; song < caster.Count; song++)
+            {
+                actual[song] = caster[song].GetType();
+            }
+
+            Assert.That(actual, Is.EqualTo(expected));
+        }
+
         [UnityTest]
         public IEnumerator PressHole_OnAHole_SoundsThatHoleOnTheFluteVoice()
         {
@@ -317,7 +369,8 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(session.Swarm.Count, Is.EqualTo(before + granted));
         }
 
-        // Plan section M: a song costs nothing in a farm phase, and its wasp price, paid at the cast, in a survive phase.
+        // Plan section M: a song costs nothing in a farm phase, and its wasp price, paid at the cast, in a survive phase. A
+        // song's first cast in a match is free in any phase, so the Sting is cast in the farm phase first and paid for second.
         [UnityTest]
         public IEnumerator Song_CostsNothingInAFarmPhaseAndItsPriceInASurvivePhase()
         {
@@ -330,12 +383,22 @@ namespace DigitalStory.Tests.PlayMode
             int beforeFree = session.Swarm.Count;
             yield return Play(KeysOf<DomeSong>());
             Assert.That(session.Forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome), "the Dome did not cast");
+            yield return Play(KeysOf<StingSong>());
             Assert.That(session.Swarm.Count, Is.EqualTo(beforeFree), "a song in a farm phase cost wasps");
 
             _root.CallWave();
             yield return null;
             Assert.That(session.Phase, Is.EqualTo(MatchPhase.Survive));
 
+            // The session's steps are clamped, so the Sting's own cooldown is waited for, not the game time it would take.
+            int frames = 0;
+            while (session.Caster.CooldownFraction(sting) > 0f && frames < MaxFramesForWave)
+            {
+                yield return null;
+                frames++;
+            }
+
+            Assert.That(session.Caster.CooldownFraction(sting), Is.EqualTo(0f), "the Sting never rested");
             int beforePaid = session.Swarm.Count;
             yield return Play(KeysOf<StingSong>());
             Assert.That(session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Sting), "the Sting did not cast");
@@ -821,6 +884,19 @@ namespace DigitalStory.Tests.PlayMode
             // The last note is read on the next tick.
             yield return null;
             yield return null;
+        }
+
+        // Plays the song's keys with nobody on the field, and checks that the song now runs in its slot and is known.
+        private IEnumerator ExpectSlotAfterKeys<T>(SongSlot slot, SwarmForm form) where T : SwarmSongEffect
+        {
+            Assert.That(_root.Session.ActiveBeekeeperCount, Is.EqualTo(0), "a beekeeper came before the test played");
+
+            yield return Play(KeysOf<T>());
+
+            SlotState state = _root.Session.Forms.Slot(slot);
+            Assert.That(state.Form, Is.EqualTo(form));
+            Assert.That(state.ReleasedSeconds, Is.LessThan(0f), "the song has already let go");
+            Assert.That(_root.Session.Discovery.IsKnown(SongIndex<T>()), Is.True);
         }
 
         // The keys on the scene's own song asset.

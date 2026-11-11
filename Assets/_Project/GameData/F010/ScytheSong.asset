@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c1c6bd0fc1764566a0aa7f41df1df0e, type: 3}
+  m_Name: ScytheSong
+  m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.ScytheSong
+  _song:
+    _title: Scythe
+    _description: A blade of wasps cuts the beekeepers in front
+    _cooldownSeconds: 4
+    _keys: 020000000300000000000000i
+  _category: 0
+  _waspCost: 30
+  _knownFromStart: 0
+  _revealedWhenFuryFills: 0
+  _share: 0.37
+  <Seconds>k__BackingField: 1
+  <Radius>k__BackingField: 4.5
+  <HitSeconds>k__BackingField: 0.3
+  <Damage>k__BackingField: 45
+  <WindUpSeconds>k__BackingField: 0.25
+  <SweepDegrees>k__BackingField: 200
+  <SweepSeconds>k__BackingField: 0.2
+  <FacingRange>k__BackingField: 6

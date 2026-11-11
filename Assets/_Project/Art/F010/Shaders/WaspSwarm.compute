@@ -112,6 +112,11 @@ float _DyingSeconds;
 
 static const float FullTurn = 6.28318530718;
 static const float HalfTurn = 3.14159265359;
+static const float QuarterTurn = 1.57079632679;
+static const float GoldenAngle = 2.39996322973;  // radians between neighbours on a Fibonacci spiral
+static const float GoldenShare = 0.61803398875;
+static const float Sqrt3 = 1.73205080757;
+static const float HalfSqrt3 = 0.86602540378;
 static const float3 Up = float3(0.0, 1.0, 0.0);
 static const float3 Still = float3(0.0, 0.0, 0.0);
 static const float Tiny = 0.0001;
@@ -132,6 +137,11 @@ static const int FormHiveCall = 5;
 static const int FormColossus = 6;
 static const int FormCollapsed = 7;
 static const int FormMeteor = 8;
+static const int FormHydra = 9;
+static const int FormScythe = 10;
+static const int FormLance = 11;
+static const int FormNest = 12;
+static const int FormHoneycomb = 13;
 
 static const int NoSlot = -1;
 static const float NoFloor = -100000.0;  // a Steer's floor when the wasp may fly as low as it likes
@@ -168,12 +178,24 @@ static const float PeelStagger = 0.25;
 static const float HomeSeconds = 0.4;
 static const float HomeStagger = 0.2;
 
+// Seconds a song's clock here runs ahead of the rules' clock. The view sends the cast as a time on its own clock, and
+// taking it back off that clock, many seconds into a run, loses a few microseconds to float rounding: a beat the rules
+// reached on this frame (the Hydra's bite at 0.7 s, say) could then fall just short of it here, and its flash would
+// come a frame after its damage. A millisecond is far too short to see.
+static const float BeatSlack = 0.001;
+
 // Strikes fly on a stiff spring so a fast wasp keeps to its path; held shapes use SwarmConfig's shape spring.
 static const float StrikeSpring = 400.0;         // stable to dt 1/30
 static const float StrikeDamping = 0.8;
 static const float StrikeMaxSpeed = 70.0;        // metres per second, enough for an 18 m dive from 12 m up in 0.5 s
 static const float MaxSpeed = 25.0;              // metres per second, so a far target never fires a wasp across the map.
                                                  // WaspInstanced.shader draws a wasp faster than this as a streak.
+// A strike that crosses its whole reach in a blink (the Lance's shot, the Hydra's snap, the Scythe's sweep, the Nest's
+// burst) is pinned to its path (Steer.pin) instead: even the strike spring lags metres behind a path that fast and
+// lands late, and cuts inside a fast sweep. The pin eases in over this long before the blink starts, while the shape
+// still holds, so a wasp a little off its path catches up instead of jumping. While it eases in, Fly holds the step to
+// StrikeMaxSpeed, so a wasp still far off its path flies there as a streak instead of jumping across in three frames.
+static const float PinEaseSeconds = 0.05;
 
 // The heat curve of a strike (songs-v2 B): from WindUpStartHeat to WindUpHeat through the wind-up, ImpactHeat for
 // ImpactSeconds from the impact, then HoldHeat. ImpactHeat is the only heat that turns a wasp white in the draw.
@@ -280,6 +302,199 @@ static const float DomeWeaveStagger = 0.35;      // seconds from the ground ring
 static const float DomeWeaveSeconds = 0.25;      // seconds one wasp's spiral into its place takes
 static const float DomeWeaveTurn = 1.5;          // radians a wasp turns about the core as it spirals in
 
+// Hydra (Strike slot). See HydraSteer for what it reads. Its necks, rear and splashes grow with the level's size scale;
+// the bite's height, a beekeeper's chest, does not.
+static const int HydraMostHeads = 5;
+static const float HydraBiteSeconds = 0.7;       // HydraSong.BiteSeconds's default, while p1.y is 0: the heads land, and
+                                                 // the damage with them
+static const float HydraSnapSeconds = 0.25;      // the heads rear back until this long before the bite, at most half of
+                                                 // it, then snap onto their targets: 0.45 s with the 0.7 s bite
+static const float HydraNeckPacking = 0.6;       // a wasp's place on its neck is frac(heads x u) to this power, packing the head
+static const float HydraHeadStart = 0.8;         // from this place on the neck a wasp is part of the head
+static const float HydraFanRadians = 1.0;        // the heads rear back on a fan behind the core, its outer heads this far
+                                                 // either side of straight back, so they stand clear of each other from
+                                                 // any side the camera sees them, for any head count
+static const float HydraRootOut = 1.5;           // metres from the core toward the head's target its neck rises from: outside
+                                                 // the core's clear circle (SwarmConfig.CoreClearRadius 1.2), so the reared
+                                                 // neck arches back over the inner ring and the struck one reaches out from
+                                                 // it, and no neck ever crosses the ring. Not grown: the ring does not grow
+static const float HydraRearBack = 2.4;          // metres behind the core the head rears back to
+static const float HydraRearHeight = 3.8;        // about the plan's 4 m
+static const float HydraArchForward = 1.4;       // metres the reared neck bows toward the target, like a cobra's
+static const float HydraStrikeArch = 0.9;        // metres the struck neck still bows up at its middle, so it reads as a neck
+                                                 // striking down from above, not as a line on the ground
+static const float HydraSwayMeters = 0.35;
+static const float HydraSwaySpeed = 7.0;         // radians per second
+static const float HydraSwayPhase = 2.1;         // radians between neighbouring heads, so they sway apart
+static const float HydraNeckWidth = 0.18;        // metres the neck spreads, widening to HydraHeadWidth at the head
+static const float HydraHeadWidth = 0.55;
+static const float HydraBiteHeight = 0.9;        // metres above the ground a head bites a beekeeper: its chest
+static const float HydraStrikeHeight = 0.2;      // metres above the ground a spare head, with no beekeeper, strikes
+// How HydraRule packs each head into one float of the slot: a whole number below 2^23, exact in a float. The flag is
+// added when the head bites a beekeeper; the rest is x x 2048 + z, each the head's ground point in 1/16 m steps from
+// 64 m below the world's origin.
+static const uint HydraBitesFlag = 4194304;
+static const uint HydraGridShift = 11;
+static const uint HydraGridMask = 2047;
+static const float HydraGridStepsPerMetre = 16.0;
+static const float HydraGridOrigin = 64.0;
+static const float HydraSplashSpikes = 8.0;
+static const float HydraSplashLowest = -0.3;     // the spikes' heights on the unit sphere: a few stab into the ground
+static const float HydraSplashHighest = 0.9;
+static const float HydraSplashRadius = 1.2;
+static const float HydraSplashSeconds = 0.08;    // the head bursts into its splash this fast
+static const float HydraShakeSeconds = 0.35;     // the heads stay pinned through the shake, so it shows in full
+static const float HydraShakeMeters = 0.2;
+static const float HydraShakeSpeed = 125.663706; // radians per second (20 Hz)
+static const float HydraSettleSeconds = 0.25;    // the splash folds back into the head after the shake
+static const float HydraFloorHeight = 0.1;       // metres above the ground a splash's low spikes skim
+
+// Scythe (Strike slot). See ScytheSteer for what it reads.
+static const float DefaultScytheReach = 4.5;     // ScytheSong's reach, while p0.z is 0
+static const float DefaultScytheSweep = 3.49065850399; // 200 degrees, while p0.y is 0
+static const float ScytheFormSeconds = 0.25;     // the sweep's start while p0.w is 0
+static const float ScytheHitSeconds = 0.3;       // ScytheSong's hit, while p1.x is 0
+static const float ScytheLeastSweepSeconds = 0.15; // while p1.y is 0, the ease-out sweep is timed so its edge crosses the
+static const float ScytheMostSweepSeconds = 0.5;   // aim, the sweep's middle, on the hit's frame, within these. ScytheSong's
+                                                   // 0.25 s puts it there 0.01 s after the hit, within a frame
+static const float ScytheInnerRadius = 1.4;      // the blade's root. The plan's 1 m would cross the core's clear circle
+static const float ScytheHeight = 0.9;
+static const float ScytheCurve = 0.35;           // radians the blade's tip trails its root, by rank squared
+static const float ScytheCock = 0.52359877560;   // 30 degrees the blade winds back while it forms, before it sweeps
+static const float ScytheBladeWidth = 0.6;       // metres across the blade at its widest, tapering to both ends
+static const float ScytheBladeDepth = 0.15;      // metres up and down
+static const float ScytheSmearRadians = 1.0;     // how far the last wasp trails the edge at the sweep's fastest. The plan's
+                                                 // 0.6 leaves gaps: the edge first moves about a radian a frame at 60 fps
+static const float ScytheCrumbleSeconds = 0.35;  // after the sweep and its smear, the blade crumbles into embers
+static const float ScytheSinkMeters = 0.8;
+static const float ScytheScatterMeters = 0.4;
+static const float ScytheEmberHeat = 0.3;
+
+// Lance (Strike slot). See LanceSteer for what it reads. Its spear, crown and wake grow with its length, which the
+// rule grows with the level.
+static const float DefaultLanceLength = 14.0;    // LanceSong's length, while p1.x is 0
+static const float LanceDrawSeconds = 0.4;       // the draw while p1.y is 0
+static const float LanceFlightSeconds = 0.1;     // LanceSong.FlightSeconds: from the fire to the tip at full length, so
+                                                 // the tip lands on LanceSong's hit, its draw plus this
+static const float LanceSpearFront = 1.3;        // metres behind the core the spear's tip gathers. The plan's 0.5 m would
+                                                 // sit on the core's marker
+static const float LanceSpearLength = 5.0;
+static const float LancePullMeters = 0.8;        // the spear draws back this far through the draw
+static const float LanceHeight = 1.2;            // metres up the line runs where it hits: a beekeeper's chest
+static const float LanceHighHeight = 2.4;        // metres up the spear is held and thrown from, so it flies over the inner
+                                                 // ring and the river round the core instead of through them
+static const float LanceDropMeters = 3.0;        // metres past the core over which the thrown line drops to LanceHeight
+static const float LanceLooseWidth = 0.35;       // metres the spear spreads as it gathers, tightening to LanceTightWidth.
+static const float LanceTightWidth = 0.1;        // The plan's 0.05 m is thinner than a wasp
+static const float LanceTipWidth = 0.4;          // the tip's width as a share of the shaft's, over the first LanceTipTaper
+static const float LanceTipTaper = 0.2;
+static const float LanceTipShare = 0.08;         // the ranks below this are the spear's tip, white once half drawn
+static const float LanceQuiverMeters = 0.08;     // the goal's swing. The strike spring shows about a third of it until
+                                                 // the pin eases in at the end of the draw, so the quiver grows
+static const float LanceQuiverSpeed = 50.0;      // radians per second (8 Hz). The plan's 30 Hz aliases to a still or a
+                                                 // flicker at 60 frames a second
+static const float LanceQuiverWave = 6.0;        // radians the quiver's phase turns along the spear
+static const float LanceWakeShare = 0.3;         // the last ranks stop along the line as its wake; the rest fly to its end
+static const float LanceWakeStart = 1.2;         // metres ahead of the origin the wake starts, clear of the core
+static const float LanceCrownRadius = 1.5;
+static const float LanceCrownDepth = 0.8;        // metres past the end the crown flares forward
+static const float LanceCrownSeconds = 0.15;
+static const float LanceDriftMeters = 1.0;       // the wake's sparks drift this far sideways
+static const float LanceSinkMeters = 0.5;
+static const float LanceDriftSeconds = 0.6;
+static const float LanceSparkHeat = 0.3;
+
+// Nest (Post slot). See NestSteer for what it reads.
+static const float DefaultNestTrigger = 2.5;     // NestSong's radii, while p1.x and p1.y are 0
+static const float DefaultNestBlast = 3.5;
+static const float NestLobSeconds = 0.5;         // the last wasp has landed by then; NestSong arms at 0.6 s
+static const float NestLobStagger = 0.12;        // seconds from the river's head leaving to its tail
+static const float NestPeelSeconds = 0.1;        // a wasp joins the lob this fast. The lob starts over the core, inside the
+                                                 // ring around it, and the usual 0.3 s blend would cut the arc flat
+static const float NestLobLift = 1.5;            // metres over the river's height the lob starts, so the comet leaves over
+                                                 // the core's inner ring instead of through it
+static const float NestArcHeight = 2.5;          // metres the lob rises, plus NestArcRise per metre of distance
+static const float NestArcRise = 0.3;
+static const float NestHeadWidth = 0.1;          // metres the comet's head spreads; the tail adds up to NestTailWidth
+static const float NestTailWidth = 0.5;
+static const float NestSplashSeconds = 0.15;     // a landed wasp spreads into the disc this fast
+static const float NestFuseSeconds = 0.3;        // NestSong.FuseSeconds's default, while p1.z is 0: from the set-off to
+                                                 // the burst
+static const float NestPatrolShare = 0.78;       // the ranks from here up patrol the trigger ring; the rest make the disc.
+                                                 // The plan's 15% is too few dots to draw a ring with a young swarm
+static const float NestRingWidth = 0.2;
+static const float NestRingHeight = 0.25;
+static const float NestRingSpin = -0.45;         // radians per second, against the disc
+static const float NestDiscShare = 0.45;         // the disc's radius as a share of the trigger radius
+static const float NestDiscHeight = 0.3;
+static const float NestDiscDepth = 0.08;
+static const float NestDiscSpin = 0.7;           // radians per second
+static const float NestSpiralTwist = 2.4;        // radians the disc's two arms turn from its centre to its rim
+static const float NestArmWidth = 1.2;           // radians each arm spreads across
+static const float NestPulseSpeed = 5.02654824574; // radians per second (0.8 Hz)
+static const float NestPulseShare = 0.12;        // the disc's breath, as a share of its radius
+static const float NestArmedGlow = 0.35;         // the heat while armed, pulsing up by NestPulseGlow
+static const float NestPulseGlow = 0.25;
+static const float NestCrunchRadius = 0.35;
+static const float NestCrunchHeight = 0.6;
+static const float NestSpikes = 16.0;            // the plan's 24 leave gaps in each spike with a young swarm's 120 wasps
+static const float NestSpikeRoot = 0.15;         // share of a spike near its root left empty
+static const float NestSpikeLowest = 0.3;        // metres up the lowest spike's tip, and the highest's, at the default radius
+static const float NestSpikeHighest = 2.6;
+static const float NestSpikeSeconds = 0.12;
+static const float NestDroopSeconds = 0.3;
+static const float NestDroopMeters = 0.8;
+static const float NestFloorHeight = 0.1;
+// NestRule lets go at the burst, so the burst and the flight home share the slot's 0.6 s return beat
+// (SquadConfig.ReturnSeconds): NestBurstHoldSeconds + NestHomeSeconds + NestHomeStagger must not pass it.
+static const float NestBurstHoldSeconds = 0.2;
+static const float NestHomeSeconds = 0.3;
+static const float NestHomeStagger = 0.1;
+
+// Honeycomb (Post slot). See HoneycombSteer for what it reads.
+static const float DefaultHoneycombRadius = 1.6; // HoneycombSong's radii, while p0.w and p1.z are 0
+static const float DefaultHoneycombBurst = 2.2;
+static const float HoneycombHeightShare = 1.65;  // the dome's height as a share of its radius: 2.6 m over a 1.6 m hive,
+                                                 // the plan's 2.2 m wall and its cap, so the top cells stand clear of the
+                                                 // hive's roof instead of hiding behind it
+static const float HoneycombCellShare = 0.68;    // a cell's side as a share of the radius (1.09 m at 1.6 m), so a grown
+                                                 // shell keeps its cell count and a bigger swarm draws thicker strokes.
+                                                 // The plan's 0.45 m cells blur into a mesh with a young swarm's 160 wasps,
+                                                 // and 0.83 m ones leave dotted edges: these few cells are a cage whose
+                                                 // edges read as lines from the game camera
+static const float HoneycombStroke = 0.1;        // metres a cell edge's stroke spreads across
+static const float HoneycombLowestPolar = 1.45;  // radians from the crown at most: the cells past the dome's foot line the
+                                                 // ground round the hive instead of sinking into it
+static const float HoneycombFlightSeconds = 1.0; // the stream's arc from the river to the hive's foot
+static const float HoneycombFlightStagger = 0.35;
+static const float HoneycombArcHeight = 2.0;     // metres the stream rises, plus HoneycombArcRise per metre of distance
+static const float HoneycombArcRise = 0.12;
+static const float HoneycombWindSeconds = 0.6;   // the helix from the dome's foot up to a wasp's cell
+static const float HoneycombWindTurn = 3.14159265359; // radians a wasp winds round the hive as it climbs
+static const float HoneycombSpin = 0.08;         // radians per second
+static const float HoneycombBreathSpeed = 1.88495559215; // radians per second (0.3 Hz)
+static const float HoneycombBreathShare = 0.03;
+static const float HoneycombGlow = 0.55;         // brighter than the Dome's 0.4: a thinner shell, far from the core, that
+                                                 // must stand out against the hive's own light and its alarm ring
+static const float HoneycombBreathGlow = 0.06;
+static const float HoneycombHitLatitude = 0.35;  // radians up from the ground where a stick strikes the shell
+static const float HoneycombRippleSpeed = 4.0;   // radians per second across the shell
+static const float HoneycombRippleWidth = 0.35;  // radians
+static const float HoneycombRippleSeconds = 0.8;
+static const float HoneycombRippleMeters = 0.35;
+static const float HoneycombRippleHeat = 0.8;
+static const float HoneycombBulgeMeters = 0.3;   // the struck cell bulges out and flashes white
+static const float HoneycombBulgeSeconds = 0.4;
+static const float HoneycombFlashSeconds = 0.2;
+static const float HoneycombFloorHeight = 0.1;
+// At the release each cell pops out to the burst radius and lifts off, lowest rank first, then flies home. The pops and
+// the flight home share the slot's 0.6 s return beat (SquadConfig.ReturnSeconds): HoneycombPopStagger +
+// HoneycombPopSeconds + HoneycombHomeSeconds must not pass it.
+static const float HoneycombPopSeconds = 0.15;
+static const float HoneycombPopStagger = 0.15;   // seconds from the crown's pop to the foot's
+static const float HoneycombHomeSeconds = 0.3;
+static const float HoneycombLiftMeters = 0.6;
+
 // Gust: a pulse added to every wasp within the radius, whatever it is doing. An inhale toward the centre, then a ring
 // whose front pushes the wasps out and up as it passes, slowing as it grows; then the swarm glides back.
 static const float GustInhaleSeconds = 0.12;
@@ -328,6 +543,8 @@ struct Steer
     float heat;          // the song's heat
     float floorY;        // a wasp below this skims along it, or NoFloor
     bool isFast;         // on the strike spring and the strike speed cap
+    float pin;           // 0: the springs fly the wasp; 1: it is placed on its goal each frame, so a blink strike lands on
+                         // its frame; between, eased that far from the spring's place toward the goal
 };
 
 int StateOf(WaspDynamic body)
@@ -683,6 +900,7 @@ Steer SteerOf(float3 goal, float share, float heat)
     steer.heat = heat;
     steer.floorY = NoFloor;
     steer.isFast = false;
+    steer.pin = 0.0;
     return steer;
 }
 
@@ -717,6 +935,30 @@ float StrikeHeat(float windUp, float sinceImpact)
     }
 
     return heat;
+}
+
+// A flat direction turned `angle` radians about the up axis, the way RingOffset's angle turns (from +x toward +z).
+float3 TurnFlat(float3 direction, float angle)
+{
+    float turnSin;
+    float turnCos;
+    sincos(angle, turnSin, turnCos);
+    return float3(direction.x * turnCos - direction.z * turnSin, 0.0, direction.x * turnSin + direction.z * turnCos);
+}
+
+// 0 to 1, fastest at the start and settling at the end: three times the mean pace at first.
+float EaseOutCubic(float progress)
+{
+    float rest = 1.0 - saturate(progress);
+    return 1.0 - rest * rest * rest;
+}
+
+// The index-th of `count` unit directions turned GoldenAngle apart round the up axis, rising evenly from height `lowest`
+// to `highest`, so any count of them spreads evenly. The spikes of a splash or a burst.
+float3 FibonacciDirection(float index, float count, float lowest, float highest)
+{
+    float height = lerp(lowest, highest, (index + 0.5) / count);
+    return RingOffset(index * GoldenAngle, sqrt(saturate(1.0 - height * height))) + Up * height;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1005,6 +1247,518 @@ Steer DomeSteer(SlotContext context)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Hydra: Bezier necks rise from the swarm's edge and rear their heads back over the core; the heads snap onto their
+// targets, burst into spiky splashes and shake; then the necks recoil into the river, head first.
+
+// One head's packed float: heads 1 to 4 are p0's x, y, z and w, head 5 is p1.x.
+float HydraPackedOf(SlotContext context, int head)
+{
+    float packed = context.p1.x;
+    if (head == 0)
+    {
+        packed = context.p0.x;
+    }
+    else if (head == 1)
+    {
+        packed = context.p0.y;
+    }
+    else if (head == 2)
+    {
+        packed = context.p0.z;
+    }
+    else if (head == 3)
+    {
+        packed = context.p0.w;
+    }
+
+    return packed;
+}
+
+// Where one head lands, unpacked as HydraRule packs it: at a beekeeper's chest when it bites one, or just over the
+// ground for a spare head.
+float3 HydraBiteOf(SlotContext context, int head, float ground)
+{
+    uint packed = (uint)max(HydraPackedOf(context, head) + 0.5, 0.0);
+    bool bites = packed >= HydraBitesFlag;
+    float x = (float)((packed >> HydraGridShift) & HydraGridMask) / HydraGridStepsPerMetre - HydraGridOrigin;
+    float z = (float)(packed & HydraGridMask) / HydraGridStepsPerMetre - HydraGridOrigin;
+    return float3(x, ground + (bites ? HydraBiteHeight : HydraStrikeHeight), z);
+}
+
+// How many heads the Hydra has: HydraRule never packs a head as 0 and leaves the places past its count at 0, so the
+// places that are not 0. At least one.
+int HydraHeadCount(SlotContext context)
+{
+    float present = step(0.5, context.p0.x) + step(0.5, context.p0.y) + step(0.5, context.p0.z) + step(0.5, context.p0.w)
+        + step(0.5, context.p1.x);
+    return clamp((int)(present + 0.5), 1, HydraMostHeads);
+}
+
+// Reads (HydraRule's remarks): p0.x, p0.y, p0.z, p0.w and p1.x heads 1 to 5, each packed into one float
+// (HydraBiteOf), as many as HydraHeadCount counts; p1.y the bite's seconds after the cast, HydraSong.BiteSeconds, when
+// the heads land with the damage (0 reads as 0.7); p1.z the level's size scale at the cast (0 reads as 1), which grows
+// the necks, the rear and the splashes. The ground is at the core's height. A head follows its beekeeper until the
+// bite. The heads rear back until HydraSnapSeconds before the bite, then snap.
+// The squad's rank picks the head (floor(heads x u)) and the place on its neck (frac(heads x u) to HydraNeckPacking, 1 at
+// the head), so every head gets an equal share and its wasps crowd into the head.
+Steer HydraSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float seconds = context.seconds;
+    int heads = HydraHeadCount(context);
+    float biteAt = context.p1.y > 0.0 ? context.p1.y : HydraBiteSeconds;
+    float rearAt = biteAt - min(HydraSnapSeconds, 0.5 * biteAt);
+    float ranked = context.u * heads;
+    int head = min((int)ranked, heads - 1);
+    float neck = pow(saturate(ranked - head), HydraNeckPacking);
+    bool isHead = neck >= HydraHeadStart;
+
+    float ground = _CorePosition.y;
+    float grown = context.p1.z > 0.0 ? context.p1.z : 1.0;
+    float3 bite = HydraBiteOf(context, head, ground);
+    float3 toward = FlatDirection(_CorePosition.xyz, bite);
+    float3 side = cross(Up, toward);
+
+    // Launch: each neck rises from the swarm's edge on its target's side, and its head rears back over the core, away from
+    // its target and turned out on the heads' fan, swaying.
+    float fanShare = heads > 1 ? 2.0 * head / (heads - 1) - 1.0 : 0.0;
+    float3 behind = TurnFlat(-toward, fanShare * HydraFanRadians);
+    float sway = sin(seconds * HydraSwaySpeed + head * HydraSwayPhase) * HydraSwayMeters * grown;
+    float3 root = _CorePosition.xyz + toward * HydraRootOut + Up * FlyHeight;
+    float3 rear = _CorePosition.xyz + (behind * HydraRearBack + Up * HydraRearHeight) * grown + cross(Up, behind) * sway;
+    float3 risen = lerp(root, rear, smoothstep(0.0, rearAt, seconds));
+    float3 arch = (root + risen) * 0.5 + toward * (HydraArchForward * grown);
+
+    // Peak: the heads snap onto their targets on an ease-in cubic and the necks whip straight, pinned to the path, so the
+    // heads land on the bite's frame.
+    float strike = saturate((seconds - rearAt) / (biteAt - rearAt));
+    float snap = strike * strike * strike;
+    float3 headPoint = lerp(risen, bite, snap);
+    float3 control = lerp(arch, (root + bite) * 0.5 + Up * (HydraStrikeArch * grown), snap);
+
+    float3 spine = Bezier(root, control, headPoint, neck);
+    float3 tangent = BezierSlope(root, control, headPoint, neck);
+    float tangentLength = length(tangent);
+    float3 along = tangentLength > Tiny ? tangent / tangentLength : Up;
+    float3 across = cross(Up, along);
+    float acrossLength = length(across);
+    across = acrossLength > Tiny ? across / acrossLength : side;
+    float3 normal = cross(along, across);
+    float width = lerp(HydraNeckWidth, HydraHeadWidth, smoothstep(HydraHeadStart - 0.1, 1.0, neck)) * grown;
+    float3 shape = spine + (across * cos(wasp.ringAngle) + normal * sin(wasp.ringAngle)) * (wasp.ringRadius * width);
+
+    // The bite: each head bursts into a spiky splash on its target and the neck shakes it, hardest at the head.
+    float sinceBite = seconds - biteAt;
+    float splash = 0.0;
+    float shake = 0.0;
+    if (sinceBite >= 0.0)
+    {
+        float open = smoothstep(0.0, HydraSplashSeconds, sinceBite);
+        splash = open * (1.0 - smoothstep(HydraShakeSeconds, HydraShakeSeconds + HydraSettleSeconds, sinceBite));
+        shake = sin(sinceBite * HydraShakeSpeed + head) * HydraShakeMeters * grown * saturate(1.0 - sinceBite / HydraShakeSeconds);
+    }
+
+    if (isHead)
+    {
+        float spike = floor(wasp.phase01 * HydraSplashSpikes);
+        float3 spikeDirection = FibonacciDirection(spike, HydraSplashSpikes, HydraSplashLowest, HydraSplashHighest);
+        float reach = (neck - HydraHeadStart) / (1.0 - HydraHeadStart);
+        shape = lerp(shape, bite + spikeDirection * (reach * HydraSplashRadius * grown), splash);
+    }
+
+    shape += side * (shake * neck * neck);
+
+    // Return: the necks recoil into the river, head first.
+    float peel = PeelBy(seconds, context.lane, rearAt);
+    float home = Home(context.released, 1.0 - neck);
+    float3 goal = lerp(lerp(context.baseGoal, shape, peel), context.baseGoal, home);
+
+    // On the strike spring from the cast, as the Lance is, so even the river's tail keeps close to its neck while the
+    // squeezed peel rushes it there and the pin has little left to close. Pinned from the snap through the shake; the
+    // strike spring then folds the splash back into the head.
+    bool isHeld = home <= 0.0;
+    float pinned = sinceBite < HydraShakeSeconds && isHeld ? smoothstep(rearAt - PinEaseSeconds, rearAt, seconds) : 0.0;
+
+    Steer steer = SteerOf(goal, peel * (1.0 - home), StrikeHeat(seconds / biteAt, sinceBite));
+    steer.isFast = sinceBite < HydraShakeSeconds + HydraSettleSeconds && isHeld;
+    steer.pin = pinned;
+    steer.floorY = home < 1.0 ? ground + HydraFloorHeight : NoFloor;
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Scythe: a crescent blade forms off the core and winds back, sweeps round it with a trailing smear, and crumbles into
+// sinking embers that fly home.
+
+// Reads (ScytheRule's remarks): p0.x the angle the sweep starts at (radians on the ground, from +x toward +z, as
+// RingOffset), the aim less half the sweep; p0.y the signed sweep (radians; positive turns from +x toward +z; 0 reads as
+// 200 degrees); p0.z the reach in metres, grown by the level (0 reads as 4.5); p0.w the wind-up, when the sweep starts
+// (0 reads as 0.25); p1.x the cut's seconds after the cast (0 reads as 0.3); p1.y the sweep's seconds after the wind-up
+// (0: timed so the edge crosses the aim on the cut's frame). The centre is the live core. p1.z is not read.
+// The squad's rank is the place along the blade, 0 at its root and 1 at its tip.
+Steer ScytheSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float seconds = context.seconds;
+    float sweep = abs(context.p0.y) > Tiny ? context.p0.y : DefaultScytheSweep;
+    float turn = sweep >= 0.0 ? 1.0 : -1.0;
+    float reach = max(context.p0.z > 0.0 ? context.p0.z : DefaultScytheReach, ScytheInnerRadius);
+    float sweepStart = context.p0.w > 0.0 ? context.p0.w : ScytheFormSeconds;
+    float hit = context.p1.x > 0.0 ? context.p1.x : ScytheHitSeconds;
+    float grown = reach / DefaultScytheReach;
+
+    // Launch: the blade, widest in the middle, its tip curving back against the sweep.
+    float along = context.u;
+    float radius = lerp(ScytheInnerRadius, reach, along);
+    float across = ScytheBladeWidth * grown * sin(HalfTurn * along) * (wasp.ringRadius - 0.5);
+
+    // Peak: the edge winds back while the blade forms, then sweeps on an ease-out cubic, pinned. With no sweep time from
+    // the rule, it takes as long as puts the edge on the aim, its middle, at the cut: the ease-out reaches a share s of
+    // its arc at 1 - cbrt(1 - s) of its time. Each wasp follows the edge a moment later, the most by ScytheSmearRadians
+    // at the sweep's fastest pace, so the fast start leaves a fan-shaped smear that catches up as the blade slows.
+    float arc = abs(sweep) + ScytheCock;
+    float atAim = 1.0 - pow(saturate(1.0 - (0.5 * abs(sweep) + ScytheCock) / arc), 1.0 / 3.0);
+    float timedSeconds = clamp(max(hit - sweepStart, 0.0) / atAim, ScytheLeastSweepSeconds, ScytheMostSweepSeconds);
+    float sweepSeconds = context.p1.y > 0.0 ? context.p1.y : timedSeconds;
+    float smearSeconds = ScytheSmearRadians * sweepSeconds / (3.0 * arc);
+    float wound = smoothstep(0.0, sweepStart, seconds) * ScytheCock;
+    float swept = EaseOutCubic((seconds - sweepStart - wasp.phase01 * wasp.phase01 * smearSeconds) / sweepSeconds);
+    float edge = context.p0.x - turn * wound + (sweep + turn * wound) * swept;
+    float angle = edge - turn * ScytheCurve * along * along + across / radius;
+    float lift = ScytheHeight + sin(wasp.ringAngle) * ScytheBladeDepth;
+    float3 blade = _CorePosition.xyz + RingOffset(angle, radius) + Up * lift;
+
+    // Then the blade crumbles into embers that scatter a little and sink.
+    float sweepEnd = sweepStart + sweepSeconds + smearSeconds;
+    float crumble = smoothstep(sweepEnd, sweepEnd + ScytheCrumbleSeconds, seconds);
+    float3 scatter = RingOffset(angle, (wasp.seed - 0.5) * 2.0 * ScytheScatterMeters) - Up * (ScytheSinkMeters * (0.5 + 0.5 * wasp.level01));
+    blade += scatter * crumble;
+
+    float heat = lerp(StrikeHeat(seconds / hit, seconds - hit), ScytheEmberHeat, crumble);
+
+    // Return: the embers fly home, root first.
+    float peel = PeelBy(seconds, context.lane, sweepStart);
+    float home = Home(context.released, along);
+    float3 goal = lerp(lerp(context.baseGoal, blade, peel), context.baseGoal, home);
+
+    // On the strike spring from the cast, as the Lance is, so even the river's tail keeps close to its place while the
+    // squeezed peel rushes it round to the blade and the pin has little left to close. Pinned through the sweep; the
+    // shape spring then holds the crumbling blade, which hardly moves by then.
+    bool isSweeping = seconds < sweepEnd && home <= 0.0;
+    Steer steer = SteerOf(goal, peel * (1.0 - home), heat);
+    steer.isFast = isSweeping;
+    steer.pin = isSweeping ? smoothstep(sweepStart - PinEaseSeconds, sweepStart, seconds) : 0.0;
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Lance: the squad gathers into a spear behind the core and draws back, fires down the line in a blink, and fans into a
+// crown at the far end over a thin wake of drifting sparks; then home.
+
+// Reads (LanceRule's remarks): p0.xy the line's origin on the ground (world x, z), p0.zw its direction on the ground (x, z;
+// normalised here, the core's facing if 0), both live through the draw and locked when it fires; p1.x the length
+// in metres, grown by the level (0 reads as 14); p1.y the draw's seconds, when it fires (0 reads as 0.4); p1.z how many
+// seconds later the spear's back fires than its tip (0 is allowed). The origin's height is the core's. The tip lands at
+// the full length LanceFlightSeconds after the fire, which is LanceSong.FlightSeconds, so on LanceSong's hit for any draw.
+// The squad's rank is the place along the spear, 0 at its tip and 1 at its back.
+Steer LanceSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float seconds = context.seconds;
+    float3 origin = float3(context.p0.x, _CorePosition.y, context.p0.y);
+    float aimLength = length(context.p0.zw);
+    float3 toward = aimLength > Tiny ? float3(context.p0.z, 0.0, context.p0.w) / aimLength : _CoreForward.xyz;
+    float3 side = cross(Up, toward);
+    float reach = context.p1.x > 0.0 ? context.p1.x : DefaultLanceLength;
+    float draw = context.p1.y > 0.0 ? context.p1.y : LanceDrawSeconds;
+    float tailLag = max(context.p1.z, 0.0);
+    float grown = reach / DefaultLanceLength;
+    float along = context.u;
+    float3 around = side * cos(wasp.ringAngle) + Up * sin(wasp.ringAngle);
+
+    // Launch: the draw. The squad gathers into a spear held high on the aim line behind the core and pulls back,
+    // tightening and quivering harder as it goes. The quiver stops as it fires, so the flight starts from the drawn spear.
+    float drawn = smoothstep(0.0, draw, seconds);
+    float hasFired = seconds >= draw ? 1.0 : 0.0;
+    float width = lerp(LanceLooseWidth, LanceTightWidth, drawn) * grown * lerp(LanceTipWidth, 1.0, smoothstep(0.0, LanceTipTaper, along));
+    float quiver = sin(seconds * LanceQuiverSpeed - along * LanceQuiverWave) * LanceQuiverMeters * drawn * (1.0 - hasFired);
+    float back = LanceSpearFront + (along * LanceSpearLength + drawn * LancePullMeters) * grown;
+    float3 spear = origin - toward * back + Up * LanceHighHeight + around * (wasp.ringRadius * width) + side * quiver;
+
+    // Peak: every wasp flies straight down the line on an ease-in, pinned, the back up to p1.z later, so the spear
+    // stretches into a streak whose tip reaches the full length on the hit's frame. Thrown from high, the streak passes
+    // over the core and drops to chest height LanceDropMeters past it. The back LanceWakeShare stop along the line as its
+    // wake; the rest fly to its end and fan out into a crown.
+    bool isWake = along >= 1.0 - LanceWakeShare;
+    float fireAt = draw + along * tailLag;
+    float arriveAt = fireAt + LanceFlightSeconds;
+    float flight = saturate((seconds - fireAt) / LanceFlightSeconds);
+    float station = isWake ? lerp(LanceWakeStart, reach, saturate((1.0 - along) / LanceWakeShare)) : reach;
+    float height = lerp(LanceHighHeight, LanceHeight, smoothstep(0.0, LanceDropMeters, station));
+    float3 shot = origin + toward * station + Up * height + around * (wasp.ringRadius * LanceTightWidth * grown);
+    float3 shape = lerp(spear, shot, flight * flight);
+
+    // The crown flares forward round the line's end; the wake's sparks drift sideways and sink.
+    float settled = smoothstep(arriveAt, arriveAt + LanceCrownSeconds, seconds);
+    float drift = smoothstep(arriveAt, arriveAt + LanceDriftSeconds, seconds);
+    float3 crown = (toward * (LanceCrownDepth * wasp.level01) + around * (sqrt(wasp.ringRadius) * LanceCrownRadius)) * grown;
+    float3 sparks = side * ((wasp.seed - 0.5) * 2.0 * LanceDriftMeters * grown) - Up * (LanceSinkMeters * wasp.level01);
+    shape += isWake ? sparks * drift : crown * settled;
+
+    // The tip burns white once half drawn; the whole line flashes on the hit's frame.
+    float hitAt = draw + LanceFlightSeconds;
+    float heat = StrikeHeat(drawn, seconds - hitAt);
+    if (along < LanceTipShare && drawn >= 0.5 && seconds < hitAt)
+    {
+        heat = ImpactHeat;
+    }
+
+    if (isWake)
+    {
+        heat = lerp(heat, LanceSparkHeat, drift);
+    }
+
+    // Return: home, tip first.
+    float peel = PeelBy(seconds, context.lane, draw);
+    float home = Home(context.released, along);
+    float3 goal = lerp(lerp(context.baseGoal, shape, peel), context.baseGoal, home);
+
+    // The strike spring gathers the spear tight. The pin eases in at the end of the draw, so the spear quivers in full
+    // just before it fires, and holds the shot, the crown and the wake on their paths until the squad heads home.
+    bool isHeld = home <= 0.0;
+    Steer steer = SteerOf(goal, peel * (1.0 - home), heat);
+    steer.isFast = isHeld;
+    steer.pin = isHeld ? smoothstep(draw - PinEaseSeconds, draw, seconds) : 0.0;
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Nest: a comet lobbed onto the spot, a low turning disc that pulses while armed with a ring patrolling its trigger
+// radius; set off, it crunches and erupts into an urchin of spikes to the blast radius, which droop; then home.
+
+// Reads: p0.xyz where the nest lies (a ground point); p0.w the seconds after the cast at which a beekeeper set it off,
+// or -1; p1.x the trigger radius and p1.y the blast radius in metres, grown by the level (0 reads as 2.5 and 3.5);
+// p1.z the fuse's seconds from the set-off to the burst, NestSong.FuseSeconds (0 reads as 0.3). NestRule lets go at the
+// burst, so once released the release is the burst; before that the burst is p0.w plus the fuse. A nest let go without
+// a set-off (its time ran out) lifts and flies home.
+// The squad's rank places a wasp in the disc, or on the patrol ring from NestPatrolShare up.
+Steer NestSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float seconds = context.seconds;
+    float3 nest = context.p0.xyz;
+    float trigger = context.p1.x > 0.0 ? context.p1.x : DefaultNestTrigger;
+    float blast = context.p1.y > 0.0 ? context.p1.y : DefaultNestBlast;
+    bool isSetOff = context.p0.w >= 0.0;
+    bool isReleased = context.released >= 0.0;
+    float releasedAt = seconds - max(context.released, 0.0);
+    float fuse = context.p1.z > 0.0 ? context.p1.z : NestFuseSeconds;
+    float burstAt = isReleased ? releasedAt : context.p0.w + fuse;
+    float lead = StrikeLeadSeconds();
+
+    // Launch: a comet on a high arc, the river's head first, its tail narrowing to the landing.
+    float leave = context.lane * NestLobStagger;
+    float lobSeconds = NestLobSeconds - NestLobStagger;
+    float progress = saturate((seconds - leave) / lobSeconds);
+    float rate = progress > 0.0 && progress < 1.0 ? 1.0 / lobSeconds : 0.0;
+    float3 start = _CorePosition.xyz + Up * (FlyHeight + NestLobLift);
+    float3 land = nest + Up * NestDiscHeight;
+    float3 control = (start + land) * 0.5 + Up * (NestArcHeight + NestArcRise * distance(start, land));
+    float3 across = cross(Up, FlatDirection(start, land)) * cos(wasp.ringAngle) + Up * sin(wasp.ringAngle);
+    float cometWidth = (NestHeadWidth + context.lane * NestTailWidth) * wasp.ringRadius * (1.0 - progress);
+    float3 comet = Bezier(start, control, land, progress) + BezierSlope(start, control, land, progress) * (rate * lead) + across * cometWidth;
+
+    // Peak, armed: a low two-armed spiral disc turning one way, a ring on the trigger radius turning the other, the
+    // disc breathing and glowing in a slow pulse.
+    float pulse = sin(seconds * NestPulseSpeed);
+    float3 armed = nest;
+    if (context.u >= NestPatrolShare)
+    {
+        float patrolAround = (context.u - NestPatrolShare) / (1.0 - NestPatrolShare) * FullTurn + seconds * NestRingSpin;
+        armed = nest + RingOffset(patrolAround, trigger + (wasp.ringRadius - 0.5) * NestRingWidth) + Up * NestRingHeight;
+    }
+    else
+    {
+        float spread = sqrt(context.u / NestPatrolShare);
+        float arm = wasp.lane < 0.5 ? 0.0 : HalfTurn;
+        float discAround = arm + spread * NestSpiralTwist + (wasp.phase01 - 0.5) * NestArmWidth + seconds * NestDiscSpin;
+        float discRadius = spread * trigger * NestDiscShare * (1.0 + NestPulseShare * pulse);
+        armed = nest + RingOffset(discAround, discRadius) + Up * (NestDiscHeight + sin(wasp.ringAngle) * NestDiscDepth);
+    }
+
+    float settle = smoothstep(leave + lobSeconds, leave + lobSeconds + NestSplashSeconds, seconds);
+    float3 shape = lerp(comet, armed, settle);
+    float heat = lerp(StrikeHeat(progress, -1.0), NestArmedGlow + NestPulseGlow * (0.5 + 0.5 * pulse), settle);
+
+    // Set off: it crunches into a tight ball over the fuse, hotter as it goes.
+    float crunch = isSetOff ? smoothstep(context.p0.w, max(burstAt, context.p0.w + Tiny), seconds) : 0.0;
+    float3 crunched = nest + Up * NestCrunchHeight + SphereDirection(wasp) * (wasp.ringRadius * NestCrunchRadius);
+    shape = lerp(shape, crunched, crunch * crunch);
+    heat = lerp(heat, WindUpHeat, crunch);
+
+    // The burst: an urchin of spikes, each out and up from the ball to a tip over the blast radius, pinned; then the
+    // spikes droop on the springs.
+    float sinceBurst = seconds - burstAt;
+    bool isBursting = isSetOff && sinceBurst >= 0.0;
+    if (isBursting)
+    {
+        float spike = floor(wasp.phase01 * NestSpikes);
+        float rise = lerp(NestSpikeLowest, NestSpikeHighest, frac(spike * GoldenShare)) * (blast / DefaultNestBlast);
+        float3 heart = nest + Up * NestCrunchHeight;
+        float3 tip = nest + RingOffset(spike * GoldenAngle, blast) + Up * rise;
+        float reach = lerp(NestSpikeRoot, 1.0, wasp.ringRadius) * EaseOutCubic(sinceBurst / NestSpikeSeconds);
+        float droop = smoothstep(NestSpikeSeconds, NestSpikeSeconds + NestDroopSeconds, sinceBurst);
+        shape = lerp(heart, tip, reach) - Up * (droop * NestDroopMeters * reach * reach);
+        heat = StrikeHeat(1.0, sinceBurst);
+    }
+
+    // Return: after the burst has shown, or at once if it never went off.
+    float homeStart = isSetOff ? max(releasedAt, burstAt + NestBurstHoldSeconds) : releasedAt;
+    float home = isReleased ? smoothstep(0.0, NestHomeSeconds, seconds - homeStart - context.u * NestHomeStagger) : 0.0;
+    float peel = smoothstep(0.0, NestPeelSeconds, seconds - leave);
+    float3 goal = lerp(lerp(context.baseGoal, shape, peel), context.baseGoal, home);
+
+    Steer steer = SteerOf(goal, peel * (1.0 - home), heat);
+    // The strike spring through the lob, its goal led along the arc so it lands on time; the pin eases in over the
+    // crunch's last moment and holds through the spikes' eruption.
+    bool isErupting = isSetOff && sinceBurst < NestSpikeSeconds && home <= 0.0;
+    steer.isFast = home <= 0.0 && (rate > 0.0 || isErupting);
+    steer.pin = isErupting ? smoothstep(burstAt - PinEaseSeconds, burstAt, seconds) : 0.0;
+    steer.floorY = home < 1.0 && settle > 0.0 ? nest.y + NestFloorHeight : NoFloor;
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Honeycomb: a stream arcs to the hive and winds up round it in a helix into a shell of hexagon cells, calm and slowly
+// breathing; a stick's hit ripples across it from that side; released, the cells pop out and lift off, then fly home.
+
+// |offset| in the hexagon's own measure: 1 on the edge of a hexagon of apothem 1 whose flat sides face 0, 60 and 120
+// degrees.
+float HexMeasure(float2 offset)
+{
+    float slanted = 0.5 * offset.x;
+    float upright = HalfSqrt3 * offset.y;
+    return max(abs(offset.x), max(abs(slanted + upright), abs(slanted - upright)));
+}
+
+// The centre of the hexagon cell that holds a point in the plane. The cells have flat sides facing 0, 60 and 120
+// degrees, `apothem` from centre to side, so neighbouring centres lie 2 x apothem apart in those directions. The point
+// in lattice steps along (2a, 0) and (a, a x sqrt 3), rounded to the nearest centre by the usual cube rounding.
+float2 HexCenter(float2 position, float apothem)
+{
+    float rows = position.y / (apothem * Sqrt3);
+    float columns = (position.x - rows * apothem) / (2.0 * apothem);
+    float3 cube = float3(columns, rows, -columns - rows);
+    float3 rounded = round(cube);
+    float3 error = abs(rounded - cube);
+    if (error.x > error.y && error.x > error.z)
+    {
+        rounded.x = -rounded.y - rounded.z;
+    }
+    else if (error.y > error.z)
+    {
+        rounded.y = -rounded.x - rounded.z;
+    }
+
+    return float2((2.0 * rounded.x + rounded.y) * apothem, rounded.y * apothem * Sqrt3);
+}
+
+// The point on its cell's edge that a point in the plane snaps to: out from the cell's centre, through the point, to the
+// edge. `away` is used for a point on the very centre. Gives the cell's centre too.
+float2 HexEdge(float2 position, float apothem, float2 away, out float2 cell)
+{
+    cell = HexCenter(position, apothem);
+    float2 offset = position - cell;
+    offset = dot(offset, offset) > Tiny * Tiny ? offset : away;
+    return cell + offset * (apothem / max(HexMeasure(offset), Tiny));
+}
+
+// Reads: p0.xyz the hive's position (its base on the ground); p0.w the shell's radius in metres, grown by the level (0
+// reads as 1.6); p1.x the side of the stick that hit last, as an angle on the ground from the hive (radians, from +x
+// toward +z, as RingOffset); p1.y that hit's seconds after the cast, or -1; p1.z the radius in metres the cells burst out
+// to at the release, grown by the level (0 reads as 2.2).
+// The shell is a dome HoneycombHeightShare times as tall as it is wide. Each wasp's place on it is spread evenly by rank
+// (height) and lane (angle), as on the Dome; the dome is laid flat round its crown (a point's distance from the crown
+// along the dome becomes its distance from the plane's centre), the point snaps to its hexagon cell's edge in that plane,
+// and goes back onto the dome. Laid flat that way the lattice needs no seam, and its cells only narrow a little toward
+// the dome's foot.
+Steer HoneycombSteer(SlotContext context)
+{
+    WaspStatic wasp = context.wasp;
+    float seconds = context.seconds;
+    float3 hive = context.p0.xyz;
+    float radius = context.p0.w > 0.0 ? context.p0.w : DefaultHoneycombRadius;
+    float burst = context.p1.z > 0.0 ? context.p1.z : DefaultHoneycombBurst;
+    float apothem = radius * HoneycombCellShare * HalfSqrt3;
+
+    // The wasp's cell edge, laid flat, then its place on the dome: from the crown, and round the hive.
+    float2 away = float2(cos(wasp.lane * FullTurn), sin(wasp.lane * FullTurn));
+    float2 flat = away * (acos(saturate(1.0 - context.u)) * radius);
+    float2 cell;
+    float2 edge = HexEdge(flat, apothem, away, cell);
+    float2 outward = edge - cell;
+    edge += outward * ((wasp.ringRadius - 0.5) * HoneycombStroke / max(length(outward), Tiny));
+    float edgeReach = length(edge);
+    float seatPolar = min(edgeReach / radius, HoneycombLowestPolar);
+    float seatAround = (edgeReach > Tiny ? atan2(edge.y, edge.x) : 0.0) + seconds * HoneycombSpin;
+
+    // Launch: a stream arcs from the river to the dome's foot, the river's head first; there each wasp winds up round
+    // the hive in a helix to its cell.
+    float leave = context.lane * HoneycombFlightStagger;
+    float flight = saturate((seconds - leave) / HoneycombFlightSeconds);
+    float wound = smoothstep(0.0, HoneycombWindSeconds, seconds - leave - HoneycombFlightSeconds);
+    float polar = lerp(HoneycombLowestPolar, seatPolar, wound);
+    float around = seatAround - (1.0 - wound) * HoneycombWindTurn;
+    float3 unit = RingOffset(around, sin(polar)) + Up * cos(polar);
+    float breath = 1.0 + HoneycombBreathShare * sin(seconds * HoneycombBreathSpeed);
+    float3 seat = hive + float3(unit.x, unit.y * HoneycombHeightShare, unit.z) * (radius * breath);
+    float heat = HoneycombGlow + HoneycombBreathGlow * sin(seconds * HoneycombBreathSpeed);
+
+    // Peak: a stick's hit flashes its cell white and bulges it, and a ripple runs across the shell from that side.
+    float sinceHit = context.p1.y >= 0.0 ? seconds - context.p1.y : -1.0;
+    if (sinceHit >= 0.0 && sinceHit < HoneycombRippleSeconds)
+    {
+        float3 struck = RingOffset(context.p1.x, cos(HoneycombHitLatitude)) + Up * sin(HoneycombHitLatitude);
+        float apart = acos(clamp(dot(unit, struck), -1.0, 1.0));
+        float front = (apart - sinceHit * HoneycombRippleSpeed) / HoneycombRippleWidth;
+        float wave = exp(-front * front) * (1.0 - sinceHit / HoneycombRippleSeconds) * wound;
+
+        // The struck cell is found laid flat, as the wasps' cells are, with the shell's turn taken off.
+        float struckAround = context.p1.x - seconds * HoneycombSpin;
+        float2 struckFlat = float2(cos(struckAround), sin(struckAround)) * ((QuarterTurn - HoneycombHitLatitude) * radius);
+        float2 struckOffset = cell - HexCenter(struckFlat, apothem);
+        bool isStruck = dot(struckOffset, struckOffset) < apothem * apothem;
+        float bulge = isStruck ? (1.0 - smoothstep(0.0, HoneycombBulgeSeconds, sinceHit)) * wound : 0.0;
+
+        seat += unit * (wave * HoneycombRippleMeters + bulge * HoneycombBulgeMeters);
+        heat = max(heat, wave * HoneycombRippleHeat);
+        if (isStruck && sinceHit < HoneycombFlashSeconds && wound > 0.0)
+        {
+            heat = ImpactHeat;
+        }
+    }
+
+    float3 control = (context.baseGoal + seat) * 0.5 + Up * (HoneycombArcHeight + HoneycombArcRise * distance(context.baseGoal, seat));
+    float3 shape = Bezier(context.baseGoal, control, seat, smoothstep(0.0, 1.0, flight));
+
+    // Return: each cell pops out to the burst radius and lifts off, lowest rank (the crown) first, then flies home. A
+    // wasp still on its way (a shell let go at once, with no hive standing) just turns home.
+    float released = context.released;
+    float popAt = context.u * HoneycombPopStagger;
+    float pop = released >= 0.0 ? smoothstep(0.0, HoneycombPopSeconds, released - popAt) * wound : 0.0;
+    float home = released >= 0.0 ? smoothstep(0.0, HoneycombHomeSeconds, released - popAt - HoneycombPopSeconds) : 0.0;
+    float3 popped = hive + (seat - hive) * (burst / radius) + Up * HoneycombLiftMeters;
+    shape = lerp(shape, popped, pop);
+    heat = max(heat, WindUpHeat * pop);
+
+    float share = smoothstep(0.0, PeelSeconds, seconds - leave) * (1.0 - home);
+    Steer steer = SteerOf(lerp(shape, context.baseGoal, home), share, heat);
+    steer.isFast = flight > 0.0 && flight < 1.0 && home <= 0.0;
+    steer.floorY = home < 1.0 && flight >= 1.0 ? hive.y + HoneycombFloorHeight : NoFloor;
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // The slot dispatch.
 
 SlotContext ContextOf(int slot, uint index, WaspStatic wasp, float3 baseGoal)
@@ -1018,7 +1772,7 @@ SlotContext ContextOf(int slot, uint index, WaspStatic wasp, float3 baseGoal)
     context.baseGoal = baseGoal;
     context.u = saturate((wasp.squad - header.z) / max(header.w - header.z, Tiny));
     context.lane = FlowLaneAt(wasp, header.y);
-    context.seconds = max(_SimTime - header.y, 0.0);
+    context.seconds = max(_SimTime - header.y + BeatSlack, 0.0);
     context.released = p1.w >= 0.0 ? max(_SimTime - p1.w, 0.0) : -1.0;
     context.p0 = _Slots[slot * SLOT_VECTORS + 1];
     context.p1 = p1;
@@ -1044,6 +1798,26 @@ Steer SlotSteer(int form, SlotContext context)
     else if (form == FormDome)
     {
         steer = DomeSteer(context);
+    }
+    else if (form == FormHydra)
+    {
+        steer = HydraSteer(context);
+    }
+    else if (form == FormScythe)
+    {
+        steer = ScytheSteer(context);
+    }
+    else if (form == FormLance)
+    {
+        steer = LanceSteer(context);
+    }
+    else if (form == FormNest)
+    {
+        steer = NestSteer(context);
+    }
+    else if (form == FormHoneycomb)
+    {
+        steer = HoneycombSteer(context);
     }
 
     return steer;
@@ -1146,6 +1920,7 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     float maxSpeed = MaxSpeed;
     float floorY = NoFloor;
     float tintSharpness = TintSharpness;
+    float pin = 0.0;
 
     int slot = SlotOf(wasp);
     if (slot != NoSlot)
@@ -1160,6 +1935,7 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
         isFlowing = isFlowing && steer.share <= 0.0;
         floorY = steer.floorY;
         tintSharpness = SlotTintSharpness;
+        pin = saturate(steer.pin);
 
         // On the usual springs and speed cap a fast strike would trail metres behind its path and land late.
         if (steer.isFast)
@@ -1188,9 +1964,27 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
         damping = _WobbleDamping;
     }
 
+    float3 before = body.position;
     float3 acceleration = stiffness * (goal - body.position) - 2.0 * damping * sqrt(stiffness) * body.velocity;
     body.velocity = LimitSpeed(body.velocity + acceleration * _DeltaTime, maxSpeed);
     body.position += body.velocity * _DeltaTime;
+
+    // A pinned wasp is placed on its goal, or eased that far toward it, and its speed becomes what it moved: the draw
+    // streaks it, and the spring takes its motion over when the pin lets go. While the pin eases in, the step is held to
+    // the strike speed, so a wasp still far off its path flies there instead of jumping; once fully pinned it is placed,
+    // so a blink strike lands on its frame. A paused step (no time) leaves it be.
+    if (pin > 0.0 && _DeltaTime > 0.0)
+    {
+        float3 moved = lerp(body.position, goal, pin) - before;
+        if (pin < 1.0)
+        {
+            moved = LimitSpeed(moved, StrikeMaxSpeed * _DeltaTime);
+        }
+
+        body.position = before + moved;
+        body.velocity = moved / _DeltaTime;
+    }
+
     Skim(floorY, body);
 
     // Only the plain river: a song's squad, the inner ring and the shapes (the halo, the giant) may fly at the core.

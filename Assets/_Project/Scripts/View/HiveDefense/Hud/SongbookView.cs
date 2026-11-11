@@ -233,10 +233,12 @@ namespace DigitalStory.View
             }
         }
 
-        // Free while songs are free, the wasp price otherwise. A song that costs nothing shows nothing.
+        // Free while the song's next cast costs nothing (its first cast, or a farm phase unless it is a tower), the wasp price
+        // otherwise (HiveDefenseSession.SongPrice). A song that never costs anything shows nothing.
         private void ShowCost(int song)
         {
-            int cost = _session.AreSongsFree ? CostFree : _session.Caster[song].WaspCost;
+            int price = _session.Caster[song].WaspCost;
+            int cost = price == 0 ? 0 : (_session.SongPrice(song) == 0 ? CostFree : price);
             if (cost == _costShown[song])
             {
                 return;
@@ -244,7 +246,7 @@ namespace DigitalStory.View
 
             _costShown[song] = cost;
             Label label = _costs[song];
-            label.text = cost == CostFree ? FreeText : _costTexts[song];
+            label.text = cost == CostFree ? FreeText : (cost == 0 ? string.Empty : _costTexts[song]);
             label.EnableInClassList("chip-cost--free", cost == CostFree);
             label.EnableInClassList("chip-cost--none", cost == 0);
         }

@@ -26,6 +26,10 @@ namespace DigitalStory.View
         // so it arrives with the stingers.
         private const float AttackLightFollowPerSecond = 4f;
 
+        // Share of the lance's line from the core where the attack light settles once the spear fires, so the whole streak
+        // is lit.
+        private const float LanceLightShare = 0.5f;
+
         // Every slot, in the order the view numbers them.
         private static readonly SongSlot[] Slots = { SongSlot.Post, SongSlot.Guard, SongSlot.Strike };
 
@@ -509,8 +513,9 @@ namespace DigitalStory.View
         }
 
         // Where the striking squad is: on the sting's target, or on the meteor's ball (over the core while it climbs and
-        // hangs, then along the line down to the impact point, as MeteorSteer in WaspSwarm.compute flies it), or around the
-        // core for a song that strikes there, such as the Tornado.
+        // hangs, then along the line down to the impact point, as MeteorSteer in WaspSwarm.compute flies it), or halfway down
+        // the lance's line once it fires (LanceRule's ParamA and ParamB), or around the core for a song that strikes there,
+        // such as the Tornado.
         private static Vector3 StrikeLightPoint(Vector3 core, in SlotState strike)
         {
             Vector4 a = strike.ParamA;
@@ -518,6 +523,12 @@ namespace DigitalStory.View
             if (strike.Form == SwarmForm.Sting)
             {
                 return target;
+            }
+
+            if (strike.Form == SwarmForm.Lance)
+            {
+                Vector4 line = strike.ParamB;
+                return strike.Seconds < line.y ? core : new Vector3(a.x, core.y, a.y) + (new Vector3(a.z, 0f, a.w) * (line.x * LanceLightShare));
             }
 
             if (strike.Form != SwarmForm.Meteor)

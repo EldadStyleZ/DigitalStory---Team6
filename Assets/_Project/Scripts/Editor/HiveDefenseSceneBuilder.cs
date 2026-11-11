@@ -134,7 +134,8 @@ namespace DigitalStory.Editor
         {
             "SwarmConfig", "SquadConfig", "AimConfig", "CoreMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "NestConfig",
             "SwarmLevelConfig", "SmokeConfig", "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
-            "DomeSong", "StingSong", "TornadoSong", "GustSong", "MeteorSong", "HiveCallSong", "ColossusSong",
+            "StingSong", "TornadoSong", "MeteorSong", "HydraSong", "ScytheSong", "LanceSong", "NestSong", "DomeSong", "GustSong",
+            "HoneycombSong", "HiveCallSong", "ColossusSong",
         };
 
         // Assets an older build made under names that no longer fit: each moves to its new path, keeping its GUID and any
@@ -379,16 +380,22 @@ namespace DigitalStory.Editor
             return smoker;
         }
 
-        // The order is the spec's table: Dome, Sting, Tornado, Gust, Meteor, Hive Call, Colossus.
+        // The order of the song table in the HUD: the attacks (Strike, then the Post trap), the defenses (Guard, the Gust
+        // pulse, then the Post shell), then the gold songs.
         private static SwarmSongEffect[] LoadOrCreateSongs()
         {
             return new SwarmSongEffect[]
             {
-                LoadOrCreate<DomeSong>("DomeSong"),
                 LoadOrCreate<StingSong>("StingSong"),
                 LoadOrCreate<TornadoSong>("TornadoSong"),
-                LoadOrCreate<GustSong>("GustSong"),
                 LoadOrCreate<MeteorSong>("MeteorSong"),
+                LoadOrCreate<HydraSong>("HydraSong"),
+                LoadOrCreate<ScytheSong>("ScytheSong"),
+                LoadOrCreate<LanceSong>("LanceSong"),
+                LoadOrCreate<NestSong>("NestSong"),
+                LoadOrCreate<DomeSong>("DomeSong"),
+                LoadOrCreate<GustSong>("GustSong"),
+                LoadOrCreate<HoneycombSong>("HoneycombSong"),
                 LoadOrCreate<HiveCallSong>("HiveCallSong"),
                 LoadOrCreate<ColossusSong>("ColossusSong"),
             };

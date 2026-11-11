@@ -112,6 +112,82 @@ namespace DigitalStory.Tests.PlayMode
         private const string LevelOneSuffix = "-level1";
         private const string LevelFiveSuffix = "-level5";
 
+        // Snapshot 15, the five songs after the Meteor. The beekeepers of the first wave are stunned as they come, then put
+        // where a picture needs them and stunned for its length, so they stand still and never hit the swarm.
+        private const float StageStunSeconds = 60f;
+        private const float StageSettleSeconds = 1.5f;
+        private const float FaceNorthSeconds = 0.25f;
+        private const float HydraRearShotSeconds = 0.45f;
+        private const float HydraBiteShotSeconds = 0.7f;
+        private const float HydraFocusHeight = 2f;
+        private const float HydraCloseDistance = 13f;
+        private const float HydraClosePitch = 22f;
+        private const float HydraCloseYaw = 40f;
+        private const float ScytheCutShotSeconds = 0.3f;
+        private const float ScytheCloseDistance = 10f;
+        private const float ScytheClosePitch = 50f;
+        private const float LanceDrawShotSeconds = 0.35f;
+        private const float LanceFireShotSeconds = 0.5f;
+        private const float LanceHeight = 1.2f;
+        private const float LanceCloseMargin = 5f;
+        private const float LanceClosePitch = 22f;
+        private const float NestArmedShotSeconds = 1.3f;
+        private const float NestStepInMetres = 1.5f;
+        private const float NestShotFocusHeight = 1f;
+        private const float NestCloseDistance = 8f;
+        private const float NestCloseYaw = 70f;
+        private const float NestClosePitch = 30f;
+        private const float MaxSetOffSeconds = 2f;
+        private const float HoneycombBuiltSeconds = 2.4f;
+        private const float HoneycombFocusHeight = 1.4f;
+        private const float HoneycombCloseDistance = 8f;
+        private const float HoneycombClosePitch = 25f;
+        private const float HoneycombCloseYaw = 30f;
+        private const float MaxHiveHitSeconds = 3f;
+        private const float AllSlotsCloseDistance = 14f;
+        private const float AllSlotsClosePitch = 35f;
+        private const int KnownInHudTwelve = 7;
+
+        // Where the core stands for each picture, and where its beekeepers stand. The game camera looks north (+z).
+        private static readonly Vector3 HydraCore = new Vector3(0f, 0f, -4f);
+
+        // Three at about 6.5 m in front, the nearest three; a fourth at 7.6 m, bitten only by a fourth head (level 4 on).
+        private static readonly Vector3[] HydraBeekeepers =
+        {
+            new Vector3(-4f, 0f, 1f), new Vector3(0.5f, 0f, 2.5f), new Vector3(4.5f, 0f, 0.5f), new Vector3(-7f, 0f, -1f),
+        };
+
+        private static readonly Vector3 ScytheCore = new Vector3(0f, 0f, -4f);
+
+        // Three in front within the blade's 4.5 m, the nearest of them the threat it faces, and one behind it.
+        private static readonly Vector3[] ScytheBeekeepers =
+        {
+            new Vector3(-2.5f, 0f, -1.5f), new Vector3(0f, 0f, -0.6f), new Vector3(2.4f, 0f, -2f), new Vector3(0f, 0f, -8.2f),
+        };
+
+        private static readonly Vector3 LanceCore = new Vector3(-5f, 0f, -6f);
+
+        // A file walking in from the north-east, 4, 7.5 and 11 m out on one line; the fourth stands well off it.
+        private static readonly Vector3[] LanceBeekeepers =
+        {
+            new Vector3(-1.8f, 0f, -3.6f), new Vector3(1f, 0f, -1.5f), new Vector3(3.8f, 0f, 0.6f), new Vector3(-9f, 0f, 2f),
+        };
+
+        private static readonly Vector3 NestCore = new Vector3(0f, 0f, -6f);
+
+        // Parked far from the core and from where the nest lands, until it walks into the trap.
+        private static readonly Vector3 NestParked = new Vector3(-16f, 0f, -14f);
+
+        // East of the east hive, in a stick's reach of it and beyond its notice of the core.
+        private static readonly Vector3 HiveStickOffset = new Vector3(1.75f, 0f, 0.3f);
+        private static readonly Vector3 CoreOffHive = new Vector3(0f, 0f, -7f);
+
+        // Around a core 7 m south of the east hive, as offsets from that hive: within the Hydra's reach, none at the hive.
+        private static readonly Vector3[] AllSlotsBeekeeperOffsets =
+        {
+            new Vector3(-4.5f, 0f, -4.5f), new Vector3(4.5f, 0f, -4.5f), new Vector3(2.5f, 0f, -12f),
+        };
+
         private HiveDefenseRoot _root;
         private SwarmCoreMotor _core;
         private Camera _camera;
@@ -298,7 +374,7 @@ namespace DigitalStory.Tests.PlayMode
             yield return CaptureClose("snap-8-tornado", _core.Position + (Vector3.up * TornadoFocusHeight), WideCloseDistance, LowPitch);
         }
 
-        // Two songs are found besides Sting, so the songbook shows three known songs and four empty slots, the "New song"
+        // Two songs are found besides Sting, so the songbook shows three known songs and nine empty slots, the "New song"
         // line, and all but the last of the Tornado's notes glowing as a hint.
         [UnityTest]
         public IEnumerator Snapshot9_Hud()
@@ -460,8 +536,8 @@ namespace DigitalStory.Tests.PlayMode
         }
 
         // Plan sections L and M in a wave called early: the survive phase line, the "Wave 1" banner, the wasps granted for
-        // the seconds skipped, and the wasp price on each known song's chip. The Dome and the Tornado were found for free in
-        // the farm phase, so three chips show a price.
+        // the seconds skipped, and the wasp price on each known song's chip. The Dome and the Tornado were found in the farm
+        // phase, so their chips show a price; the Sting has never been cast, and its first cast is free, so its chip says so.
         [UnityTest]
         public IEnumerator Snapshot13_Survive()
         {
@@ -569,6 +645,283 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(arrows, Is.Not.Null, "the HUD has no NestOffscreenIndicatorView");
             Assert.That(arrows.ShownCount, Is.GreaterThanOrEqualTo(1), "no arrow points at an open nest out of sight");
             yield return CaptureHud("snap-14-hud");
+        }
+
+        // ---- Snapshot 15: Hydra, Scythe, Lance, Nest and Honeycomb (plan sections A and B) ----
+        // Each beat is taken from the game camera and from a close camera (-close), on the frame the rules reach it.
+
+        // The Hydra at level 1: three necks rear back behind the core (rear, 0.45 s), then the heads snap onto the three
+        // beekeepers nearest the core and bite on the rule's frame (bite, 0.7 s). The fourth beekeeper is spared.
+        [UnityTest]
+        public IEnumerator Snapshot15_Hydra()
+        {
+            return HydraShots(string.Empty, 0);
+        }
+
+        // The same at level 5, after four nests: a fourth head, taller necks and wider splashes.
+        [UnityTest]
+        public IEnumerator Snapshot15_HydraLevel5()
+        {
+            return HydraShots(LevelFiveSuffix, LevelFiveNests);
+        }
+
+        // The Scythe's sweep on the cut's frame (0.3 s): the blade's edge on the aim, the smear behind it.
+        [UnityTest]
+        public IEnumerator Snapshot15_Scythe()
+        {
+            yield return Stage(ScytheCore, ScytheBeekeepers);
+            yield return Play(KeysOf<ScytheSong>());
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Scythe));
+
+            yield return WaitForSlot(SongSlot.Strike, ScytheCutShotSeconds);
+            yield return CaptureBoth(
+                "snap-15-scythe-sweep", ScytheCore + (Vector3.up * CloseFocusHeight), ScytheCloseDistance, ScytheClosePitch, 0f);
+        }
+
+        // The Lance at level 1: drawn back behind the core (draw, 0.35 s), then the streak at full length on the hit's frame
+        // (fire, 0.5 s), down a file of three beekeepers.
+        [UnityTest]
+        public IEnumerator Snapshot15_Lance()
+        {
+            return LanceShots(string.Empty, 0);
+        }
+
+        // The same at level 5: a longer, thicker spear.
+        [UnityTest]
+        public IEnumerator Snapshot15_LanceLevel5()
+        {
+            return LanceShots(LevelFiveSuffix, LevelFiveNests);
+        }
+
+        // The Nest armed on the ground ahead of the core with nobody near (armed), then a beekeeper walks into its ring and
+        // it bursts on the rule's frame (burst).
+        [UnityTest]
+        public IEnumerator Snapshot15_Nest()
+        {
+            yield return Stage(NestCore, NestParked);
+            HiveDefenseSession session = _root.Session;
+            yield return Play(KeysOf<NestSong>());
+            Assert.That(session.Forms.Slot(SongSlot.Post).Form, Is.EqualTo(SwarmForm.Nest));
+
+            yield return WaitForSlot(SongSlot.Post, NestArmedShotSeconds);
+            Vector4 nest = session.Forms.Slot(SongSlot.Post).ParamA;
+            var spot = new Vector3(nest.x, nest.y, nest.z);
+            Vector3 focus = spot + (Vector3.up * NestShotFocusHeight);
+            Assert.That(nest.w, Is.LessThan(0f), "the nest went off before anyone came");
+            yield return CaptureBoth("snap-15-nest-armed", focus, NestCloseDistance, NestClosePitch, NestCloseYaw);
+
+            session.ActiveBeekeeper(0).Spawn(spot + (Vector3.right * NestStepInMetres));
+            float waited = 0f;
+            while (session.Forms.Slot(SongSlot.Post).ParamA.w < 0f && waited < MaxSetOffSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            float setOff = session.Forms.Slot(SongSlot.Post).ParamA.w;
+            Assert.That(setOff, Is.GreaterThanOrEqualTo(0f), "the beekeeper in the ring did not set the nest off");
+            NestSong song = (NestSong)session.Caster[SongIndex<NestSong>()];
+            yield return WaitForSlot(SongSlot.Post, setOff + song.FuseSeconds);
+            yield return CaptureBoth("snap-15-nest-burst", focus, NestCloseDistance, NestClosePitch, NestCloseYaw);
+        }
+
+        // The Honeycomb built on the east hive, and a stick that strikes it: its cell flashes and a ripple runs from that side.
+        [UnityTest]
+        public IEnumerator Snapshot15_Honeycomb()
+        {
+            Vector3 hive = EastHivePosition();
+            yield return Stage(hive + CoreOffHive, NestParked);
+            HiveDefenseSession session = _root.Session;
+            yield return Play(KeysOf<HoneycombSong>());
+            Assert.That(session.Forms.Slot(SongSlot.Post).Form, Is.EqualTo(SwarmForm.Honeycomb));
+            yield return WaitForSlot(SongSlot.Post, HoneycombBuiltSeconds);
+
+            session.ActiveBeekeeper(0).Spawn(hive + HiveStickOffset);
+            float waited = 0f;
+            while (session.Forms.Slot(SongSlot.Post).ParamB.y < 0f && waited < MaxHiveHitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.Forms.Slot(SongSlot.Post).ParamB.y, Is.GreaterThanOrEqualTo(0f), "the stick never hit the shell");
+            yield return CaptureBoth(
+                "snap-15-honeycomb", hive + (Vector3.up * HoneycombFocusHeight), HoneycombCloseDistance, HoneycombClosePitch, HoneycombCloseYaw);
+        }
+
+        // A Honeycomb on the east hive (Post), a Dome on the core (Guard) and a Hydra biting (Strike), all at once.
+        [UnityTest]
+        public IEnumerator Snapshot15_AllThreeSlots()
+        {
+            Vector3 hive = EastHivePosition();
+            var spots = new Vector3[AllSlotsBeekeeperOffsets.Length];
+            for (int index = 0; index < spots.Length; index++)
+            {
+                spots[index] = hive + AllSlotsBeekeeperOffsets[index];
+            }
+
+            yield return Stage(hive + CoreOffHive, spots);
+            SwarmFormMachine forms = _root.Session.Forms;
+            yield return Play(KeysOf<HoneycombSong>());
+            yield return WaitForSlot(SongSlot.Post, HoneycombBuiltSeconds);
+            yield return Play(KeysOf<DomeSong>());
+            yield return Wait(DomeWovenSeconds);
+            yield return Play(KeysOf<HydraSong>());
+            yield return WaitForSlot(SongSlot.Strike, HydraBiteShotSeconds);
+
+            Assert.That(forms.Slot(SongSlot.Post).Form, Is.EqualTo(SwarmForm.Honeycomb));
+            Assert.That(forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Hydra));
+            Assert.That(forms.Slot(SongSlot.Post).ReleasedSeconds < 0f && forms.Slot(SongSlot.Guard).ReleasedSeconds < 0f, Is.True);
+            Vector3 focus = ((hive + _core.Position) * 0.5f) + (Vector3.up * CloseFocusHeight);
+            yield return CaptureBoth("snap-15-all-three-slots", focus, AllSlotsCloseDistance, AllSlotsClosePitch, 0f);
+        }
+
+        // The song table with all twelve slots: the Sting and six songs found, and the Meteor's first three notes played.
+        [UnityTest]
+        public IEnumerator Snapshot15_HudTwelve()
+        {
+            HiveDefenseSession session = _root.Session;
+            Assert.That(session.Caster.Count, Is.EqualTo(12));
+            yield return Wait(SongSeconds);
+            yield return PlayAndPause(KeysOf<DomeSong>());
+            yield return PlayAndPause(KeysOf<HydraSong>());
+            yield return PlayAndPause(KeysOf<LanceSong>());
+            yield return PlayAndPause(KeysOf<NestSong>());
+            yield return PlayAndPause(KeysOf<HoneycombSong>());
+            yield return PlayAndPause(KeysOf<HiveCallSong>());
+            IReadOnlyList<int> meteor = KeysOf<MeteorSong>();
+            var start = new int[meteor.Count - HalfSongNotesMissing];
+            for (int index = 0; index < start.Length; index++)
+            {
+                start[index] = meteor[index];
+            }
+
+            yield return Play(start);
+            yield return Wait(HintPauseSeconds);
+            Assert.That(session.Discovery.KnownCount, Is.EqualTo(KnownInHudTwelve));
+            yield return CaptureHud("snap-15-hud-twelve");
+        }
+
+        private IEnumerator HydraShots(string suffix, int nests)
+        {
+            yield return GrowTo(nests);
+            yield return Stage(HydraCore, HydraBeekeepers);
+            yield return Play(KeysOf<HydraSong>());
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Hydra));
+
+            Vector3 middle = HydraCore;
+            for (int index = 0; index < HydraBeekeepers.Length; index++)
+            {
+                middle += HydraBeekeepers[index];
+            }
+
+            Vector3 focus = (middle / (HydraBeekeepers.Length + 1)) + (Vector3.up * HydraFocusHeight);
+            yield return WaitForSlot(SongSlot.Strike, HydraRearShotSeconds);
+            yield return CaptureBoth("snap-15-hydra-rear" + suffix, focus, HydraCloseDistance, HydraClosePitch, HydraCloseYaw);
+            yield return WaitForSlot(SongSlot.Strike, HydraBiteShotSeconds);
+            yield return CaptureBoth("snap-15-hydra-bite" + suffix, focus, HydraCloseDistance, HydraClosePitch, HydraCloseYaw);
+        }
+
+        // The close camera looks across the line from its side, far enough back to hold all of it.
+        private IEnumerator LanceShots(string suffix, int nests)
+        {
+            yield return GrowTo(nests);
+            yield return Stage(LanceCore, LanceBeekeepers);
+            yield return Play(KeysOf<LanceSong>());
+            SlotState strike = _root.Session.Forms.Slot(SongSlot.Strike);
+            Assert.That(strike.Form, Is.EqualTo(SwarmForm.Lance));
+
+            yield return WaitForSlot(SongSlot.Strike, LanceDrawShotSeconds);
+            strike = _root.Session.Forms.Slot(SongSlot.Strike);
+            var origin = new Vector3(strike.ParamA.x, LanceHeight, strike.ParamA.y);
+            var direction = new Vector3(strike.ParamA.z, 0f, strike.ParamA.w);
+            float length = strike.ParamB.x;
+            Vector3 focus = origin + (direction * (length * 0.5f));
+            float distance = length + LanceCloseMargin;
+            float yaw = (Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg) - QuarterTurnDegrees - _camera.transform.eulerAngles.y;
+            yield return CaptureBoth("snap-15-lance-draw" + suffix, focus, distance, LanceClosePitch, yaw);
+            yield return WaitForSlot(SongSlot.Strike, LanceFireShotSeconds);
+            yield return CaptureBoth("snap-15-lance-fire" + suffix, focus, distance, LanceClosePitch, yaw);
+        }
+
+        // Collects nests until the swarm is at level 1 + nests: its capacity, its wasps and its level grow by the rules.
+        private IEnumerator GrowTo(int nests)
+        {
+            if (nests <= 0)
+            {
+                yield break;
+            }
+
+            yield return CollectNests(nests);
+            Assert.That(_root.Session.Level, Is.EqualTo(1 + nests));
+        }
+
+        // Puts the core at `core`, facing north, calls the first wave, stuns each beekeeper as it comes (for the rest of the
+        // test: the scene and its session are loaded afresh for the next), and once there is one for each spot puts them
+        // there, stunned for the picture, and lets the camera and the river settle.
+        private IEnumerator Stage(Vector3 core, params Vector3[] spots)
+        {
+            _core.PlaceAt(core + (Vector3.back * FaceNorthMetres()), true);
+            yield return Walk(Vector3.forward, FaceNorthSeconds);
+            HiveDefenseSession session = _root.Session;
+            session.BeekeeperSpawned += keeper => keeper.Stun(StageStunSeconds);
+            yield return WaitForBeekeepers(spots.Length);
+
+            Assert.That(session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(spots.Length));
+            for (int index = 0; index < spots.Length; index++)
+            {
+                BeekeeperBrain keeper = session.ActiveBeekeeper(index);
+                keeper.Spawn(spots[index]);
+                keeper.Stun(StageStunSeconds);
+            }
+
+            yield return Wait(StageSettleSeconds);
+        }
+
+        // The metres the core walks north in FaceNorthSeconds, so it ends on its spot facing north.
+        private float FaceNorthMetres() => LoadCoreMove().Speed * FaceNorthSeconds;
+
+        private Vector3 EastHivePosition()
+        {
+            HiveSet hives = _root.Session.Hives;
+            Vector3 east = hives[0].Position;
+            for (int index = 1; index < hives.Count; index++)
+            {
+                if (hives[index].Position.x > east.x)
+                {
+                    east = hives[index].Position;
+                }
+            }
+
+            return east;
+        }
+
+        // Waits until the song in the slot has run this many seconds by the rules' clock, or the slot has emptied.
+        private IEnumerator WaitForSlot(SongSlot slot, float seconds)
+        {
+            SwarmFormMachine forms = _root.Session.Forms;
+            while (forms.Slot(slot).IsActive && forms.Slot(slot).Seconds < seconds)
+            {
+                yield return null;
+            }
+
+            Assert.That(forms.Slot(slot).IsActive, Is.True, slot + " emptied before " + seconds + " s");
+        }
+
+        // The game camera's picture on this frame, then the close camera's on the next, turned yawOffset degrees from the
+        // game camera's heading.
+        private IEnumerator CaptureBoth(string name, Vector3 focus, float distance, float pitch, float yawOffset)
+        {
+            float yaw = _camera.transform.eulerAngles.y + yawOffset;
+            yield return Capture(name);
+            yield return CapturePosed(name + CloseSuffix, focus, distance, pitch, yaw);
+        }
+
+        private IEnumerator PlayAndPause(IReadOnlyList<int> holes)
+        {
+            yield return Play(holes);
+            yield return Wait(HintPauseSeconds);
         }
 
         // Casts the song at level 1 and takes it, collects four nests, comes back to the same spot and takes it again at level
