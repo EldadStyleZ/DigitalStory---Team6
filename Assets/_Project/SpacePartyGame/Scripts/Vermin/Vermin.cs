@@ -30,7 +30,15 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("Which layers hold cage walls.")]
         private LayerMask _cageWallLayers;
 
+        [SerializeField, Tooltip("Which layers hold other vermin, to keep a little space from them.")]
+        private LayerMask _verminLayers;
+
         private readonly List<Collider2D> _wallHits = new List<Collider2D>();
+        private readonly List<Collider2D> _neighbourHits = new List<Collider2D>();
+        private readonly List<Vector2> _neighbours = new List<Vector2>();
+        private ContactFilter2D _verminFilter;
+        private float _spotDistance;
+        private Vector2 _spotOffset;
         private Rigidbody2D _rigidbody;
         private CircleCollider2D _collider;
         private VerminSettings _settings;
@@ -94,10 +102,16 @@ namespace SpacePartyGame
                 return;
             }
 
+            bool wasFollowingThem = IsFollowing && _leader == caller;
             _follow.Hear(caller.Slot, callStartedAt, Time.time);
 
             if (_follow.Leader == caller.Slot)
             {
+                if (!wasFollowingThem)
+                {
+                    PickASpot();
+                }
+
                 _leader = caller;
                 SetPassThroughCages(true);
             }
@@ -108,6 +122,7 @@ namespace SpacePartyGame
             _rigidbody = GetComponent<Rigidbody2D>();
             _collider = GetComponent<CircleCollider2D>();
             _wallFilter = new ContactFilter2D { useLayerMask = true, layerMask = _cageWallLayers, useTriggers = false };
+            _verminFilter = new ContactFilter2D { useLayerMask = true, layerMask = _verminLayers, useTriggers = false };
 
             if (_body == null || _appearance == null || _outline == null)
             {
@@ -151,8 +166,9 @@ namespace SpacePartyGame
                 }
                 else
                 {
-                    _rigidbody.linearVelocity = Steering.Toward(_rigidbody.position, _leader.transform.position,
-                        _settings.FollowDistance, _settings.FollowSpeed);
+                    Vector2 spot = (Vector2)_leader.transform.position + _spotOffset;
+                    Vector2 follow = Steering.Toward(_rigidbody.position, spot, _spotDistance, _settings.FollowSpeed);
+                    _rigidbody.linearVelocity = WithSpacing(follow);
                     return;
                 }
             }
@@ -162,7 +178,32 @@ namespace SpacePartyGame
                 return;
             }
 
-            _rigidbody.linearVelocity = _wander.Tick(Time.fixedDeltaTime);
+            _rigidbody.linearVelocity = WithSpacing(_wander.Tick(Time.fixedDeltaTime));
+        }
+
+        // Its own place near the leader, so followers do not all head for one point.
+        private void PickASpot()
+        {
+            _spotDistance = FollowSpot.Distance(_settings.FollowDistance, _settings.FollowDistanceSpread, Random.value);
+            _spotOffset = FollowSpot.Offset(_settings.FollowOffsetRadius, Random.value, Random.value);
+        }
+
+        // Adds a nudge away from close neighbours, never going faster than following.
+        private Vector2 WithSpacing(Vector2 velocity)
+        {
+            _neighbours.Clear();
+            Physics2D.OverlapCircle(_rigidbody.position, _settings.SpacingRadius, _verminFilter, _neighbourHits);
+
+            foreach (Collider2D hit in _neighbourHits)
+            {
+                if (hit != _collider)
+                {
+                    _neighbours.Add(hit.attachedRigidbody != null ? hit.attachedRigidbody.position : (Vector2)hit.transform.position);
+                }
+            }
+
+            Vector2 push = VerminSpacing.Push(_rigidbody.position, _neighbours, _settings.SpacingRadius, _settings.SpacingStrength);
+            return Vector2.ClampMagnitude(velocity + push, _settings.FollowSpeed);
         }
 
         private void Update()

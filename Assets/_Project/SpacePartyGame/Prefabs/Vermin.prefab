@@ -303,6 +303,9 @@ MonoBehaviour:
   _cageWallLayers:
     serializedVersion: 2
     m_Bits: 2048
+  _verminLayers:
+    serializedVersion: 2
+    m_Bits: 512
 --- !u!114 &6031448408418431233
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -58,6 +58,23 @@ namespace SpacePartyGame
         [SerializeField, Min(0f), Tooltip("How close it walks up to its leader (the toy creatures' follow distance).")]
         private float _followDistance = 1.1f;
 
+        [SerializeField, Min(0f), Tooltip("How much each follower's stopping distance varies around the follow distance, either way.")]
+        private float _followDistanceSpread = 0.4f;
+
+        [SerializeField, Min(0f), Tooltip("How far each follower's own spot may sit from its leader's position.")]
+        private float _followOffsetRadius = 0.4f;
+
+        [Header("Spacing")]
+        [SerializeField, Min(0f), Tooltip("Vermin closer together than this steer apart, in units (about one vermin's width).")]
+        private float _spacingRadius = 0.45f;
+
+        [SerializeField, Min(0f), Tooltip("How hard they steer apart at most, in units per second.")]
+        private float _spacingStrength = 2f;
+
+        public float FollowDistanceSpread => _followDistanceSpread;
+        public float FollowOffsetRadius => _followOffsetRadius;
+        public float SpacingRadius => _spacingRadius;
+        public float SpacingStrength => _spacingStrength;
         public int StartCount => _startCount;
         public float FollowSeconds => _followSeconds;
         public float FollowSpeed => _followSpeed;

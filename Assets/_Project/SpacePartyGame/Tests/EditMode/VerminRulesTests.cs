@@ -70,6 +70,85 @@ namespace SpacePartyGame.Tests
         }
     }
 
+    public sealed class VerminSpacingTests
+    {
+        [Test]
+        public void Push_NoNeighbours_IsZero()
+        {
+            Assert.That(VerminSpacing.Push(Vector2.zero, new Vector2[0], 0.45f, 2f), Is.EqualTo(Vector2.zero));
+        }
+
+        [Test]
+        public void Push_NeighbourOutsideTheRadius_IsZero()
+        {
+            Assert.That(VerminSpacing.Push(Vector2.zero, new[] { new Vector2(0.5f, 0f) }, 0.45f, 2f), Is.EqualTo(Vector2.zero));
+        }
+
+        [Test]
+        public void Push_CloseNeighbour_PushesAwayHarderTheCloserItIs()
+        {
+            Vector2 near = VerminSpacing.Push(Vector2.zero, new[] { new Vector2(0.1f, 0f) }, 0.4f, 2f);
+            Vector2 far = VerminSpacing.Push(Vector2.zero, new[] { new Vector2(0.3f, 0f) }, 0.4f, 2f);
+
+            Assert.That(near.x, Is.LessThan(0f));
+            Assert.That(near.y, Is.EqualTo(0f).Within(1e-5f));
+            Assert.That(near.magnitude, Is.GreaterThan(far.magnitude));
+            Assert.That(near.magnitude, Is.EqualTo(1.5f).Within(1e-4f));
+        }
+
+        [Test]
+        public void Push_NeighboursOnBothSides_Cancel()
+        {
+            Vector2 push = VerminSpacing.Push(Vector2.zero, new[] { new Vector2(0.2f, 0f), new Vector2(-0.2f, 0f) }, 0.45f, 2f);
+
+            Assert.That(push.magnitude, Is.EqualTo(0f).Within(1e-5f));
+        }
+
+        [Test]
+        public void Push_NeverMoreThanTheStrength()
+        {
+            var crowd = new[] { new Vector2(0.01f, 0f), new Vector2(0.02f, 0.01f), new Vector2(0.01f, -0.01f), new Vector2(0.03f, 0f) };
+
+            Assert.That(VerminSpacing.Push(Vector2.zero, crowd, 0.45f, 2f).magnitude, Is.LessThanOrEqualTo(2f + 1e-4f));
+        }
+
+        [Test]
+        public void Push_OnTheSameSpot_StillPushes()
+        {
+            Assert.That(VerminSpacing.Push(Vector2.zero, new[] { Vector2.zero }, 0.45f, 2f).magnitude, Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void Push_IgnoresItself()
+        {
+            // The vermin's own position may be in the list it gets from a physics query; it must not push itself.
+            Assert.That(VerminSpacing.Push(new Vector2(1f, 1f), new[] { new Vector2(1f, 1f) }, 0.45f, 2f, ignoreSelf: true), Is.EqualTo(Vector2.zero));
+        }
+    }
+
+    public sealed class FollowSpotTests
+    {
+        [TestCase(0f, 0.7f)]
+        [TestCase(0.5f, 1.1f)]
+        [TestCase(1f, 1.5f)]
+        public void Distance_SpreadsAroundTheMiddle(float roll, float expected)
+        {
+            Assert.That(FollowSpot.Distance(1.1f, 0.4f, roll), Is.EqualTo(expected).Within(1e-4f));
+        }
+
+        [Test]
+        public void Offset_StaysWithinItsRadius()
+        {
+            foreach (float a in new[] { 0f, 0.3f, 0.9f })
+            {
+                foreach (float r in new[] { 0f, 0.5f, 1f })
+                {
+                    Assert.That(FollowSpot.Offset(0.4f, a, r).magnitude, Is.LessThanOrEqualTo(0.4f + 1e-5f));
+                }
+            }
+        }
+    }
+
     public sealed class VerminFacingTests
     {
         [TestCase(0.2f, 0.5f, -1)]

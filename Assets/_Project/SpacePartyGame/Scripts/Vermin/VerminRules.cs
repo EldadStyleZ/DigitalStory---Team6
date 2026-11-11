@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace SpacePartyGame
@@ -93,6 +94,64 @@ namespace SpacePartyGame
 
         /// <summary>Stops following at once, such as when it walks into its leader's own cage.</summary>
         public void Stop() => _lastHeard = float.NegativeInfinity;
+    }
+
+    /// <summary>
+    /// Keeps vermin from bunching on one spot: each steers away from neighbours closer than the spacing radius, more
+    /// strongly the closer they are. It is a nudge added to its own movement, not a collision, so crowds spread out
+    /// softly instead of shoving.
+    /// </summary>
+    public static class VerminSpacing
+    {
+        private const float SameSpot = 1e-4f;
+
+        /// <summary>The push away from close neighbours, never longer than the strength (in units per second).</summary>
+        /// <param name="ignoreSelf">Skip neighbours on exactly its own spot, such as itself in a physics query's results.</param>
+        public static Vector2 Push(Vector2 self, IReadOnlyList<Vector2> neighbours, float radius, float strength, bool ignoreSelf = false)
+        {
+            Vector2 sum = Vector2.zero;
+
+            foreach (Vector2 other in neighbours)
+            {
+                Vector2 away = self - other;
+                float distance = away.magnitude;
+
+                if (distance >= radius)
+                {
+                    continue;
+                }
+
+                if (distance < SameSpot)
+                {
+                    if (ignoreSelf)
+                    {
+                        continue;
+                    }
+
+                    // Exactly on top of each other: any direction will do to start them apart.
+                    sum += Vector2.right;
+                    continue;
+                }
+
+                sum += away / distance * (1f - (distance / radius));
+            }
+
+            return Vector2.ClampMagnitude(sum, 1f) * strength;
+        }
+    }
+
+    /// <summary>Where a follower stands near its leader, its own spot, so followers do not all aim at one point.</summary>
+    public static class FollowSpot
+    {
+        /// <summary>Its own stopping distance: the middle distance, give or take the spread, from a 0-to-1 roll.</summary>
+        public static float Distance(float middle, float spread, float roll) => middle + (((roll * 2f) - 1f) * spread);
+
+        /// <summary>Its own small offset from the leader, anywhere within the radius, from two 0-to-1 rolls.</summary>
+        public static Vector2 Offset(float radius, float angleRoll, float distanceRoll)
+        {
+            float angle = angleRoll * 2f * Mathf.PI;
+            return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * (radius * Mathf.Sqrt(distanceRoll));
+        }
     }
 
     /// <summary>Who can call a vermin.</summary>

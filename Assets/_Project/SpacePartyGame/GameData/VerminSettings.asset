@@ -20,7 +20,15 @@ MonoBehaviour:
   _edgeMargin: 0.8
   _cageMargin: 0.5
   _playerMargin: 1.2
+  _startFacingLeftChance: 0.5
   _wanderSpeed: 0.7
   _minWanderSeconds: 1
   _maxWanderSeconds: 3
   _pauseChance: 0.3
+  _followSeconds: 2
+  _followSpeed: 3.6
+  _followDistance: 1.1
+  _followDistanceSpread: 0.4
+  _followOffsetRadius: 0.4
+  _spacingRadius: 0.45
+  _spacingStrength: 2
