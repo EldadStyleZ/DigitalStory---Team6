@@ -21,6 +21,9 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("The picture to flip. The art faces right.")]
         private SpriteRenderer _body;
 
+        [SerializeField, Tooltip("Face left at the start instead of right, such as for the player on the right side.")]
+        private bool _startsFacingLeft;
+
         private Rigidbody2D _rigidbody;
         private InputAction _move;
         private int _facing = 1;
@@ -42,7 +45,11 @@ namespace SpacePartyGame
             if (_body == null)
             {
                 Debug.LogError($"{name}: PlayerMovement has no body sprite to flip.", this);
+                return;
             }
+
+            _facing = _startsFacingLeft ? -1 : 1;
+            _body.flipX = _facing < 0;
         }
 
         private void FixedUpdate()

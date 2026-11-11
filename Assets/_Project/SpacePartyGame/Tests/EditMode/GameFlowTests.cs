@@ -23,13 +23,16 @@ namespace SpacePartyGame.Tests
         [TestCase(GameState.NameEntry, GameState.Leaderboard)]
         [TestCase(GameState.Leaderboard, GameState.StartMenu)]
         [TestCase(GameState.Leaderboard, GameState.Join)]
+        [TestCase(GameState.StartMenu, GameState.Countdown)]
+        [TestCase(GameState.RoundEnd, GameState.StartMenu)]
         public void CanMove_AllowedStep_IsTrue(GameState from, GameState to)
         {
             Assert.That(GameFlow.CanMove(from, to), Is.True);
         }
 
         [TestCase(GameState.StartMenu, GameState.Playing)]
-        [TestCase(GameState.StartMenu, GameState.Countdown)]
+        // Allowed since the join screen can be switched off: the start menu goes straight to the countdown.
+        // [TestCase(GameState.StartMenu, GameState.Countdown)]
         [TestCase(GameState.Join, GameState.Playing)]
         [TestCase(GameState.Countdown, GameState.Join)]
         [TestCase(GameState.Playing, GameState.Countdown)]
@@ -80,6 +83,62 @@ namespace SpacePartyGame.Tests
         public void CanStartMatch_ByPlayerCount(int joined, bool allowSinglePlayer, bool expected)
         {
             Assert.That(GameFlow.CanStartMatch(joined, allowSinglePlayer), Is.EqualTo(expected));
+        }
+    }
+
+    public sealed class GameFlowOptionsTests
+    {
+        [TestCase(true, GameState.Join)]
+        [TestCase(false, GameState.Countdown)]
+        public void AfterStartMenu_DependsOnJoinScreen(bool useJoinScreen, GameState expected)
+        {
+            Assert.That(GameFlow.AfterStartMenu(useJoinScreen), Is.EqualTo(expected));
+        }
+
+        [TestCase(true, GameState.Leaderboard)]
+        [TestCase(false, GameState.StartMenu)]
+        public void AfterRoundEnd_DependsOnLeaderboard(bool useLeaderboard, GameState expected)
+        {
+            Assert.That(GameFlow.AfterRoundEnd(useLeaderboard), Is.EqualTo(expected));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void AfterStartMenu_IsAlwaysAnAllowedMove(bool useJoinScreen)
+        {
+            Assert.That(GameFlow.CanMove(GameState.StartMenu, GameFlow.AfterStartMenu(useJoinScreen)), Is.True);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void AfterRoundEnd_IsAlwaysAnAllowedMove(bool useLeaderboard)
+        {
+            Assert.That(GameFlow.CanMove(GameState.RoundEnd, GameFlow.AfterRoundEnd(useLeaderboard)), Is.True);
+        }
+    }
+
+    public sealed class FixedPlayersTests
+    {
+        [Test]
+        public void Count_IsTwo()
+        {
+            Assert.That(FixedPlayers.Count, Is.EqualTo(2));
+        }
+
+        [TestCase(0, FixedPlayers.KeyboardScheme)]
+        [TestCase(1, FixedPlayers.GamepadScheme)]
+        public void SchemeFor_EachSlot(int slot, string expected)
+        {
+            Assert.That(FixedPlayers.SchemeFor(slot), Is.EqualTo(expected));
+        }
+
+        [TestCase(0, false, false)]
+        [TestCase(0, true, false)]
+        [TestCase(1, false, true)]
+        [TestCase(1, true, false)]
+        public void WantsGamepad_OnlyP2WithoutOne(int slot, bool hasGamepad, bool expected)
+        {
+            Assert.That(FixedPlayers.WantsGamepad(slot, hasGamepad), Is.EqualTo(expected));
         }
     }
 

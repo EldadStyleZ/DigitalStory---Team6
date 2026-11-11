@@ -13,6 +13,12 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("Debug only: lets one player start a match.")]
         private bool _allowSinglePlayer;
 
+        [SerializeField, Tooltip("Off: Start goes straight to the countdown with two fixed players (P1 keyboard, P2 gamepad).")]
+        private bool _useJoinScreen;
+
+        [SerializeField, Tooltip("Off: a round's end goes back to the start menu instead of name entry and the leaderboard.")]
+        private bool _useLeaderboard;
+
         [SerializeField, Min(1), Tooltip("How many seconds the countdown before a match lasts.")]
         private int _countdownSeconds = 3;
 
@@ -37,11 +43,38 @@ namespace SpacePartyGame
         /// <summary>Whether one player may start a match, for testing.</summary>
         public bool AllowSinglePlayer => _allowSinglePlayer;
 
+        /// <summary>Whether players join on the join screen; when off, two fixed players are spawned instead.</summary>
+        public bool UseJoinScreen => _useJoinScreen;
+
+        /// <summary>Whether a round's end leads to name entry and the leaderboard.</summary>
+        public bool UseLeaderboard => _useLeaderboard;
+
         /// <summary>The number the countdown shows now, or 0 outside it.</summary>
         public int CountdownShown => State == GameState.Countdown ? _countdown.Shown : 0;
 
         /// <summary>Opens the join screen from the start menu.</summary>
         public void OpenJoin() => _flow.TryMoveTo(GameState.Join);
+
+        /// <summary>
+        /// What the start menu's Start button does: opens the join screen, or, with it off, starts the countdown
+        /// for the fixed players.
+        /// </summary>
+        public void StartFromMenu()
+        {
+            if (State == GameState.StartMenu)
+            {
+                _flow.TryMoveTo(GameFlow.AfterStartMenu(_useJoinScreen));
+            }
+        }
+
+        /// <summary>Leaves a round's end: to the leaderboard, or, with it off, back to the start menu.</summary>
+        public void LeaveRoundEnd()
+        {
+            if (State == GameState.RoundEnd)
+            {
+                _flow.TryMoveTo(GameFlow.AfterRoundEnd(_useLeaderboard));
+            }
+        }
 
         /// <summary>Starts the countdown if the join screen is open and enough players have joined.</summary>
         public bool RequestMatchStart(int joinedPlayers)

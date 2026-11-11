@@ -8,6 +8,7 @@ namespace SpacePartyGame
     /// <summary>
     /// Puts one cage per player on the map when a match starts, so they are there during the countdown, removes
     /// them on the start menu and join screen, and keeps each player's live score and HUD in step with their cage.
+    /// With scene cages set, it gives each player their placed cage instead and leaves the cages in the scene.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class CageManager : MonoBehaviour
@@ -24,7 +25,10 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("The playable floor.")]
         private MapBounds _map;
 
-        [SerializeField, Tooltip("The cage to copy for each player.")]
+        [SerializeField, Tooltip("Cages placed in the scene, P1's first. When set, players are given these instead of copies of the prefab.")]
+        private Cage[] _sceneCages = Array.Empty<Cage>();
+
+        [SerializeField, Tooltip("The cage to copy for each player, when no scene cages are set.")]
         private Cage _cagePrefab;
 
         [SerializeField, Tooltip("The parent for the cages.")]
@@ -106,7 +110,8 @@ namespace SpacePartyGame
 
         private void Awake()
         {
-            if (_flow == null || _joining == null || _palette == null || _map == null || _cagePrefab == null || _cagesParent == null)
+            if (_flow == null || _joining == null || _palette == null || _map == null || _cagePrefab == null || _cagesParent == null
+                || Array.IndexOf(_sceneCages, null) >= 0)
             {
                 Debug.LogError($"{name}: CageManager is missing a reference.", this);
             }
@@ -141,6 +146,12 @@ namespace SpacePartyGame
             RemoveCages();
             _scores.Reset();
 
+            if (_sceneCages.Length > 0)
+            {
+                AssignSceneCages();
+                return;
+            }
+
             int count = _joining.Players.Count;
             Vector2[] places = CagePlacement.Place(PreferredSpots(count), Rules());
 
@@ -156,6 +167,22 @@ namespace SpacePartyGame
             }
         }
 
+        // Gives P1 the first scene cage, P2 the second and so on. Scene cages stay on the map between matches.
+        private void AssignSceneCages()
+        {
+            int count = Mathf.Min(_joining.Players.Count, _sceneCages.Length);
+
+            for (int i = 0; i < count; i++)
+            {
+                var identity = _joining.Players[i].GetComponent<PlayerIdentity>();
+                Cage cage = _sceneCages[i];
+                cage.Initialize(identity, _palette.CageOf(identity.Slot));
+                cage.ContentsChanged += HandleContentsChanged;
+                _cages.Add(cage);
+                HandleContentsChanged(cage);
+            }
+        }
+
         private void RemoveCages()
         {
             foreach (Cage cage in _cages)
@@ -163,7 +190,13 @@ namespace SpacePartyGame
                 if (cage != null)
                 {
                     cage.ContentsChanged -= HandleContentsChanged;
-                    Destroy(cage.gameObject);
+
+                    // Scene cages are kept; only the copies made from the prefab are removed.
+                    // Destroy(cage.gameObject);
+                    if (Array.IndexOf(_sceneCages, cage) < 0)
+                    {
+                        Destroy(cage.gameObject);
+                    }
                 }
             }
 

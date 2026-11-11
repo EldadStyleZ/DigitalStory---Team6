@@ -41,6 +41,12 @@ namespace SpacePartyGame
             (GameState.NameEntry, GameState.Leaderboard),
             (GameState.Leaderboard, GameState.StartMenu),
             (GameState.Leaderboard, GameState.Join),
+
+            // With the join screen off, the start menu goes straight to the countdown.
+            (GameState.StartMenu, GameState.Countdown),
+
+            // With the leaderboard off, the round end goes straight back to the start menu.
+            (GameState.RoundEnd, GameState.StartMenu),
         };
 
         /// <summary>The current stage.</summary>
@@ -56,6 +62,14 @@ namespace SpacePartyGame
         public static bool CanStartMatch(int joined, bool allowSinglePlayer) =>
             joined <= MaxPlayers && joined >= (allowSinglePlayer ? 1 : 2);
 
+        /// <summary>The stage the start menu leads to: the join screen, or straight to the countdown without it.</summary>
+        public static GameState AfterStartMenu(bool useJoinScreen) =>
+            useJoinScreen ? GameState.Join : GameState.Countdown;
+
+        /// <summary>The stage a round's end leads to: the leaderboard, or back to the start menu without it.</summary>
+        public static GameState AfterRoundEnd(bool useLeaderboard) =>
+            useLeaderboard ? GameState.Leaderboard : GameState.StartMenu;
+
         /// <summary>Moves to a stage if the rules allow it, and says whether it did.</summary>
         public bool TryMoveTo(GameState to)
         {
@@ -69,6 +83,26 @@ namespace SpacePartyGame
             Changed?.Invoke(from, to);
             return true;
         }
+    }
+
+    /// <summary>
+    /// The fixed two-player setup used while the join screen is off: P1 always plays on the keyboard and mouse, and
+    /// P2 on a gamepad when one is connected. P2 still exists without one, standing still until a gamepad arrives.
+    /// </summary>
+    public static class FixedPlayers
+    {
+        /// <summary>How many players the fixed setup spawns.</summary>
+        public const int Count = 2;
+
+        /// <summary>The control scheme names in <c>SpacePartyControls.inputactions</c>.</summary>
+        public const string KeyboardScheme = "Keyboard&Mouse";
+        public const string GamepadScheme = "Gamepad";
+
+        /// <summary>The control scheme a slot plays with: keyboard for P1, gamepad for P2.</summary>
+        public static string SchemeFor(int slot) => slot == 0 ? KeyboardScheme : GamepadScheme;
+
+        /// <summary>Whether a slot is waiting for a gamepad: true for P2 while it has none.</summary>
+        public static bool WantsGamepad(int slot, bool hasGamepad) => SchemeFor(slot) == GamepadScheme && !hasGamepad;
     }
 
     /// <summary>Counts down whole seconds, such as 3, 2, 1.</summary>
