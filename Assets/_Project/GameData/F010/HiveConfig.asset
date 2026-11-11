@@ -14,3 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.HiveConfig
   <Health>k__BackingField: 300
   <UnderAttackSeconds>k__BackingField: 2
+  <DamagedStartFraction>k__BackingField: 0.8
+  <ProductionPerSecond>k__BackingField: 6
+  <ProductionHealthFraction>k__BackingField: 0.5
+  <StoreCapacity>k__BackingField: 300
+  <StartStore>k__BackingField: 100
+  <CollectRadius>k__BackingField: 3
+  <CollectPerSecond>k__BackingField: 150
+  <HealWaspsPerSecond>k__BackingField: 60
+  <WaspsPerHealthPoint>k__BackingField: 2

@@ -8,7 +8,7 @@ using UnityEngine.UIElements;
 namespace DigitalStory.View
 {
     /// <summary>
-    /// Shows the hive defense HUD: wasps, Fury, the songbook of found songs, recent notes, hives and waves. It also creates and
+    /// Shows the hive defense HUD: wasps, Fury, the songbook of found songs, recent notes, hives, the phase and the first round's lesson. It also creates and
     /// initializes the <see cref="HiveOffscreenIndicatorView"/> and <see cref="EndScreenView"/> on this object.
     /// </summary>
     /// <remarks>The UIDocument's Visual Tree Asset must be HiveDefenseHud.uxml. Everything shown is a label or a bar width.</remarks>
@@ -20,8 +20,6 @@ namespace DigitalStory.View
         private const string LowClass = "wasp-count--low";
         private const string LowFillClass = "wasp-fill--low";
         private const string FuryFullClass = "fury-panel--full";
-        private const string FlashClass = "hive-panel--flash";
-        private const string DestroyedClass = "hive-panel--destroyed";
         private const string NoteShownClass = "note--shown";
         private const string NoteHintClass = "note--hint";
         private const string LineShownClass = "line--shown";
@@ -32,17 +30,41 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The swarm's look and numbers: the category colours and the low-wasps warning.")]
         private SwarmConfig _swarmConfig;
 
-        [SerializeField, Tooltip("The line shown in the first seconds of a match.")]
-        private string _promptText = "Play notes with H J K L. Find the songs.";
-
-        [SerializeField, Min(0f), Tooltip("How long the first line stays, in seconds.")]
-        private float _promptSeconds = 8f;
-
         [SerializeField, Min(0.1f), Tooltip("How long the 'New song' line stays, in seconds.")]
         private float _discoverySeconds = 3f;
 
-        [SerializeField, Min(0.1f), Tooltip("How long the 'Not ready' line stays, in seconds.")]
+        [SerializeField, Min(0.1f), Tooltip("How long a refusal line ('Not enough wasps') stays, in seconds.")]
         private float _notReadySeconds = 1.2f;
+
+        [SerializeField, Min(0.1f), Tooltip("How long the banner at a phase change ('Wave 2', 'Wave cleared') stays, in seconds.")]
+        private float _bannerSeconds = 2f;
+
+        [SerializeField, Min(0.1f), Tooltip("How long '+N wasps' stays after a wave is called early, in seconds.")]
+        private float _grantedSeconds = 2f;
+
+        [SerializeField, Tooltip("The hint shown in a farm phase.")]
+        private string _callWaveHint = "Enter: call the wave early";
+
+        [SerializeField, Tooltip("The hint under a damaged hive the core is near.")]
+        private string _holdToHealText = "Hold E to heal";
+
+        [SerializeField, Tooltip("The hint under a hive while wasps flow into it.")]
+        private string _healingText = "Healing";
+
+        [SerializeField, Tooltip("Lesson step 1: moving.")]
+        private string _moveText = "Move with W A S D.";
+
+        [SerializeField, Tooltip("Lesson step 2: the first song. The notes are the Sting's.")]
+        private string _stingText = "Play J K H.";
+
+        [SerializeField, Tooltip("Lesson step 3: taking wasps from a hive.")]
+        private string _visitHiveText = "Fly to a hive to take its wasps.";
+
+        [SerializeField, Tooltip("Lesson step 4: giving wasps back. Only the hurt hive can take them, so the prompt names it.")]
+        private string _healHiveText = "Hold E at the hurt hive to give wasps back and heal it.";
+
+        [SerializeField, Tooltip("Lesson step 5: calling the wave.")]
+        private string _callWaveText = "Enemies come when the timer ends. Press Enter when ready.";
 
         [SerializeField, Min(0.05f), Tooltip("Seconds between the alarm colour and normal while a hive is under attack.")]
         private float _flashSeconds = 0.25f;
@@ -62,26 +84,18 @@ namespace DigitalStory.View
         private VisualElement _waspFill;
         private VisualElement _furyPanel;
         private VisualElement _furyFill;
-        private Label _waveLabel;
-        private Label _nextWaveLabel;
         private SongbookView _songbook;
+        private PhaseView _phase;
+        private LessonView _lesson;
+        private HivePanelsView _hives;
         private Label _furyKeys;
-        private Label _promptLine;
         private Label _messageLine;
         private int _colossusSong = -1;
         private bool _isFuryRevealed;
-        private float _promptLeft;
         private float _messageLeft;
         private Label[] _noteCells;
         private bool[] _noteHints;
         private int[] _noteHoles;
-        private VisualElement[] _hivePanels;
-        private VisualElement[] _hiveFills;
-        private int[] _hiveBarShown;
-        private float[] _hiveFlashLeft;
-        private bool[] _hiveFlashOn;
-        private bool[] _hiveDestroyedShown;
-
         private int _shownWasps = -1;
         private int _shownMax = -1;
         private bool _isLow;
@@ -89,9 +103,6 @@ namespace DigitalStory.View
         private int _shownWaspBar = -1;
         private int _shownFuryBar = -1;
         private bool _isFuryFull;
-        private int _shownWave = -1;
-        private int _shownWaveCount = -1;
-        private int _shownNextWave = -1;
 
         /// <summary>The text on the wasp count, for tests and debugging.</summary>
         public string WaspCountText => _waspCount?.text;
@@ -118,11 +129,10 @@ namespace DigitalStory.View
             _furyPanel = Require<VisualElement>(root, "fury-panel");
             _furyFill = Require<VisualElement>(root, "fury-fill");
             _furyKeys = Require<Label>(root, "fury-keys");
-            _promptLine = Require<Label>(root, "prompt-line");
+            Label lessonLine = Require<Label>(root, "prompt-line");
             _messageLine = Require<Label>(root, "message-line");
             VisualElement songbook = Require<VisualElement>(root, "songbook");
-            _waveLabel = Require<Label>(root, "wave-label");
-            _nextWaveLabel = Require<Label>(root, "next-wave-label");
+            VisualElement topCenter = Require<VisualElement>(root, "top-center");
             VisualElement notes = Require<VisualElement>(root, "notes");
             VisualElement hives = Require<VisualElement>(root, "hives");
             VisualElement offscreen = Require<VisualElement>(root, "offscreen-layer");
@@ -134,13 +144,12 @@ namespace DigitalStory.View
             _songbook = new SongbookView(session, _swarmConfig, songbook);
             session.Discovery.Discovered += OnDiscovered;
             session.Caster.SongNotReady += OnSongNotReady;
-            _promptLine.text = _promptText;
-            _promptLeft = _promptSeconds;
-            _promptLine.EnableInClassList(LineShownClass, _promptSeconds > 0f);
+            _phase = new PhaseView(session, topCenter, _callWaveHint, _bannerSeconds, _grantedSeconds);
+            _lesson = new LessonView(session.Tutorial, lessonLine, _moveText, _stingText, _visitHiveText, _healHiveText, _callWaveText);
             _messageLeft = 0f;
             _messageLine.RemoveFromClassList(LineShownClass);
             BuildNotes(notes);
-            BuildHives(hives);
+            _hives = new HivePanelsView(session, hives, _flashSeconds, _holdToHealText, _healingText);
 
             Camera camera = _camera != null ? _camera : Camera.main;
             if (camera == null)
@@ -164,11 +173,12 @@ namespace DigitalStory.View
 
             ShowWasps();
             ShowFury();
-            ShowWaves();
+            _phase.Tick(Time.deltaTime);
+            _lesson.Tick();
             _songbook.Tick(Time.deltaTime);
             ShowNotes();
             ShowLines(Time.deltaTime);
-            ShowHives(Time.deltaTime);
+            _hives.Tick(Time.deltaTime);
         }
 
         private void OnDestroy()
@@ -182,6 +192,12 @@ namespace DigitalStory.View
             {
                 _songbook.Dispose();
                 _songbook = null;
+            }
+
+            if (_phase != null)
+            {
+                _phase.Dispose();
+                _phase = null;
             }
 
             if (_session != null)
@@ -249,43 +265,6 @@ namespace DigitalStory.View
             }
         }
 
-        private void BuildHives(VisualElement column)
-        {
-            HiveSet hives = _session.Hives;
-            _hivePanels = new VisualElement[hives.Count];
-            _hiveFills = new VisualElement[hives.Count];
-            _hiveBarShown = new int[hives.Count];
-            _hiveFlashLeft = new float[hives.Count];
-            _hiveFlashOn = new bool[hives.Count];
-            _hiveDestroyedShown = new bool[hives.Count];
-
-            for (int index = 0; index < hives.Count; index++)
-            {
-                var panel = new VisualElement();
-                panel.AddToClassList("hive-panel");
-                panel.pickingMode = PickingMode.Ignore;
-
-                var title = new Label("Hive " + (index + 1).ToString(CultureInfo.InvariantCulture));
-                title.AddToClassList("hive-title");
-                panel.Add(title);
-
-                var track = new VisualElement();
-                track.AddToClassList("bar-track");
-                track.pickingMode = PickingMode.Ignore;
-                var fill = new VisualElement();
-                fill.AddToClassList("bar-fill");
-                fill.AddToClassList("hive-fill");
-                fill.pickingMode = PickingMode.Ignore;
-                track.Add(fill);
-                panel.Add(track);
-
-                column.Add(panel);
-                _hivePanels[index] = panel;
-                _hiveFills[index] = fill;
-                _hiveBarShown[index] = -1;
-            }
-        }
-
         private static int HoleColour(int hole) => ((hole % HoleColours) + HoleColours) % HoleColours;
 
         private void ShowWasps()
@@ -338,29 +317,6 @@ namespace DigitalStory.View
             {
                 _isFuryFull = fury.IsFull;
                 _furyPanel.EnableInClassList(FuryFullClass, _isFuryFull);
-            }
-        }
-
-        private void ShowWaves()
-        {
-            WaveDirector waves = _session.Waves;
-            int wave = waves.WaveNumber;
-            int count = waves.WaveCount;
-            if (wave != _shownWave || count != _shownWaveCount)
-            {
-                _shownWave = wave;
-                _shownWaveCount = count;
-                _waveLabel.text = "Wave " + wave.ToString(CultureInfo.InvariantCulture)
-                    + "/" + count.ToString(CultureInfo.InvariantCulture);
-            }
-
-            // 0 while a wave runs or after the last one, so the line is hidden then, and its backing with it.
-            int next = Mathf.CeilToInt(waves.SecondsToNextWave);
-            if (next != _shownNextWave)
-            {
-                _shownNextWave = next;
-                _nextWaveLabel.text = next > 0 ? "Next wave in " + next.ToString(CultureInfo.InvariantCulture) : string.Empty;
-                _nextWaveLabel.style.display = next > 0 ? DisplayStyle.Flex : DisplayStyle.None;
             }
         }
 
@@ -419,15 +375,6 @@ namespace DigitalStory.View
 
         private void ShowLines(float deltaTime)
         {
-            if (_promptLeft > 0f)
-            {
-                _promptLeft -= deltaTime;
-                if (_promptLeft <= 0f)
-                {
-                    _promptLine.RemoveFromClassList(LineShownClass);
-                }
-            }
-
             if (_messageLeft > 0f)
             {
                 _messageLeft -= deltaTime;
@@ -445,15 +392,29 @@ namespace DigitalStory.View
         }
 
         // A known song is named, and its chip in the songbook nudges too. An unknown one is not named, so it stays hidden.
-        private void OnSongNotReady(int song)
+        private void OnSongNotReady(int song, SongRefusal refusal)
         {
-            if (_session.Discovery.IsKnown(song))
+            string text;
+            switch (refusal)
             {
-                ShowMessage(_session.Caster[song].Song.Title + " not ready", Color.clear, _notReadySeconds);
-                return;
+                case SongRefusal.NotEnoughWasps:
+                    text = "Not enough wasps";
+                    break;
+                case SongRefusal.NeedsFury:
+                    text = "Needs full Fury";
+                    break;
+                case SongRefusal.Collapsed:
+                    text = "The swarm is too small";
+                    break;
+                case SongRefusal.GiantStanding:
+                    text = "The giant is standing";
+                    break;
+                default:
+                    text = _session.Discovery.IsKnown(song) ? _session.Caster[song].Song.Title + " is not ready" : "Not ready";
+                    break;
             }
 
-            ShowMessage("Not ready", Color.clear, _notReadySeconds);
+            ShowMessage(text, Color.clear, _notReadySeconds);
         }
 
         private void ShowMessage(string text, Color color, float seconds)
@@ -470,51 +431,6 @@ namespace DigitalStory.View
 
             _messageLeft = seconds;
             _messageLine.AddToClassList(LineShownClass);
-        }
-
-        private void ShowHives(float deltaTime)
-        {
-            HiveSet hives = _session.Hives;
-            for (int index = 0; index < _hivePanels.Length; index++)
-            {
-                Hive hive = hives[index];
-                int bar = BarValue(hive.MaxHealth > 0f ? hive.Health / hive.MaxHealth : 0f);
-                if (bar != _hiveBarShown[index])
-                {
-                    _hiveBarShown[index] = bar;
-                    _hiveFills[index].style.width = Length.Percent(bar / BarScale * 100f);
-                }
-
-                if (hive.IsDestroyed != _hiveDestroyedShown[index])
-                {
-                    _hiveDestroyedShown[index] = hive.IsDestroyed;
-                    _hivePanels[index].EnableInClassList(DestroyedClass, hive.IsDestroyed);
-                }
-
-                // The alarm colour for one period, normal for the next, for as long as the attack lasts.
-                bool isAttacked = hive.IsUnderAttack && !hive.IsDestroyed;
-                bool flashOn = false;
-                if (isAttacked)
-                {
-                    _hiveFlashLeft[index] -= deltaTime;
-                    flashOn = _hiveFlashOn[index];
-                    if (_hiveFlashLeft[index] <= 0f)
-                    {
-                        _hiveFlashLeft[index] = _flashSeconds;
-                        flashOn = !flashOn;
-                    }
-                }
-                else
-                {
-                    _hiveFlashLeft[index] = 0f;
-                }
-
-                if (flashOn != _hiveFlashOn[index])
-                {
-                    _hiveFlashOn[index] = flashOn;
-                    _hivePanels[index].EnableInClassList(FlashClass, flashOn);
-                }
-            }
         }
 
         private static int BarValue(float fraction) => (int)(Mathf.Clamp01(fraction) * BarScale);

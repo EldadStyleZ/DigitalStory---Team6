@@ -24,8 +24,6 @@ namespace DigitalStory.Tests.PlayMode
         private const float FastTimeScale = 5f;
         private const float MaxWaveSeconds = 40f;
         private const int MaxFramesForWave = 300000;
-        private const float GainSeconds = 1000f;
-        private const int StandingHives = 2;
         private const double NanosecondsPerMillisecond = 1000000.0;
 
         private HiveDefenseRoot _root;
@@ -112,10 +110,12 @@ namespace DigitalStory.Tests.PlayMode
             _root = Object.FindAnyObjectByType<HiveDefenseRoot>();
             Assert.That(_root, Is.Not.Null);
 
-            // Hive Call is the public way to add wasps: one big step fills the swarm to its maximum.
-            _root.Session.Swarm.Gain(GainSeconds, StandingHives);
+            // Wasps that arrive fill the swarm to its maximum.
+            _root.Session.Swarm.Gain(_root.Session.Swarm.Max);
             Assert.That(_root.Session.Swarm.Count, Is.EqualTo(_root.Session.Swarm.Max));
 
+            // The match starts in a farm phase with nobody on the map, so the wave is called at once.
+            _root.CallWave();
             Time.timeScale = FastTimeScale;
             int frames = 0;
             float elapsed = 0f;

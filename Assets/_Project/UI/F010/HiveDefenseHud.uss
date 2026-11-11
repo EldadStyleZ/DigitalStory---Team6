@@ -12,6 +12,10 @@
     --fury-glow: rgb(255, 214, 90);
     --overlay: rgba(9, 10, 20, 0.74);
     --key-text: rgb(35, 28, 12);
+    --farm: rgb(140, 200, 190);
+    --survive: rgb(255, 150, 40);
+    --health: rgb(77, 217, 77);
+    --store: rgb(255, 199, 38);
 
     position: absolute;
     left: 0;
@@ -108,7 +112,7 @@
     -unity-font-style: bold;
 }
 
-/* Top centre: waves */
+/* Top centre: the phase. Calm for a farm phase, warm for a survive phase. */
 .top-center {
     position: absolute;
     top: 12px;
@@ -117,22 +121,46 @@
     align-items: center;
 }
 
-.wave-label {
+.phase-label {
     font-size: 18px;
     -unity-font-style: bold;
     background-color: var(--panel);
     border-radius: 6px;
     padding: 2px 12px;
+    border-bottom-width: 3px;
+    border-color: rgba(0, 0, 0, 0);
 }
 
-/* On its own backing, because bare caption text is unreadable over the bright grass. */
-.next-wave-label {
-    font-size: 14px;
-    color: var(--text);
-    background-color: var(--panel);
-    border-radius: 6px;
+.phase-label--farm {
+    color: var(--farm);
+    border-color: var(--farm);
+}
+
+.phase-label--survive {
+    color: var(--survive);
+    border-color: var(--survive);
+}
+
+/* On their own backing, because bare caption text is unreadable over the bright grass. */
+.top-center .phase-hint {
+    font-size: 12px;
+    color: var(--caption);
     margin-top: 4px;
-    padding: 2px 10px;
+}
+
+.top-center .banner-line {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: var(--text);
+    margin-top: 4px;
+    padding: 2px 16px;
+}
+
+.top-center .granted-line {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: var(--wasp);
+    margin-top: 2px;
 }
 
 /* Hives, down the left side */
@@ -143,7 +171,7 @@
 }
 
 .hive-panel {
-    min-width: 120px;
+    min-width: 150px;
     background-color: var(--panel);
     border-radius: 6px;
     border-width: 2px;
@@ -158,8 +186,50 @@
     padding: 0;
 }
 
+/* Green health and a gold store, as on the bars over the hives in the world. */
 .hive-fill {
-    background-color: var(--gold);
+    background-color: var(--health);
+}
+
+/* The store is a smaller bar and a number, so health stays the main bar. */
+.bar-track--thin {
+    height: 3px;
+    margin-top: 3px;
+}
+
+.hive-store-fill {
+    background-color: var(--store);
+}
+
+.hive-store-label {
+    color: var(--store);
+    font-size: 11px;
+    padding: 0;
+}
+
+.hive-stopped {
+    display: none;
+    flex-grow: 1;
+    margin-left: 6px;
+    color: var(--alarm);
+    font-size: 10px;
+    padding: 0;
+}
+
+.hive-stopped--shown {
+    display: flex;
+}
+
+.hive-hint {
+    display: none;
+    color: var(--gold);
+    font-size: 11px;
+    padding: 0;
+    margin-top: 2px;
+}
+
+.hive-hint--shown {
+    display: flex;
 }
 
 .hive-panel--flash {
@@ -238,10 +308,10 @@
     margin: 0 1px;
 }
 
-/* The songbook, bottom left. Quiet: no panel and partly see-through, but its notes stay readable. */
+/* The songbook, bottom right, where it leaves room for the hives on the left even at fourteen songs. Quiet: no panel and partly see-through, but its notes stay readable. */
 .songbook {
     position: absolute;
-    left: 12px;
+    right: 12px;
     bottom: 10px;
     opacity: 0.75;
 }
@@ -253,8 +323,9 @@
     margin-bottom: 2px;
 }
 
+/* Wide enough for seven notes, the name and the cost. */
 .songbook-chips {
-    width: 196px;
+    width: 264px;
 }
 
 .chip {
@@ -274,7 +345,7 @@
 
 .chip-mark,
 .chip-title,
-.chip-pips {
+.chip-cost {
     display: none;
 }
 
@@ -285,7 +356,7 @@
 
 .chip--known .chip-mark,
 .chip--known .chip-title,
-.chip--known .chip-pips {
+.chip--known .chip-cost {
     display: flex;
 }
 
@@ -327,12 +398,33 @@
 
 .chip-title {
     flex-grow: 1;
+    flex-shrink: 1;
     font-size: 12px;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Pushed right, so the letters and dots line up whether or not the name shows. */
+.chip-pips {
+    flex-direction: row;
+    margin-left: auto;
+}
+
+.chip-cost {
+    min-width: 34px;
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--wasp);
+    -unity-text-align: middle-right;
     padding: 0;
 }
 
-.chip-pips {
-    flex-direction: row;
+.chip-cost--free {
+    color: var(--caption);
+}
+
+.chip-cost--none {
+    color: var(--caption);
 }
 
 .pip {
@@ -345,6 +437,20 @@
     color: var(--key-text);
     -unity-text-align: middle-center;
     padding: 0;
+}
+
+/* A note not found yet: a small dot. The first one is tinted with the category colour in code. Every pip also has the
+   pip class, and with equal weight the later rule wins, so this one must come after .pip. The dot is centred among the
+   taller letter pips. */
+.pip--unknown {
+    width: 7px;
+    height: 7px;
+    margin-left: 5px;
+    margin-right: 4px;
+    margin-top: 0;
+    border-radius: 4px;
+    align-self: center;
+    background-color: rgba(255, 255, 255, 0.25);
 }
 
 .chip-cooldown {

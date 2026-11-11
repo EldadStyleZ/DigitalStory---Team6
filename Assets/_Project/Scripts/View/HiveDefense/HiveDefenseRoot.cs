@@ -54,7 +54,7 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The smoke grenade and cloud numbers.")]
         private SmokeConfig _smoke;
 
-        [SerializeField, Tooltip("The waves and the pauses between them.")]
+        [SerializeField, Tooltip("The rounds: the farm phases and the waves.")]
         private WaveConfig _waves;
 
         [SerializeField, Tooltip("The stick beekeeper's numbers.")]
@@ -146,6 +146,8 @@ namespace DigitalStory.View
         private bool _isCameraBackForColossus;
         private bool _isRestarting;
         private bool _isReady;
+        private bool _isWaveCalled;
+        private bool _isGiveHeld;
 
         /// <summary>The running match, for the views, tests and debugging.</summary>
         public HiveDefenseSession Session { get; private set; }
@@ -166,6 +168,27 @@ namespace DigitalStory.View
             {
                 _fluteVoice.PlayNote(hole);
             }
+        }
+
+        /// <summary>
+        /// The one entry point for calling the wave early, as Enter does. The call is read on the next tick; outside a farm
+        /// phase the session ignores it.
+        /// </summary>
+        public void CallWave()
+        {
+            if (_isReady)
+            {
+                _isWaveCalled = true;
+            }
+        }
+
+        /// <summary>
+        /// Holds Give, as holding E does, until it is released with false. Beside a hurt hive the swarm then pays wasps into
+        /// its health. E works either way.
+        /// </summary>
+        public void HoldGive(bool isHeld)
+        {
+            _isGiveHeld = isHeld;
         }
 
         private void Awake()
@@ -201,7 +224,7 @@ namespace DigitalStory.View
             Session.Caster.SongCast += HandleSongCast;
             for (int index = 0; index < _hives.Length; index++)
             {
-                _hives[index].Initialize(Session.Hives[index], _camera);
+                _hives[index].Initialize(Session.Hives[index], _camera, _hive);
             }
 
             _beekeeperPool.Initialize(Session, _stickPrefab, _smokerPrefab);
@@ -279,6 +302,8 @@ namespace DigitalStory.View
 
             if (Session.State != HiveDefenseState.Playing)
             {
+                // The match is over, so nothing flows between the core and a hive any more.
+                StopHiveFlows();
                 if (_input.RestartPressed && !_isRestarting)
                 {
                     _isRestarting = true;
@@ -300,6 +325,11 @@ namespace DigitalStory.View
                 _lastAimPoint = aim;
             }
 
+            if (_input.CallWavePressed)
+            {
+                CallWave();
+            }
+
             // The mouse aims only while it is live; otherwise auto-aim chooses.
             var frame = new HiveDefenseFrame(
                 _coreMotor.Position,
@@ -308,8 +338,11 @@ namespace DigitalStory.View
                 _holeMask,
                 _input.PunchPressed,
                 _input.KickPressed,
-                _input.IsMouseLive);
+                _input.IsMouseLive,
+                _input.GiveHeld || _isGiveHeld,
+                _isWaveCalled);
             _holeMask = 0;
+            _isWaveCalled = false;
             _hasFormChangedThisTick = false;
             Session.Tick(in frame, dt);
 
@@ -321,8 +354,36 @@ namespace DigitalStory.View
             _trail.Push(core);
 
             FeedSwarm(core);
+            FeedHives(core);
             FeedGlow(core, dt);
             FeedCamera();
+        }
+
+        // Only the hive the core stands at shows the core near, and its store flowing in or the swarm's wasps flowing out.
+        private void FeedHives(Vector3 core)
+        {
+            int near = Session.NearHive;
+            bool isCollecting = Session.IsCollecting;
+            bool isGiving = Session.IsGiving;
+            for (int index = 0; index < _hives.Length; index++)
+            {
+                bool isNear = index == near;
+                HiveView view = _hives[index];
+                view.SetCorePosition(core);
+                view.ShowCoreNear(isNear);
+                view.ShowCollecting(isNear && isCollecting);
+                view.ShowGiving(isNear && isGiving);
+            }
+        }
+
+        private void StopHiveFlows()
+        {
+            for (int index = 0; index < _hives.Length; index++)
+            {
+                _hives[index].ShowCoreNear(false);
+                _hives[index].ShowCollecting(false);
+                _hives[index].ShowGiving(false);
+            }
         }
 
         private void HandleFormChanged(SwarmForm form)

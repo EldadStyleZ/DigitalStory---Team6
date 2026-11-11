@@ -15,8 +15,9 @@ namespace DigitalStory.Tests.PlayMode
 {
     /// <summary>
     /// Loads the hive defense scene and checks that it starts, draws the swarm, answers the flute, keeps the core inside the
-    /// giant, the camera on the core and the core in the play area and out of the hives, and animates the beekeepers. Every song is played with the keys on its own asset, so a change of keys never
-    /// breaks these tests.
+    /// giant, the camera on the core and the core in the play area and out of the hives, and animates the beekeepers. It also
+    /// checks the farm and survive phases and the wasp economy through the root, as the keys would drive them. Every song is
+    /// played with the keys on its own asset, so a change of keys never breaks these tests.
     /// </summary>
     public sealed class HiveDefenseSceneTests
     {
@@ -24,6 +25,8 @@ namespace DigitalStory.Tests.PlayMode
         private const string SwarmConfigPath = "Assets/_Project/GameData/F010/SwarmConfig.asset";
         private const string ColossusConfigPath = "Assets/_Project/GameData/F010/ColossusConfig.asset";
         private const string CoreMoveConfigPath = "Assets/_Project/GameData/F010/CoreMoveConfig.asset";
+        private const string WaveConfigPath = "Assets/_Project/GameData/F010/WaveConfig.asset";
+        private const string HiveConfigPath = "Assets/_Project/GameData/F010/HiveConfig.asset";
         private const string GroundName = "Ground";
         private const string SceneryName = "Scenery";
         private const int FramesToSettle = 3;
@@ -32,7 +35,7 @@ namespace DigitalStory.Tests.PlayMode
         private const int SongsKnownAtStart = 1;
         private const float FastTimeScale = 5f;
         private const int MaxFramesForWave = 300000;
-        private const float MaxWaveSeconds = 40f;
+        private const float PastTheFarmTimerSeconds = 5f;
         private const int FramesBetweenNotes = 1;
         private const string LegBone = "LeftUpperLeg";
         private const float WatchSeconds = 0.7f;
@@ -51,6 +54,10 @@ namespace DigitalStory.Tests.PlayMode
         private const float SameWayDot = 0.95f;
         private const float WallHalfSizeMetres = 0.8f;
         private const float WallInsideEdgeMetres = 2f;
+        private const float BesideHiveMetres = 2f;
+        private const int CollectHive = 0;
+        private const float CollectSeconds = 0.3f;
+        private const float GiveSeconds = 0.5f;
 
         // The controller rests its skin width away from what it touches, so a capsule this much thinner than the core's
         // overlaps only what the core is really inside.
@@ -227,15 +234,17 @@ namespace DigitalStory.Tests.PlayMode
             yield return null;
         }
 
+        // Plan section L: the first wave comes when the first farm phase's timer runs out, even if it is never called.
         [UnityTest]
-        public IEnumerator Scene_PastTheFirstWaveDelay_HasAnActiveBeekeeper()
+        public IEnumerator Scene_WhenTheFirstFarmTimerRunsOut_HasAnActiveBeekeeper()
         {
+            float most = LoadWaves().FirstFarmSeconds + PastTheFarmTimerSeconds;
             Time.timeScale = FastTimeScale;
 
             // Batch mode runs thousands of frames a second, so count game time, not frames.
             int frames = 0;
             float elapsed = 0f;
-            while (_root.Session.ActiveBeekeeperCount < 1 && elapsed < MaxWaveSeconds && frames < MaxFramesForWave)
+            while (_root.Session.ActiveBeekeeperCount < 1 && elapsed < most && frames < MaxFramesForWave)
             {
                 elapsed += Time.deltaTime;
                 frames++;
@@ -243,6 +252,142 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             Assert.That(_root.Session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(1));
+            Assert.That(_root.Session.Phase, Is.EqualTo(MatchPhase.Survive));
+        }
+
+        // Plan section L: a match starts in the first round's farm phase, with nobody on the map and the songs free.
+        [UnityTest]
+        public IEnumerator Match_OnLoad_StartsInAFarmPhaseWithNoBeekeeper()
+        {
+            for (int frame = 0; frame < FramesToRun; frame++)
+            {
+                yield return null;
+            }
+
+            HiveDefenseSession session = _root.Session;
+            WaveConfig waves = LoadWaves();
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(session.Round, Is.EqualTo(1));
+            Assert.That(session.RoundCount, Is.EqualTo(waves.Waves.Count));
+            Assert.That(session.FarmSecondsLeft, Is.GreaterThan(0f).And.LessThanOrEqualTo(waves.FirstFarmSeconds));
+            Assert.That(session.AreSongsFree, Is.True);
+            Assert.That(session.ActiveBeekeeperCount, Is.EqualTo(0));
+        }
+
+        // Plan section L: calling the wave, as Enter does, starts it at once, and each second of farm phase skipped earns
+        // EarlyBonusPerSecond wasps.
+        [UnityTest]
+        public IEnumerator CallWave_InTheFarmPhase_StartsTheWaveAndGrantsWasps()
+        {
+            HiveDefenseSession session = _root.Session;
+            WaveConfig waves = LoadWaves();
+            float skipped = -1f;
+            int granted = 0;
+            System.Action<float> onCalled = seconds => skipped = seconds;
+            System.Action<int> onGranted = wasps => granted += wasps;
+            session.Waves.WaveCalledEarly += onCalled;
+            session.WaspsGranted += onGranted;
+            int before = session.Swarm.Count;
+            try
+            {
+                _root.CallWave();
+                yield return null;
+            }
+            finally
+            {
+                session.Waves.WaveCalledEarly -= onCalled;
+                session.WaspsGranted -= onGranted;
+            }
+
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Survive));
+            Assert.That(session.AreSongsFree, Is.False);
+            Assert.That(session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(1), "the wave did not start at once");
+            Assert.That(skipped, Is.GreaterThan(0f).And.LessThanOrEqualTo(waves.FirstFarmSeconds));
+            Assert.That(granted, Is.EqualTo(Mathf.FloorToInt(skipped * waves.EarlyBonusPerSecond)));
+            Assert.That(granted, Is.GreaterThan(0));
+            Assert.That(session.Swarm.Count, Is.EqualTo(before + granted));
+        }
+
+        // Plan section M: a song costs nothing in a farm phase, and its wasp price, paid at the cast, in a survive phase.
+        [UnityTest]
+        public IEnumerator Song_CostsNothingInAFarmPhaseAndItsPriceInASurvivePhase()
+        {
+            HiveDefenseSession session = _root.Session;
+            int dome = SongIndex<DomeSong>();
+            int sting = SongIndex<StingSong>();
+            Assert.That(session.Caster[dome].WaspCost, Is.GreaterThan(0), "the Dome is free, so the farm phase proves nothing");
+            Assert.That(session.Caster[sting].WaspCost, Is.GreaterThan(0));
+
+            int beforeFree = session.Swarm.Count;
+            yield return Play(KeysOf<DomeSong>());
+            Assert.That(session.Forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome), "the Dome did not cast");
+            Assert.That(session.Swarm.Count, Is.EqualTo(beforeFree), "a song in a farm phase cost wasps");
+
+            _root.CallWave();
+            yield return null;
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Survive));
+
+            int beforePaid = session.Swarm.Count;
+            yield return Play(KeysOf<StingSong>());
+            Assert.That(session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Sting), "the Sting did not cast");
+            Assert.That(session.Swarm.Count, Is.EqualTo(beforePaid - session.Caster[sting].WaspCost));
+        }
+
+        // Plan section M: beside a hive the core takes the hive's store into the swarm.
+        [UnityTest]
+        public IEnumerator Core_BesideAHive_TakesItsStoreIntoTheSwarm()
+        {
+            var motor = Object.FindAnyObjectByType<SwarmCoreMotor>();
+            HiveDefenseSession session = _root.Session;
+            Hive hive = session.Hives[CollectHive];
+            float storeBefore = hive.Store;
+            int before = session.Swarm.Count;
+            Assert.That(storeBefore, Is.GreaterThan(0f), "the hive starts with no store");
+            Assert.That(session.Swarm.Count, Is.LessThan(session.Swarm.Max), "the swarm is full, so it can take nothing");
+
+            motor.PlaceAt(BesideHive(hive.Position), true);
+            yield return null;
+            Assert.That(session.NearHive, Is.EqualTo(CollectHive), "the core is not within the hive's collect radius");
+            Assert.That(session.IsCollecting, Is.True);
+            yield return WaitGameSeconds(CollectSeconds);
+
+            Assert.That(hive.Store, Is.LessThan(storeBefore));
+            Assert.That(session.Swarm.Count, Is.GreaterThan(before));
+        }
+
+        // Plan section M: holding Give beside the hurt hive pays the swarm's wasps into its health, WaspsPerHealthPoint
+        // for each point.
+        [UnityTest]
+        public IEnumerator Give_BesideTheHurtHive_HealsItAndCostsWasps()
+        {
+            var motor = Object.FindAnyObjectByType<SwarmCoreMotor>();
+            HiveDefenseSession session = _root.Session;
+            HiveConfig config = LoadHiveConfig();
+            int hurt = session.Hives.Count - 1;
+            Hive hive = session.Hives[hurt];
+            Assert.That(hive.Health, Is.LessThan(hive.MaxHealth), "the last hive does not start hurt");
+            float healthBefore = hive.Health;
+            int before = session.Swarm.Count;
+
+            _root.HoldGive(true);
+            try
+            {
+                motor.PlaceAt(BesideHive(hive.Position), true);
+                yield return WaitGameSeconds(GiveSeconds);
+                Assert.That(session.NearHive, Is.EqualTo(hurt), "the core is not within the hive's collect radius");
+                Assert.That(session.IsGiving, Is.True);
+                Assert.That(session.IsCollecting, Is.False, "the hive handed out its store while Give was held");
+            }
+            finally
+            {
+                _root.HoldGive(false);
+            }
+
+            float healed = hive.Health - healthBefore;
+            int paid = before - session.Swarm.Count;
+            Assert.That(healed, Is.GreaterThan(0f));
+            Assert.That(paid, Is.GreaterThan(0));
+            Assert.That(paid, Is.EqualTo(Mathf.RoundToInt(healed * config.WaspsPerHealthPoint)));
         }
 
         // Plan section K: there is no Piper. The swarm's core is an invisible point with a CharacterController.
@@ -405,6 +550,23 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(IsInside(controller, solids), Is.False);
         }
 
+        private static WaveConfig LoadWaves()
+        {
+            var waves = AssetDatabase.LoadAssetAtPath<WaveConfig>(WaveConfigPath);
+            Assert.That(waves, Is.Not.Null, "There is no WaveConfig at " + WaveConfigPath + ". Rebuild the scene.");
+            return waves;
+        }
+
+        private static HiveConfig LoadHiveConfig()
+        {
+            var hive = AssetDatabase.LoadAssetAtPath<HiveConfig>(HiveConfigPath);
+            Assert.That(hive, Is.Not.Null, "There is no HiveConfig at " + HiveConfigPath + ". Rebuild the scene.");
+            return hive;
+        }
+
+        // A spot on the camera's side of a hive, clear of its model and well inside its collect radius.
+        private static Vector3 BesideHive(Vector3 hive) => hive + (Vector3.back * BesideHiveMetres);
+
         private static CoreMoveConfig LoadCoreMove()
         {
             var coreMove = AssetDatabase.LoadAssetAtPath<CoreMoveConfig>(CoreMoveConfigPath);
@@ -497,20 +659,13 @@ namespace DigitalStory.Tests.PlayMode
         [UnityTest]
         public IEnumerator Beekeeper_WhileWalkingToAHive_MovesItsLegs()
         {
-            Time.timeScale = FastTimeScale;
+            // The match starts in a farm phase with nobody on the map, so the wave is called at once.
+            _root.CallWave();
+            yield return null;
+            Assert.That(_root.Session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(1), "Calling the wave brought no beekeeper.");
 
-            int frames = 0;
-            float elapsed = 0f;
-            while (_root.Session.ActiveBeekeeperCount < 1 && elapsed < MaxWaveSeconds && frames < MaxFramesForWave)
-            {
-                elapsed += Time.deltaTime;
-                frames++;
-                yield return null;
-            }
-
-            Time.timeScale = _savedTimeScale;
             BeekeeperView view = null;
-            foreach (BeekeeperView candidate in Object.FindObjectsByType<BeekeeperView>(FindObjectsSortMode.None))
+            foreach (BeekeeperView candidate in Object.FindObjectsByType<BeekeeperView>())
             {
                 if (candidate.isActiveAndEnabled && candidate.Brain != null)
                 {

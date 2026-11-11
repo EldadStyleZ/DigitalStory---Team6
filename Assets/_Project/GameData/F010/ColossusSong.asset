@@ -18,6 +18,7 @@ MonoBehaviour:
     _cooldownSeconds: 0
     _keys: 0300000001000000020000000100000003000000i
   _category: 2
+  _waspCost: 0
   _knownFromStart: 0
   _revealedWhenFuryFills: 1
   <Seconds>k__BackingField: 12

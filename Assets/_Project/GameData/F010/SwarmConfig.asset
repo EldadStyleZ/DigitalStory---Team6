@@ -17,7 +17,7 @@ MonoBehaviour:
   <CollapseBelow>k__BackingField: 240
   <CollapseBlockSeconds>k__BackingField: 3
   <RespawnWasps>k__BackingField: 1000
-  <HiveCallWaspsPerSecondPerHive>k__BackingField: 100
+  <MinRespawnWasps>k__BackingField: 300
   <LowWasps>k__BackingField: 600
   <RiverSpring>k__BackingField: 40
   <RiverDamping>k__BackingField: 0.6

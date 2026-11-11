@@ -22,8 +22,10 @@
             </ui:VisualElement>
         </ui:VisualElement>
         <ui:VisualElement name="top-center" class="top-center" picking-mode="Ignore">
-            <ui:Label name="wave-label" text="Wave 0/0" class="wave-label" />
-            <ui:Label name="next-wave-label" text="" class="next-wave-label" />
+            <ui:Label name="phase-label" text="" class="phase-label" picking-mode="Ignore" />
+            <ui:Label name="phase-hint" text="" class="phase-hint line" picking-mode="Ignore" />
+            <ui:Label name="banner-line" text="" class="banner-line line" picking-mode="Ignore" />
+            <ui:Label name="granted-line" text="" class="granted-line line" picking-mode="Ignore" />
         </ui:VisualElement>
         <ui:VisualElement name="hives" class="hives" picking-mode="Ignore" />
         <ui:VisualElement name="bottom" class="bottom" picking-mode="Ignore">

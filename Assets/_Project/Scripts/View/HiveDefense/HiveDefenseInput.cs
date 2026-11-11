@@ -43,6 +43,12 @@ namespace DigitalStory.View
         /// <summary>True only on the frame restart was pressed (R).</summary>
         public bool RestartPressed { get; private set; }
 
+        /// <summary>True while E is held: give wasps to a hive.</summary>
+        public bool GiveHeld { get; private set; }
+
+        /// <summary>True only on the frame the call-wave key was pressed (Return or keypad Enter).</summary>
+        public bool CallWavePressed { get; private set; }
+
         /// <summary>True for 1 s after the mouse moves 4 px, and while a mouse button is held. Then the mouse aims.</summary>
         public bool IsMouseLive { get; private set; }
 
@@ -94,6 +100,8 @@ namespace DigitalStory.View
             PunchPressed = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
             KickPressed = Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.LeftShift);
             RestartPressed = Input.GetKeyDown(KeyCode.R);
+            GiveHeld = Input.GetKey(KeyCode.E);
+            CallWavePressed = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
             UpdateMouseLive();
 
             for (int hole = 0; hole < LetterKeys.Length; hole++)

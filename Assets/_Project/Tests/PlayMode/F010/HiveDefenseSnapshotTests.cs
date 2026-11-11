@@ -81,6 +81,13 @@ namespace DigitalStory.Tests.PlayMode
         private const string LaunchSuffix = "-launch";
         private const string WrapSuffix = "-wrap";
         private const string GrowSuffix = "-grow";
+        private const float HiveCallShotSeconds = 0.4f;
+        private const float MoveLessonSeconds = 0.4f;
+        private const float BannerShotSeconds = 0.6f;
+        private const float OutsideRingMetres = 4.5f;
+        private const float BesideHiveMetres = 2f;
+        private const float FlowShotSeconds = 0.3f;
+        private const int HalfSongNotesMissing = 1;
 
         private HiveDefenseRoot _root;
         private SwarmCoreMotor _core;
@@ -177,13 +184,15 @@ namespace DigitalStory.Tests.PlayMode
             yield return CaptureClose("snap-3-dome", CoreFocus());
         }
 
+        // Hive Call lasts only while the hives' stores flow in, under a second at the start of a match.
         [UnityTest]
         public IEnumerator Snapshot4_HiveCall()
         {
             yield return Wait(SongSeconds);
             yield return Play(KeysOf<HiveCallSong>());
             Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall));
-            yield return Wait(SongSeconds);
+            yield return Wait(HiveCallShotSeconds);
+            Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall), "Hive Call ended before the picture");
             yield return Capture("snap-4-hivecall");
         }
 
@@ -263,8 +272,6 @@ namespace DigitalStory.Tests.PlayMode
             yield return CaptureClose("snap-8-tornado", _core.Position + (Vector3.up * TornadoFocusHeight), WideCloseDistance, LowPitch);
         }
 
-        // Camera.Render does not draw UI Toolkit, so the HUD panel is pointed at a render texture for a few frames,
-        // through a runtime copy of its PanelSettings. The PanelSettings asset itself is never changed.
         // Two songs are found besides Sting, so the songbook shows three known songs and four empty slots, the "New song"
         // line, and all but the last of the Tornado's notes glowing as a hint.
         [UnityTest]
@@ -286,40 +293,7 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(_root.Session.Discovery.KnownCount, Is.EqualTo(KnownInHud));
             Assert.That(_root.Session.Discovery.HintNotes(_root.Session.Caster), Is.EqualTo(hint.Length));
 
-            UIDocument document = UnityEngine.Object.FindAnyObjectByType<UIDocument>();
-            Assert.That(document, Is.Not.Null);
-            PanelSettings original = document.panelSettings;
-            PanelSettings copy = UnityEngine.Object.Instantiate(original);
-            var target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
-            target.Create();
-            copy.targetTexture = target;
-            copy.clearColor = false;
-
-            try
-            {
-                document.panelSettings = copy;
-                _capturer.BeginOverlay(target);
-                for (int frame = 0; frame < HudFrames; frame++)
-                {
-                    yield return null;
-                }
-
-                _capturer.RequestOverlayRead(Path.Combine(_directory, "snap-9-hud.png"));
-                while (_capturer.IsBusy)
-                {
-                    yield return null;
-                }
-            }
-            finally
-            {
-                _capturer.EndOverlay();
-                document.panelSettings = original;
-                UnityEngine.Object.Destroy(copy);
-                target.Release();
-                UnityEngine.Object.Destroy(target);
-            }
-
-            Assert.That(_capturer.LastWasFlat, Is.False, "snap-9-hud.png is a single flat colour.");
+            yield return CaptureHud("snap-9-hud");
         }
 
         // Each moment is taken twice: from the side, far and low enough to show the climb (the named picture), and
@@ -390,6 +364,153 @@ namespace DigitalStory.Tests.PlayMode
             yield return CaptureClose("snap-12-dome-and-sting", MidpointToNearestBeekeeper(), WideCloseDistance, ClosePitch);
         }
 
+        // Plan sections L and N in the first farm phase: the phase line and its timer, the lesson's second prompt once the core
+        // has moved, the song table with the Sting known and the Meteor filled in but for its last note (and the Tornado's
+        // first two notes), and the hive panels with their stores.
+        [UnityTest]
+        public IEnumerator Snapshot13_Farm()
+        {
+            yield return Wait(SongSeconds);
+            yield return Walk(Vector3.forward, MoveLessonSeconds);
+            IReadOnlyList<int> meteor = KeysOf<MeteorSong>();
+            var start = new int[meteor.Count - HalfSongNotesMissing];
+            for (int index = 0; index < start.Length; index++)
+            {
+                start[index] = meteor[index];
+            }
+
+            yield return Play(start);
+            yield return Wait(HintPauseSeconds);
+
+            HiveDefenseSession session = _root.Session;
+            Assert.That(session.Phase, Is.EqualTo(MatchPhase.Farm));
+            Assert.That(session.Tutorial.Current, Is.EqualTo(TutorialStep.PlaySting));
+            Assert.That(session.Discovery.KnownNotes(SongIndex<MeteorSong>()), Is.EqualTo(start.Length));
+            Assert.That(session.Discovery.IsKnown(SongIndex<MeteorSong>()), Is.False);
+            yield return CaptureHud("snap-13-farm");
+        }
+
+        // Plan section M: the core beside a hive while its store flows into the swarm: the bright collect ring, the motes
+        // rising from the hive to the core, and the store bar under the health bar. The core waits outside the ring first,
+        // so the camera has caught up with it.
+        [UnityTest]
+        public IEnumerator Snapshot13_Collect()
+        {
+            Hive hive = _root.Session.Hives[0];
+            yield return ApproachHive(hive.Position);
+            Assert.That(_root.Session.NearHive, Is.EqualTo(0));
+            Assert.That(_root.Session.IsCollecting, Is.True);
+            yield return Capture("snap-13-collect");
+            yield return CaptureClose("snap-13-collect", HiveAndCoreFocus(hive.Position));
+        }
+
+        // Plan section M: Give held beside the hurt hive: the swarm's wasps flow into it as green crosses and its health bar
+        // grows, while collecting shows gold dots.
+        [UnityTest]
+        public IEnumerator Snapshot13_Give()
+        {
+            int last = _root.Session.Hives.Count - 1;
+            Hive hive = _root.Session.Hives[last];
+            Assert.That(hive.Health, Is.LessThan(hive.MaxHealth), "the last hive does not start hurt");
+            _root.HoldGive(true);
+            try
+            {
+                yield return ApproachHive(hive.Position);
+                Assert.That(_root.Session.NearHive, Is.EqualTo(last));
+                Assert.That(_root.Session.IsGiving, Is.True);
+                yield return Capture("snap-13-give");
+                yield return CaptureClose("snap-13-give", HiveAndCoreFocus(hive.Position));
+
+                // The hive's panel says it is being healed.
+                yield return CaptureHud("snap-13-give-hud");
+            }
+            finally
+            {
+                _root.HoldGive(false);
+            }
+        }
+
+        // Plan sections L and M in a wave called early: the survive phase line, the "Wave 1" banner, the wasps granted for
+        // the seconds skipped, and the wasp price on each known song's chip. The Dome and the Tornado were found for free in
+        // the farm phase, so three chips show a price.
+        [UnityTest]
+        public IEnumerator Snapshot13_Survive()
+        {
+            yield return Wait(SongSeconds);
+            yield return Play(KeysOf<DomeSong>());
+            yield return Wait(HintPauseSeconds);
+            yield return Play(KeysOf<TornadoSong>());
+            Assert.That(_root.Session.Discovery.KnownCount, Is.EqualTo(KnownInHud));
+            _root.CallWave();
+            yield return Wait(BannerShotSeconds);
+            Assert.That(_root.Session.Phase, Is.EqualTo(MatchPhase.Survive));
+            Assert.That(_root.Session.AreSongsFree, Is.False);
+            yield return CaptureHud("snap-13-survive");
+        }
+
+        // Stops outside the hive's collect ring until the camera has caught up, then steps in beside the hive.
+        private IEnumerator ApproachHive(Vector3 hive)
+        {
+            _core.PlaceAt(hive + (Vector3.back * OutsideRingMetres), true);
+            yield return Wait(SettleCameraSeconds);
+            _core.PlaceAt(hive + (Vector3.back * BesideHiveMetres), true);
+            yield return Wait(FlowShotSeconds);
+        }
+
+        private Vector3 HiveAndCoreFocus(Vector3 hive) => ((hive + _core.Position) * 0.5f) + (Vector3.up * CloseFocusHeight);
+
+        private IEnumerator Walk(Vector3 direction, float seconds)
+        {
+            float elapsed = 0f;
+            while (elapsed < seconds)
+            {
+                float dt = Time.deltaTime;
+                _core.Move(direction, 1f, false, dt);
+                elapsed += dt;
+                yield return null;
+            }
+        }
+
+        // Camera.Render does not draw UI Toolkit, so the HUD panel is pointed at a render texture for a few frames,
+        // through a runtime copy of its PanelSettings. The PanelSettings asset itself is never changed.
+        private IEnumerator CaptureHud(string name)
+        {
+            UIDocument document = UnityEngine.Object.FindAnyObjectByType<UIDocument>();
+            Assert.That(document, Is.Not.Null);
+            PanelSettings original = document.panelSettings;
+            PanelSettings copy = UnityEngine.Object.Instantiate(original);
+            var target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
+            target.Create();
+            copy.targetTexture = target;
+            copy.clearColor = false;
+
+            try
+            {
+                document.panelSettings = copy;
+                _capturer.BeginOverlay(target);
+                for (int frame = 0; frame < HudFrames; frame++)
+                {
+                    yield return null;
+                }
+
+                _capturer.RequestOverlayRead(Path.Combine(_directory, name + ".png"));
+                while (_capturer.IsBusy)
+                {
+                    yield return null;
+                }
+            }
+            finally
+            {
+                _capturer.EndOverlay();
+                document.panelSettings = original;
+                UnityEngine.Object.Destroy(copy);
+                target.Release();
+                UnityEngine.Object.Destroy(target);
+            }
+
+            Assert.That(_capturer.LastWasFlat, Is.False, name + ".png is a single flat colour.");
+        }
+
         private IEnumerator Wait(float seconds)
         {
             float elapsed = 0f;
@@ -419,17 +540,22 @@ namespace DigitalStory.Tests.PlayMode
         // The keys on the scene's own song asset.
         private IReadOnlyList<int> KeysOf<T>() where T : SwarmSongEffect
         {
+            return _root.Session.Caster[SongIndex<T>()].Song.Keys;
+        }
+
+        private int SongIndex<T>() where T : SwarmSongEffect
+        {
             HiveDefenseSession session = _root.Session;
             for (int song = 0; song < session.Caster.Count; song++)
             {
                 if (session.Caster[song] is T)
                 {
-                    return session.Caster[song].Song.Keys;
+                    return song;
                 }
             }
 
             Assert.Fail("The scene has no " + typeof(T).Name + ".");
-            return null;
+            return -1;
         }
 
         private IEnumerator Play(IReadOnlyList<int> holes)
@@ -444,8 +570,10 @@ namespace DigitalStory.Tests.PlayMode
             yield return null;
         }
 
+        // The match starts in a farm phase with nobody on the map, so the wave is called at once.
         private IEnumerator WaitForBeekeepers(int wanted)
         {
+            _root.CallWave();
             float elapsed = 0f;
             while (_root.Session.ActiveBeekeeperCount < wanted && elapsed < MaxWaveSeconds)
             {
