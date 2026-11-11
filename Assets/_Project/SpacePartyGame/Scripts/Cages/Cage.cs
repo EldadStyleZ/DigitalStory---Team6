@@ -23,7 +23,7 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("The trigger inside the bars, on the CageWall layer.")]
         private BoxCollider2D _interior;
 
-        [SerializeField, Tooltip("Half the size of the walls' outer edge, in units; the walls are built from it.")]
+        [SerializeField, Tooltip("Half the size of the walls' outer edge at scale 1, in units; multiplied by the cage's scale.")]
         private Vector2 _outerHalfSize = new Vector2(0.93f, 0.98f);
 
         [SerializeField, Tooltip("Which layers count as vermin.")]
@@ -40,8 +40,9 @@ namespace SpacePartyGame
         /// <summary>The player this cage belongs to.</summary>
         public PlayerIdentity Owner { get; private set; }
 
-        /// <summary>Half the size of the cage's outer edge, for placing cages.</summary>
-        public Vector2 OuterHalfSize => _outerHalfSize;
+        /// <summary>Half the size of the cage's outer edge in world units (scaled with the cage), for placing cages.</summary>
+        // public Vector2 OuterHalfSize => _outerHalfSize;
+        public Vector2 OuterHalfSize => Vector2.Scale(_outerHalfSize, transform.lossyScale);
 
         /// <summary>How many vermin are inside.</summary>
         public int Count => _inside.Count;
