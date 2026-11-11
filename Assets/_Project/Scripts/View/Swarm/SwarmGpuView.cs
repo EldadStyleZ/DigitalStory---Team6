@@ -8,14 +8,16 @@ using UnityEngine.Rendering;
 namespace DigitalStory.View
 {
     /// <summary>
-    /// Moves and draws every wasp of the swarm on the GPU, with one compute dispatch and one indirect draw a frame.
-    /// Gameplay never touches a wasp. It feeds this view the live count, the form and a few positions.
+    /// Moves and draws every wasp of the swarm on the GPU, with one compute dispatch and two indirect draws a frame:
+    /// the wasps, then the soft glow around each. Gameplay never touches a wasp. It feeds this view the live count, the
+    /// form, the colour of the last song cast and a few positions.
     /// </summary>
     /// <remarks>
     /// Why the GPU and not Jobs: docs/CODING_STANDARDS.md says "profile first, then Jobs and Burst". We go to the GPU
-    /// on purpose, because 10,000 independently animated agents is a known GPU workload, and DOTS would need four new
-    /// packages, which is a team decision. This runs in the Built-in Render Pipeline with no new package, the CPU cost
-    /// does not change with the number of wasps, and the CPU never reads GPU data back. Spec F-010, section 9.1.
+    /// on purpose, because thousands of independently animated agents is a known GPU workload, and DOTS would need four
+    /// new packages, which is a team decision. This runs in the Built-in Render Pipeline with no new package, the CPU
+    /// cost does not change with the number of wasps, and the CPU never reads GPU data back. Spec F-010, section 9.1.
+    /// The glow stands in for bloom, which would need the post-processing package.
     /// </remarks>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(100)] // Runs after the scripts that feed it, so the wasps never lag a frame behind the rules.
@@ -28,9 +30,6 @@ namespace DigitalStory.View
         // Matches THREAD_GROUP_SIZE in WaspSwarm.compute.
         private const int ThreadsPerGroup = 64;
         private const int MostBones = 64;
-
-        // One colour per SwarmForm value (River 0 to Meteor 8): the length of _FormColors in WaspSwarm.compute.
-        private const int FormCount = 9;
         private const int LayoutSeed = 1010;
         private const double GoldenRatioFraction = 0.6180339887498949;
         private const float FullTurn = Mathf.PI * 2f;
@@ -38,7 +37,7 @@ namespace DigitalStory.View
         private const float StandsFlag = 1f;
         private const float FallenFlag = 0f;
 
-        // Bytes per element. Each matches a struct in WaspSwarm.compute and WaspInstanced.shader.
+        // Bytes per element. Each matches a struct in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.
         private const int StaticStride = sizeof(float) * 12;
         private const int DynamicStride = sizeof(float) * 12;
         private const int TrailStride = sizeof(float) * 4;
@@ -68,7 +67,9 @@ namespace DigitalStory.View
         private static readonly int MeteorRiseSecondsId = Shader.PropertyToID("_MeteorRiseSeconds");
         private static readonly int MeteorDiveSecondsId = Shader.PropertyToID("_MeteorDiveSeconds");
         private static readonly int MeteorHeightId = Shader.PropertyToID("_MeteorHeight");
-        private static readonly int FormColorsId = Shader.PropertyToID("_FormColors");
+        private static readonly int RiverColorId = Shader.PropertyToID("_RiverColor");
+        private static readonly int CastColorId = Shader.PropertyToID("_CastColor");
+        private static readonly int PreviousCastColorId = Shader.PropertyToID("_PreviousCastColor");
         private static readonly int RiverSpringId = Shader.PropertyToID("_RiverSpring");
         private static readonly int RiverDampingId = Shader.PropertyToID("_RiverDamping");
         private static readonly int ShapeSpringId = Shader.PropertyToID("_ShapeSpring");
@@ -90,6 +91,8 @@ namespace DigitalStory.View
         private static readonly int WaspLengthId = Shader.PropertyToID("_WaspLength");
         private static readonly int BuzzAmplitudeId = Shader.PropertyToID("_BuzzAmplitude");
         private static readonly int BuzzFrequencyId = Shader.PropertyToID("_BuzzFrequency");
+        private static readonly int GlowSizeId = Shader.PropertyToID("_GlowSize");
+        private static readonly int GlowStrengthId = Shader.PropertyToID("_GlowStrength");
 
         [SerializeField, Tooltip("WaspSwarm.compute, which moves the wasps.")]
         private ComputeShader _swarmCompute;
@@ -97,11 +100,17 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("WaspInstanced.shader, which draws them. This view makes its own material from it.")]
         private Shader _waspShader;
 
+        [SerializeField, Tooltip("WaspGlow.shader, which draws the soft glow around each wasp. This view makes its own material from it.")]
+        private Shader _glowShader;
+
         private SwarmConfig _config;
         private PathTrail _trail;
         private Mesh _mesh;
         private Material _material;
         private RenderParams _renderParams;
+        private Mesh _glowMesh;
+        private Material _glowMaterial;
+        private RenderParams _glowRenderParams;
         private int _simulateKernel;
         private int _resetKernel;
         private int _maxWasps;
@@ -109,7 +118,6 @@ namespace DigitalStory.View
 
         private WaspStatic[] _staticData;
         private Vector4[] _trailPoints;
-        private Vector4[] _formColors;
         private GraphicsBuffer.IndirectDrawIndexedArgs[] _drawArgs;
 
         private GraphicsBuffer _staticBuffer;
@@ -117,7 +125,15 @@ namespace DigitalStory.View
         private GraphicsBuffer _trailBuffer;
         private GraphicsBuffer _boneBuffer;
         private GraphicsBuffer _argsBuffer;
+        private GraphicsBuffer _glowArgsBuffer;
         private bool _needsReset;
+
+        // The colour of the last song cast, the colour the current form shows, and the colour the form before showed.
+        // The two form colours are latched once a frame, so SetForm and SetCastColor may come in either order.
+        private Color _castColor;
+        private Color _formColor;
+        private Color _previousFormColor;
+        private bool _hasFormChanged;
 
         private float _simTime;
         private int _activeCount;
@@ -149,6 +165,12 @@ namespace DigitalStory.View
         /// <summary>True while the buffers exist and the swarm is moved and drawn each frame, for tests and debugging.</summary>
         public bool IsRunning => _staticBuffer != null;
 
+        /// <summary>The colour of the last song cast, which every form but the River shows, for tests and debugging.</summary>
+        public Color CastColor => _castColor;
+
+        /// <summary>How far the river has curled into the ring around the standing Piper: 0 while it flows behind them, 1 once it is a ring.</summary>
+        public float StandingShare => _standingShare;
+
         private void OnEnable()
         {
             if (_config != null)
@@ -174,9 +196,11 @@ namespace DigitalStory.View
                 _trailBuffer.SetData(_trailPoints, 0, 0, trailCount);
             }
 
+            LatchFormColors();
             BindComputeBuffers();
             PushFrame(deltaTime, trailCount);
             PushConfig();
+            PushColors();
 
             if (_needsReset)
             {
@@ -186,8 +210,15 @@ namespace DigitalStory.View
 
             _swarmCompute.Dispatch(_simulateKernel, _groupCount, 1, 1);
 
-            _renderParams.worldBounds = new Bounds(_piperPosition, Vector3.one * (_config.BoundsMeters * 2f));
+            var bounds = new Bounds(_piperPosition, Vector3.one * (_config.BoundsMeters * 2f));
+            _renderParams.worldBounds = bounds;
             Graphics.RenderMeshIndirect(_renderParams, _mesh, _argsBuffer);
+
+            if (_glowArgsBuffer != null)
+            {
+                _glowRenderParams.worldBounds = bounds;
+                Graphics.RenderMeshIndirect(_glowRenderParams, _glowMesh, _glowArgsBuffer);
+            }
         }
 
         private void OnDisable() => ReleaseBuffers();
@@ -201,7 +232,8 @@ namespace DigitalStory.View
         /// <summary>
         /// Supplies the swarm's settings and the Piper's trail, and starts the count at SwarmConfig.StartingWasps.
         /// Call before this object starts; calling again (a restart) starts the swarm over.
-        /// Logs an error and switches this view off when a shader is missing or the device has no compute shaders.
+        /// Logs an error and switches this view off when a wasp shader is missing or the device has no compute shaders.
+        /// Logs an error and draws the wasps without their glow when only the glow shader is missing.
         /// </summary>
         public void Initialize(SwarmConfig config, PathTrail trail)
         {
@@ -241,6 +273,11 @@ namespace DigitalStory.View
             _activeCount = config.StartingWasps;
             _mesh = WaspMeshFactory.Create();
             _material = new Material(_waspShader) { name = "Wasp Swarm" };
+            if (CanGlow())
+            {
+                _glowMesh = WaspMeshFactory.CreateGlowQuad();
+                _glowMaterial = new Material(_glowShader) { name = "Wasp Swarm Glow" };
+            }
 
             // A restart keeps the layout and any Colossus samples, unless the wasp count changed.
             if (_staticData == null || _staticData.Length != _maxWasps)
@@ -250,8 +287,10 @@ namespace DigitalStory.View
             }
 
             _trailPoints = new Vector4[config.TrailPoints];
-            _formColors = new Vector4[FormCount];
             _drawArgs = new GraphicsBuffer.IndirectDrawIndexedArgs[1];
+            _castColor = config.RiverColor;
+            _formColor = config.RiverColor;
+            _previousFormColor = config.RiverColor;
             _config = config;
 
             if (isActiveAndEnabled)
@@ -275,7 +314,15 @@ namespace DigitalStory.View
             _previousFormStartTime = _formStartTime;
             _form = form;
             _formStartTime = _simTime;
+            _hasFormChanged = true;
         }
+
+        /// <summary>
+        /// The colour every form but the River shows until the next call: the colour of the category of the song just
+        /// cast, from SwarmConfig.ColorOf. The River and the collapsed swarm always show SwarmConfig.RiverColor. Each wasp
+        /// takes the new colour as the form's wave reaches it, so the colour flows through the swarm with the motion.
+        /// </summary>
+        public void SetCastColor(Color color) => _castColor = color;
 
         /// <summary>Where the Piper stands and faces. Only the facing on the ground is used.</summary>
         public void SetPiper(Vector3 position, Vector3 forward)
@@ -468,6 +515,24 @@ namespace DigitalStory.View
             return true;
         }
 
+        // The glow only dresses the wasps, so without it the swarm still runs, but the missing glow is reported.
+        private bool CanGlow()
+        {
+            if (_glowShader == null)
+            {
+                Debug.LogError($"{name}: SwarmGpuView needs WaspGlow.shader to draw the wasps' glow. Rebuild the scene or fill it in.", this);
+                return false;
+            }
+
+            if (!_glowShader.isSupported)
+            {
+                Debug.LogError($"{name}: WaspGlow.shader does not run on this device, so the wasps draw without their glow. Check it for compile errors.", this);
+                return false;
+            }
+
+            return true;
+        }
+
         private void CreateBuffers()
         {
             if (IsRunning)
@@ -502,9 +567,39 @@ namespace DigitalStory.View
                 layer = gameObject.layer,
             };
 
+            if (_glowMaterial != null)
+            {
+                CreateGlowBuffers();
+            }
+
             // New buffers hold nothing yet, so the next frame fills the dynamic one before it moves anything.
             _boneCount = 0;
             _needsReset = true;
+        }
+
+        // One glow quad per wasp, from the same wasp buffers. Its material's queue (Transparent) draws it after the
+        // opaque geometry, wasps included.
+        private void CreateGlowBuffers()
+        {
+            _glowArgsBuffer = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 1, GraphicsBuffer.IndirectDrawIndexedArgs.size);
+            _drawArgs[0] = new GraphicsBuffer.IndirectDrawIndexedArgs
+            {
+                indexCountPerInstance = _glowMesh.GetIndexCount(0),
+                instanceCount = (uint)_maxWasps,
+                startIndex = _glowMesh.GetIndexStart(0),
+                baseVertexIndex = _glowMesh.GetBaseVertex(0),
+                startInstance = 0,
+            };
+            _glowArgsBuffer.SetData(_drawArgs);
+
+            _glowMaterial.SetBuffer(StaticId, _staticBuffer);
+            _glowMaterial.SetBuffer(DynamicId, _dynamicBuffer);
+            _glowRenderParams = new RenderParams(_glowMaterial)
+            {
+                shadowCastingMode = ShadowCastingMode.Off,
+                receiveShadows = false,
+                layer = gameObject.layer,
+            };
         }
 
         private void StartOver()
@@ -519,6 +614,7 @@ namespace DigitalStory.View
             _previousFormStartTime = 0f;
             _standingSeconds = 0f;
             _standingShare = 0f;
+            _hasFormChanged = false;
         }
 
         // Spec 9.3: while the Piper stands, the river curls into a torus around them. The PathTrail never shrinks while
@@ -560,6 +656,18 @@ namespace DigitalStory.View
                 Destroy(_mesh);
                 _mesh = null;
             }
+
+            if (_glowMaterial != null)
+            {
+                Destroy(_glowMaterial);
+                _glowMaterial = null;
+            }
+
+            if (_glowMesh != null)
+            {
+                Destroy(_glowMesh);
+                _glowMesh = null;
+            }
         }
 
         private void ReleaseBuffers()
@@ -569,6 +677,7 @@ namespace DigitalStory.View
             Release(ref _trailBuffer);
             Release(ref _boneBuffer);
             Release(ref _argsBuffer);
+            Release(ref _glowArgsBuffer);
         }
 
         // Bound every frame, because the bindings live on the shared ComputeShader asset and are lost if it reloads.
@@ -630,31 +739,46 @@ namespace DigitalStory.View
             compute.SetFloat(TorusRadiusId, _config.TorusRadius);
             compute.SetFloat(DyingSecondsId, _config.DyingSeconds);
 
-            FillFormColors();
-            compute.SetVectorArray(FormColorsId, _formColors);
-
             _material.SetFloat(WaspLengthId, _config.WaspLength);
             _material.SetFloat(DyingSecondsId, _config.DyingSeconds);
             _material.SetFloat(BuzzAmplitudeId, _config.BuzzAmplitude);
             _material.SetFloat(BuzzFrequencyId, _config.BuzzFrequency);
+
+            if (_glowMaterial != null)
+            {
+                _glowMaterial.SetFloat(GlowSizeId, _config.GlowSize);
+                _glowMaterial.SetFloat(GlowStrengthId, _config.GlowStrength);
+                _glowMaterial.SetFloat(DyingSecondsId, _config.DyingSeconds);
+                _glowMaterial.SetFloat(BuzzAmplitudeId, _config.BuzzAmplitude);
+                _glowMaterial.SetFloat(BuzzFrequencyId, _config.BuzzFrequency);
+            }
+        }
+
+        // Once a frame, after everything that feeds this view has run: on a change of form, the colour the old form
+        // showed becomes the colour of the wasps its wave has not reached yet. A SetCastColor in the same frame, before
+        // or after the SetForm, colours the new form.
+        private void LatchFormColors()
+        {
+            if (_hasFormChanged)
+            {
+                _previousFormColor = _formColor;
+                _hasFormChanged = false;
+            }
+
+            _formColor = _castColor;
         }
 
         // The compute shader writes these colours straight into the draw, so they skip Unity's colour-space conversion.
-        private void FillFormColors()
+        private void PushColors()
         {
             bool isLinear = QualitySettings.activeColorSpace == ColorSpace.Linear;
-            _formColors[(int)SwarmForm.River] = ShaderColor(_config.RiverColor, isLinear);
-            _formColors[(int)SwarmForm.Dome] = ShaderColor(_config.DomeColor, isLinear);
-            _formColors[(int)SwarmForm.Sting] = ShaderColor(_config.StingColor, isLinear);
-            _formColors[(int)SwarmForm.Tornado] = ShaderColor(_config.TornadoColor, isLinear);
-            _formColors[(int)SwarmForm.Gust] = ShaderColor(_config.GustColor, isLinear);
-            _formColors[(int)SwarmForm.HiveCall] = ShaderColor(_config.HiveCallColor, isLinear);
-            _formColors[(int)SwarmForm.Colossus] = ShaderColor(_config.ColossusColor, isLinear);
-            _formColors[(int)SwarmForm.Collapsed] = ShaderColor(_config.RiverColor, isLinear);
-            _formColors[(int)SwarmForm.Meteor] = ShaderColor(_config.MeteorColor, isLinear);
+            ComputeShader compute = _swarmCompute;
+            compute.SetVector(RiverColorId, ShaderColor(_config.RiverColor, isLinear));
+            compute.SetVector(CastColorId, ShaderColor(_formColor, isLinear));
+            compute.SetVector(PreviousCastColorId, ShaderColor(_previousFormColor, isLinear));
         }
 
-        // 48 bytes, the same layout as WaspStatic in WaspSwarm.compute and WaspInstanced.shader.
+        // 48 bytes, the same layout as WaspStatic in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.
         [StructLayout(LayoutKind.Sequential)]
         private struct WaspStatic
         {

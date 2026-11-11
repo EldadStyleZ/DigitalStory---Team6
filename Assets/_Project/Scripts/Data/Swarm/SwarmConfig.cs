@@ -1,32 +1,38 @@
+using System;
 using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>The wasp swarm: how many wasps there are, what makes it collapse, and how it looks and flows.</summary>
+    /// <summary>The wasp swarm: how many wasps there are, what makes it collapse, and how it looks, flows and glows.</summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Swarm Config", fileName = "SwarmConfig")]
     public sealed class SwarmConfig : ScriptableObject
     {
+        // The counts are 0.4 of the first tuning and each wasp is drawn twice as long, so the swarm has fewer, bigger
+        // wasps that read one by one, and the balance between losses, gains and the collapse stays the same.
         [field: Header("Rules")]
         [field: SerializeField, Min(1), Tooltip("Wasps at the start of a run.")]
-        public int StartingWasps { get; private set; } = 5000;
+        public int StartingWasps { get; private set; } = 2000;
 
         [field: SerializeField, Min(1), Tooltip("Most wasps the swarm can hold. Also the size of the GPU buffers.")]
-        public int MaxWasps { get; private set; } = 10000;
+        public int MaxWasps { get; private set; } = 4000;
 
         [field: SerializeField, Min(0), Tooltip("The swarm collapses when a loss leaves fewer wasps than this.")]
-        public int CollapseBelow { get; private set; } = 600;
+        public int CollapseBelow { get; private set; } = 240;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the swarm stays collapsed before it can respawn.")]
         public float CollapseBlockSeconds { get; private set; } = 3f;
 
         [field: SerializeField, Min(0), Tooltip("Wasps the swarm comes back with when a hive still stands.")]
-        public int RespawnWasps { get; private set; } = 2500;
+        public int RespawnWasps { get; private set; } = 1000;
 
         [field: SerializeField, Min(0f), Tooltip("Wasps gained per second from each standing hive while Hive Call is held.")]
-        public float HiveCallWaspsPerSecondPerHive { get; private set; } = 250f;
+        public float HiveCallWaspsPerSecondPerHive { get; private set; } = 100f;
 
         [field: SerializeField, Range(0f, 1f), Tooltip("Share of a loss that still gets through the dome.")]
         public float DomeLossFraction { get; private set; } = 0.15f;
+
+        [field: SerializeField, Min(0), Tooltip("The HUD warns that the swarm is low while it has fewer wasps than this.")]
+        public int LowWasps { get; private set; } = 600;
 
         [field: Header("River and shapes")]
         [field: SerializeField, Min(0f), Tooltip("Spring strength pulling a wasp toward its place in the river.")]
@@ -54,10 +60,10 @@ namespace DigitalStory.Data
         public float FlowSpeed { get; private set; } = 0.08f;
 
         [field: SerializeField, Min(0f), Tooltip("Length of the river when the Piper moves.")]
-        public float RiverLengthMeters { get; private set; } = 8f;
+        public float RiverLengthMeters { get; private set; } = 11f;
 
-        [field: SerializeField, Min(0f), Tooltip("Half the width of the river.")]
-        public float RiverRadius { get; private set; } = 0.55f;
+        [field: SerializeField, Min(0f), Tooltip("Half the width of the river, and of the ring around the Piper. Wide enough that the big wasps keep apart instead of merging into one band. The river is less than half as tall as it is wide.")]
+        public float RiverRadius { get; private set; } = 1.2f;
 
         [field: SerializeField, Min(0f), Tooltip("Sideways sway of the river, in metres.")]
         public float MeanderAmplitude { get; private set; } = 0.25f;
@@ -65,8 +71,8 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Metres of path the river needs before it stretches out behind the Piper. On a shorter path, at the start of a run, it curls into the ring around them.")]
         public float StandingTrailMeters { get; private set; } = 2f;
 
-        [field: SerializeField, Min(0f), Tooltip("Radius of the ring the swarm forms around the Piper.")]
-        public float TorusRadius { get; private set; } = 1.5f;
+        [field: SerializeField, Min(0f), Tooltip("Radius of the ring the swarm forms around the Piper. Keep it more than RiverRadius, so the ring never covers them.")]
+        public float TorusRadius { get; private set; } = 2.4f;
 
         [field: SerializeField, Min(0f), Tooltip("The Piper counts as standing while they stay within this many metres (on the ground) of where they stopped, so settling never counts as a step.")]
         public float StandStillMeters { get; private set; } = 0.05f;
@@ -88,7 +94,7 @@ namespace DigitalStory.Data
         public float DyingSeconds { get; private set; } = 1.5f;
 
         [field: SerializeField, Min(0.001f), Tooltip("Drawn length of one wasp, in metres.")]
-        public float WaspLength { get; private set; } = 0.12f;
+        public float WaspLength { get; private set; } = 0.24f;
 
         [field: Header("Trail and limits")]
         [field: SerializeField, Min(2), Tooltip("Points the Piper's path trail keeps.")]
@@ -103,29 +109,56 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(1f), Tooltip("Half size of the box that wasps may fill. Used for the draw bounds.")]
         public float BoundsMeters { get; private set; } = 60f;
 
+        // The wasps glow by these colours, so they are light and saturated: the shader whitens each wasp's core itself.
         [field: Header("Colours")]
-        [field: SerializeField, Tooltip("Colour of wasps in the river.")]
-        public Color RiverColor { get; private set; } = new Color(1f, 0.85f, 0.1f, 1f);
+        [field: SerializeField, Tooltip("Colour of the plain swarm: the river, the ring around the Piper and the collapsed swarm. A warm yellow that glows yellow-white.")]
+        public Color RiverColor { get; private set; } = new Color(1f, 0.82f, 0.42f, 1f);
 
-        [field: SerializeField, Tooltip("Colour of the dome.")]
-        public Color DomeColor { get; private set; } = new Color(0.2f, 0.55f, 1f, 1f);
+        [field: SerializeField, Tooltip("Colour of an attack song's form (Sting, Tornado, Meteor, Colossus). A hot red. Red means attack and nothing else.")]
+        public Color AttackColor { get; private set; } = new Color(1f, 0.22f, 0.1f, 1f);
 
-        [field: SerializeField, Tooltip("Colour of the sting.")]
-        public Color StingColor { get; private set; } = new Color(1f, 0.5f, 0.1f, 1f);
+        [field: SerializeField, Tooltip("Colour of a defense song's form (Dome, Gust).")]
+        public Color DefenseColor { get; private set; } = new Color(0.25f, 0.6f, 1f, 1f);
 
-        [field: SerializeField, Tooltip("Colour of the tornado.")]
-        public Color TornadoColor { get; private set; } = new Color(0.5f, 0.55f, 0.65f, 1f);
+        [field: SerializeField, Tooltip("Colour of a power song's form (Hive Call). A deep gold, more saturated than the river's yellow.")]
+        public Color PowerColor { get; private set; } = new Color(1f, 0.7f, 0.08f, 1f);
 
-        [field: SerializeField, Tooltip("Colour of the gust.")]
-        public Color GustColor { get; private set; } = new Color(0.7f, 0.9f, 1f, 1f);
+        // A soft glow is drawn around every wasp in place of bloom, which the project cannot add. In a dense swarm many
+        // glows overlap and add up, so each one is faint; they blend softly toward white instead of clipping.
+        [field: Header("Glow")]
+        [field: SerializeField, Min(0f), Tooltip("Metres across the soft glow drawn around each wasp. 0 hides the glow.")]
+        public float GlowSize { get; private set; } = 0.5f;
 
-        [field: SerializeField, Tooltip("Colour of the Hive Call (gold).")]
-        public Color HiveCallColor { get; private set; } = new Color(1f, 0.84f, 0.1f, 1f);
+        [field: SerializeField, Range(0f, 1f), Tooltip("Brightness of one wasp's glow at its middle. Keep it low: in the river dozens of glows overlap.")]
+        public float GlowStrength { get; private set; } = 0.18f;
 
-        [field: SerializeField, Tooltip("Colour of the Colossus.")]
-        public Color ColossusColor { get; private set; } = new Color(0.9f, 0.6f, 0.15f, 1f);
+        [field: SerializeField, Min(0f), Tooltip("Metres the swarm's light reaches over the ground and the trees, at full strength.")]
+        public float LightRange { get; private set; } = 14f;
 
-        [field: SerializeField, Tooltip("Colour of the meteor (hot red-orange). It glows hottest in the dive.")]
-        public Color MeteorColor { get; private set; } = new Color(1f, 0.3f, 0.06f, 1f);
+        [field: SerializeField, Min(0f), Tooltip("Brightness of the swarm's light at full strength.")]
+        public float LightIntensity { get; private set; } = 5.5f;
+
+        [field: SerializeField, Min(0f), Tooltip("Metres above the ground the swarm's light hangs. Lower lights a smaller, brighter pool.")]
+        public float LightHeight { get; private set; } = 3f;
+
+        [field: SerializeField, Min(0f), Tooltip("Metres the swarm's light sits toward the camera from the middle of the swarm, so the side of the Piper the camera sees is lit too.")]
+        public float LightTowardCamera { get; private set; } = 1.5f;
+
+        /// <summary>The colour the wasps take while a song of <paramref name="category"/> holds their form.</summary>
+        /// <exception cref="ArgumentOutOfRangeException">The category has no colour.</exception>
+        public Color ColorOf(SongCategory category)
+        {
+            switch (category)
+            {
+                case SongCategory.Attack:
+                    return AttackColor;
+                case SongCategory.Defense:
+                    return DefenseColor;
+                case SongCategory.Power:
+                    return PowerColor;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(category), category, "This song category has no colour in SwarmConfig.");
+            }
+        }
     }
 }

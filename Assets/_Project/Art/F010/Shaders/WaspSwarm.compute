@@ -30,7 +30,7 @@ struct WaspDynamic
     float state;         // StateAlive, StateDying or StateDead
     float3 velocity;
     float stateTime;     // seconds in the current state
-    float4 tint;         // rgb colour, a glow
+    float4 tint;         // rgb colour, a heat: how hot the wasp glows in WaspInstanced.shader and WaspGlow.shader
 };
 
 StructuredBuffer<WaspStatic> _Static;
@@ -61,7 +61,13 @@ float4 _Meteor;                           // xyz impact point, w share of the sw
 float _MeteorRiseSeconds;                 // from the cast to the top of the climb
 float _MeteorDiveSeconds;                 // from the top of the climb to the impact
 float _MeteorHeight;                      // metres above the Piper the meteor climbs to
-float4 _FormColors[9];                    // rgb per form id
+
+// Colours, already in the colour space the draw expects. A wasp in the river (or the collapsed swarm) shows the river's
+// colour; in any other form it shows the colour of the last song cast. A form change sweeps through the swarm as a
+// wave, so a wasp the wave has not reached yet still shows the colour of the form before.
+float4 _RiverColor;
+float4 _CastColor;
+float4 _PreviousCastColor;
 
 // From SwarmConfig.
 float _RiverSpring;
@@ -111,26 +117,32 @@ static const int FormMeteor = 8;
 static const int TrailSearchSteps = 12;
 
 // The look of each form, from spec 9.3. SwarmConfig does not hold these yet; move one there if it needs tuning.
+// The shapes are sized for at most 4,000 wasps of 0.24 m: wide and thick enough that the wasps keep apart.
 static const float FlyHeight = 1.0;              // metres above the ground the river flows
+static const float CrossSectionHeight = 0.45;    // the river's and the ring's height as a share of their width. Flat, so
+                                                 // the wasps spread out where the camera above sees them one by one
+                                                 // instead of stacking into one glowing band
 static const float RiverSwirl = 0.6;             // radians per second the river's cross-section turns
 static const float MeanderWaveNumber = 1.4;      // radians per metre along the river, a wave about 4.5 m long
 static const float MeanderSpeed = 0.9;           // radians per second
 static const float DefaultDomeRadius = 2.2;
 static const float DomeSpin = 0.25;              // radians per second
+static const float DomeShellThickness = 0.3;     // metres the dome's shell spreads across its radius, so it reads as a
+                                                 // swarm in depth rather than wasps pressed into one surface
 static const float StingFlightSeconds = 0.6;
 static const float StingStaggerSeconds = 0.35;
 static const float StingArcHeight = 1.2;         // metres the arc rises, plus StingArcRise per metre of distance
 static const float StingArcRise = 0.25;
 static const float StingTargetHeight = 1.0;      // metres above the target's feet
-static const float StingOrbitRadius = 0.8;
+static const float StingOrbitRadius = 1.0;       // wraps a beekeeper from the feet to the head
 static const float StingOrbitSpin = 5.0;         // radians per second
-static const float RiverHeadGap = 1.0;           // metres behind the Piper where the river starts, so it never hides them
+static const float RiverHeadGap = 1.2;           // metres behind the Piper where the river starts, so it never hides them
 static const float TornadoInnerRadius = 1.5;
 static const float DefaultTornadoRadius = 5.0;
 static const float TornadoFunnelBottom = 0.8;    // the column's radius at the bottom and top, as a share
 static const float TornadoFunnelTop = 1.25;
 static const float TornadoWallShare = 0.75;      // share of the wasps in the column's wall; the rest are flung out
-static const float TornadoWallThickness = 0.5;   // metres
+static const float TornadoWallThickness = 0.7;   // metres
 static const float TornadoBaseHeight = 0.2;
 static const float TornadoHeight = 3.0;
 static const float TornadoSpin = 6.0;            // radians per second
@@ -138,21 +150,21 @@ static const float TornadoTwist = 3.0;           // radians the spiral turns fro
 static const float GustSeconds = 0.8;
 static const float GustStartRadius = 0.6;
 static const float GustRadius = 6.0;
-static const float HaloRadius = 0.7;
-static const float HaloHeight = 2.1;
-static const float HaloThickness = 0.15;
+static const float HaloRadius = 0.9;
+static const float HaloHeight = 2.2;             // over the Piper's head, clear of it by more than HaloThickness
+static const float HaloThickness = 0.25;
 static const float HaloSpin = 2.5;               // radians per second
 static const float MeteorClimbStagger = 0.3;     // share of the rise over which the climbers set off, lowest seed first
 static const float MeteorClimbShare = 0.55;      // share of the rise one wasp's climb takes; the rest is the hang
 static const float MeteorGatherShare = 0.5;      // share of its climb a wasp takes to leave the river for the column
 static const float MeteorSpreadShare = 0.7;      // from this share of its climb the column opens into the ball
-static const float MeteorColumnRadius = 0.35;
+static const float MeteorColumnRadius = 0.45;
 static const float MeteorColumnSpin = 4.0;       // radians per second
-static const float MeteorBallRadius = 1.6;
+static const float MeteorBallRadius = 1.9;
 static const float MeteorBallSpin = 1.5;         // radians per second
 static const float MeteorDiveStagger = 0.15;     // seconds from the first diver to the last, so the dive draws streaks
 static const float MeteorDiveEase = 0.5;         // the dive's starting speed as a share of its mean; it ends at 2 minus this
-static const float MeteorLandingScatter = 0.8;   // metres from the impact point a wasp lands, at most
+static const float MeteorLandingScatter = 1.0;   // metres from the impact point a wasp lands, at most
 static const float MeteorFloorHeight = 0.15;     // metres above the impact point a landed wasp skims
 static const float MeteorSkidKeep = 0.35;        // share of its ground speed a wasp keeps when it hits the floor
 static const float DefaultMeteorRadius = 3.0;    // the burst's ring when _MeteorRadius is 0, MeteorSong.Radius's default
@@ -165,7 +177,7 @@ static const float MeteorMaxSpeed = 70.0;        // metres per second, enough fo
 static const float MaxSpeed = 25.0;              // metres per second, so a far target never fires a wasp across the map.
                                                  // WaspInstanced.shader draws a wasp faster than this as a streak.
 static const float SpawnHeight = 1.2;            // metres above a hive's base
-static const float SpawnScatter = 0.4;
+static const float SpawnScatter = 0.5;
 static const float SpawnLift = 4.0;              // upward metres per second at birth, so newcomers arc in
 static const float ResetScatter = 1.5;
 static const float BurstSpeed = 4.0;             // metres per second a lost wasp flies from the hit
@@ -176,13 +188,16 @@ static const float Gravity = 9.81;
 static const float FallDrag = 1.5;               // share of speed lost per second while falling
 static const float TintSharpness = 6.0;          // how fast a wasp takes on its form's colour, per second
 static const float MeteorTintSharpness = 14.0;   // faster, so the meteor's heat follows its short dive
+
+// The heat of each form, 0 to 1: how much brighter than the calm river the wasps and their glow burn, and how much
+// their eyes light up. Attacks run hottest.
 static const float RiverGlow = 0.1;
-static const float DomeGlow = 0.35;
+static const float DomeGlow = 0.4;
 static const float StingGlow = 0.9;
-static const float TornadoGlow = 0.3;
-static const float GustGlow = 0.3;
-static const float HiveCallGlow = 0.8;
-static const float ColossusGlow = 0.2;
+static const float TornadoGlow = 0.5;
+static const float GustGlow = 0.4;
+static const float HiveCallGlow = 0.6;
+static const float ColossusGlow = 0.4;
 static const float MeteorGlow = 0.55;            // while it waits, climbs and hangs
 static const float MeteorDiveGlow = 1.0;         // hottest in the dive
 static const float MeteorBurstGlow = 0.75;
@@ -228,9 +243,17 @@ float GlowOf(int look)
     return glow;
 }
 
-float4 TintOf(int look)
+// The colour and heat a wasp heads for. hasSwitched says whether the current form's wave has reached the wasp, the
+// same test that picks its form, so the colour flows through the swarm with the motion.
+float4 TintOf(int look, bool hasSwitched)
 {
-    return float4(_FormColors[look].rgb, GlowOf(look));
+    float3 color = hasSwitched ? _CastColor.rgb : _PreviousCastColor.rgb;
+    if (look == FormRiver || look == FormCollapsed)
+    {
+        color = _RiverColor.rgb;
+    }
+
+    return float4(color, GlowOf(look));
 }
 
 float3 RingOffset(float angle, float radius)
@@ -304,7 +327,7 @@ float3 TorusTarget(WaspStatic wasp, float flowLane)
     float angle = wasp.ringAngle + _SimTime * RiverSwirl;
     float radius = wasp.ringRadius * _RiverRadius;
     float reach = _TorusRadius + cos(angle) * radius;
-    float3 lift = Up * (FlyHeight + sin(angle) * radius);
+    float3 lift = Up * (FlyHeight + sin(angle) * radius * CrossSectionHeight);
     return _PiperPosition.xyz + RingOffset(around, reach) + lift;
 }
 
@@ -322,7 +345,7 @@ float3 RiverTarget(WaspStatic wasp)
     float angle = wasp.ringAngle + _SimTime * RiverSwirl;
     float radius = wasp.ringRadius * _RiverRadius;
     float meander = _MeanderAmplitude * sin(along * MeanderWaveNumber - _SimTime * MeanderSpeed);
-    float3 river = center + Up * (FlyHeight + sin(angle) * radius) + side * (cos(angle) * radius + meander);
+    float3 river = center + Up * (FlyHeight + sin(angle) * radius * CrossSectionHeight) + side * (cos(angle) * radius + meander);
 
     // The torus shows while the trail is still too short to hold a river (the start of a run) and while the Piper
     // stands. The trail alone cannot say the second: it keeps its full length after the Piper stops.
@@ -331,8 +354,9 @@ float3 RiverTarget(WaspStatic wasp)
     return lerp(TorusTarget(wasp, flowLane), river, riverShare);
 }
 
-// A Fibonacci hemisphere: every active wasp gets its own evenly spread point.
-float3 DomeTarget(uint index)
+// A Fibonacci hemisphere: every active wasp gets its own evenly spread point, at any count. The shell has some depth
+// about the song's radius, so 4,000 big wasps on it overlap less.
+float3 DomeTarget(uint index, WaspStatic wasp)
 {
     float count = max((float)_ActiveCount, 1.0);
     float slot = (float)index + 0.5;
@@ -340,6 +364,7 @@ float3 DomeTarget(uint index)
     float spread = sqrt(saturate(1.0 - height * height));
     float around = slot * GoldenAngle + _SimTime * DomeSpin;
     float radius = _DomeRadius > 0.0 ? _DomeRadius : DefaultDomeRadius;
+    radius += (wasp.ringRadius - 0.5) * DomeShellThickness;
     return _PiperPosition.xyz + (RingOffset(around, spread) + Up * height) * radius;
 }
 
@@ -390,7 +415,7 @@ float3 GustTarget(WaspStatic wasp, float formSeconds)
 {
     float burst = saturate(formSeconds / GustSeconds);
     float radius = lerp(GustStartRadius, GustRadius, sin(burst * HalfTurn));
-    float lift = FlyHeight + sin(wasp.ringAngle) * wasp.ringRadius * _RiverRadius;
+    float lift = FlyHeight + sin(wasp.ringAngle) * wasp.ringRadius * _RiverRadius * CrossSectionHeight;
     return _PiperPosition.xyz + RingOffset(wasp.seed * FullTurn, radius) + Up * lift;
 }
 
@@ -569,7 +594,7 @@ float3 GoalOf(int form, float formSeconds, uint index, WaspStatic wasp, out int 
 
     if (form == FormDome)
     {
-        goal = DomeTarget(index);
+        goal = DomeTarget(index, wasp);
     }
     else if (form == FormSting && IsStinger(wasp))
     {
@@ -697,7 +722,7 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
 
     body.stateTime += _DeltaTime;
 
-    float4 tint = TintOf(look);
+    float4 tint = TintOf(look, hasSwitched);
     float tintSharpness = TintSharpness;
     if (look == FormMeteor)
     {
@@ -840,6 +865,6 @@ void ResetWasps(uint3 id : SV_DispatchThreadID)
     body.state = isActive ? (float)StateAlive : (float)StateDead;
     body.velocity = Still;
     body.stateTime = 0.0;
-    body.tint = TintOf(FormRiver);
+    body.tint = TintOf(FormRiver, true);
     _Dynamic[index] = body;
 }
