@@ -354,9 +354,9 @@ namespace DigitalStory.Tests.EditMode
             return song;
         }
 
-        private SwarmSongContext Context(Vector3 piper = default, ISwarmTarget aim = null, bool smoke = true)
+        private SwarmSongContext Context(Vector3 piper = default, ISwarmTarget aim = null, bool smoke = true, Vector3 aimPoint = default)
         {
-            return new SwarmSongContext(piper, aim, _body, _forms, _fury, _hives, _enemies, smoke ? _smoke : null);
+            return new SwarmSongContext(piper, aim, aimPoint, _body, _forms, _fury, _hives, _enemies, smoke ? _smoke : null);
         }
 
         private static void AssertSong(SwarmSongEffect song, string title, float cooldown, params int[] keys)

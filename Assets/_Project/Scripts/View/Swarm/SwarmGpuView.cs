@@ -28,22 +28,15 @@ namespace DigitalStory.View
         // Matches THREAD_GROUP_SIZE in WaspSwarm.compute.
         private const int ThreadsPerGroup = 64;
         private const int MostBones = 64;
-        private const int FormCount = 8;
+
+        // One colour per SwarmForm value (River 0 to Meteor 8): the length of _FormColors in WaspSwarm.compute.
+        private const int FormCount = 9;
         private const int LayoutSeed = 1010;
         private const double GoldenRatioFraction = 0.6180339887498949;
         private const float FullTurn = Mathf.PI * 2f;
         private const float MinimumSquaredLength = 0.000001f;
         private const float StandsFlag = 1f;
         private const float FallenFlag = 0f;
-
-        // Spec 9.3: while the Piper stands, the river curls into a torus around them. The Piper counts as standing
-        // while they stay within StandingDriftMeters (on the ground) of where they stopped, so settling never counts
-        // as a step. After StandingDelaySeconds the river eases into the torus over StandingBlendSeconds, and eases
-        // back as soon as they walk. Like the look constants in WaspSwarm.compute, SwarmConfig does not hold these
-        // yet; move one there if it needs tuning.
-        private const float StandingDriftMeters = 0.05f;
-        private const float StandingDelaySeconds = 0.5f;
-        private const float StandingBlendSeconds = 0.75f;
 
         // Bytes per element. Each matches a struct in WaspSwarm.compute and WaspInstanced.shader.
         private const int StaticStride = sizeof(float) * 12;
@@ -71,6 +64,10 @@ namespace DigitalStory.View
         private static readonly int HiveAId = Shader.PropertyToID("_HiveA");
         private static readonly int HiveBId = Shader.PropertyToID("_HiveB");
         private static readonly int LastHitId = Shader.PropertyToID("_LastHit");
+        private static readonly int MeteorId = Shader.PropertyToID("_Meteor");
+        private static readonly int MeteorRiseSecondsId = Shader.PropertyToID("_MeteorRiseSeconds");
+        private static readonly int MeteorDiveSecondsId = Shader.PropertyToID("_MeteorDiveSeconds");
+        private static readonly int MeteorHeightId = Shader.PropertyToID("_MeteorHeight");
         private static readonly int FormColorsId = Shader.PropertyToID("_FormColors");
         private static readonly int RiverSpringId = Shader.PropertyToID("_RiverSpring");
         private static readonly int RiverDampingId = Shader.PropertyToID("_RiverDamping");
@@ -137,6 +134,11 @@ namespace DigitalStory.View
         private Vector4 _firstHive;
         private Vector4 _secondHive;
         private Vector3 _lastHit;
+        private Vector3 _meteorTarget;
+        private float _meteorFraction;
+        private float _meteorRiseSeconds;
+        private float _meteorDiveSeconds;
+        private float _meteorHeight;
         private float _domeRadius;
         private float _tornadoRadius;
         private int _boneCount;
@@ -289,6 +291,20 @@ namespace DigitalStory.View
         {
             _stingTarget = target;
             _stingFraction = Mathf.Clamp01(fraction);
+        }
+
+        /// <summary>
+        /// The meteor: where it lands, the share of the swarm (0 to 1) that flies it, the seconds from the cast to the
+        /// top of its climb, the seconds of its dive, and how many metres above the Piper it climbs. Read while the form
+        /// is Meteor, and timed from the moment the form changes to it.
+        /// </summary>
+        public void SetMeteor(Vector3 target, float fraction, float riseSeconds, float diveSeconds, float height)
+        {
+            _meteorTarget = target;
+            _meteorFraction = Mathf.Clamp01(fraction);
+            _meteorRiseSeconds = Mathf.Max(0f, riseSeconds);
+            _meteorDiveSeconds = Mathf.Max(0f, diveSeconds);
+            _meteorHeight = Mathf.Max(0f, height);
         }
 
         /// <summary>Where both hives are and whether each still stands. Revived wasps come from a standing hive.</summary>
@@ -500,13 +516,17 @@ namespace DigitalStory.View
             _standingShare = 0f;
         }
 
-        // The PathTrail never shrinks while the Piper stands (it only stores points as they walk), so its length cannot
-        // tell standing from walking. This measures standing directly instead, and eases the torus in and out.
+        // Spec 9.3: while the Piper stands, the river curls into a torus around them. The PathTrail never shrinks while
+        // the Piper stands (it only stores points as they walk), so its length cannot tell standing from walking. This
+        // measures standing directly instead: the Piper stands while they stay within StandStillMeters (on the ground)
+        // of where they stopped, so settling never counts as a step. After StandDelaySeconds the river eases into the
+        // torus over StandBlendSeconds, and eases back as soon as they walk.
         private void TrackStanding(float deltaTime)
         {
+            float stillMeters = _config.StandStillMeters;
             Vector3 drift = _piperPosition - _standingAnchor;
             drift.y = 0f;
-            if (drift.sqrMagnitude > StandingDriftMeters * StandingDriftMeters)
+            if (drift.sqrMagnitude > stillMeters * stillMeters)
             {
                 _standingAnchor = _piperPosition;
                 _standingSeconds = 0f;
@@ -516,8 +536,10 @@ namespace DigitalStory.View
                 _standingSeconds += deltaTime;
             }
 
-            float goal = _standingSeconds >= StandingDelaySeconds ? 1f : 0f;
-            _standingShare = Mathf.MoveTowards(_standingShare, goal, deltaTime / StandingBlendSeconds);
+            float goal = _standingSeconds >= _config.StandDelaySeconds ? 1f : 0f;
+            float blendSeconds = _config.StandBlendSeconds;
+            float blendStep = blendSeconds > 0f ? deltaTime / blendSeconds : 1f;
+            _standingShare = Mathf.MoveTowards(_standingShare, goal, blendStep);
         }
 
         private void DestroyOwnedAssets()
@@ -575,6 +597,10 @@ namespace DigitalStory.View
             compute.SetVector(HiveAId, _firstHive);
             compute.SetVector(HiveBId, _secondHive);
             compute.SetVector(LastHitId, _lastHit);
+            compute.SetVector(MeteorId, new Vector4(_meteorTarget.x, _meteorTarget.y, _meteorTarget.z, _meteorFraction));
+            compute.SetFloat(MeteorRiseSecondsId, _meteorRiseSeconds);
+            compute.SetFloat(MeteorDiveSecondsId, _meteorDiveSeconds);
+            compute.SetFloat(MeteorHeightId, _meteorHeight);
             compute.SetFloat(DomeRadiusId, _domeRadius);
             compute.SetFloat(TornadoRadiusId, _tornadoRadius);
         }
@@ -619,6 +645,7 @@ namespace DigitalStory.View
             _formColors[(int)SwarmForm.HiveCall] = ShaderColor(_config.HiveCallColor, isLinear);
             _formColors[(int)SwarmForm.Colossus] = ShaderColor(_config.ColossusColor, isLinear);
             _formColors[(int)SwarmForm.Collapsed] = ShaderColor(_config.RiverColor, isLinear);
+            _formColors[(int)SwarmForm.Meteor] = ShaderColor(_config.MeteorColor, isLinear);
         }
 
         // 48 bytes, the same layout as WaspStatic in WaspSwarm.compute and WaspInstanced.shader.

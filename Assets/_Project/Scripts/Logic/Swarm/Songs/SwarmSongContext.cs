@@ -9,6 +9,7 @@ namespace DigitalStory.Logic
         public SwarmSongContext(
             Vector3 piperPosition,
             ISwarmTarget aimTarget,
+            Vector3 aimPoint,
             SwarmBody swarm,
             SwarmFormMachine forms,
             FuryMeter fury,
@@ -18,6 +19,7 @@ namespace DigitalStory.Logic
         {
             PiperPosition = piperPosition;
             AimTarget = aimTarget;
+            AimPoint = aimPoint;
             Swarm = swarm;
             Forms = forms;
             Fury = fury;
@@ -31,6 +33,9 @@ namespace DigitalStory.Logic
 
         /// <summary>The beekeeper the Piper aims at, or null when there is none.</summary>
         public ISwarmTarget AimTarget { get; }
+
+        /// <summary>Where the Piper aims on the ground, whether or not a beekeeper is there.</summary>
+        public Vector3 AimPoint { get; }
 
         /// <summary>The swarm's wasps.</summary>
         public SwarmBody Swarm { get; }

@@ -128,6 +128,19 @@ namespace DigitalStory.Tests.EditMode
         // ---------- Spawn ----------
 
         [Test]
+        public void New_BeforeItSpawns_IsNotAliveAndCannotBeHurt()
+        {
+            var brain = new BeekeeperBrain(StickConfig());
+            var recorder = new Recorder(brain);
+
+            brain.TakeDamage(1000f);
+
+            Assert.That(brain.IsAlive, Is.False, "a pooled beekeeper is not on the field until it spawns");
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.Dead));
+            Assert.That(recorder.Deaths, Is.EqualTo(0));
+        }
+
+        [Test]
         public void Spawn_PlacesItAtFullHealthGoingToTheHive()
         {
             var brain = SpawnAt(StickConfig(), new Vector3(3f, 0f, 4f));

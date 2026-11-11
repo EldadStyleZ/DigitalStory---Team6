@@ -62,11 +62,20 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Sideways sway of the river, in metres.")]
         public float MeanderAmplitude { get; private set; } = 0.25f;
 
-        [field: SerializeField, Min(0f), Tooltip("Length of the river when the Piper stands still.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres of path the river needs before it stretches out behind the Piper. On a shorter path, at the start of a run, it curls into the ring around them.")]
         public float StandingTrailMeters { get; private set; } = 2f;
 
         [field: SerializeField, Min(0f), Tooltip("Radius of the ring the swarm forms around the Piper.")]
         public float TorusRadius { get; private set; } = 1.5f;
+
+        [field: SerializeField, Min(0f), Tooltip("The Piper counts as standing while they stay within this many metres (on the ground) of where they stopped, so settling never counts as a step.")]
+        public float StandStillMeters { get; private set; } = 0.05f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds the Piper stands before the river curls into the ring around them.")]
+        public float StandDelaySeconds { get; private set; } = 0.5f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds the river takes to ease into the ring, and back out once the Piper walks. 0 switches at once.")]
+        public float StandBlendSeconds { get; private set; } = 0.75f;
 
         [field: Header("Wasps")]
         [field: SerializeField, Min(0f), Tooltip("Size of the small shake on each wasp, in metres.")]
@@ -115,5 +124,8 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Tooltip("Colour of the Colossus.")]
         public Color ColossusColor { get; private set; } = new Color(0.9f, 0.6f, 0.15f, 1f);
+
+        [field: SerializeField, Tooltip("Colour of the meteor (hot red-orange). It glows hottest in the dive.")]
+        public Color MeteorColor { get; private set; } = new Color(1f, 0.3f, 0.06f, 1f);
     }
 }

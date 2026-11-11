@@ -20,11 +20,12 @@ namespace DigitalStory.Tests.EditMode
             new[] { 1, 1, 2 },
             new[] { 0, 5, 0 },
             new[] { 3, 4, 5, 4, 3 },
+            new[] { 4, 2, 0 },
         };
 
         private static readonly SwarmForm[] SongForms =
         {
-            SwarmForm.Dome, SwarmForm.Sting, SwarmForm.Tornado, SwarmForm.Gust, SwarmForm.HiveCall, SwarmForm.Colossus,
+            SwarmForm.Dome, SwarmForm.Sting, SwarmForm.Tornado, SwarmForm.Gust, SwarmForm.HiveCall, SwarmForm.Colossus, SwarmForm.Meteor,
         };
 
         private SwarmConfig _swarmConfig;
@@ -61,6 +62,7 @@ namespace DigitalStory.Tests.EditMode
             _songs.Add(ScriptableObject.CreateInstance<GustSong>());
             _songs.Add(ScriptableObject.CreateInstance<HiveCallSong>());
             _songs.Add(ScriptableObject.CreateInstance<ColossusSong>());
+            _songs.Add(ScriptableObject.CreateInstance<MeteorSong>());
             _caster = new SwarmSongCaster(_songs, _songConfig, HoleCount);
             _cast.Clear();
             _played.Clear();
@@ -83,9 +85,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Count_SixSongs_AreExposedByIndex()
+        public void Count_SevenSongs_AreExposedByIndex()
         {
-            Assert.That(_caster.Count, Is.EqualTo(6));
+            Assert.That(_caster.Count, Is.EqualTo(7));
             Assert.That(_caster[0], Is.SameAs(_songs[0]));
             Assert.That(_caster[5], Is.SameAs(_songs[5]));
         }
@@ -96,6 +98,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(3)]
         [TestCase(4)]
         [TestCase(5)]
+        [TestCase(6)]
         public void Press_EachSongsKeysFromSilence_CastExactlyThatSong(int song)
         {
             _fury.AddDamage(1000f);
@@ -113,6 +116,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(3)]
         [TestCase(4)]
         [TestCase(5)]
+        [TestCase(6)]
         public void Press_EachSongsKeysBeforeTheLastNote_CastNothing(int song)
         {
             _fury.AddDamage(1000f);
@@ -140,6 +144,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(2)]
         [TestCase(3)]
         [TestCase(4)]
+        [TestCase(6)]
         public void Press_WhileTheColossusStands_CastsNothingAndStartsNoCooldown(int song)
         {
             _fury.AddDamage(1000f);
@@ -416,7 +421,7 @@ namespace DigitalStory.Tests.EditMode
 
         private SwarmSongContext Context()
         {
-            return new SwarmSongContext(Vector3.zero, _aim, _body, _forms, _fury, _hives, _enemies, new FakeSmokeClearer());
+            return new SwarmSongContext(Vector3.zero, _aim, Vector3.zero, _body, _forms, _fury, _hives, _enemies, new FakeSmokeClearer());
         }
     }
 }

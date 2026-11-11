@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DigitalStory.Logic
@@ -23,6 +24,16 @@ namespace DigitalStory.Logic
         private ISwarmTarget _stingTarget;
         private float _stingFraction;
         private float _stingDamagePerSecond;
+        private Vector3 _meteorTarget;
+        private float _meteorFraction;
+        private float _meteorRiseSeconds;
+        private float _meteorDiveSeconds;
+        private float _meteorHeight;
+        private float _meteorRadius;
+        private float _meteorDamage;
+        private float _meteorStunSeconds;
+        private IReadOnlyList<ISwarmTarget> _meteorEnemies;
+        private bool _meteorHasLanded;
 
         public SwarmFormMachine(SwarmBody body, FuryMeter fury)
         {
@@ -49,6 +60,24 @@ namespace DigitalStory.Logic
 
         /// <summary>The share of the swarm that streams to the sting target, or 0 outside the sting.</summary>
         public float StingFraction => _current == SwarmForm.Sting ? _stingFraction : 0f;
+
+        /// <summary>Where the meteors fall, or zero outside the meteor form.</summary>
+        public Vector3 MeteorTarget => _meteorTarget;
+
+        /// <summary>The share of the swarm that climbs and falls, or 0 outside the meteor form.</summary>
+        public float MeteorFraction => _current == SwarmForm.Meteor ? _meteorFraction : 0f;
+
+        /// <summary>Seconds the meteors climb, or 0 outside the meteor form.</summary>
+        public float MeteorRiseSeconds => _meteorRiseSeconds;
+
+        /// <summary>Seconds the meteors dive, or 0 outside the meteor form.</summary>
+        public float MeteorDiveSeconds => _meteorDiveSeconds;
+
+        /// <summary>Metres above the Piper the meteors climb to, or 0 outside the meteor form.</summary>
+        public float MeteorHeight => _meteorHeight;
+
+        /// <summary>Raised once, with the impact point, when the meteors land.</summary>
+        public event Action<Vector3> MeteorLanded;
 
         /// <summary>Raised with the new form every time the form changes.</summary>
         public event Action<SwarmForm> FormChanged;
@@ -109,6 +138,60 @@ namespace DigitalStory.Logic
                 _fury.AddDamage(damageDealt);
             }
 
+            return true;
+        }
+
+        /// <summary>
+        /// Starts the meteor: it climbs, dives, lands, then flows back (riseSeconds + diveSeconds + afterSeconds in all).
+        /// At the landing every living enemy within radius metres (on the ground) of the target takes damage and is
+        /// stunned, and that damage fills Fury. Nothing happens before the landing, and a collapse cancels it.
+        /// </summary>
+        public bool StartMeteor(
+            Vector3 target,
+            float fraction,
+            float riseSeconds,
+            float diveSeconds,
+            float afterSeconds,
+            float height,
+            IReadOnlyList<ISwarmTarget> enemies,
+            float radius,
+            float damage,
+            float stunSeconds)
+        {
+            RequireSeconds(riseSeconds);
+            RequireSeconds(diveSeconds);
+            RequireSeconds(afterSeconds);
+
+            if (fraction < 0f || fraction > 1f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(fraction), fraction, "The fraction must be from 0 to 1.");
+            }
+
+            if (height < 0f || radius < 0f || damage < 0f || stunSeconds < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(height), "The height, radius, damage and stun cannot be negative.");
+            }
+
+            if (enemies == null)
+            {
+                throw new ArgumentNullException(nameof(enemies));
+            }
+
+            if (!Begin(SwarmForm.Meteor, riseSeconds + diveSeconds + afterSeconds))
+            {
+                return false;
+            }
+
+            _meteorTarget = target;
+            _meteorFraction = fraction;
+            _meteorRiseSeconds = riseSeconds;
+            _meteorDiveSeconds = diveSeconds;
+            _meteorHeight = height;
+            _meteorRadius = radius;
+            _meteorDamage = damage;
+            _meteorStunSeconds = stunSeconds;
+            _meteorEnemies = enemies;
+            _meteorHasLanded = false;
             return true;
         }
 
@@ -178,6 +261,9 @@ namespace DigitalStory.Logic
                     }
 
                     break;
+                case SwarmForm.Meteor:
+                    TickMeteor();
+                    break;
                 case SwarmForm.Dome:
                 case SwarmForm.Tornado:
                 case SwarmForm.Gust:
@@ -222,6 +308,54 @@ namespace DigitalStory.Logic
             }
         }
 
+        private void TickMeteor()
+        {
+            if (!_meteorHasLanded && _secondsInForm >= _meteorRiseSeconds + _meteorDiveSeconds)
+            {
+                Land();
+            }
+
+            if (_secondsInForm >= _duration)
+            {
+                SetForm(SwarmForm.River);
+            }
+        }
+
+        private void Land()
+        {
+            _meteorHasLanded = true;
+            float radiusSquared = _meteorRadius * _meteorRadius;
+
+            for (int i = 0; i < _meteorEnemies.Count; i++)
+            {
+                ISwarmTarget enemy = _meteorEnemies[i];
+
+                if (!enemy.IsAlive)
+                {
+                    continue;
+                }
+
+                float dx = enemy.Position.x - _meteorTarget.x;
+                float dz = enemy.Position.z - _meteorTarget.z;
+
+                if (dx * dx + dz * dz > radiusSquared)
+                {
+                    continue;
+                }
+
+                enemy.TakeDamage(_meteorDamage);
+
+                if (enemy.IsAlive)
+                {
+                    enemy.Stun(_meteorStunSeconds);
+                }
+
+                _fury.AddDamage(_meteorDamage);
+            }
+
+            MeteorLanded?.Invoke(_meteorTarget);
+        }
+
         private void CancelHiveCall()
         {
             if (_current == SwarmForm.HiveCall)
@@ -253,6 +387,17 @@ namespace DigitalStory.Logic
                 _stingTarget = null;
                 _stingFraction = 0f;
                 _stingDamagePerSecond = 0f;
+            }
+
+            if (form != SwarmForm.Meteor)
+            {
+                _meteorTarget = Vector3.zero;
+                _meteorFraction = 0f;
+                _meteorRiseSeconds = 0f;
+                _meteorDiveSeconds = 0f;
+                _meteorHeight = 0f;
+                _meteorEnemies = null;
+                _meteorHasLanded = false;
             }
 
             if (changed)

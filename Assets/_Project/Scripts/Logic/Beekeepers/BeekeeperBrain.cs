@@ -15,7 +15,8 @@ namespace DigitalStory.Logic
 
         private readonly BeekeeperConfig _config;
 
-        private BeekeeperState _state;
+        // A pooled beekeeper is off the field, and so out of every attack's reach, until it spawns.
+        private BeekeeperState _state = BeekeeperState.Dead;
         private Vector3 _position;
         private Vector3 _facing = Vector3.forward;
         private Vector3 _knockback;
@@ -49,7 +50,7 @@ namespace DigitalStory.Logic
         /// <summary>Health left, from 0 to the configured health.</summary>
         public float Health => _health;
 
-        /// <summary>False once it is dead.</summary>
+        /// <summary>False until it spawns, and once it is dead.</summary>
         public bool IsAlive => _state != BeekeeperState.Dead;
 
         /// <summary>

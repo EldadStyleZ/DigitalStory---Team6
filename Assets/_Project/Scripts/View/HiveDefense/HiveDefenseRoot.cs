@@ -282,6 +282,12 @@ namespace DigitalStory.View
             ISwarmTarget stingTarget = forms.StingTarget;
             _swarmView.SetSting(stingTarget != null ? stingTarget.Position : piper, forms.StingFraction);
 
+            if (forms.Current == SwarmForm.Meteor)
+            {
+                _swarmView.SetMeteor(
+                    forms.MeteorTarget, forms.MeteorFraction, forms.MeteorRiseSeconds, forms.MeteorDiveSeconds, forms.MeteorHeight);
+            }
+
             HiveSet hives = Session.Hives;
             _swarmView.SetHives(hives[0].Position, hives[1].Position, !hives[0].IsDestroyed, !hives[1].IsDestroyed);
             _swarmView.SetLastHit(Session.LastHitPoint);

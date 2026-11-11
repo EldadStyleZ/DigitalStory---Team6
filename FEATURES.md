@@ -15,7 +15,7 @@ The team's shared tracker. Read it before starting work, and keep your row curre
 | F-005 | Menus and HUD | Done | EldadStyleZ | `feature/F-005-menus-and-hud` | – | 224 EditMode and 61 PlayMode tests in the Editor; the owner played it with real keys and mouse and the screens, pause, retry, flute and minimap all worked |
 | F-006 | Night, effects and sound | Done | EldadStyleZ | `feature/F-006-night-effects-sound` | – | 247 EditMode and 156 PlayMode tests in the Editor; the owner played and listened and the flute, effects, mute and night look all worked; Profiler at 170 rats with all effects on: 1.32 ms average and 2.35 ms worst per frame in the Editor, 0.197 ms per rule tick |
 | F-007 | Eldad's lab: summoner in a maze | In progress | EldadStyleZ | `eldad-lab` | `Assets/_Project/Scenes/eldad-lab-scene.unity` | – |
-| F-010 | Wasp swarm defends the hives | In progress | EldadStyleZ | `eldad-lab-2` | `Assets/_Project/Scenes/eldad-lab-2-scene.unity` and its new prefabs and prefab variants | – |
+| F-010 | Wasp swarm defends the hives | In progress | EldadStyleZ | `eldad-lab-2` | `Assets/_Project/Scenes/eldad-lab-2-scene.unity` and its new prefabs and prefab variants | So far: 659 EditMode and 18 F-010 PlayMode tests in Unity batch mode; snapshots of every swarm form, the hives, a wave and the HUD looked at. Not yet played in the Editor, and the Profiler check is still to do |
 
 - **Status:** `Idea`, `Planned`, `In progress`, `Done` or `Dropped`.
 - **Holding:** the scenes and prefabs the owner is changing. Nobody else edits them until this cell is cleared, because Unity scenes merge badly.
@@ -121,6 +121,17 @@ flowchart LR
 - **Layers:** Data holds the swarm, Piper movement, Fury, Colossus, hive, beekeeper, smoke and wave configs. Logic holds the swarm body, form machine, songs, Fury, path trail, hives, beekeeper brain, smoke, waves and the session. View holds the composition root, input, Piper motor, camera, the GPU swarm, hive, beekeeper and smoke views and the HUD.
 - **Tests:** the EditMode tests listed in section 11 of the spec.
 - **Notes:** the full spec is [`docs/specs/F-010-wasp-swarm.md`](docs/specs/F-010-wasp-swarm.md). The wasps live on the GPU (one compute shader and one indirect draw) instead of Jobs and Burst, because DOTS would need new packages. The scene is separate from Town, so The Piper keeps working. Raz's prefabs, controllers and `testing.unity` are not changed: the Piper and the beekeepers are prefab variants.
+- **Built from code:** `DigitalStory/Build F-010 Scene` makes the scene, prefabs, controllers and config assets, and keeps tuned config values. `Build F-010 Scene (reset configs)` starts the configs again from the code defaults.
+- **Added by the owner:** a seventh song, Meteor (keys 5-3-1).
+- **Choices made while building:**
+  - The dome also cuts the wasps lost to smoke, not only to hits.
+  - The Colossus's body points are baked into an asset in the Editor, because imported meshes cannot be read in a build.
+  - The Colossus is Mixamo's X Bot, with its clips in `Art/Mixamo`. Without that folder the builder falls back to the Piper's rig.
+  - Raz's clips are not set to loop, so the builder saves looping copies in `Art/F010/Clips` and leaves his files alone.
+  - The scene is not in the build settings, because that file is shared. Adding it is a team decision. In the Editor, R reloads the scene by path.
+  - Flute notes are silent. `FluteVoice` needs the night session, so it did not plug in cleanly.
+- **Performance, measured in batch mode only:** at 10,000 wasps the main thread takes 0.2 ms a frame on average and F-010's code allocates nothing per frame. Any `UIDocument` in this project, the Town HUD included, costs about 1.2 KB a frame, because UI Toolkit asks the Input Manager for buttons named "Next" and "Previous" that the project does not define. Adding those two entries is a team decision. GPU time and frame rate still need the Editor Profiler.
+- **Known:** three older PlayMode audio tests (`FluteVoiceTests` twice, `SoundViewTests` once) fail in batch mode on the owner's Mac, with and without this branch.
 
 ## Ideas
 

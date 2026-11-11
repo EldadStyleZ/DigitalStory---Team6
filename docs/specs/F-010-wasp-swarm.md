@@ -11,7 +11,7 @@
 
 ## 1. The game
 
-The player is **the Piper**. A swarm of 5,000 to 10,000 wasps follows them like a river. Playing short combos on a six-hole flute, with keys 1 to 6, commands the swarm. It can raise a dome, sting a beekeeper, spin a tornado, blow away smoke, call more wasps from the hives, or build a **Colossus**: a giant in human shape that the player steers and fights with.
+The player is **the Piper**. A swarm of 5,000 to 10,000 wasps follows them like a river. Playing short combos on a six-hole flute, with keys 1 to 6, commands the swarm. It can raise a dome, sting a beekeeper, spin a tornado, drop a meteor strike, blow away smoke, call more wasps from the hives, or build a **Colossus**: a giant in human shape that the player steers and fights with.
 
 Two hives stand in a small open world, and they are the player's lives. Beekeepers come in waves to destroy them. Some fight up close with a stick, and some throw smoke grenades from a distance. Each hit the swarm takes knocks wasps out of it.
 
@@ -65,6 +65,7 @@ Each song is **one strategy asset**, following the team's pattern of one asset p
 | **Sting** | 3-4-5 | 4 s, or until the target dies | 1.5 s | 40% of the swarm streams in an arc to the aimed beekeeper and wraps around it. 25 damage a second. Fills Fury |
 | **Tornado** | 6-5-4-6 | 1.5 s | 10 s | A spinning column around the Piper. 30 damage and 6 m/s knockback to every beekeeper within 5 m. Fills Fury |
 | **Gust** | 2-2-3 | 0.8 s | 6 s | The swarm bursts outward in a ring and comes back. Clears every smoke cloud within 6 m |
+| **Meteor** | 5-3-1 | 1.9 s | 9 s | 30% of the swarm climbs 12 m in 0.8 s, then dives onto the aimed beekeeper or point in 0.5 s. 60 damage and a 0.5 s stun to every beekeeper within 3 m of the impact, at most 18 m from the Piper. Fills Fury |
 | **Hive Call** | 1-6-1 | Until the Piper moves, is hit or reaches the maximum | 3 s | **Power up.** Streams of wasps fly from every standing hive to the Piper, adding 250 a second per standing hive. The Piper is rooted and plays |
 | **Colossus** | 4-5-6-5-4 | 12 s | Needs **Fury at 100%** | The swarm builds a giant human (§6). The player steers the giant, and the Piper stands still and plays |
 
@@ -133,7 +134,7 @@ There are two `BeekeeperConfig` assets.
 | Hive damage | 6 per hit | Through smoke |
 | Wasps knocked off | 180 per hit | Through smoke |
 
-**Behaviour:** `BeekeeperBrain` is one class whose states are GoToHive, AttackHive, ChasePiper, WindUp, Recover, Stunned and Dead.
+**Behaviour:** `BeekeeperBrain` is one class whose states are GoToHive, ChasePiper, WindUp, Recover, Stunned and Dead. `IsTargetingHive` tells a swing at a hive from a swing at the Piper.
 
 1. A beekeeper walks to the nearest standing hive and attacks it.
 2. When the Piper comes within 7 m, or the beekeeper is hit, it attacks the Piper.
@@ -230,6 +231,7 @@ Make every buffer once in `OnEnable`, release it in `OnDisable`, and reuse the a
 | **Sting** | Wasps with `seed < stingFraction` follow a Bezier arc from the Piper to the target, then orbit a 0.8 m sphere around it. The rest stay in the River. Orange glow |
 | **Tornado** | A spiral cylinder around the Piper, radius from 1.5 to 5 m and height 3 m, spinning fast |
 | **Gust** | An outward ring burst to 6 m, then back to the River |
+| **Meteor** | Wasps with `seed < fraction` climb in a column to a ball above the Piper, dive in streaks onto the target, burst outward in a ring, then go back to the River. The rest stay in the River. Red-orange glow |
 | **Hive Call** | A tight halo around the Piper. Newly active wasps start at a standing hive and fly an arc to the halo. Gold tint |
 | **Colossus** | `bones[boneIndex] × boneOffset` |
 | **Dying** | A burst away from `lastHitPoint`, gravity, shrink to zero over 1.5 s, then Dead |
@@ -296,7 +298,7 @@ Namespaces follow the layer, such as `DigitalStory.Logic`. Folders are per featu
 - `PiperMoveConfig`: speed and the multipliers in the dome and in smoke.
 - `SwarmSongTimings`, or fields on each song asset: durations, cooldowns, radii, damage and sting fraction.
 - `FuryConfig`.
-- `ColossusConfig`: scale, speed, attacks, chain window, stun and duration.
+- `ColossusConfig`: scale, speed, attacks, chain window and stun. The duration is on the `ColossusSong` asset.
 - `HiveConfig`.
 - `BeekeeperConfig`, with two assets: `StickBeekeeper` and `SmokerBeekeeper`.
 - `SmokeConfig`.
@@ -308,8 +310,8 @@ Namespaces follow the layer, such as `DigitalStory.Logic`. Folders are per featu
 | Class | Job |
 |---|---|
 | `SwarmBody` | Count, maximum, `Lose(amount, isDomed)`, `Gain(deltaTime, standingHives)`, collapse and respawn. Events `CountChanged`, `Collapsed` and `Respawned` |
-| `SwarmFormMachine` | The forms River, Dome, Sting, Tornado, Gust, HiveCall, Colossus and Collapsed, which change is allowed when, and the timers. Event `FormChanged` |
-| `SwarmSongEffect` (abstract ScriptableObject) | The base of each song. The songs are `DomeSong`, `StingSong`, `TornadoSong`, `GustSong`, `HiveCallSong` and `ColossusSong`, with `SwarmSongContext` |
+| `SwarmFormMachine` | The forms River, Dome, Sting, Tornado, Gust, HiveCall, Colossus, Collapsed and Meteor, which change is allowed when, and the timers. Event `FormChanged` |
+| `SwarmSongEffect` (abstract ScriptableObject) | The base of each song. The songs are `DomeSong`, `StingSong`, `TornadoSong`, `GustSong`, `MeteorSong`, `HiveCallSong` and `ColossusSong`, with `SwarmSongContext` |
 | `FuryMeter` | Fill, full and use |
 | `PathTrail` | A fixed ring buffer of the Piper's path, resampled by distance (0.15 m), giving its length and a point at any lane |
 | `ColossusAttackChain` | The punch chain window, the kick cooldown, and which attack happens and when it lands |

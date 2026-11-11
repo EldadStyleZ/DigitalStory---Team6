@@ -1,5 +1,6 @@
 // Draws every wasp in one Graphics.RenderMeshIndirect call. WaspSwarm.compute has already moved them;
-// this shader reads both wasp buffers by instance id, points each wasp along its velocity and flaps its wings.
+// this shader reads both wasp buffers by instance id, points each wasp along its velocity and flaps its wings,
+// and stretches a meteor wasp into a streak.
 // Spec: docs/specs/F-010-wasp-swarm.md, section 9.6. SwarmGpuView makes the material and sets every property below.
 Shader "DigitalStory/WaspInstanced"
 {
@@ -70,6 +71,13 @@ Shader "DigitalStory/WaspInstanced"
 
             // Below this speed a wasp faces its resting heading instead, so it never spins when it hovers.
             static const float StillSpeed = 0.05;
+
+            // Only a climbing or diving meteor flies faster than the swarm's speed cap (MaxSpeed, 25 m/s, in
+            // WaspSwarm.compute). Such a wasp draws stretched back along its flight, so the dive reads as streaks.
+            static const float StreakSpeed = 26.0;
+            static const float StreakPerSpeed = 0.15;   // extra body lengths per metre per second above StreakSpeed
+            static const float MostStreak = 5.0;        // extra body lengths at most
+            static const float HeadZ = 0.5;             // the head end of the mesh, which stays put as the body stretches
 
             // Cheap sine noise: three detuned sines with seed-spread phases.
             static const float3 BuzzRates = float3(1.0, 1.13, 0.87);
@@ -153,6 +161,13 @@ Shader "DigitalStory/WaspInstanced"
                 return _BuzzAmplitude * sin(angle);
             }
 
+            // 1 up to StreakSpeed, then longer the faster the wasp flies.
+            float StreakOf(float3 velocity)
+            {
+                float extra = max(length(velocity) - StreakSpeed, 0.0) * StreakPerSpeed;
+                return 1.0 + min(extra, MostStreak);
+            }
+
             float3 Albedo(float localZ, float wing, float3 tint)
             {
                 float band = step(DarkStripeShare, frac((localZ + 0.5) * StripeCount));
@@ -178,7 +193,8 @@ Shader "DigitalStory/WaspInstanced"
                 Facing(body.velocity, wasp.seed, forward, right, up);
 
                 float scale = _WaspLength * LifeScale(body);
-                float3 shape = right * localPosition.x + up * localPosition.y + forward * localPosition.z;
+                float alongZ = HeadZ + (localPosition.z - HeadZ) * StreakOf(body.velocity);
+                float3 shape = right * localPosition.x + up * localPosition.y + forward * alongZ;
                 float3 world = body.position + Buzz(wasp.seed) + shape * scale;
 
                 FragmentInput output;

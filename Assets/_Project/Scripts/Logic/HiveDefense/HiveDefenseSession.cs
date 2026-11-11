@@ -29,6 +29,7 @@ namespace DigitalStory.Logic
         private HiveDefenseState _state = HiveDefenseState.Playing;
         private Vector3 _piperPosition;
         private Vector3 _lastHitPoint;
+        private Vector3 _aimPoint;
         private BeekeeperBrain _aimTarget;
         private int _activeCount;
         private bool _isColossusActive;
@@ -246,6 +247,7 @@ namespace DigitalStory.Logic
             _piperPosition = frame.PiperPosition;
 
             Caster.Tick(dt);
+            _aimPoint = frame.AimPoint;
             _aimTarget = FindAimTarget(frame.AimPoint);
             PressHoles(frame.PressedHoleMask);
 
@@ -313,7 +315,7 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                var context = new SwarmSongContext(_piperPosition, AimTarget, Swarm, Forms, Fury, Hives, _enemies, Smoke);
+                var context = new SwarmSongContext(_piperPosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke);
                 Caster.Press(hole, context);
             }
         }

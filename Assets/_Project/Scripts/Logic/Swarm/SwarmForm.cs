@@ -11,5 +11,6 @@ namespace DigitalStory.Logic
         HiveCall = 5,
         Colossus = 6,
         Collapsed = 7,
+        Meteor = 8,
     }
 }
