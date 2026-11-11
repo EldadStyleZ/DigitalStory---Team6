@@ -99,6 +99,15 @@ namespace DigitalStory.Data
         [field: SerializeField, Range(0f, 1f), Tooltip("How hot the inner ring's wasps glow, from 0 to 1, while no song runs; half that while one does, as the river quiets. The calm river glows at 0.1, the Dome at 0.4, and 0.95 and up flash white.")]
         public float CoreRingGlow { get; private set; } = 0.75f;
 
+        // The river curls into the ring around the stopped core and stretches out behind the moving one in a blend whose
+        // straight path crosses the core. WaspSwarm.compute swings it round the core and keeps it out of this circle, or
+        // hundreds of wasps pile onto the inner ring for half a second at every stop and start.
+        [field: SerializeField, Min(0f), Tooltip("Metres around the core, on the ground, that the river keeps clear of, so it flows around the inner ring instead of across it when it curls into the ring around the stopped core or stretches out behind it again. Keep it above CoreRingRadius plus the inner ring's 0.25 m band, and at most TorusRadius minus RiverRadius, the inner edge of the ring around the core. 0 lets the river cross the core.")]
+        public float CoreClearRadius { get; private set; } = 1.2f;
+
+        [field: SerializeField, Min(0f), Tooltip("Metres per second a river wasp inside CoreClearRadius is eased back out to its edge. Faster than the core walks, so the moving core parts the swarm in front of it, and slow enough that a wasp let go by a song inside the circle drifts out instead of jumping.")]
+        public float CoreClearSpeed { get; private set; } = 8f;
+
         [field: Header("Wasps")]
         [field: SerializeField, Min(0f), Tooltip("Size of the small shake on each wasp, in metres.")]
         public float BuzzAmplitude { get; private set; } = 0.04f;

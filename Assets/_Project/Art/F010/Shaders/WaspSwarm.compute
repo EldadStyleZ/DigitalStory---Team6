@@ -106,6 +106,8 @@ float _TorusRadius;
 float _CoreRingShare;                     // the wasps whose seed is below this circle the core in the inner ring
 float _CoreRingRadius;
 float _CoreRingGlow;                      // the inner ring's heat while no slot holds a song
+float _CoreClearRadius;                   // metres on the ground around the core that the river keeps clear of
+float _CoreClearSpeed;                    // metres per second a river wasp inside that circle is eased back out
 float _DyingSeconds;
 
 static const float FullTurn = 6.28318530718;
@@ -513,6 +515,28 @@ float FlowLaneAt(WaspStatic wasp, float time)
     return frac(wasp.lane + time * _FlowSpeed);
 }
 
+// Metres from the core to a point, on the ground.
+float FlatReach(float3 position)
+{
+    return length(position.xz - _CorePosition.xz);
+}
+
+// The river and the ring around the core blend in a straight line, and for about half the swarm that line runs across
+// the core, where the inner ring marks it: hundreds of wasps flew over the marker at every stop and start. This keeps a
+// blended goal at least leastReach from the core, the nearer of its two ends, so it swings round the core at that
+// distance instead. Both ends of the blend are unchanged. KeepClearOfCore stops the wasps that still cut the corner.
+float3 AroundCore(float3 goal, float leastReach)
+{
+    float2 away = goal.xz - _CorePosition.xz;
+    float reach = length(away);
+    if (reach < leastReach && reach > Tiny)
+    {
+        goal.xz = _CorePosition.xz + away * (leastReach / reach);
+    }
+
+    return goal;
+}
+
 // While the core stands, the river curls into a lazy ring around it.
 float3 TorusTarget(WaspStatic wasp, float flowLane)
 {
@@ -544,7 +568,8 @@ float3 RiverTarget(WaspStatic wasp)
     // stands. The trail alone cannot say the second: it keeps its full length after the core stops.
     float trailShare = saturate(trailLength / max(_StandingTrailMeters, Tiny));
     float riverShare = trailShare * (1.0 - saturate(_StandingShare));
-    return lerp(TorusTarget(wasp, flowLane), river, riverShare);
+    float3 torus = TorusTarget(wasp, flowLane);
+    return AroundCore(lerp(torus, river, riverShare), min(FlatReach(torus), FlatReach(river)));
 }
 
 // A tight halo over the core.
@@ -578,6 +603,23 @@ float3 CoreRingTarget(WaspStatic wasp)
 float CoreRingGlow()
 {
     return IsAnySlotLive() ? _CoreRingGlow * (RiverQuietGlow / RiverGlow) : _CoreRingGlow;
+}
+
+// The river keeps clear of the inner ring. AroundCore swings the river's goals round the core, but a goal that passes
+// right by the core flips to its far side, and the soft river spring would carry the wasp straight across. So a river
+// wasp inside the clear circle loses the part of its speed that points at the core and eases back out to the circle's
+// edge, and the river flows around the inner ring like water round a stone.
+void KeepClearOfCore(WaspStatic wasp, inout WaspDynamic body)
+{
+    float2 away = body.position.xz - _CorePosition.xz;
+    float reach = length(away);
+    if (reach < _CoreClearRadius)
+    {
+        float2 outward = reach > Tiny ? away / reach : float2(cos(wasp.seed * FullTurn), sin(wasp.seed * FullTurn));
+        float inward = min(dot(body.velocity.xz, outward), 0.0);
+        body.velocity.xz -= outward * inward;
+        body.position.xz += outward * min(_CoreClearRadius - reach, _CoreClearSpeed * _DeltaTime);
+    }
 }
 
 int BoneOf(WaspStatic wasp)
@@ -1150,6 +1192,12 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     body.velocity = LimitSpeed(body.velocity + acceleration * _DeltaTime, maxSpeed);
     body.position += body.velocity * _DeltaTime;
     Skim(floorY, body);
+
+    // Only the plain river: a song's squad, the inner ring and the shapes (the halo, the giant) may fly at the core.
+    if (isFlowing)
+    {
+        KeepClearOfCore(wasp, body);
+    }
 
     body.stateTime += _DeltaTime;
 

@@ -101,6 +101,8 @@ namespace DigitalStory.View
         private static readonly int CoreRingShareId = Shader.PropertyToID("_CoreRingShare");
         private static readonly int CoreRingRadiusId = Shader.PropertyToID("_CoreRingRadius");
         private static readonly int CoreRingGlowId = Shader.PropertyToID("_CoreRingGlow");
+        private static readonly int CoreClearRadiusId = Shader.PropertyToID("_CoreClearRadius");
+        private static readonly int CoreClearSpeedId = Shader.PropertyToID("_CoreClearSpeed");
         private static readonly int DyingSecondsId = Shader.PropertyToID("_DyingSeconds");
         private static readonly int WaspLengthId = Shader.PropertyToID("_WaspLength");
         private static readonly int BuzzAmplitudeId = Shader.PropertyToID("_BuzzAmplitude");
@@ -875,6 +877,8 @@ namespace DigitalStory.View
             compute.SetFloat(CoreRingShareId, _config.CoreRingShare);
             compute.SetFloat(CoreRingRadiusId, _config.CoreRingRadius);
             compute.SetFloat(CoreRingGlowId, _config.CoreRingGlow);
+            compute.SetFloat(CoreClearRadiusId, _config.CoreClearRadius);
+            compute.SetFloat(CoreClearSpeedId, _config.CoreClearSpeed);
             compute.SetFloat(DyingSecondsId, _config.DyingSeconds);
 
             _material.SetFloat(WaspLengthId, _config.WaspLength);
