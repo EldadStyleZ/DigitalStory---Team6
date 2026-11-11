@@ -46,6 +46,8 @@ namespace SpacePartyGame
         private BlowBar _blowBar;
 
         private BlowCharge _blow;
+        private readonly List<Collider2D> _blowHits = new List<Collider2D>();
+        private readonly HashSet<Rigidbody2D> _blowBodies = new HashSet<Rigidbody2D>();
 
         private readonly List<Collider2D> _heard = new List<Collider2D>();
         private PlayerInstrument _instrument;
@@ -174,9 +176,11 @@ namespace SpacePartyGame
                 return;
             }
 
-            if (BlowCharge.Charges(note) && Permissions.CanBlow)
+            if (BlowCharge.Charges(note) && Permissions.CanBlow && !_instrument.IsPlayingChord)
             {
                 _blow.Begin(Time.time);
+                _instrument.HoldWithoutLimit(note);
+                _instrument.Gain = _blowSettings.ChargeStartVolume;
             }
             else if (_blow.IsCharging)
             {
@@ -193,10 +197,50 @@ namespace SpacePartyGame
 
             bool fires = _blow.Release(Time.time);
             _blowBar.Hide();
+            _instrument.HoldWithoutLimit(null);
+            _instrument.Gain = 1f;
 
             if (fires)
             {
-                Blew?.Invoke(_movement.AimDirection);
+                _instrument.PlayChord(note, _blowSettings.ChordSemitones, _blowSettings.ChordSeconds, _blowSettings.ChordVolume);
+                Vector2 aim = _movement.AimDirection;
+                BlowAway(aim);
+                Blew?.Invoke(aim);
+            }
+        }
+
+        // Pushes every vermin and other player in the cone, from the player's feet, along the aim.
+        private void BlowAway(Vector2 aim)
+        {
+            Vector2 origin = transform.position;
+            var filter = new ContactFilter2D { useLayerMask = true, layerMask = _blowSettings.PushLayers, useTriggers = false };
+            Physics2D.OverlapCircle(origin, _blowSettings.Reach, filter, _blowHits);
+            _blowBodies.Clear();
+
+            foreach (Collider2D hit in _blowHits)
+            {
+                Rigidbody2D body = hit.attachedRigidbody;
+
+                if (body == null || body.gameObject == gameObject || !_blowBodies.Add(body))
+                {
+                    continue;
+                }
+
+                if (!BlowCone.Contains(origin, aim, body.position, _blowSettings.ConeAngle, _blowSettings.Reach))
+                {
+                    continue;
+                }
+
+                if (body.TryGetComponent(out Vermin vermin))
+                {
+                    Vector2 push = BlowCone.Push(origin, aim, body.position, _blowSettings.Reach, _blowSettings.VerminPushSpeed, _blowSettings.EdgeStrength);
+                    vermin.Blow(push, _blowSettings.PushSeconds);
+                }
+                else if (body.TryGetComponent(out PlayerMovement other))
+                {
+                    Vector2 push = BlowCone.Push(origin, aim, body.position, _blowSettings.Reach, _blowSettings.PlayerPushSpeed, _blowSettings.EdgeStrength);
+                    other.Push(push, _blowSettings.PushSeconds, _blowSettings.PushedPlayerControl);
+                }
             }
         }
 
@@ -206,6 +250,8 @@ namespace SpacePartyGame
             {
                 _blow.Cancel();
                 _blowBar.Hide();
+                _instrument.HoldWithoutLimit(null);
+                _instrument.Gain = 1f;
             }
         }
 
@@ -213,7 +259,9 @@ namespace SpacePartyGame
         {
             if (_blow != null && _blow.IsCharging)
             {
-                _blowBar.Show(_blow.Progress(Time.time), _identity.Colour);
+                float progress = _blow.Progress(Time.time);
+                _blowBar.Show(progress, _identity.Colour);
+                _instrument.Gain = BlowSound.ChargeGain(progress, _blowSettings.ChargeStartVolume, _blowSettings.ChargeEndVolume);
             }
 
             _run.Tick(Time.time, Time.deltaTime);
@@ -267,6 +315,19 @@ namespace SpacePartyGame
         {
             Gizmos.color = Color.cyan;
             Gizmos.DrawWireSphere(CallCentre, _callRadius);
+
+            if (_blowSettings != null)
+            {
+                // The blow's cone, toward the way the player aims (or faces, outside Play Mode).
+                Vector2 aim = _movement != null ? _movement.AimDirection : Vector2.right;
+                Vector3 origin = transform.position;
+                Vector3 left = Quaternion.Euler(0f, 0f, _blowSettings.ConeAngle * 0.5f) * aim * _blowSettings.Reach;
+                Vector3 right = Quaternion.Euler(0f, 0f, -_blowSettings.ConeAngle * 0.5f) * aim * _blowSettings.Reach;
+                Gizmos.color = Color.magenta;
+                Gizmos.DrawLine(origin, origin + left);
+                Gizmos.DrawLine(origin, origin + right);
+                Gizmos.DrawLine(origin + left, origin + right);
+            }
         }
     }
 }

@@ -40,6 +40,11 @@ namespace SpacePartyGame
         [SerializeField, Min(0), Tooltip("From how many seconds left the tick is the higher one.")]
         private int _highTickFrom = 5;
 
+        [SerializeField, Min(0f), Tooltip("How long the clock stays on screen after reaching 0, in seconds.")]
+        private float _hideAfterZeroSeconds = 1f;
+
+        private float _hideAt = float.PositiveInfinity;
+
         private void Awake()
         {
             if (_round == null || _flow == null || _clock == null || _text == null)
@@ -70,10 +75,20 @@ namespace SpacePartyGame
             bool inGame = to == GameState.Countdown || to == GameState.Playing || to == GameState.Paused
                 || to == GameState.RoundEnd;
             _clock.SetActive(inGame);
+            _hideAt = to == GameState.RoundEnd ? Time.time + _hideAfterZeroSeconds : float.PositiveInfinity;
 
             if (inGame)
             {
                 Show(_round.TimeShown);
+            }
+        }
+
+        private void Update()
+        {
+            if (Time.time >= _hideAt)
+            {
+                _hideAt = float.PositiveInfinity;
+                _clock.SetActive(false);
             }
         }
 

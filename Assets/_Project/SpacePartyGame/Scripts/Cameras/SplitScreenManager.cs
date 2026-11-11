@@ -39,6 +39,9 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("The line across the middle of the screen.")]
         private GameObject _horizontalDivider;
 
+        [SerializeField, Tooltip("The blow's numbers, for the camera shake.")]
+        private BlowSettings _blowSettings;
+
         [SerializeField, Min(0f), Tooltip("How long the winner's view takes to widen to the whole screen at the round's end, in seconds.")]
         private float _winnerWidenSeconds = 1.5f;
 
@@ -188,12 +191,46 @@ namespace SpacePartyGame
         {
             _flow.OnMatchStart += Split;
             _flow.StateChanged += HandleStateChanged;
+            _joining.PlayerJoined += ListenForBlows;
         }
 
         private void OnDisable()
         {
             _flow.OnMatchStart -= Split;
             _flow.StateChanged -= HandleStateChanged;
+            _joining.PlayerJoined -= ListenForBlows;
+        }
+
+        // A blow shakes the blower's view, and the view of every player it shoves.
+        private void ListenForBlows(PlayerInput player)
+        {
+            Transform target = player.transform;
+
+            if (player.TryGetComponent(out PlayerAbilities abilities))
+            {
+                abilities.Blew += aim => ShakeViewOf(target);
+            }
+
+            if (player.TryGetComponent(out PlayerMovement movement))
+            {
+                movement.Pushed += () => ShakeViewOf(target);
+            }
+        }
+
+        private void ShakeViewOf(Transform player)
+        {
+            if (_blowSettings == null)
+            {
+                return;
+            }
+
+            foreach (FollowCamera camera in _cameras)
+            {
+                if (camera != null && camera.Target == player)
+                {
+                    camera.Shake(_blowSettings.ShakeAmplitude, _blowSettings.ShakeSeconds);
+                }
+            }
         }
 
         private void Start()

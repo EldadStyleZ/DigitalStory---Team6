@@ -21,6 +21,10 @@ namespace SpacePartyGame
         private Camera _camera;
         private Transform _target;
         private Vector2 _velocity;
+        private Vector2 _framed;
+        private float _shakeStartedAt = float.NegativeInfinity;
+        private float _shakeSeconds;
+        private float _shakeAmplitude;
 
         /// <summary>The camera this script moves.</summary>
         public Camera Camera => _camera;
@@ -37,13 +41,23 @@ namespace SpacePartyGame
             _camera.rect = viewport;
             _camera.orthographicSize = _zoom;
             _velocity = Vector2.zero;
-            MoveTo(Framed(target.position));
+            _shakeStartedAt = float.NegativeInfinity;
+            _framed = Framed(target.position);
+            MoveTo(_framed);
         }
 
         /// <summary>Moves the camera's view to another part of the screen, keeping its zoom.</summary>
         public void SetViewport(Rect viewport)
         {
             _camera.rect = viewport;
+        }
+
+        /// <summary>Shakes the view for a moment, such as when a blow goes off near its player.</summary>
+        public void Shake(float amplitude, float seconds)
+        {
+            _shakeStartedAt = Time.time;
+            _shakeSeconds = seconds;
+            _shakeAmplitude = amplitude;
         }
 
         /// <summary>Stops following and switches the camera off.</summary>
@@ -71,7 +85,10 @@ namespace SpacePartyGame
             }
 
             Vector2 goal = Framed(_target.position);
-            MoveTo(Vector2.SmoothDamp(transform.position, goal, ref _velocity, _smoothTime));
+            // MoveTo(Vector2.SmoothDamp(transform.position, goal, ref _velocity, _smoothTime));
+            // The shake sits on top of the smooth follow, so it never pushes the follow itself off course.
+            _framed = Vector2.SmoothDamp(_framed, goal, ref _velocity, _smoothTime);
+            MoveTo(_framed + CameraShake.Offset(Time.time - _shakeStartedAt, _shakeSeconds, _shakeAmplitude));
         }
 
         private Vector2 Framed(Vector2 point)

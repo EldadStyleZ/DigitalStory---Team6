@@ -33,5 +33,20 @@ namespace SpacePartyGame
             _kind == InstrumentKind.Cello
                 ? new CelloSynth(_cello, sampleRate)
                 : new FluteInstrumentSynth(_flute, sampleRate);
+
+        /// <summary>Makes a synthesizer for this instrument with its whole pitch moved by some semitones.</summary>
+        public IInstrumentSynth CreateSynth(int sampleRate, float semitones)
+        {
+            float ratio = BlowSound.Ratio(semitones);
+
+            if (_kind == InstrumentKind.Cello)
+            {
+                var cello = JsonUtility.FromJson<CelloSound>(InstrumentPitch.ShiftBaseHertz(JsonUtility.ToJson(_cello), ratio));
+                return new CelloSynth(cello, sampleRate);
+            }
+
+            var flute = JsonUtility.FromJson<FluteSound>(InstrumentPitch.ShiftBaseHertz(JsonUtility.ToJson(_flute), ratio));
+            return new FluteInstrumentSynth(flute, sampleRate);
+        }
     }
 }

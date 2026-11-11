@@ -12,9 +12,42 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16128f88524806549967918f77d020e0, type: 3}
   m_Name: BlowSettings
   m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.BlowSettings
-  _chargeSeconds: 3
+  _chargeSeconds: 1.5
+  _chargeStartVolume: 0.25
+  _chargeEndVolume: 1.4
+  _chordSemitones:
+  - 0
+  - 4
+  - 7
+  _chordSeconds: 1.5
+  _chordVolume: 0.9
+  _coneAngle: 90
+  _reach: 4.5
+  _verminPushSpeed: 20
+  _playerPushSpeed: 18
+  _edgeStrength: 0.45
+  _pushSeconds: 0.6
+  _pushedPlayerControl: 0.3
+  _pushLayers:
+    serializedVersion: 2
+    m_Bits: 768
+  _effectOffset: {x: 0, y: 0.45}
+  _effectForward: 0.55
+  _effectReach: 4.5
+  _dabCount: 110
+  _dabSize: {x: 0.35, y: 0.8}
+  _dabLifetime: {x: 0.4, y: 0.7}
+  _dabTravel: {x: 0.6, y: 1.15}
+  _dabScatter: 0.3
+  _dabAlpha: 0.95
+  _dabWhiteMix: 0.45
+  _arcSeconds: 0.55
+  _arcStartFraction: 0.15
+  _arcAlpha: 1
+  _shakeAmplitude: 0.22
+  _shakeSeconds: 0.25
   _barWidth: 0.9
-  _barHeight: 0.13
+  _barHeight: 0.065
   _barOffset: {x: 0, y: -0.22}
   _barBackColour: {r: 0.231, g: 0.129, b: 0.114, a: 0.75}
   _barFadeSeconds: 0.12

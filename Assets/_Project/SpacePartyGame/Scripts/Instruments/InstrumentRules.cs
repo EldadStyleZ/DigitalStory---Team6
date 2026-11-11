@@ -16,6 +16,7 @@ namespace SpacePartyGame
         private readonly bool[] _held = new bool[NoteCount];
         private readonly int[] _pressOrder = new int[NoteCount];
         private int _presses;
+        private int _unlimited = -1;
 
         public NoteHolds(float maxHoldSeconds)
         {
@@ -43,11 +44,18 @@ namespace SpacePartyGame
             }
         }
 
-        /// <summary>Whether a note is playing: held, and for less than the limit.</summary>
+        /// <summary>
+        /// Lets one note play for as long as it is held, past the limit, such as Left while the blow charges; null
+        /// puts the limit back on every note.
+        /// </summary>
+        public void HoldWithoutLimit(Note? note) => _unlimited = note.HasValue ? (int)note.Value : -1;
+
+        /// <summary>Whether a note is playing: held, and for less than the limit (or with no limit).</summary>
         public bool IsActive(Note note, float now)
         {
             int index = (int)note;
-            return _held[index] && now - _pressedAt[index] < _maxHoldSeconds;
+            // return _held[index] && now - _pressedAt[index] < _maxHoldSeconds;
+            return _held[index] && (index == _unlimited || now - _pressedAt[index] < _maxHoldSeconds);
         }
 
         /// <summary>When a note was last pressed.</summary>

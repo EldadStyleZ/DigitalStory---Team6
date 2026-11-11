@@ -29,9 +29,10 @@ namespace SpacePartyGame
         private int _facing = 1;
         private float _topSpeed = -1f;
         private Vector2 _aim;
-        private Vector2 _push;
+        // private Vector2 _push;
+        // private float _pushUntil = float.NegativeInfinity;
+        private Knockback _knockback;
         private float _pushControl = 1f;
-        private float _pushUntil = float.NegativeInfinity;
 
         /// <summary>The normal walking top speed, set in the Inspector.</summary>
         public float WalkSpeed => _moveSpeed;
@@ -45,6 +46,9 @@ namespace SpacePartyGame
 
         /// <summary>How the player is moving now, in units per second.</summary>
         public Vector2 Velocity => _rigidbody.linearVelocity;
+
+        /// <summary>Raised when a blow shoves the player.</summary>
+        public event Action Pushed;
 
         /// <summary>Raised when the player turns, with the new facing.</summary>
         public event Action<int> FacingChanged;
@@ -71,17 +75,20 @@ namespace SpacePartyGame
         /// </summary>
         public void Push(Vector2 velocity, float seconds, float control)
         {
-            _push = velocity;
-            _pushStartedAt = Time.time;
-            _pushSeconds = Mathf.Max(0.01f, seconds);
-            _pushUntil = Time.time + _pushSeconds;
+            // _push = velocity;
+            // _pushStartedAt = Time.time;
+            // _pushSeconds = Mathf.Max(0.01f, seconds);
+            // _pushUntil = Time.time + _pushSeconds;
+            _knockback = new Knockback(velocity, Time.time, seconds);
             _pushControl = Mathf.Clamp01(control);
+            Pushed?.Invoke();
         }
 
         /// <summary>Puts the player back as they started: facing their start way, standing still, not pushed.</summary>
         public void ResetToStart()
         {
-            _pushUntil = float.NegativeInfinity;
+            // _pushUntil = float.NegativeInfinity;
+            _knockback = default;
             _aim = Vector2.zero;
             _rigidbody.linearVelocity = Vector2.zero;
             _facing = _startsFacingLeft ? -1 : 1;
@@ -92,8 +99,8 @@ namespace SpacePartyGame
             }
         }
 
-        private float _pushStartedAt;
-        private float _pushSeconds = 1f;
+        /// <summary>Whether a blow is shoving the player now.</summary>
+        public bool IsPushed => _knockback.IsActive(Time.time);
 
         private void Awake()
         {
@@ -123,9 +130,12 @@ namespace SpacePartyGame
             // _rigidbody.linearVelocity = PlayerMotion.VelocityFor(input, _moveSpeed);
             // _rigidbody.linearVelocity = PlayerMotion.VelocityFor(input, TopSpeed);
             Vector2 own = CanMove ? PlayerMotion.VelocityFor(input, TopSpeed) : Vector2.zero;
-            bool isPushed = Time.time < _pushUntil;
-            float left = isPushed ? 1f - (Time.time - _pushStartedAt) / _pushSeconds : 0f;
-            _rigidbody.linearVelocity = isPushed ? own * _pushControl + _push * left : own;
+            // bool isPushed = Time.time < _pushUntil;
+            // float left = isPushed ? 1f - (Time.time - _pushStartedAt) / _pushSeconds : 0f;
+            // _rigidbody.linearVelocity = isPushed ? own * _pushControl + _push * left : own;
+            _rigidbody.linearVelocity = IsPushed
+                ? Knockback.Combine(own, _knockback.Velocity(Time.time), _pushControl)
+                : own;
 
             if (!CanMove)
             {

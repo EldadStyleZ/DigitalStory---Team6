@@ -40,6 +40,7 @@ namespace SpacePartyGame
         private float _spotDistance;
         private Vector2 _spotOffset;
         private Rigidbody2D _rigidbody;
+        private Knockback _blown;
         private CircleCollider2D _collider;
         private VerminSettings _settings;
         private CageManager _cages;
@@ -117,6 +118,20 @@ namespace SpacePartyGame
             }
         }
 
+        /// <summary>Whether a blow is carrying it now.</summary>
+        public bool IsBlown => _blown.IsActive(Time.time);
+
+        /// <summary>
+        /// A blow carries it away: it stops following, and cage walls do not stop it while the shove lasts. Once
+        /// it stops, it walks clear of any wall it ended up in, as after following.
+        /// </summary>
+        public void Blow(Vector2 velocity, float seconds)
+        {
+            StopFollowing();
+            _blown = new Knockback(velocity, Time.time, seconds);
+            SetPassThroughCages(true);
+        }
+
         /// <summary>Stops following its leader now, such as when the round ends.</summary>
         public void StopFollowing()
         {
@@ -142,6 +157,7 @@ namespace SpacePartyGame
         {
             _wander?.Restart();
             _follow?.Stop();
+            _blown = default;
             _leader = null;
             _passesThroughCages = false;
             _facing = VerminFacing.AtSpawn(Random.value, _startFacingLeftChance);
@@ -158,6 +174,12 @@ namespace SpacePartyGame
         {
             if (_wander == null)
             {
+                return;
+            }
+
+            if (IsBlown)
+            {
+                _rigidbody.linearVelocity = _blown.Velocity(Time.time);
                 return;
             }
 

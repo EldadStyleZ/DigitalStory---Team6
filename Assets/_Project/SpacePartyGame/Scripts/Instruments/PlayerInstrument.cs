@@ -28,6 +28,65 @@ namespace SpacePartyGame
         private PlayerNotes _notes;
         private NoteHolds _holds;
         private IInstrumentSynth _synth;
+        private IInstrumentSynth[] _chord;
+        private float[] _chordBuffer = new float[0];
+        private float _gain = 1f;
+        private float _chordVolume = 1f;
+        private float _chordUntil = float.NegativeInfinity;
+        private bool _chordSounding;
+
+        /// <summary>
+        /// How loud the instrument's notes are, 1 normally. The blow raises and lowers it while charging; the chord
+        /// has its own loudness.
+        /// </summary>
+        public float Gain
+        {
+            get => Volatile.Read(ref _gain);
+            set => Volatile.Write(ref _gain, Mathf.Max(0f, value));
+        }
+
+        /// <summary>Whether the blow's chord is playing now.</summary>
+        public bool IsPlayingChord => Time.time < _chordUntil;
+
+        /// <summary>Lets one note play past the hold limit while it is held, or null to put the limit back.</summary>
+        public void HoldWithoutLimit(Note? note)
+        {
+            _holds.HoldWithoutLimit(note);
+            RaiseChanges();
+        }
+
+        /// <summary>
+        /// Stops every note and plays a chord on <paramref name="root"/> for a while: one voice per entry of
+        /// <paramref name="semitones"/>, each that many semitones above the root. Notes stay silent until it ends.
+        /// </summary>
+        public void PlayChord(Note root, float[] semitones, float seconds, float volume)
+        {
+            _holds.ReleaseAll();
+            _holds.HoldWithoutLimit(null);
+            RaiseChanges();
+            _synth?.Play(InstrumentKeys.Silent);
+            Gain = 1f;
+
+            int rate = AudioSettings.outputSampleRate;
+
+            if (rate <= 0 || _instrument == null || semitones == null)
+            {
+                return;
+            }
+
+            var chord = new IInstrumentSynth[semitones.Length];
+
+            for (int i = 0; i < chord.Length; i++)
+            {
+                chord[i] = _instrument.CreateSynth(rate, semitones[i]);
+                chord[i].Play(InstrumentKeys.KeyOf(root));
+            }
+
+            Volatile.Write(ref _chordVolume, volume);
+            Volatile.Write(ref _chord, chord);
+            _chordUntil = Time.time + seconds;
+            _chordSounding = true;
+        }
 
         /// <summary>Raised when a note starts playing.</summary>
         public event Action<Note> NoteStarted;
@@ -50,7 +109,49 @@ namespace SpacePartyGame
         /// <summary>Writes the instrument's next samples. The voice calls it on the audio thread.</summary>
         public void FillAudio(float[] buffer, int channels)
         {
-            Volatile.Read(ref _synth)?.Fill(buffer, channels);
+            // Volatile.Read(ref _synth)?.Fill(buffer, channels);
+            IInstrumentSynth synth = Volatile.Read(ref _synth);
+
+            if (synth == null)
+            {
+                return;
+            }
+
+            synth.Fill(buffer, channels);
+            float gain = Volatile.Read(ref _gain);
+
+            if (!Mathf.Approximately(gain, 1f))
+            {
+                for (int i = 0; i < buffer.Length; i++)
+                {
+                    buffer[i] *= gain;
+                }
+            }
+
+            IInstrumentSynth[] chord = Volatile.Read(ref _chord);
+
+            if (chord == null)
+            {
+                return;
+            }
+
+            if (_chordBuffer.Length != buffer.Length)
+            {
+                _chordBuffer = new float[buffer.Length];
+            }
+
+            float volume = Volatile.Read(ref _chordVolume);
+
+            foreach (IInstrumentSynth voice in chord)
+            {
+                Array.Clear(_chordBuffer, 0, _chordBuffer.Length);
+                voice.Fill(_chordBuffer, channels);
+
+                for (int i = 0; i < buffer.Length; i++)
+                {
+                    buffer[i] = Mathf.Clamp(buffer[i] + _chordBuffer[i] * volume, -1f, 1f);
+                }
+            }
         }
 
         private void Awake()
@@ -89,11 +190,39 @@ namespace SpacePartyGame
         private void Update()
         {
             RaiseChanges();
+
+            // While the blow's chord plays, the notes stay silent; when it ends, its voices fade out.
+            // _synth?.Play(InstrumentKeys.KeyOf(Sounding));
+            if (IsPlayingChord)
+            {
+                _synth?.Play(InstrumentKeys.Silent);
+                return;
+            }
+
+            if (_chordSounding)
+            {
+                _chordSounding = false;
+                IInstrumentSynth[] chord = Volatile.Read(ref _chord);
+
+                if (chord != null)
+                {
+                    foreach (IInstrumentSynth voice in chord)
+                    {
+                        voice.Play(InstrumentKeys.Silent);
+                    }
+                }
+            }
+
             _synth?.Play(InstrumentKeys.KeyOf(Sounding));
         }
 
         private void HandlePressed(Note note)
         {
+            if (IsPlayingChord)
+            {
+                return;
+            }
+
             _holds.Press(note, Time.time);
             RaiseChanges();
         }

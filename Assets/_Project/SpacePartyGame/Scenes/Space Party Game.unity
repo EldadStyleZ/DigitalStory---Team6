@@ -6315,6 +6315,7 @@ MonoBehaviour:
   - {fileID: 924394282}
   _verticalDivider: {fileID: 1237499327}
   _horizontalDivider: {fileID: 706890576}
+  _blowSettings: {fileID: 11400000, guid: 31c4c00eb2b431a4887fa6056dc4c390, type: 2}
   _winnerWidenSeconds: 1.5
   _winnerWidenEase:
     serializedVersion: 2
