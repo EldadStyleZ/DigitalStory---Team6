@@ -288,7 +288,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_WhileCollapsed_CastsNothingAndRemembersNothing()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100);
 
             int result = PlayAll(SongKeys[0]);
 
@@ -302,7 +302,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_AfterTheRespawn_CastsAgain()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100);
             PlayAll(SongKeys[0]);
             _body.Tick(3f, 2);
 
@@ -338,7 +338,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_NotesCompletedWhileCollapsed_IsRaisedAndNothingIsRemembered()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100);
 
             PlayAll(SongKeys[0]);
 
@@ -350,7 +350,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_CollapsedAndOnlyPartOfASong_IsNotRaised()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100);
 
             Press(SongKeys[0][0]);
             Press(SongKeys[0][1]);
@@ -361,7 +361,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_CollapsedNotesTooOld_AreNotCounted()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100);
             Press(SongKeys[0][0]);
             Press(SongKeys[0][1]);
             _caster.Tick(3f);
@@ -429,7 +429,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_WhileCollapsedWithNotesPlayed_AllocatesNothing()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100);
             SwarmSongContext context = Context();
 
             Assert.That(() => { _caster.Press(L, in context); }, Is.Not.AllocatingGCMemory());

@@ -2,15 +2,12 @@ using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>How fast the Piper moves and turns, and what slows it down.</summary>
+    /// <summary>How fast the Piper moves and turns, and what slows it down. A song that changes the Piper's speed holds its own number.</summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Piper Move Config", fileName = "PiperMoveConfig")]
     public sealed class PiperMoveConfig : ScriptableObject
     {
         [field: SerializeField, Min(0f), Tooltip("Walking speed in metres per second.")]
         public float Speed { get; private set; } = 4.5f;
-
-        [field: SerializeField, Range(0f, 1f), Tooltip("Share of speed kept while the dome is up.")]
-        public float DomeSpeedMultiplier { get; private set; } = 0.5f;
 
         [field: SerializeField, Range(0f, 1f), Tooltip("Share of speed kept while standing in smoke.")]
         public float SmokeSpeedMultiplier { get; private set; } = 0.6f;

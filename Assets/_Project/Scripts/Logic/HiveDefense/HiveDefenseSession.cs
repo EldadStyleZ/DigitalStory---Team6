@@ -12,7 +12,8 @@ namespace DigitalStory.Logic
     /// </summary>
     /// <remarks>
     /// It is also the aim chooser of the songs it casts (<see cref="ISongAim"/>): an aimed song asks it for its target by the
-    /// song's own rule, and the mouse wins while it is live.
+    /// song's own rule, and the mouse wins while it is live. The marker's target, chosen every tick, uses the rule and reach
+    /// of the aimed song the player knows from the start (the Sting), read from its asset, so the marker and that song agree.
     /// </remarks>
     public sealed class HiveDefenseSession : ISongAim
     {
@@ -31,6 +32,7 @@ namespace DigitalStory.Logic
         private readonly ColossusAttackChain _chain;
         private readonly IReadOnlyList<SwarmSongEffect> _songs;
         private readonly AutoAim _autoAim;
+        private readonly SlotSongEffect _markerSong;
 
         private HiveDefenseState _state = HiveDefenseState.Playing;
         private Vector3 _piperPosition;
@@ -78,6 +80,7 @@ namespace DigitalStory.Logic
                 throw new ArgumentOutOfRangeException(nameof(rules), "HoleCount must be from 1 to " + MaxHoleBits + ".");
             }
 
+            _markerSong = FindMarkerSong(rules.Songs);
             _piperPosition = piperStart;
             _lastHitPoint = piperStart;
 
@@ -165,18 +168,16 @@ namespace DigitalStory.Logic
         /// <summary>The Piper's position as of the last tick.</summary>
         public Vector3 PiperPosition => _piperPosition;
 
-        /// <summary>How much the Piper's speed is multiplied: slower in the dome and in smoke, 1 otherwise.</summary>
+        /// <summary>
+        /// How much the Piper's speed is multiplied: by the running songs (the dome slows it), and in smoke unless a running
+        /// song keeps smoke from slowing it. 1 otherwise.
+        /// </summary>
         public float PiperSpeedMultiplier
         {
             get
             {
-                float multiplier = 1f;
-                if (Forms.IsDomed)
-                {
-                    multiplier *= _rules.PiperMove.DomeSpeedMultiplier;
-                }
-
-                if (Smoke.IsPiperInSmoke)
+                float multiplier = Forms.PiperSpeedMultiplier;
+                if (Smoke.IsPiperInSmoke && Forms.SmokeSlowsPiper)
                 {
                     multiplier *= _rules.PiperMove.SmokeSpeedMultiplier;
                 }
@@ -264,9 +265,11 @@ namespace DigitalStory.Logic
 
             float dt = Mathf.Min(deltaTime, _rules.Swarm.MaxDeltaTime);
 
+            // The Piper is held in place while it is rooted, so asking to move counts as moving: it ends Hive Call. While the
+            // giant stands the move steers the giant, and this does nothing.
             Vector3 step = frame.PiperPosition - _piperPosition;
             step.y = 0f;
-            if (step.sqrMagnitude > MovedSqrMetres)
+            if (step.sqrMagnitude > MovedSqrMetres || frame.Move.sqrMagnitude > 0f)
             {
                 Forms.NotifyPiperMoved();
             }
@@ -279,7 +282,7 @@ namespace DigitalStory.Logic
             _isMouseLive = frame.IsMouseLive;
             _mousePoint = frame.AimPoint;
             _autoAim.Tick(dt);
-            Choose(AimRule.Threat, _rules.Aim.StingRange);
+            Choose(_markerSong.AimRule, _markerSong.AimRange);
             PressHoles(frame.PressedHoleMask);
 
             int standing = Hives.StandingCount;
@@ -287,7 +290,7 @@ namespace DigitalStory.Logic
             Forms.Tick(dt, standing);
 
             TickColossus(frame, dt);
-            Smoke.Tick(dt, Hives, Swarm, _piperPosition, Forms.IsDomed);
+            Smoke.Tick(dt, Hives, Swarm, _piperPosition, Forms);
             Hives.Tick(dt);
             TickBeekeepers(dt);
             Waves.Tick(dt, _activeCount);
@@ -317,6 +320,23 @@ namespace DigitalStory.Logic
                     Discovery.Reveal(song);
                 }
             }
+        }
+
+        // The marker shows what the starting aimed song would strike. Without one it would mark beekeepers by numbers that no
+        // song uses, so a song list without it is a setup mistake.
+        private static SlotSongEffect FindMarkerSong(IReadOnlyList<SwarmSongEffect> songs)
+        {
+            for (int index = 0; index < songs.Count; index++)
+            {
+                if (songs[index] is SlotSongEffect song && song.IsAimed && song.KnownFromStart && song.AimRule == AimRule.Threat)
+                {
+                    return song;
+                }
+            }
+
+            throw new ArgumentException(
+                "The songs need one aimed song that is known from the start and aims by the Threat rule (the Sting): the aim marker uses its reach.",
+                "rules");
         }
 
         // Only the direction on the ground counts. A facing with no length keeps the last one.
@@ -516,12 +536,13 @@ namespace DigitalStory.Logic
 
         private void OnHiveHit(BeekeeperBrain brain, int hiveIndex)
         {
-            Hives[hiveIndex].Damage(brain.Config.HiveDamage);
+            Hives[hiveIndex].Damage(brain.Config.HiveDamage * Forms.HiveDamageFraction(hiveIndex));
+            Forms.NotifyHiveHit(hiveIndex, brain);
         }
 
         private void OnPiperHit(BeekeeperBrain brain)
         {
-            Swarm.Lose(brain.Config.WaspsKnockedOff, Forms.IsDomed);
+            Swarm.Lose(brain.Config.WaspsKnockedOff, Forms.WaspLossFraction);
             Forms.NotifyHit(brain.Position);
             _lastHitPoint = _piperPosition;
         }

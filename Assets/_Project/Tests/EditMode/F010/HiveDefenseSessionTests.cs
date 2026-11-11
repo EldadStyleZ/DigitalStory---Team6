@@ -28,6 +28,27 @@ namespace DigitalStory.Tests.EditMode
 
         private static WaveEntry[] OneStick() => new[] { new WaveEntry(1, 0) };
 
+        // Stuns every beekeeper for good the moment it spawns, so it stays where it stood. Returns them in spawn order.
+        private List<BeekeeperBrain> StandStillAsTheySpawn()
+        {
+            var keepers = new List<BeekeeperBrain>();
+            _world.Session.BeekeeperSpawned += keeper =>
+            {
+                keeper.Stun(1000f);
+                keepers.Add(keeper);
+            };
+
+            return keepers;
+        }
+
+        // A cast context on the session's own swarm, forms and hives, with no beekeepers, for a test's own song.
+        private SwarmSongContext SongContext()
+        {
+            HiveDefenseSession session = _world.Session;
+            return new SwarmSongContext(
+                _world.Piper, null, _world.Piper, session.Swarm, session.Forms, session.Fury, session.Hives, new List<ISwarmTarget>(), session.Smoke);
+        }
+
         // A stick that spawns 1 m from the Piper, who stands at the origin.
         private HiveDefenseWorld StickBesidePiper(WaveEntry[] waves = null, bool withSongs = false)
         {
@@ -227,9 +248,22 @@ namespace DigitalStory.Tests.EditMode
             bool hit = _world.RunUntil(() => _world.Session.Swarm.Count < _world.Swarm.StartingWasps, 10f);
 
             int lost = _world.Swarm.StartingWasps - _world.Session.Swarm.Count;
+            var dome = (DomeSong)_world.Songs[HiveDefenseWorld.DomeIndex];
             Assert.That(hit, Is.True);
-            Assert.That(lost, Is.EqualTo(Mathf.RoundToInt(_world.Stick.WaspsKnockedOff * _world.Swarm.DomeLossFraction)));
+            Assert.That(lost, Is.EqualTo(Mathf.RoundToInt(_world.Stick.WaspsKnockedOff * dome.LossFraction)));
             Assert.That(lost, Is.LessThan(_world.Stick.WaspsKnockedOff));
+        }
+
+        [Test]
+        public void PiperSpeedMultiplier_UnderTheDome_IsTheDomeAssetsMultiplier()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            var dome = (DomeSong)_world.Songs[HiveDefenseWorld.DomeIndex];
+            JsonUtility.FromJsonOverwrite("{\"<SpeedMultiplier>k__BackingField\":0.3}", dome);
+
+            _world.Play(DomeHoles);
+
+            Assert.That(_world.Session.PiperSpeedMultiplier, Is.EqualTo(0.3f).Within(1e-5f));
         }
 
         [Test]
@@ -264,6 +298,35 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall), "Dome then Hive Call is the safe refill");
         }
 
+        // Plan section A: Hive Call ends when the Piper moves. The Piper is held in place while it lasts, so its position
+        // never changes: asking to move must end it, or the held key would be refused without a sign.
+        [Test]
+        public void HiveCall_ThePlayerAsksToMove_EndsIt_ThoughThePiperIsHeldInPlace()
+        {
+            _world = new HiveDefenseWorld();
+            Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+            Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall), "standing still keeps it");
+
+            _world.Session.Tick(_world.Frame(move: new Vector2(1f, 0f)), HiveDefenseWorld.Step);
+
+            Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(_world.Session.IsPiperRooted, Is.False);
+        }
+
+        [Test]
+        public void HiveCall_UnderTheDome_ThePlayerAsksToMove_EndsHiveCallAndKeepsTheDome()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            _world.Play(DomeHoles);
+            Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
+
+            _world.Session.Tick(_world.Frame(move: new Vector2(0f, -1f)), HiveDefenseWorld.Step);
+
+            Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.River), "a hit would not end it under the dome, but moving does");
+            Assert.That(_world.Session.Forms.IsDomed, Is.True);
+        }
+
         [Test]
         public void StickHitOnPiper_CancelsHiveCallAndSetsTheLastHitPoint()
         {
@@ -293,6 +356,64 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.Hives[0].Health, Is.EqualTo(300f - _world.Stick.HiveDamage));
             Assert.That(_world.Session.Hives[1].Health, Is.EqualTo(300f));
             Assert.That(_world.Session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps));
+        }
+
+        // A song that shields a hive needs only its rule: the session asks the running songs how much gets through and
+        // tells them about the hit.
+        [Test]
+        public void StickHitOnHive_WithASongShieldingIt_TakesOnlyTheShareLetThroughAndTellsTheSong()
+        {
+            _world = new HiveDefenseWorld(
+                OneStick(),
+                hives: new[] { new Vector3(0f, 0f, 0f), new Vector3(60f, 0f, 0f) },
+                spawns: new[] { new Vector3(1f, 0f, 0f) },
+                piper: new Vector3(0f, 0f, 80f));
+            var shell = ScriptableObject.CreateInstance<FakeSlotSong>();
+            try
+            {
+                shell.ShieldedHive = 0;
+                shell.HiveDamageFraction = 0.25f;
+                SwarmSongContext context = SongContext();
+                shell.Cast(in context);
+
+                bool hit = _world.RunUntil(() => _world.Session.Hives[0].Health < 300f, 15f);
+
+                Assert.That(hit, Is.True);
+                Assert.That(_world.Session.Hives[0].Health, Is.EqualTo(300f - (_world.Stick.HiveDamage * 0.25f)).Within(1e-3f));
+                Assert.That(shell.Rule.HiveHitCount, Is.EqualTo(1));
+                Assert.That(shell.Rule.LastHiveHit, Is.EqualTo(0));
+                Assert.That(shell.Rule.LastHiveAttacker, Is.SameAs(_world.Session.ActiveBeekeeper(0)));
+            }
+            finally
+            {
+                Object.DestroyImmediate(shell);
+            }
+        }
+
+        [Test]
+        public void PiperSpeedMultiplier_InSmoke_IsSlowerUnlessARunningSongKeepsTheSmokeOff()
+        {
+            _world = new HiveDefenseWorld();
+            var wings = ScriptableObject.CreateInstance<FakeSlotSong>();
+            try
+            {
+                _world.Session.Smoke.Throw(Origin, Origin);
+                _world.Run(1.5f);
+                Assert.That(_world.Session.Smoke.IsPiperInSmoke, Is.True);
+                Assert.That(_world.Session.PiperSpeedMultiplier, Is.EqualTo(_world.PiperMove.SmokeSpeedMultiplier).Within(1e-5f));
+
+                wings.SlotToUse = SongSlot.Guard;
+                wings.PiperSpeedMultiplier = 1.6f;
+                wings.SmokeSlowsPiper = false;
+                SwarmSongContext context = SongContext();
+                wings.Cast(in context);
+
+                Assert.That(_world.Session.PiperSpeedMultiplier, Is.EqualTo(1.6f).Within(1e-5f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(wings);
+            }
         }
 
         [Test]
@@ -567,6 +688,74 @@ namespace DigitalStory.Tests.EditMode
             Vector4 strike = _world.Session.Forms.Slot(SongSlot.Strike).ParamA;
             Assert.That(strike.x, Is.EqualTo(0f).Within(1e-3f));
             Assert.That(strike.z, Is.EqualTo(-6f).Within(1e-3f));
+        }
+
+        // Plan section E: the Meteor strikes the beekeeper with the most others within 3.5 m. The marker picks by Threat every
+        // tick, and its pick a moment ago must not decide where the Meteor lands.
+        [Test]
+        public void Cast_MeteorJustAfterTheMarkerPickedALoner_StillStrikesTheCrowd()
+        {
+            _world = new HiveDefenseWorld(
+                new[] { new WaveEntry(5, 0) },
+                spawns: new[]
+                {
+                    new Vector3(0f, 0f, 3f), new Vector3(0f, 0f, 5f),
+                    new Vector3(0f, 0f, -14f), new Vector3(1f, 0f, -14f), new Vector3(-1f, 0f, -14f),
+                },
+                withAllSongs: true);
+            List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
+            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 5, 10f);
+            _world.Run(HiveDefenseWorld.Step);
+            Assert.That(_world.Session.AimTarget, Is.SameAs(keepers[0]), "the nearest, 3 m away");
+
+            keepers[0].TakeDamage(10000f);
+            _world.Run(0.3f);
+            Assert.That(_world.Session.AimTarget, Is.SameAs(keepers[1]), "the loner became the marker's pick 0.3 s ago");
+
+            _world.Play(_world.Session.Caster[HiveDefenseWorld.MeteorIndex].Song.Keys);
+
+            Vector4 strike = _world.Session.Forms.Slot(SongSlot.Strike).ParamA;
+            Assert.That(_world.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Meteor));
+            Assert.That(strike.x, Is.EqualTo(0f).Within(0.1f), "the crowd 14 m behind, not the loner");
+            Assert.That(strike.z, Is.EqualTo(-14f).Within(0.1f));
+        }
+
+        // The marker and the Sting share one reach, the Sting asset's, so tuning the song moves both.
+        [Test]
+        public void AimTarget_WithTheMouseIdle_ReachesAsFarAsTheStingAssetSays()
+        {
+            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(0f, 0f, 14f) });
+            StandStillAsTheySpawn();
+            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
+            _world.Run(HiveDefenseWorld.Step);
+            Assert.That(_world.Session.AimTarget, Is.Null, "14 m is beyond the Sting's 12 m");
+
+            JsonUtility.FromJsonOverwrite("{\"<MaxRange>k__BackingField\":15}", _world.Sting);
+            _world.Run(HiveDefenseWorld.Step);
+
+            Assert.That(_world.Session.AimTarget, Is.SameAs(_world.Session.ActiveBeekeeper(0)));
+        }
+
+        [Test]
+        public void New_SongsWithoutAStartingThreatSong_Throws()
+        {
+            _world = new HiveDefenseWorld();
+            var dome = ScriptableObject.CreateInstance<DomeSong>();
+            try
+            {
+                var rules = new HiveDefenseRules(
+                    _world.Swarm, _world.Squads, _world.PiperMove, _world.Fury, _world.Colossus, _world.Hive, _world.Smoke,
+                    _world.WaveConfig, _world.Stick, _world.Smoker, _world.Aim, _world.SongConfig, new SwarmSongEffect[] { dome },
+                    HiveDefenseWorld.HoleCount);
+
+                Assert.That(
+                    () => new HiveDefenseSession(rules, new[] { Vector3.zero }, new[] { Vector3.one }, Vector3.zero, new FixedRandomSource()),
+                    Throws.ArgumentException);
+            }
+            finally
+            {
+                Object.DestroyImmediate(dome);
+            }
         }
 
         [Test]

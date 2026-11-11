@@ -23,3 +23,5 @@ MonoBehaviour:
   _share: 0.35
   <Seconds>k__BackingField: 5
   <Radius>k__BackingField: 2.2
+  <LossFraction>k__BackingField: 0.15
+  <SpeedMultiplier>k__BackingField: 0.5

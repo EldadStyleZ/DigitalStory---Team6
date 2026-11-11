@@ -23,8 +23,11 @@ namespace DigitalStory.Logic
             _song = song;
         }
 
-        /// <summary>Where the wrapped target or air is, following the target as it moves.</summary>
-        public override Vector4 ParamA => new Vector4(_point.x, _point.y, _point.z, 0f);
+        /// <summary>
+        /// Where the wrapped target or air is, following the target as it moves, and in w the seconds the flight takes, so
+        /// the picture arrives on the frame the damage starts.
+        /// </summary>
+        public override Vector4 ParamA => new Vector4(_point.x, _point.y, _point.z, _song.ArriveSeconds);
 
         /// <summary>The second target, for the Twin Sting duet. With no duet it is the first.</summary>
         public override Vector4 ParamB => new Vector4(_point.x, _point.y, _point.z, 0f);

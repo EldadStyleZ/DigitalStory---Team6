@@ -3,8 +3,8 @@ using UnityEngine;
 namespace DigitalStory.Logic
 {
     /// <summary>
-    /// The dome: a shell around the Piper for its seconds. While it runs the machine counts the swarm as domed, and each hit
-    /// it blocks is remembered so the picture can ripple from the hit's side.
+    /// The dome: a shell around the Piper for its seconds. While it runs, only its share of each wasp loss gets through and
+    /// the Piper walks slower, and each hit it blocks is remembered so the picture can ripple from the hit's side.
     /// </summary>
     internal sealed class DomeRule : SongRule
     {
@@ -27,6 +27,12 @@ namespace DigitalStory.Logic
 
         /// <summary>Nothing yet.</summary>
         public override Vector4 ParamB => Vector4.zero;
+
+        /// <summary>The dome's share of each loss: <see cref="DomeSong.LossFraction"/>.</summary>
+        protected internal override float WaspLossFraction => _song.LossFraction;
+
+        /// <summary>The Piper walks slower inside the dome: <see cref="DomeSong.SpeedMultiplier"/>.</summary>
+        protected internal override float PiperSpeedMultiplier => _song.SpeedMultiplier;
 
         protected override void Begin(in SwarmSongContext context)
         {

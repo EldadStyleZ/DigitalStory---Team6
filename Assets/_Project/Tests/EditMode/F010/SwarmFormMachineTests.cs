@@ -239,7 +239,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _forms.StartColossus(12f);
 
-            _body.Lose(_config.StartingWasps - 100, false);
+            _body.Lose(_config.StartingWasps - 100);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsPiperRooted, Is.False);
@@ -362,7 +362,7 @@ namespace DigitalStory.Tests.EditMode
         {
             Start(SwarmForm.Dome, 5f);
 
-            _body.Lose(_config.StartingWasps - 100, false);
+            _body.Lose(_config.StartingWasps - 100);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsDomed, Is.False);
@@ -373,7 +373,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Collapse_WhileInTheRiver_GoesToCollapsed()
         {
-            _body.Lose(_config.StartingWasps - 100, false);
+            _body.Lose(_config.StartingWasps - 100);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             Assert.That(_forms.IsPiperRooted, Is.False);
@@ -384,7 +384,7 @@ namespace DigitalStory.Tests.EditMode
         {
             Start(SwarmForm.Sting, 4f);
 
-            _body.Lose(_config.StartingWasps - 100, false);
+            _body.Lose(_config.StartingWasps - 100);
 
             Assert.That(_forms.Slot(SongSlot.Strike).IsActive, Is.False);
         }
@@ -392,7 +392,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Start_WhileCollapsed_IsRefused()
         {
-            _body.Lose(_config.StartingWasps - 100, false);
+            _body.Lose(_config.StartingWasps - 100);
             _changes.Clear();
 
             Start(SwarmForm.Dome, 5f);
@@ -413,7 +413,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Tick_WhileCollapsed_StaysCollapsedWithoutTheBodyRespawning()
         {
-            _body.Lose(_config.StartingWasps - 100, false);
+            _body.Lose(_config.StartingWasps - 100);
 
             _forms.Tick(1f, 2);
 
@@ -423,7 +423,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Respawn_AfterTheBlock_GoesBackToTheRiver()
         {
-            _body.Lose(_config.StartingWasps - 100, false);
+            _body.Lose(_config.StartingWasps - 100);
             _changes.Clear();
 
             _body.Tick(3f, 2);

@@ -64,8 +64,11 @@ namespace DigitalStory.Logic
             }
         }
 
-        /// <summary>Advances grenades and clouds, hurts hives, drains the swarm and updates <see cref="IsPiperInSmoke"/>.</summary>
-        public void Tick(float deltaTime, HiveSet hives, SwarmBody swarm, Vector3 piperPosition, bool isDomed)
+        /// <summary>
+        /// Advances grenades and clouds, hurts hives, drains the swarm and updates <see cref="IsPiperInSmoke"/>. Only the
+        /// share that <paramref name="shield"/> lets through reaches the swarm and each hive.
+        /// </summary>
+        public void Tick(float deltaTime, HiveSet hives, SwarmBody swarm, Vector3 piperPosition, IDamageShield shield)
         {
             if (hives == null)
             {
@@ -75,6 +78,11 @@ namespace DigitalStory.Logic
             if (swarm == null)
             {
                 throw new ArgumentNullException(nameof(swarm));
+            }
+
+            if (shield == null)
+            {
+                throw new ArgumentNullException(nameof(shield));
             }
 
             if (deltaTime < 0f)
@@ -91,8 +99,8 @@ namespace DigitalStory.Logic
             }
 
             LandGrenades(deltaTime);
-            HurtHives(hives);
-            HurtSwarm(deltaTime, swarm, piperPosition, isDomed);
+            HurtHives(hives, shield);
+            HurtSwarm(swarm, piperPosition, shield);
             AgeClouds();
         }
 
@@ -163,7 +171,7 @@ namespace DigitalStory.Logic
             return null;
         }
 
-        private void HurtHives(HiveSet hives)
+        private void HurtHives(HiveSet hives, IDamageShield shield)
         {
             for (int c = 0; c < Capacity; c++)
             {
@@ -185,18 +193,18 @@ namespace DigitalStory.Logic
                 float seconds = LongestEffectAt(hive.Position, out _);
                 if (seconds > 0f)
                 {
-                    hive.Damage(_config.HiveDamagePerSecond * seconds);
+                    hive.Damage(_config.HiveDamagePerSecond * seconds * shield.HiveDamageFraction(h));
                 }
             }
         }
 
-        private void HurtSwarm(float deltaTime, SwarmBody swarm, Vector3 piperPosition, bool isDomed)
+        private void HurtSwarm(SwarmBody swarm, Vector3 piperPosition, IDamageShield shield)
         {
             float seconds = LongestEffectAt(piperPosition, out bool inside);
             IsPiperInSmoke = inside;
             if (seconds > 0f)
             {
-                swarm.Drain(_config.WaspLossPerSecond, seconds, isDomed);
+                swarm.Drain(_config.WaspLossPerSecond, seconds, shield.WaspLossFraction);
             }
         }
 

@@ -83,6 +83,8 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(dome.Seconds, Is.EqualTo(5f));
             Assert.That(dome.Radius, Is.EqualTo(2.2f));
             Assert.That(dome.Share, Is.EqualTo(0.35f));
+            Assert.That(dome.LossFraction, Is.EqualTo(0.15f), "hits cost 85% fewer wasps");
+            Assert.That(dome.SpeedMultiplier, Is.EqualTo(0.5f), "the Piper at x0.5");
             Assert.That(sting.Seconds, Is.EqualTo(4f));
             Assert.That(sting.Share, Is.EqualTo(0.3f));
             Assert.That(sting.ArriveSeconds, Is.EqualTo(0.6f));
@@ -102,6 +104,9 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(gust.ClearRadius, Is.EqualTo(6f));
             Assert.That(gust.PushRadius, Is.EqualTo(3f));
             Assert.That(gust.PushSpeed, Is.EqualTo(4f));
+            Assert.That(gust.InhaleSeconds, Is.EqualTo(0.12f), "the inhale, 0 to .12 s");
+            Assert.That(gust.RingStartRadius, Is.EqualTo(0.6f), "the ring grows from .6 m");
+            Assert.That(gust.RingSeconds, Is.EqualTo(0.5f));
             Assert.That(colossus.Seconds, Is.EqualTo(12f));
         }
 
@@ -137,6 +142,24 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.IsDomed, Is.True);
             _forms.Tick(5f, 2);
             Assert.That(_forms.IsDomed, Is.False);
+        }
+
+        [Test]
+        public void Dome_WhileItRuns_LetsThroughItsAssetsShareOfEachLossAndSlowsThePiper()
+        {
+            var song = Make<DomeSong>();
+            JsonUtility.FromJsonOverwrite("{\"<LossFraction>k__BackingField\":0.4,\"<SpeedMultiplier>k__BackingField\":0.7}", song);
+            Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f));
+            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(1f));
+
+            Cast(song);
+
+            Assert.That(_forms.WaspLossFraction, Is.EqualTo(0.4f).Within(1e-5f));
+            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(0.7f).Within(1e-5f));
+            Assert.That(_forms.SmokeSlowsPiper, Is.True, "the dome does not keep the smoke off");
+            _forms.Tick(5f, 2);
+            Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f), "its return beat shields nothing");
+            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(1f));
         }
 
         [Test]
@@ -498,7 +521,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Gust_Cast_PushesBeekeepersWithinThreeMetresOutAtFourMetresPerSecond()
+        public void Gust_RingHasPassed_PushedBeekeepersWithinThreeMetresOutAtFourMetresPerSecond()
         {
             var near = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 1f) };
             var edge = new FakeSwarmTarget { Position = new Vector3(1f, 2f, 4f) };
@@ -510,6 +533,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(dead);
 
             Cast(Make<GustSong>(), piper: new Vector3(1f, 0f, 1f));
+            _forms.Tick(0.8f, 2);
 
             Assert.That(near.LastKnockback.x, Is.EqualTo(4f).Within(1e-3f));
             Assert.That(near.LastKnockback.z, Is.EqualTo(0f).Within(1e-3f));
@@ -518,6 +542,85 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(far.LastKnockback, Is.EqualTo(Vector3.zero));
             Assert.That(dead.LastKnockback, Is.EqualTo(Vector3.zero));
             Assert.That(near.DamageTaken, Is.EqualTo(0f), "a gust pushes, it does not hurt");
+            Assert.That(near.KnockbackCount, Is.EqualTo(1), "once");
+            Assert.That(edge.KnockbackCount, Is.EqualTo(1));
+        }
+
+        // The owner's rule: an impact hurts on the frame it visibly lands. The ring reaches 3 m about 0.25 s after the cast.
+        [Test]
+        public void Gust_Cast_PushesNobodyBeforeItsRingStarts()
+        {
+            var onTop = new FakeSwarmTarget { Position = new Vector3(0.5f, 0f, 0f) };
+            _enemies.Add(onTop);
+
+            Cast(Make<GustSong>());
+            Assert.That(onTop.KnockbackCount, Is.EqualTo(0), "not on the cast frame");
+
+            _forms.Tick(0.11f, 2);
+            Assert.That(onTop.KnockbackCount, Is.EqualTo(0), "the wasps are still drawn in");
+        }
+
+        [Test]
+        public void Gust_EachBeekeeper_IsPushedOnTheStepTheRingReachesIt()
+        {
+            var close = new FakeSwarmTarget { Position = new Vector3(0.5f, 0f, 0f) };
+            var middle = new FakeSwarmTarget { Position = new Vector3(0f, 0f, 2f) };
+            var edge = new FakeSwarmTarget { Position = new Vector3(-3f, 0f, 0f) };
+            _enemies.Add(close);
+            _enemies.Add(middle);
+            _enemies.Add(edge);
+            var song = Make<GustSong>();
+            Cast(song);
+
+            // The ring reaches 0.5 m as it starts at 0.12 s, 2 m at about 0.19 s and 3 m at about 0.25 s.
+            _forms.Tick(0.119f, 2);
+            Assert.That(close.KnockbackCount + middle.KnockbackCount + edge.KnockbackCount, Is.EqualTo(0));
+
+            _forms.Tick(0.061f, 2);
+            Assert.That(close.KnockbackCount, Is.EqualTo(1), "0.18 s: the ring has started");
+            Assert.That(middle.KnockbackCount, Is.EqualTo(0), "the ring is at " + song.RingRadius(0.18f) + " m");
+
+            _forms.Tick(0.02f, 2);
+            Assert.That(middle.KnockbackCount, Is.EqualTo(1), "0.20 s");
+            Assert.That(middle.LastKnockback.z, Is.EqualTo(4f).Within(1e-3f));
+            Assert.That(edge.KnockbackCount, Is.EqualTo(0), "the ring is at " + song.RingRadius(0.2f) + " m");
+
+            _forms.Tick(0.04f, 2);
+            Assert.That(edge.KnockbackCount, Is.EqualTo(0), "0.24 s: just short of 3 m");
+
+            _forms.Tick(0.02f, 2);
+            Assert.That(edge.KnockbackCount, Is.EqualTo(1), "0.26 s");
+            Assert.That(edge.LastKnockback.x, Is.EqualTo(-4f).Within(1e-3f));
+
+            _forms.Tick(0.6f, 2);
+            Assert.That(close.KnockbackCount + middle.KnockbackCount + edge.KnockbackCount, Is.EqualTo(3), "each is pushed once");
+        }
+
+        [Test]
+        public void Gust_RingRadius_DrawsInThenEasesOutFromItsStartToTheClearRadius()
+        {
+            var song = Make<GustSong>();
+
+            Assert.That(song.RingRadius(0f), Is.EqualTo(-1f));
+            Assert.That(song.RingRadius(0.119f), Is.EqualTo(-1f));
+            Assert.That(song.RingRadius(0.12f), Is.EqualTo(0.6f).Within(1e-4f));
+            Assert.That(song.RingRadius(0.37f), Is.EqualTo(0.6f + (5.4f * 0.75f)).Within(1e-3f), "halfway in time, three quarters of the way out");
+            Assert.That(song.RingRadius(0.62f), Is.EqualTo(6f).Within(1e-4f));
+            Assert.That(song.RingRadius(5f), Is.EqualTo(6f).Within(1e-4f));
+        }
+
+        [Test]
+        public void Gust_CollapseBeforeTheRingArrives_PushesNobody()
+        {
+            var edge = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 0f) };
+            _enemies.Add(edge);
+            Cast(Make<GustSong>());
+            _forms.Tick(0.1f, 2);
+
+            _body.Lose(_swarmConfig.StartingWasps - 100);
+            _forms.Tick(0.7f, 2);
+
+            Assert.That(edge.KnockbackCount, Is.EqualTo(0));
         }
 
         [Test]
@@ -525,7 +628,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var near = new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f) };
             _enemies.Add(near);
-            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100);
 
             Cast(Make<GustSong>());
 

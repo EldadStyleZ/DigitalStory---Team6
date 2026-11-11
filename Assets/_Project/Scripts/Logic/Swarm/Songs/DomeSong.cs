@@ -19,6 +19,12 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Metres from the Piper to the dome.")]
         public float Radius { get; private set; } = 2.2f;
 
+        [field: SerializeField, Range(0f, 1f), Tooltip("Share of each wasp loss (a hit on the Piper, or smoke) that still gets through the dome.")]
+        public float LossFraction { get; private set; } = 0.15f;
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("Share of the Piper's walking speed kept while the dome stands.")]
+        public float SpeedMultiplier { get; private set; } = 0.5f;
+
         /// <summary>The Guard slot.</summary>
         public override SongSlot Slot => SongSlot.Guard;
 

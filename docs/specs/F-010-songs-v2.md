@@ -282,3 +282,87 @@ While the giant stands, H J K L are its moves and do not reach the songs:
 - **Every match:** the end screen shows hives saved, wasps left, songs found, nests collected and a grade. R restarts at once.
 - **Impact feel:** a 50 ms pause of the swarm and a small camera shake on the big hits, as section B says.
 - **The playtest bot** plays whole matches through the rules: an idle player loses, a player with only Sting struggles, and a skilled player wins. It runs after every batch of songs.
+
+## The lecturer's feedback: the swarm is the player, an economy, and farm and survive phases
+
+Agreed with the owner on 2026-11-11, after the lecturer saw the game. The deadline is the week after. Where these sections differ from anything above, they win. The squads, the H J K L keys, auto-aim, the hidden songs and the night look all stay.
+
+Build order, agreed: the swarm as the player, then phases and the economy, then the fill-in song table, then nests (section H), then more songs, starting with the two towers (Honeycomb and Nest).
+
+### K. The swarm is the player
+
+- There is no Piper. WASD moves the swarm's **core**, an invisible point the camera follows. The swarm idles as a ring around the core and trails behind it as the river.
+- Beekeepers notice, chase and hit the core with the ranges they used for the Piper. A hit knocks wasps off, as before.
+- Songs that were centred on the Piper are centred on the core.
+- The Colossus is the whole swarm. The core rides inside it, so nothing is left standing behind, and when it ends the swarm is where the giant stood.
+- In the code, "Piper" becomes "core" wherever F-010 uses the word, so nothing is named after something that is not there.
+
+### L. Farm and survive
+
+A match is five rounds. Each round is a farm phase and then a survive phase.
+
+| Value | Start |
+|---|---|
+| Farm phase | 35 s, and 45 s in the first round |
+| Call the wave early | Enter. Each second skipped gives 5 wasps, up to the capacity |
+| Survive phase | The wave. It ends when every beekeeper of the wave is dead |
+| Win | The fifth wave is cleared |
+| Lose | Both hives are destroyed |
+
+- No beekeeper is on the map during a farm phase.
+- **Songs cost nothing in a farm phase**, so trying phrases is always free.
+- A banner and a timer always say which phase it is.
+
+### M. The economy
+
+Wasps are the one currency. They are the player's health, the price of an attack, the material that heals a hive, and what a tower is made of.
+
+**Spending**
+
+| Use | Cost | Notes |
+|---|---|---|
+| Sting | 10 | Cheap on purpose, so the player always has a move |
+| Gust | 20 | |
+| Dome | 40 | |
+| Tornado | 60 | |
+| Meteor | 90 | |
+| Colossus | 0 | Fury is its price |
+| Hive Call | 0 | |
+| Healing a hive | 2 wasps for each point of health | Hold E within 3 m of a damaged hive: 60 wasps a second flow in |
+| Towers (later) | Honeycomb 150, Nest 100 | The wasps stay there |
+
+- Costs apply only in a survive phase.
+- The spent wasps are the ones that do not come home: when the song releases, that many of its squad burn out.
+- A cast that would take the swarm below its collapse line is refused with "Not enough wasps". A refused cast starts no cooldown and teaches nothing false: the notes still fill in the table.
+
+**Earning**
+
+| Source | Amount |
+|---|---|
+| A hive at half health or more | Makes 6 wasps a second into its own store, 300 at most |
+| A hive below half health | Makes nothing, which is the reason to heal it |
+| Collecting a store | Automatic within 3 m of the hive, 150 wasps a second, up to the capacity |
+| Hive Call (L J L) | Calls every store from anywhere, while the core stays rooted |
+| A nest | Section H |
+| Calling a wave early | 5 wasps for each second skipped |
+
+**The decisions this makes**
+
+- Spend on attacks to end the wave fast, or keep the wasps as health.
+- Heal a hive now, which costs wasps, to keep its income, or let it stop producing.
+- Fly back to collect a store, or stay in the fight.
+- Later: station wasps as a tower at the hive you are leaving.
+
+The playtest bot plays three plans through whole matches: attack only, heal only, and a mix. The economy is right when none of the three always wins and doing nothing always loses. The numbers above are the starting point for that tuning.
+
+### N. Guidance
+
+- **The song table fills in.** Each song's slot shows the notes of its beginning that the player has played in order at least once, and dots for the rest, for example `J K ·`. It keeps them for the whole match. A song still becomes known only when it is cast.
+- **The first farm phase teaches one thing at a time.** Each prompt goes away when the player has done it:
+  1. Move with W A S D.
+  2. Play J K H.
+  3. Fly to the glowing nest and stay until it is yours.
+  4. Fly to a hive to take its wasps. Hold E to give some back and heal it.
+  5. Enemies come when the timer ends. Press Enter when ready.
+- The second hive starts the match at 80% health, so step 4 has something to heal.
+- Costs show on the song chips, and each hive panel shows its health and its store.

@@ -28,9 +28,6 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Wasps gained per second from each standing hive while Hive Call is held.")]
         public float HiveCallWaspsPerSecondPerHive { get; private set; } = 100f;
 
-        [field: SerializeField, Range(0f, 1f), Tooltip("Share of a loss that still gets through the dome.")]
-        public float DomeLossFraction { get; private set; } = 0.15f;
-
         [field: SerializeField, Min(0), Tooltip("The HUD warns that the swarm is low while it has fewer wasps than this.")]
         public int LowWasps { get; private set; } = 600;
 

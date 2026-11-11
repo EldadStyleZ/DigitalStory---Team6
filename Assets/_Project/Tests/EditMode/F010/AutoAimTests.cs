@@ -174,17 +174,6 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void RangeFor_ReadsTheConfig()
-        {
-            Build();
-
-            Assert.That(_aim.RangeFor(AimRule.Threat), Is.EqualTo(_config.StingRange));
-            Assert.That(_aim.RangeFor(AimRule.ThreeNearest), Is.EqualTo(_config.HydraRange));
-            Assert.That(_aim.RangeFor(AimRule.Line), Is.EqualTo(_config.LanceRange));
-            Assert.That(_aim.RangeFor(AimRule.Crowd), Is.EqualTo(_config.MeteorRange));
-        }
-
-        [Test]
         public void Hold_KeepsTheTargetForOneSecond_ThenMovesOn()
         {
             Add(0f, 5f);
@@ -234,6 +223,61 @@ namespace DigitalStory.Tests.EditMode
             Select(AimRule.Threat);
 
             Assert.That(_aim.TargetIndex, Is.EqualTo(1));
+        }
+
+        // A lone beekeeper 5 m away, and a crowd of three about 12 m away (index 1 is the crowd's nearest, at 11.7 m).
+        private void AddLonerAndCrowd()
+        {
+            Add(0f, 5f);
+            Add(10f, 6f);
+            Add(11f, 6f);
+            Add(10.5f, 7f);
+        }
+
+        // Plan section E: the marker selects by Threat every frame, and a cast by its own rule. One rule's fresh pick must
+        // not stand in for another's.
+        [Test]
+        public void Hold_AThreatPickJustMade_DoesNotDecideTheCrowdPick()
+        {
+            AddLonerAndCrowd();
+            Build();
+            Select(AimRule.Threat);
+            Assert.That(_aim.TargetIndex, Is.EqualTo(0), "the loner is the nearest");
+
+            Select(AimRule.Crowd, 18f);
+
+            Assert.That(_aim.TargetIndex, Is.EqualTo(1), "the crowd, whatever the Threat rule picked a moment ago");
+        }
+
+        [Test]
+        public void Hold_ACrowdPickJustMade_DoesNotDecideTheThreatPick()
+        {
+            AddLonerAndCrowd();
+            Build();
+            Select(AimRule.Threat);
+            Select(AimRule.Crowd, 18f);
+            Assert.That(_aim.TargetIndex, Is.EqualTo(1));
+
+            Select(AimRule.Threat);
+
+            Assert.That(_aim.TargetIndex, Is.EqualTo(0), "the crowd stands within 12 m, but the Threat rule picked the loner");
+        }
+
+        [Test]
+        public void Hold_EachRuleKeepsItsOwnPickForOneSecond_WhileAnotherRulePicks()
+        {
+            AddLonerAndCrowd();
+            Build();
+            Select(AimRule.Threat);
+            FakeTarget newcomer = Add(0f, 2f);
+
+            Select(AimRule.Crowd, 18f);
+            Select(AimRule.Threat);
+            Assert.That(_aim.TargetIndex, Is.EqualTo(0), "the Threat pick is still held, though a nearer beekeeper came");
+
+            _aim.Tick(1.01f);
+            Select(AimRule.Threat);
+            Assert.That(_aim.Target, Is.SameAs(newcomer), "free after a second");
         }
 
         [Test]

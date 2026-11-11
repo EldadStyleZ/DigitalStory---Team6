@@ -56,28 +56,36 @@ namespace DigitalStory.Logic
         /// <summary>Raised when the swarm comes back after a collapse.</summary>
         public event Action Respawned;
 
-        /// <summary>Removes wasps and returns how many were removed. A dome lets only a fraction of the loss through.</summary>
-        public int Lose(int wasps, bool isDomed)
+        /// <summary>
+        /// Removes wasps and returns how many were removed. Only <paramref name="lossFraction"/> of the loss, rounded, gets
+        /// through: the share the running songs let through (<see cref="SwarmFormMachine.WaspLossFraction"/>), such as the
+        /// dome's.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The fraction is not from 0 to 1.</exception>
+        public int Lose(int wasps, float lossFraction = 1f)
         {
+            RequireFraction(lossFraction);
+
             if (_isCollapsed || wasps <= 0)
             {
                 return 0;
             }
 
-            int amount = isDomed ? Mathf.RoundToInt(wasps * _config.DomeLossFraction) : wasps;
-            return Remove(amount);
+            return Remove(Mathf.RoundToInt(wasps * lossFraction));
         }
 
         /// <summary>Removes wasps at a rate (smoke), carrying fractions between calls. Same rules as Lose.</summary>
-        public void Drain(float waspsPerSecond, float deltaTime, bool isDomed)
+        /// <exception cref="ArgumentOutOfRangeException">The fraction is not from 0 to 1.</exception>
+        public void Drain(float waspsPerSecond, float deltaTime, float lossFraction = 1f)
         {
+            RequireFraction(lossFraction);
+
             if (_isCollapsed || !(waspsPerSecond > 0f) || !(deltaTime > 0f))
             {
                 return;
             }
 
-            float share = isDomed ? _config.DomeLossFraction : 1f;
-            _drainCarry += waspsPerSecond * deltaTime * share;
+            _drainCarry += waspsPerSecond * deltaTime * lossFraction;
             int whole = (int)(_drainCarry + WholeEpsilon);
             if (whole <= 0)
             {
@@ -146,6 +154,14 @@ namespace DigitalStory.Logic
             _count = _config.RespawnWasps;
             CountChanged?.Invoke(_count);
             Respawned?.Invoke();
+        }
+
+        private static void RequireFraction(float lossFraction)
+        {
+            if (!(lossFraction >= 0f && lossFraction <= 1f))
+            {
+                throw new ArgumentOutOfRangeException(nameof(lossFraction), lossFraction, "The share of a loss that gets through must be from 0 to 1.");
+            }
         }
 
         private int Remove(int amount)

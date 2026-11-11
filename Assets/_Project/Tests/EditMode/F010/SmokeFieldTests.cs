@@ -57,9 +57,10 @@ namespace DigitalStory.Tests.EditMode
             return new Hive(_hiveConfig, position);
         }
 
-        private void Tick(float deltaTime, HiveSet hives = null, Vector3? piper = null, bool domed = false)
+        // With no shield, every loss and all damage gets through.
+        private void Tick(float deltaTime, HiveSet hives = null, Vector3? piper = null, IDamageShield shield = null)
         {
-            _field.Tick(deltaTime, hives ?? SetOf(), _swarm, piper ?? Far, domed);
+            _field.Tick(deltaTime, hives ?? SetOf(), _swarm, piper ?? Far, shield ?? new FakeDamageShield());
         }
 
         private void LandACloudAt(Vector3 position)
@@ -237,6 +238,23 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Tick_HiveInsideCloudBehindAShield_LosesOnlyTheShareTheShieldLetsThrough()
+        {
+            var hive = HiveAt(Landing);
+            LandACloudAt(Landing);
+
+            Tick(1f, SetOf(hive), shield: new FakeDamageShield { HiveFraction = 0.25f });
+
+            Assert.That(hive.Health, Is.EqualTo(hive.MaxHealth - (HiveDps * 0.25f)).Within(Tolerance));
+        }
+
+        [Test]
+        public void Tick_NullShield_Throws()
+        {
+            Assert.That(() => _field.Tick(1f, SetOf(), _swarm, Far, null), Throws.TypeOf<ArgumentNullException>());
+        }
+
+        [Test]
         public void Tick_TwoHives_OnlyTheOneInsideIsHurt()
         {
             var inside = HiveAt(Landing);
@@ -332,9 +350,10 @@ namespace DigitalStory.Tests.EditMode
         public void Tick_PiperInSmokeWithDome_LosesOnlyTheDomeShare()
         {
             LandACloudAt(Landing);
-            int expected = _swarmConfig.StartingWasps - (int)Math.Round(_config.WaspLossPerSecond * _swarmConfig.DomeLossFraction);
+            var dome = new FakeDamageShield { WaspLossFraction = 0.15f };
+            int expected = _swarmConfig.StartingWasps - (int)Math.Round(_config.WaspLossPerSecond * dome.WaspLossFraction);
 
-            Tick(1f, piper: Landing, domed: true);
+            Tick(1f, piper: Landing, shield: dome);
 
             Assert.That(_swarm.Count, Is.EqualTo(expected));
         }

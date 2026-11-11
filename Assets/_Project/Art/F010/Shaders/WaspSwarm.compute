@@ -151,9 +151,11 @@ static const float HaloSpin = 2.5;               // radians per second
 
 // Every slot song launches and returns with the same two blends (songs-v2 B). Peel: a wasp leaves the base form over
 // PeelSeconds, starting PeelStagger later the further back along the river it was at the cast, so the river's head
-// leaves first and a launch is a ribbon, never a pop. Home: after the release it eases back over HomeSeconds, starting
-// HomeStagger later the higher its order. The plan's Home is 0.5 s plus 0.25 s; it is shortened so the last wasp is home
-// when the slot's 0.6 s return beat ends and the slot empties, instead of springing the last fifth of the way.
+// leaves first and a launch is a ribbon, never a pop. A song that hits sooner than the ribbon ends squeezes it with
+// PeelBy, so its whole squad is in the shape on the hit's frame. Home: after the release it eases back over
+// HomeSeconds, starting HomeStagger later the higher its order. The plan's Home is 0.5 s plus 0.25 s; it is shortened
+// so the last wasp is home when the slot's 0.6 s return beat ends and the slot empties, instead of springing the last
+// fifth of the way.
 static const float PeelSeconds = 0.3;
 static const float PeelStagger = 0.25;
 static const float HomeSeconds = 0.4;
@@ -183,8 +185,9 @@ static const float GustGlow = 0.4;
 static const float HiveCallGlow = 0.6;
 static const float ColossusGlow = 0.4;
 
-// Sting (Strike slot). p0.xyz: the target's feet, live. p1.xyz: a second target, read by the Twin Sting duet later.
-static const float StingFlightSeconds = 0.6;     // the head arrives, and the damage starts, at this many seconds
+// Sting (Strike slot). p0.xyz: the target's feet, live. p0.w: the seconds the head takes to arrive, when the damage
+// starts (StingSong.ArriveSeconds). p1.xyz: a second target, read by the Twin Sting duet later.
+static const float StingFlightSeconds = 0.6;     // the arrival while p0.w is 0
 static const float StingArcHeight = 1.2;         // metres the arc rises, plus StingArcRise per metre of distance
 static const float StingArcRise = 0.25;
 static const float StingChestHeight = 1.0;       // metres above the target's feet
@@ -611,6 +614,14 @@ float Peel(float seconds, float lane)
     return smoothstep(0.0, PeelSeconds, seconds - lane * PeelStagger);
 }
 
+// Peel squeezed in time, the same ribbon, so even the river's tail has left the base form by `end` seconds. For a song
+// that hits at `end`, so every wasp in its shape is there, and flashes, on the hit's frame. Never slower than Peel.
+float PeelBy(float seconds, float lane, float end)
+{
+    float squeeze = min(end / (PeelSeconds + PeelStagger), 1.0);
+    return smoothstep(0.0, PeelSeconds * squeeze, seconds - lane * PeelStagger * squeeze);
+}
+
 // 0 while the song holds the wasp, easing to 1 once it is back in the base form. Order 0 leaves first.
 float Home(float released, float order)
 {
@@ -673,30 +684,32 @@ Steer StingSteer(SlotContext context)
 
     // Launch: the comet. Its rank is the wasp's place in the river at the cast, so the river's head is the comet's tight,
     // bright head and the tail widens behind it. The goal leads the arc by the strike spring's lag, so the head lands
-    // on the arc's end at StingFlightSeconds, when the damage starts.
+    // on the arc's end at the rules' arrival, when the damage starts.
+    float flight = context.p0.w > 0.0 ? context.p0.w : StingFlightSeconds;
     float leave = context.lane * PeelStagger;
-    float progress = saturate((context.seconds - leave) / StingFlightSeconds);
-    float rate = progress > 0.0 && progress < 1.0 ? 1.0 / StingFlightSeconds : 0.0;
+    float progress = saturate((context.seconds - leave) / flight);
+    float rate = progress > 0.0 && progress < 1.0 ? 1.0 / flight : 0.0;
     float3 slope = BezierSlope(start, control, center, progress);
     float3 across = cross(Up, toward) * cos(wasp.ringAngle) + Up * sin(wasp.ringAngle);
     float width = (StingHeadWidth + context.lane * StingTailWidth) * wasp.ringRadius;
     float3 comet = Bezier(start, control, center, progress) + slope * (rate * StrikeLeadSeconds()) + across * width;
 
     // Peak: the rings, squeezing and flaring once a tick from the head's arrival.
-    float sinceHead = context.seconds - StingFlightSeconds;
+    float sinceHead = context.seconds - flight;
     float tick = frac(max(sinceHead, 0.0) / StingTickSeconds) * StingTickSeconds;
     float squeeze = sinceHead >= 0.0 ? 1.0 - smoothstep(0.0, StingSqueezeSeconds, tick) : 0.0;
     float3 ring = StingRingPoint(context, center, toward, lerp(StingRingRadius, StingSqueezeRadius, squeeze));
     float3 shape = lerp(comet, ring, smoothstep(StingWrapStart, 1.0, progress));
 
-    float sinceArrival = context.seconds - leave - StingFlightSeconds;
+    float sinceArrival = context.seconds - leave - flight;
     float heat = StrikeHeat(progress, sinceArrival);
     if (sinceArrival >= ImpactSeconds)
     {
         heat = lerp(HoldHeat, StingTickHeat, squeeze);
     }
 
-    float peel = Peel(context.seconds, context.lane);
+    // Peel's ribbon, but never slower than the flight, so a wasp has fully left the river, and flashes, as it arrives.
+    float peel = smoothstep(0.0, min(PeelSeconds, flight), context.seconds - leave);
     float3 goal = lerp(context.baseGoal, shape, peel);
     float share = peel;
     bool isFast = rate > 0.0;
@@ -778,7 +791,7 @@ Steer TornadoSteer(SlotContext context)
 
     float around = wasp.ringAngle + wasp.level01 * TornadoTwist + turn;
     float3 shape = _PiperPosition.xyz + RingOffset(around, radius) + Up * lift;
-    float peel = Peel(seconds, context.lane);
+    float peel = PeelBy(seconds, context.lane, hit);
     float3 goal = lerp(lerp(context.baseGoal, shape, peel), context.baseGoal, home);
 
     Steer steer = SteerOf(goal, peel * (1.0 - home), StrikeHeat(seconds / hit, sinceHit));

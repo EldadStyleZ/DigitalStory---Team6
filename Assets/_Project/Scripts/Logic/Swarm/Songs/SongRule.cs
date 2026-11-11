@@ -11,6 +11,10 @@ namespace DigitalStory.Logic
     /// A rule lets go (<see cref="Release"/>) when its time is up or it has nothing left to do. Its slot then plays a return
     /// beat, which is only a picture: the rule is not ticked again, so it hurts nothing more. A rule that a cast, Hive Call,
     /// the Colossus or a collapse ends is simply never ticked again, so a strike that has not landed is lost.
+    /// While it runs, a rule may also change the match through its modifiers (<see cref="WaspLossFraction"/>,
+    /// <see cref="PiperSpeedMultiplier"/>, <see cref="SmokeSlowsPiper"/>, <see cref="HiveDamageFraction"/>) and hear of
+    /// hits (<see cref="NotifyPiperHit"/>, <see cref="NotifyHiveHit"/>). The machine reads them only from running rules, so
+    /// a rule that ends or lets go stops changing anything at once.
     /// </remarks>
     public abstract class SongRule
     {
@@ -37,6 +41,15 @@ namespace DigitalStory.Logic
         /// <summary>The song's next numbers for its picture. Keep w at 0: the view uses it. See <see cref="SlotState.ParamB"/>.</summary>
         public abstract Vector4 ParamB { get; }
 
+        /// <summary>The share, from 0 to 1, of each wasp loss (a hit on the Piper, or smoke) that still reaches the swarm while the rule runs.</summary>
+        protected internal virtual float WaspLossFraction => 1f;
+
+        /// <summary>How much the Piper's walking speed is multiplied while the rule runs.</summary>
+        protected internal virtual float PiperSpeedMultiplier => 1f;
+
+        /// <summary>False while the rule keeps smoke from slowing the Piper.</summary>
+        protected internal virtual bool SmokeSlowsPiper => true;
+
         /// <summary>Raised with the rule and the point when its strike visibly lands.</summary>
         internal event Action<SongRule, Vector3> Landed;
 
@@ -58,6 +71,23 @@ namespace DigitalStory.Logic
         /// <paramref name="seconds"/> after the cast. Called only while the rule runs.
         /// </summary>
         protected internal virtual void NotifyPiperHit(Vector3 direction, float seconds)
+        {
+        }
+
+        /// <summary>
+        /// The share, from 0 to 1, of the damage from sticks and smoke that still reaches hive number <paramref name="hive"/>
+        /// while the rule runs.
+        /// </summary>
+        protected internal virtual float HiveDamageFraction(int hive)
+        {
+            return 1f;
+        }
+
+        /// <summary>
+        /// The stick beekeeper <paramref name="attacker"/> hit hive number <paramref name="hive"/> <paramref name="seconds"/>
+        /// after the cast; the hive has already taken the damage. Called only while the rule runs.
+        /// </summary>
+        protected internal virtual void NotifyHiveHit(int hive, ISwarmTarget attacker, float seconds)
         {
         }
 

@@ -12,13 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5ba512183180b4f11937aef54465f68d, type: 3}
   m_Name: AimConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.AimConfig
-  <StingRange>k__BackingField: 12
-  <ScytheRange>k__BackingField: 6
-  <HydraRange>k__BackingField: 9
-  <LanceRange>k__BackingField: 14
-  <MeteorRange>k__BackingField: 18
-  <NestRange>k__BackingField: 10
-  <MaelstromRange>k__BackingField: 12
   <HoldSeconds>k__BackingField: 1
   <HiveThreatBonus>k__BackingField: 6
   <HiveThreatRadius>k__BackingField: 3

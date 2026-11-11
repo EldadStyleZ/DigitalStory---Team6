@@ -7,6 +7,9 @@ namespace DigitalStory.Tests.EditMode
 {
     public sealed class SwarmBodyTests
     {
+        // The dome's share of a loss, the default on its song asset.
+        private const float DomeShare = 0.15f;
+
         private static SwarmConfig NewConfig()
         {
             return ScriptableObject.CreateInstance<SwarmConfig>();
@@ -21,7 +24,7 @@ namespace DigitalStory.Tests.EditMode
         private static SwarmBody CollapsedBody(SwarmConfig config)
         {
             var body = new SwarmBody(config);
-            body.Lose(config.StartingWasps, false);
+            body.Lose(config.StartingWasps);
             return body;
         }
 
@@ -50,20 +53,20 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            int removed = body.Lose(1000, false);
+            int removed = body.Lose(1000);
 
             Assert.That(removed, Is.EqualTo(1000));
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 1000));
         }
 
         [Test]
-        public void Lose_Domed_OnlyTheDomeFractionGetsThrough()
+        public void Lose_DomeShare_OnlyThatShareGetsThrough()
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            int expected = Mathf.RoundToInt(1000 * config.DomeLossFraction);
+            int expected = Mathf.RoundToInt(1000 * DomeShare);
 
-            int removed = body.Lose(1000, true);
+            int removed = body.Lose(1000, DomeShare);
 
             Assert.That(expected, Is.EqualTo(150));
             Assert.That(removed, Is.EqualTo(150));
@@ -71,27 +74,37 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Lose_DomedTinyLoss_RoundsToZero()
+        public void Lose_DomeShareOfATinyLoss_RoundsToZero()
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            int removed = body.Lose(3, true);
+            int removed = body.Lose(3, DomeShare);
 
             Assert.That(removed, Is.EqualTo(0));
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps));
         }
 
         [Test]
-        public void Lose_DomedFractionChanged_UsesTheConfig()
+        public void Lose_AnotherShare_UsesTheShareGiven()
         {
             var config = NewConfig();
-            JsonUtility.FromJsonOverwrite("{\"<DomeLossFraction>k__BackingField\":0.5}", config);
             var body = new SwarmBody(config);
 
-            int removed = body.Lose(1000, true);
+            int removed = body.Lose(1000, 0.5f);
 
             Assert.That(removed, Is.EqualTo(500));
+        }
+
+        [TestCase(-0.01f)]
+        [TestCase(1.01f)]
+        [TestCase(float.NaN)]
+        public void LoseAndDrain_ShareOutsideZeroToOne_Throw(float share)
+        {
+            var body = NewBody();
+
+            Assert.That(() => body.Lose(100, share), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+            Assert.That(() => body.Drain(100f, 1f, share), Throws.TypeOf<System.ArgumentOutOfRangeException>());
         }
 
         [TestCase(0)]
@@ -103,7 +116,7 @@ namespace DigitalStory.Tests.EditMode
             int raised = 0;
             body.CountChanged += _ => raised++;
 
-            int removed = body.Lose(wasps, false);
+            int removed = body.Lose(wasps);
 
             Assert.That(removed, Is.EqualTo(0));
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps));
@@ -123,7 +136,7 @@ namespace DigitalStory.Tests.EditMode
                 raised++;
             };
 
-            body.Lose(400, false);
+            body.Lose(400);
 
             Assert.That(raised, Is.EqualTo(1));
             Assert.That(seen, Is.EqualTo(config.StartingWasps - 400));
@@ -139,7 +152,7 @@ namespace DigitalStory.Tests.EditMode
             bool collapsed = false;
             body.Collapsed += () => collapsed = true;
 
-            body.Lose(config.StartingWasps - config.CollapseBelow, false);
+            body.Lose(config.StartingWasps - config.CollapseBelow);
 
             Assert.That(body.Count, Is.EqualTo(config.CollapseBelow));
             Assert.That(body.IsCollapsed, Is.False);
@@ -152,7 +165,7 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            body.Lose(config.StartingWasps - config.CollapseBelow + 1, false);
+            body.Lose(config.StartingWasps - config.CollapseBelow + 1);
 
             Assert.That(body.IsCollapsed, Is.True);
             Assert.That(body.Count, Is.EqualTo(0));
@@ -173,7 +186,7 @@ namespace DigitalStory.Tests.EditMode
                 collapsedInHandler = body.IsCollapsed;
             };
 
-            body.Lose(config.StartingWasps, false);
+            body.Lose(config.StartingWasps);
 
             Assert.That(raised, Is.EqualTo(1));
             Assert.That(countInHandler, Is.EqualTo(0));
@@ -188,7 +201,7 @@ namespace DigitalStory.Tests.EditMode
             int lastSeen = -1;
             body.CountChanged += count => lastSeen = count;
 
-            body.Lose(config.StartingWasps - 100, false);
+            body.Lose(config.StartingWasps - 100);
 
             Assert.That(lastSeen, Is.EqualTo(0));
         }
@@ -199,7 +212,7 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            body.Lose(config.StartingWasps * 3, false);
+            body.Lose(config.StartingWasps * 3);
 
             Assert.That(body.Count, Is.EqualTo(0));
         }
@@ -214,7 +227,7 @@ namespace DigitalStory.Tests.EditMode
             body.Collapsed += () => collapsedRaised++;
             body.CountChanged += _ => countRaised++;
 
-            int removed = body.Lose(500, false);
+            int removed = body.Lose(500);
 
             Assert.That(removed, Is.EqualTo(0));
             Assert.That(collapsedRaised, Is.EqualTo(0));
@@ -227,9 +240,9 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            body.Lose(config.StartingWasps - config.CollapseBelow, false);
+            body.Lose(config.StartingWasps - config.CollapseBelow);
 
-            body.Lose(1000, true);
+            body.Lose(1000, DomeShare);
 
             Assert.That(body.IsCollapsed, Is.True);
             Assert.That(body.Count, Is.EqualTo(0));
@@ -243,18 +256,18 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            body.Drain(120f, 1f, false);
+            body.Drain(120f, 1f);
 
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 120));
         }
 
         [Test]
-        public void Drain_Domed_OnlyTheDomeFractionGetsThrough()
+        public void Drain_DomeShare_OnlyThatShareGetsThrough()
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            body.Drain(1000f, 1f, true);
+            body.Drain(1000f, 1f, DomeShare);
 
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 150));
         }
@@ -265,10 +278,10 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            body.Drain(100f, 0.005f, false);
+            body.Drain(100f, 0.005f);
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps));
 
-            body.Drain(100f, 0.005f, false);
+            body.Drain(100f, 0.005f);
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 1));
         }
 
@@ -280,7 +293,7 @@ namespace DigitalStory.Tests.EditMode
 
             for (int i = 0; i < 60; i++)
             {
-                body.Drain(120f, 1f / 60f, false);
+                body.Drain(120f, 1f / 60f);
             }
 
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps - 120).Within(1));
@@ -293,7 +306,7 @@ namespace DigitalStory.Tests.EditMode
             int raised = 0;
             body.CountChanged += _ => raised++;
 
-            body.Drain(100f, 0.005f, false);
+            body.Drain(100f, 0.005f);
 
             Assert.That(raised, Is.EqualTo(0));
         }
@@ -303,11 +316,11 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            body.Lose(config.StartingWasps - config.CollapseBelow, false);
+            body.Lose(config.StartingWasps - config.CollapseBelow);
             int raised = 0;
             body.Collapsed += () => raised++;
 
-            body.Drain(10f, 1f, false);
+            body.Drain(10f, 1f);
 
             Assert.That(body.IsCollapsed, Is.True);
             Assert.That(body.Count, Is.EqualTo(0));
@@ -322,7 +335,7 @@ namespace DigitalStory.Tests.EditMode
             int raised = 0;
             body.CountChanged += _ => raised++;
 
-            body.Drain(500f, 1f, false);
+            body.Drain(500f, 1f);
 
             Assert.That(body.Count, Is.EqualTo(0));
             Assert.That(raised, Is.EqualTo(0));
@@ -334,7 +347,7 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
 
-            body.Drain(120f, 0f, false);
+            body.Drain(120f, 0f);
 
             Assert.That(body.Count, Is.EqualTo(config.StartingWasps));
         }
@@ -407,7 +420,7 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = new SwarmBody(config);
             body.Gain(100f, 2);
-            body.Lose(10, false);
+            body.Lose(10);
 
             body.Gain(1f, 2);
 
@@ -560,7 +573,7 @@ namespace DigitalStory.Tests.EditMode
             var body = CollapsedBody(config);
             body.Tick(config.CollapseBlockSeconds, 1);
 
-            int removed = body.Lose(100, false);
+            int removed = body.Lose(100);
 
             Assert.That(removed, Is.EqualTo(100));
             Assert.That(body.Count, Is.EqualTo(config.RespawnWasps - 100));
@@ -572,7 +585,7 @@ namespace DigitalStory.Tests.EditMode
             var config = NewConfig();
             var body = CollapsedBody(config);
             body.Tick(config.CollapseBlockSeconds, 1);
-            body.Lose(config.RespawnWasps, false);
+            body.Lose(config.RespawnWasps);
             Assert.That(body.IsCollapsed, Is.True);
 
             body.Tick(config.CollapseBlockSeconds - 0.1f, 1);
@@ -615,7 +628,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var config = NewConfig();
             var body = new SwarmBody(config);
-            body.Lose(1000, false);
+            body.Lose(1000);
 
             body.Tick(5f, 2);
 

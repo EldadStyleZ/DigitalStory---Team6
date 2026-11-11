@@ -130,13 +130,82 @@ namespace DigitalStory.Logic
         {
             for (int index = 0; index < SlotCount; index++)
             {
-                SongRule rule = _rules[index];
-
-                if (rule != null && !rule.IsReleased)
+                if (TryGetRunning(index, out SongRule rule))
                 {
                     rule.NotifyPiperHit(direction, _seconds[index]);
                 }
             }
+        }
+
+        /// <summary>Tells every running rule that the stick <paramref name="attacker"/> hit hive number <paramref name="hive"/>.</summary>
+        public void NotifyHiveHit(int hive, ISwarmTarget attacker)
+        {
+            for (int index = 0; index < SlotCount; index++)
+            {
+                if (TryGetRunning(index, out SongRule rule))
+                {
+                    rule.NotifyHiveHit(hive, attacker, _seconds[index]);
+                }
+            }
+        }
+
+        /// <summary>The share of each wasp loss that the running rules let through, multiplied together. 1 with none.</summary>
+        public float WaspLossFraction()
+        {
+            float fraction = 1f;
+            for (int index = 0; index < SlotCount; index++)
+            {
+                if (TryGetRunning(index, out SongRule rule))
+                {
+                    fraction *= rule.WaspLossFraction;
+                }
+            }
+
+            return fraction;
+        }
+
+        /// <summary>The running rules' multipliers of the Piper's speed, multiplied together. 1 with none.</summary>
+        public float PiperSpeedMultiplier()
+        {
+            float multiplier = 1f;
+            for (int index = 0; index < SlotCount; index++)
+            {
+                if (TryGetRunning(index, out SongRule rule))
+                {
+                    multiplier *= rule.PiperSpeedMultiplier;
+                }
+            }
+
+            return multiplier;
+        }
+
+        /// <summary>False when a running rule keeps smoke from slowing the Piper.</summary>
+        public bool SmokeSlowsPiper()
+        {
+            for (int index = 0; index < SlotCount; index++)
+            {
+                if (TryGetRunning(index, out SongRule rule) && !rule.SmokeSlowsPiper)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>The share of damage the running rules let through to hive number <paramref name="hive"/>, multiplied together. 1 with none.</summary>
+        public float HiveDamageFraction(int hive)
+        {
+            float fraction = 1f;
+            for (int index = 0; index < SlotCount; index++)
+            {
+                if (TryGetRunning(index, out SongRule rule))
+                {
+                    fraction *= rule.HiveDamageFraction(hive);
+                }
+            }
+
+            return fraction;
         }
 
         /// <summary>What the view needs to draw the slot.</summary>
@@ -167,6 +236,13 @@ namespace DigitalStory.Logic
             }
 
             return index;
+        }
+
+        // A rule that has let go plays only its return beat, so it changes nothing in the match.
+        private bool TryGetRunning(int index, out SongRule rule)
+        {
+            rule = _rules[index];
+            return rule != null && !rule.IsReleased;
         }
 
         private void Empty(int index)

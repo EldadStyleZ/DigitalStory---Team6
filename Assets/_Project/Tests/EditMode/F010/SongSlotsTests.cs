@@ -687,7 +687,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(2000)]
         public void Songs_AtAnyWaspCount_HitAsHardAndTakeTheSameSquad(int wasps)
         {
-            _body.Lose(_swarmConfig.StartingWasps - wasps, false);
+            _body.Lose(_swarmConfig.StartingWasps - wasps);
             Assert.That(_body.Count, Is.EqualTo(wasps));
             var enemy = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
             _enemies.Add(enemy);
@@ -713,13 +713,24 @@ namespace DigitalStory.Tests.EditMode
         public void Sting_Params_AreTheLiveTargetAndTheSecondTarget()
         {
             Cast(_sting);
-            AssertVector(Strike.ParamA, 3f, 0f, 0f, 0f);
+            AssertVector(Strike.ParamA, 3f, 0f, 0f, 0.6f);
 
             _aim.Position = new Vector3(4f, 0f, 1f);
             Tick(0.1f);
 
-            AssertVector(Strike.ParamA, 4f, 0f, 1f, 0f);
+            AssertVector(Strike.ParamA, 4f, 0f, 1f, 0.6f);
             AssertVector(Strike.ParamB, 4f, 0f, 1f, 0f);
+        }
+
+        [Test]
+        public void Sting_ParamAW_IsItsArrivalTime_SoThePictureLandsWithTheFirstDamage()
+        {
+            JsonUtility.FromJsonOverwrite("{\"<ArriveSeconds>k__BackingField\":0.45}", _sting);
+
+            Cast(_sting);
+
+            Assert.That(Strike.ParamA.w, Is.EqualTo(_sting.ArriveSeconds));
+            Assert.That(Strike.ParamA.w, Is.EqualTo(0.45f));
         }
 
         [Test]
@@ -809,6 +820,72 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_landed.Count, Is.EqualTo(1));
         }
 
+        // What a running song changes in the match: a new song needs only its rule for these
+
+        [Test]
+        public void Modifiers_NoSongRunning_ChangeNothing()
+        {
+            Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f));
+            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(1f));
+            Assert.That(_forms.SmokeSlowsPiper, Is.True);
+            Assert.That(_forms.HiveDamageFraction(0), Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void Modifiers_TwoRunningSongs_Multiply()
+        {
+            _post.WaspLossFraction = 0.5f;
+            _post.PiperSpeedMultiplier = 1.6f;
+            _post.SmokeSlowsPiper = false;
+            _post.ShieldedHive = 1;
+            _post.HiveDamageFraction = 0.25f;
+
+            Cast(_dome);
+            Cast(_post);
+
+            Assert.That(_forms.WaspLossFraction, Is.EqualTo(0.5f * _dome.LossFraction).Within(Tolerance));
+            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(1.6f * _dome.SpeedMultiplier).Within(Tolerance));
+            Assert.That(_forms.SmokeSlowsPiper, Is.False);
+            Assert.That(_forms.HiveDamageFraction(1), Is.EqualTo(0.25f).Within(Tolerance));
+            Assert.That(_forms.HiveDamageFraction(0), Is.EqualTo(1f), "only the shielded hive");
+        }
+
+        [Test]
+        public void Modifiers_ASongThatLetGo_ChangesNothingDuringItsReturnBeat()
+        {
+            _post.WaspLossFraction = 0.5f;
+            _post.SmokeSlowsPiper = false;
+            _post.ShieldedHive = 0;
+            _post.HiveDamageFraction = 0.25f;
+            _post.ReleaseAfter = 1f;
+            Cast(_post);
+
+            Tick(1f);
+
+            Assert.That(Post.ReleasedSeconds, Is.GreaterThanOrEqualTo(0f), "the return beat plays");
+            Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f));
+            Assert.That(_forms.SmokeSlowsPiper, Is.True);
+            Assert.That(_forms.HiveDamageFraction(0), Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void NotifyHiveHit_ReachesOnlyRunningSongs()
+        {
+            var attacker = new FakeSwarmTarget();
+            Cast(_post);
+
+            _forms.NotifyHiveHit(1, attacker);
+
+            Assert.That(_post.Rule.HiveHitCount, Is.EqualTo(1));
+            Assert.That(_post.Rule.LastHiveHit, Is.EqualTo(1));
+            Assert.That(_post.Rule.LastHiveAttacker, Is.SameAs(attacker));
+
+            _post.ReleaseAfter = 0f;
+            Tick(0.1f);
+            _forms.NotifyHiveHit(0, attacker);
+            Assert.That(_post.Rule.HiveHitCount, Is.EqualTo(1), "it let go");
+        }
+
         // Allocation
 
         [Test]
@@ -821,6 +898,18 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(() => { _forms.Tick(0.016f, StandingHives); }, Is.Not.AllocatingGCMemory());
             Assert.That(() => { _forms.Slot(SongSlot.Strike); }, Is.Not.AllocatingGCMemory());
+        }
+
+        [Test]
+        public void Modifiers_WithEverySlotRunning_AllocateNothing()
+        {
+            Cast(_dome);
+            Cast(_post);
+            Cast(_sting);
+            var attacker = new FakeSwarmTarget();
+
+            Assert.That(() => { _ = _forms.WaspLossFraction * _forms.PiperSpeedMultiplier * _forms.HiveDamageFraction(0); }, Is.Not.AllocatingGCMemory());
+            Assert.That(() => { _forms.NotifyHiveHit(0, attacker); }, Is.Not.AllocatingGCMemory());
         }
 
         [Test]
@@ -882,7 +971,7 @@ namespace DigitalStory.Tests.EditMode
 
         private void Collapse()
         {
-            _body.Lose(_swarmConfig.StartingWasps - 100, false);
+            _body.Lose(_swarmConfig.StartingWasps - 100);
         }
 
         private void FillFury()

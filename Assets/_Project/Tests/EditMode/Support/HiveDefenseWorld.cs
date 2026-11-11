@@ -18,7 +18,8 @@ namespace DigitalStory.Tests.EditMode
 
         /// <summary>
         /// The song indices when the world is built with songs: Dome H K J, Colossus L J K J L and Sting J K H; with all songs,
-        /// also Tornado J K K H, Meteor J K L K, Gust H L K and Hive Call L J L.
+        /// also Tornado J K K H, Meteor J K L K, Gust H L K and Hive Call L J L. Without either, the world holds only the Sting
+        /// (index 0), because the session's aim marker takes its reach from the starting aimed song.
         /// </summary>
         public const int DomeIndex = 0;
         public const int ColossusIndex = 1;
@@ -58,22 +59,25 @@ namespace DigitalStory.Tests.EditMode
             WaveConfig = Make<WaveConfig>();
             JsonUtility.FromJsonOverwrite(WaveJson(waves ?? new[] { new WaveEntry(1, 0) }), WaveConfig);
 
-            SwarmSongEffect[] songs = Array.Empty<SwarmSongEffect>();
+            Sting = Make<StingSong>();
+            SongConfig = Make<SongConfig>();
+            SwarmSongEffect[] songs = { Sting };
             if (withAllSongs)
             {
                 songs = new SwarmSongEffect[]
                 {
-                    Make<DomeSong>(), Make<ColossusSong>(), Make<StingSong>(), Make<TornadoSong>(), Make<MeteorSong>(), Make<GustSong>(), Make<HiveCallSong>(),
+                    Make<DomeSong>(), Make<ColossusSong>(), Sting, Make<TornadoSong>(), Make<MeteorSong>(), Make<GustSong>(), Make<HiveCallSong>(),
                 };
             }
             else if (withSongs)
             {
-                songs = new SwarmSongEffect[] { Make<DomeSong>(), Make<ColossusSong>(), Make<StingSong>() };
+                songs = new SwarmSongEffect[] { Make<DomeSong>(), Make<ColossusSong>(), Sting };
             }
 
+            Songs = songs;
             var rules = new HiveDefenseRules(
                 Swarm, Squads, PiperMove, Fury, Colossus, Hive, Smoke, WaveConfig, Stick, Smoker, Aim,
-                Make<SongConfig>(), songs, HoleCount);
+                SongConfig, songs, HoleCount);
             Session = new HiveDefenseSession(
                 rules,
                 hives ?? new[] { new Vector3(-40f, 0f, 40f), new Vector3(40f, 0f, 40f) },
@@ -92,6 +96,12 @@ namespace DigitalStory.Tests.EditMode
         public BeekeeperConfig Stick { get; }
         public BeekeeperConfig Smoker { get; }
         public AimConfig Aim { get; }
+        public SongConfig SongConfig { get; }
+        public StingSong Sting { get; }
+
+        /// <summary>The songs the session plays, in caster order.</summary>
+        public IReadOnlyList<SwarmSongEffect> Songs { get; }
+
         public WaveConfig WaveConfig { get; }
         public HiveDefenseSession Session { get; }
         public Vector3 Piper { get; set; }

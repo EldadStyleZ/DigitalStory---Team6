@@ -23,6 +23,21 @@ namespace DigitalStory.Tests.EditMode
         /// <summary>Seconds after its cast at which the rule lets go. Infinity keeps it running.</summary>
         public float ReleaseAfter { get; set; } = float.PositiveInfinity;
 
+        /// <summary>The share of each wasp loss its rule lets through while it runs.</summary>
+        public float WaspLossFraction { get; set; } = 1f;
+
+        /// <summary>How much its rule multiplies the Piper's speed while it runs.</summary>
+        public float PiperSpeedMultiplier { get; set; } = 1f;
+
+        /// <summary>False when its rule keeps smoke from slowing the Piper.</summary>
+        public bool SmokeSlowsPiper { get; set; } = true;
+
+        /// <summary>The hive its rule shields, or -1 for none.</summary>
+        public int ShieldedHive { get; set; } = -1;
+
+        /// <summary>The share of damage its rule lets through to <see cref="ShieldedHive"/>.</summary>
+        public float HiveDamageFraction { get; set; } = 1f;
+
         /// <summary>The rule the slot engine made, once the song has been cast.</summary>
         public FakeSongRule Rule { get; private set; }
 

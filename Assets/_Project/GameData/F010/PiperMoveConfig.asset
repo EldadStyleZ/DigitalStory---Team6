@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: PiperMoveConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.PiperMoveConfig
   <Speed>k__BackingField: 4.5
-  <DomeSpeedMultiplier>k__BackingField: 0.5
   <SmokeSpeedMultiplier>k__BackingField: 0.6
   <PlayingHoldSeconds>k__BackingField: 0.6
   <NoteSeconds>k__BackingField: 0.3

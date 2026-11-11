@@ -10,6 +10,7 @@ namespace DigitalStory.Tests.EditMode
         public bool IsAlive { get; set; } = true;
         public float DamageTaken { get; private set; }
         public Vector3 LastKnockback { get; private set; }
+        public int KnockbackCount { get; private set; }
         public float LastStunSeconds { get; private set; }
 
         public void TakeDamage(float amount)
@@ -20,6 +21,7 @@ namespace DigitalStory.Tests.EditMode
         public void Knockback(Vector3 velocity)
         {
             LastKnockback = velocity;
+            KnockbackCount++;
         }
 
         public void Stun(float seconds)

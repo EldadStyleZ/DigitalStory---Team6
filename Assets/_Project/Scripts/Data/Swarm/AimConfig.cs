@@ -2,32 +2,14 @@ using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>The numbers behind auto-aim: how far each song looks, how long a target is kept and how crowds are judged.</summary>
+    /// <summary>
+    /// The numbers behind auto-aim: how long a target is kept and how threats, lines and crowds are judged. Each song's reach
+    /// lives on its own song asset (its AimRange), never here, so the marker and the cast cannot disagree.
+    /// </summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Aim Config", fileName = "AimConfig")]
     public sealed class AimConfig : ScriptableObject
     {
-        [field: SerializeField, Min(0f), Tooltip("Sting's reach from the Piper, in metres.")]
-        public float StingRange { get; private set; } = 12f;
-
-        [field: SerializeField, Min(0f), Tooltip("Scythe's reach from the Piper, in metres.")]
-        public float ScytheRange { get; private set; } = 6f;
-
-        [field: SerializeField, Min(0f), Tooltip("Hydra's reach from the Piper, in metres.")]
-        public float HydraRange { get; private set; } = 9f;
-
-        [field: SerializeField, Min(0f), Tooltip("Lance's reach from the Piper, in metres.")]
-        public float LanceRange { get; private set; } = 14f;
-
-        [field: SerializeField, Min(0f), Tooltip("Meteor's reach from the Piper, in metres.")]
-        public float MeteorRange { get; private set; } = 18f;
-
-        [field: SerializeField, Min(0f), Tooltip("Nest's reach from the Piper, in metres.")]
-        public float NestRange { get; private set; } = 10f;
-
-        [field: SerializeField, Min(0f), Tooltip("Maelstrom's reach from the Piper, in metres.")]
-        public float MaelstromRange { get; private set; } = 12f;
-
-        [field: SerializeField, Min(0f), Tooltip("Seconds a chosen target is kept while it lives and stays in range.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds a rule keeps the target it chose while it lives and stays in range.")]
         public float HoldSeconds { get; private set; } = 1f;
 
         [field: SerializeField, Min(0f), Tooltip("Metres taken off a beekeeper's threat score when it stands near a standing hive.")]

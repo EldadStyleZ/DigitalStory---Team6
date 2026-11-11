@@ -17,8 +17,10 @@ namespace DigitalStory.Logic
     /// Hive Call ends the Strike song and keeps the Guard and Post songs; an Attack or Power cast ends Hive Call, and a
     /// Defense cast keeps it. The Colossus ends the Strike and Guard songs and Hive Call, and keeps the Post song. A collapse
     /// ends every slot and the Gust at once.
+    /// What a running song changes in the match (the Dome's cut of every loss and its slower Piper, say) comes from its rule
+    /// and is read here, multiplied over the running rules, so a new song needs no change to this class or to the session.
     /// </remarks>
-    public sealed class SwarmFormMachine
+    public sealed class SwarmFormMachine : IDamageShield
     {
         private const float NoGust = -1f;
 
@@ -35,6 +37,8 @@ namespace DigitalStory.Logic
         private float _gustDuration;
         private Vector3 _gustCenter;
         private float _gustRadius;
+        private GustSong _gustSong;
+        private IReadOnlyList<ISwarmTarget> _gustEnemies;
 
         /// <summary>Starts in the river with every slot empty. The squads' bands must lie within 0 to 1 and never overlap.</summary>
         public SwarmFormMachine(SwarmBody body, FuryMeter fury, SquadConfig squads)
@@ -52,11 +56,23 @@ namespace DigitalStory.Logic
         /// <summary>Seconds since the whole swarm's form began.</summary>
         public float SecondsInForm => _secondsInForm;
 
-        /// <summary>True while the Dome runs in the Guard slot, which cuts wasp losses. Its return beat does not count.</summary>
+        /// <summary>
+        /// True while the Dome runs in the Guard slot. Its return beat does not count. What the dome does (fewer wasps lost, a
+        /// slower Piper) comes from its rule, through <see cref="WaspLossFraction"/> and <see cref="PiperSpeedMultiplier"/>.
+        /// </summary>
         public bool IsDomed => _slots.RunningForm(SongSlot.Guard) == SwarmForm.Dome;
 
         /// <summary>True in Hive Call and the Colossus: the Piper stands still and plays.</summary>
         public bool IsPiperRooted => _current == SwarmForm.HiveCall || _current == SwarmForm.Colossus;
+
+        /// <summary>The share, from 0 to 1, of each wasp loss that reaches the swarm: what every running song lets through, multiplied. 1 with none.</summary>
+        public float WaspLossFraction => _slots.WaspLossFraction();
+
+        /// <summary>How much the running songs multiply the Piper's walking speed. 1 with none.</summary>
+        public float PiperSpeedMultiplier => _slots.PiperSpeedMultiplier();
+
+        /// <summary>True unless a running song keeps smoke from slowing the Piper.</summary>
+        public bool SmokeSlowsPiper => _slots.SmokeSlowsPiper();
 
         /// <summary>Seconds since the last Gust began, or -1 when there is none or it has finished.</summary>
         public float GustSeconds => _gustSeconds;
@@ -79,6 +95,23 @@ namespace DigitalStory.Logic
         public SlotState Slot(SongSlot slot)
         {
             return _slots.State(slot);
+        }
+
+        /// <summary>The share, from 0 to 1, of the damage from sticks and smoke that reaches hive number <paramref name="hive"/>: what every running song lets through, multiplied. 1 with none.</summary>
+        public float HiveDamageFraction(int hive)
+        {
+            return _slots.HiveDamageFraction(hive);
+        }
+
+        /// <summary>The stick <paramref name="attacker"/> hit hive number <paramref name="hive"/>, which has taken the damage. Running songs hear of it.</summary>
+        public void NotifyHiveHit(int hive, ISwarmTarget attacker)
+        {
+            if (attacker == null)
+            {
+                throw new ArgumentNullException(nameof(attacker));
+            }
+
+            _slots.NotifyHiveHit(hive, attacker);
         }
 
         /// <summary>
@@ -121,23 +154,26 @@ namespace DigitalStory.Logic
         /// </summary>
         public bool StartGust(Vector3 center, float radius, float seconds)
         {
-            RequireSeconds(seconds);
+            return StartPulse(center, radius, seconds, null, null);
+        }
 
-            if (radius < 0f)
+        /// <summary>
+        /// Starts <paramref name="song"/>'s pulse at <paramref name="center"/>, as <see cref="StartGust(Vector3, float, float)"/>
+        /// does, and lets the song push each beekeeper in <paramref name="enemies"/> on the step its ring reaches them.
+        /// </summary>
+        internal bool StartGust(GustSong song, Vector3 center, IReadOnlyList<ISwarmTarget> enemies)
+        {
+            if (song == null)
             {
-                throw new ArgumentOutOfRangeException(nameof(radius), radius, "The radius cannot be negative.");
+                throw new ArgumentNullException(nameof(song));
             }
 
-            if (IsBlocked)
+            if (enemies == null)
             {
-                return false;
+                throw new ArgumentNullException(nameof(enemies));
             }
 
-            _gustSeconds = 0f;
-            _gustDuration = seconds;
-            _gustCenter = center;
-            _gustRadius = radius;
-            return true;
+            return StartPulse(center, song.ClearRadius, song.Seconds, song, enemies);
         }
 
         /// <summary>
@@ -233,6 +269,36 @@ namespace DigitalStory.Logic
             }
         }
 
+        private bool StartPulse(Vector3 center, float radius, float seconds, GustSong pusher, IReadOnlyList<ISwarmTarget> enemies)
+        {
+            RequireSeconds(seconds);
+
+            if (radius < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(radius), radius, "The radius cannot be negative.");
+            }
+
+            if (IsBlocked)
+            {
+                return false;
+            }
+
+            _gustSeconds = 0f;
+            _gustDuration = seconds;
+            _gustCenter = center;
+            _gustRadius = radius;
+            _gustSong = pusher;
+            _gustEnemies = enemies;
+            return true;
+        }
+
+        private void EndGust()
+        {
+            _gustSeconds = NoGust;
+            _gustSong = null;
+            _gustEnemies = null;
+        }
+
         private void TickForm(float deltaTime, int standingHives)
         {
             if (_current == SwarmForm.HiveCall)
@@ -257,11 +323,18 @@ namespace DigitalStory.Logic
                 return;
             }
 
+            float before = _gustSeconds;
             _gustSeconds += deltaTime;
+
+            // The push lands with the ring the picture draws, not on the cast frame.
+            if (_gustSong != null)
+            {
+                _gustSong.PushWhereTheRingPassed(_gustEnemies, _gustCenter, before, _gustSeconds);
+            }
 
             if (_gustSeconds >= _gustDuration)
             {
-                _gustSeconds = NoGust;
+                EndGust();
             }
         }
 
@@ -308,7 +381,7 @@ namespace DigitalStory.Logic
         private void OnCollapsed()
         {
             _slots.EndAll();
-            _gustSeconds = NoGust;
+            EndGust();
             SetForm(SwarmForm.Collapsed);
         }
 

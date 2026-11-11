@@ -10,10 +10,15 @@ namespace DigitalStory.Logic
     /// Call <see cref="Tick"/> once per frame, then <see cref="Select"/> with the rule of the song about to cast
     /// (or a default rule to draw the marker). Read the result from <see cref="Target"/>, <see cref="HiveIndex"/>
     /// and <see cref="AimPoint"/>. All distances ignore height. Nothing is allocated after construction.
+    /// Each rule holds its own pick, so the marker's choice every frame never stands in for what a cast's rule would choose.
     /// </remarks>
     public sealed class AutoAim
     {
         private const float Epsilon = 1e-6f;
+        private const int NoTarget = -1;
+
+        // The rules are numbered from 0 with no gaps, so each one indexes its own hold.
+        private static readonly int RuleCount = Enum.GetValues(typeof(AimRule)).Length;
 
         private readonly AimConfig _config;
         private readonly IReadOnlyList<ISwarmTarget> _targets;
@@ -21,7 +26,8 @@ namespace DigitalStory.Logic
         private readonly float[] _hiveHealth;
         private readonly float[] _hiveSinceHit;
         private readonly int[] _nearest;
-        private float _sinceChosen;
+        private readonly int[] _heldIndex = new int[RuleCount];
+        private readonly float[] _sinceChosen = new float[RuleCount];
 
         /// <summary>Starts with no target. The target list may change in size and content between calls.</summary>
         public AutoAim(AimConfig config, IReadOnlyList<ISwarmTarget> targets, HiveSet hives)
@@ -39,14 +45,19 @@ namespace DigitalStory.Logic
             }
 
             _nearest = new int[Mathf.Max(1, config.NearestCount)];
-            TargetIndex = -1;
+            for (int rule = 0; rule < RuleCount; rule++)
+            {
+                _heldIndex[rule] = NoTarget;
+            }
+
+            TargetIndex = NoTarget;
             HiveIndex = -1;
         }
 
         /// <summary>The chosen beekeeper, or null when the target is a hive, a point or nothing.</summary>
         public ISwarmTarget Target => TargetIndex >= 0 && TargetIndex < _targets.Count ? _targets[TargetIndex] : null;
 
-        /// <summary>Index of the chosen beekeeper in the target list, or -1.</summary>
+        /// <summary>Index in the target list of the beekeeper the last <see cref="Select"/> chose, or -1.</summary>
         public int TargetIndex { get; private set; }
 
         /// <summary>Index of the chosen hive, or -1. Only the <see cref="AimRule.Hive"/> rule sets it.</summary>
@@ -72,10 +83,14 @@ namespace DigitalStory.Logic
             return _nearest[slot];
         }
 
-        /// <summary>Ages the hold timer and notes which hives were hit.</summary>
+        /// <summary>Ages every rule's hold timer and notes which hives were hit.</summary>
         public void Tick(float deltaTime)
         {
-            _sinceChosen += deltaTime;
+            for (int rule = 0; rule < RuleCount; rule++)
+            {
+                _sinceChosen[rule] += deltaTime;
+            }
+
             for (int i = 0; i < _hiveHealth.Length; i++)
             {
                 float health = _hives[i].Health;
@@ -92,28 +107,19 @@ namespace DigitalStory.Logic
             }
         }
 
-        /// <summary>The range, in metres, for a rule that has several songs. Pass the song's own range to <see cref="Select"/>.</summary>
-        public float RangeFor(AimRule rule)
-        {
-            switch (rule)
-            {
-                case AimRule.Threat: return _config.StingRange;
-                case AimRule.ThreeNearest: return _config.HydraRange;
-                case AimRule.Line: return _config.LanceRange;
-                case AimRule.Crowd: return _config.MeteorRange;
-                default: return float.MaxValue;
-            }
-        }
-
-        /// <summary>Chooses the target for a rule. Returns true when a beekeeper or hive was chosen.</summary>
+        /// <summary>
+        /// Chooses the target for a rule. Returns true when a beekeeper or hive was chosen. A beekeeper the rule chose is kept
+        /// for <see cref="AimConfig.HoldSeconds"/> while it lives and stays in range; other rules' picks never count.
+        /// </summary>
         /// <param name="rule">How to choose.</param>
-        /// <param name="range">Metres from the Piper within which a beekeeper may be chosen. Ignored for Hive.</param>
+        /// <param name="range">Metres from the Piper within which a beekeeper may be chosen: the song's own reach. Ignored for Hive.</param>
         /// <param name="piperPosition">Where the Piper stands.</param>
         /// <param name="piperForward">Where the Piper faces. Height is ignored.</param>
         /// <param name="mouseLive">True while the mouse wins over auto-aim.</param>
         /// <param name="mousePoint">The mouse's point on the ground. Only read while the mouse is live.</param>
         public bool Select(AimRule rule, float range, Vector3 piperPosition, Vector3 piperForward, bool mouseLive, Vector3 mousePoint)
         {
+            int held = RuleIndex(rule);
             NearestCount = 0;
             HiveIndex = -1;
 
@@ -124,14 +130,14 @@ namespace DigitalStory.Logic
 
             if (mouseLive)
             {
-                SetTarget(NearestTo(mousePoint, _config.MouseRadius));
+                Hold(held, NearestTo(mousePoint, _config.MouseRadius));
                 AimPoint = mousePoint;
                 return TargetIndex >= 0;
             }
 
             if (rule == AimRule.Hive)
             {
-                SetTarget(-1);
+                Hold(held, NoTarget);
                 HiveIndex = PickHive(piperPosition);
                 if (HiveIndex >= 0)
                 {
@@ -143,9 +149,13 @@ namespace DigitalStory.Logic
                 return false;
             }
 
-            if (!IsHeld(piperPosition, range))
+            if (IsHeld(held, piperPosition, range))
             {
-                SetTarget(PickBeekeeper(rule, piperPosition, range));
+                TargetIndex = _heldIndex[held];
+            }
+            else
+            {
+                Hold(held, PickBeekeeper(rule, piperPosition, range));
             }
 
             if (TargetIndex < 0)
@@ -158,22 +168,37 @@ namespace DigitalStory.Logic
             return true;
         }
 
-        private bool IsHeld(Vector3 piper, float range)
+        private static int RuleIndex(AimRule rule)
         {
-            return TargetIndex >= 0
-                && TargetIndex < _targets.Count
-                && _sinceChosen < _config.HoldSeconds
-                && _targets[TargetIndex].IsAlive
-                && DistanceSquared(_targets[TargetIndex].Position, piper) <= range * range;
-        }
+            int index = (int)rule;
 
-        private void SetTarget(int index)
-        {
-            if (index != TargetIndex)
+            if (index < 0 || index >= RuleCount)
             {
-                _sinceChosen = 0f;
+                throw new ArgumentOutOfRangeException(nameof(rule), rule, "There is no such aim rule.");
             }
 
+            return index;
+        }
+
+        private bool IsHeld(int rule, Vector3 piper, float range)
+        {
+            int index = _heldIndex[rule];
+            return index >= 0
+                && index < _targets.Count
+                && _sinceChosen[rule] < _config.HoldSeconds
+                && _targets[index].IsAlive
+                && DistanceSquared(_targets[index].Position, piper) <= range * range;
+        }
+
+        // The rule's pick becomes the result. A new pick starts the rule's hold afresh.
+        private void Hold(int rule, int index)
+        {
+            if (index != _heldIndex[rule])
+            {
+                _sinceChosen[rule] = 0f;
+            }
+
+            _heldIndex[rule] = index;
             TargetIndex = index;
         }
 

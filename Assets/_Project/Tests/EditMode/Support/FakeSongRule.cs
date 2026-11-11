@@ -3,7 +3,10 @@ using UnityEngine;
 
 namespace DigitalStory.Tests.EditMode
 {
-    /// <summary>The rule of a <see cref="FakeSlotSong"/>: it only records what the slot engine did to it, and lets go when its song says.</summary>
+    /// <summary>
+    /// The rule of a <see cref="FakeSlotSong"/>: it only records what the slot engine did to it, lets go when its song says,
+    /// and changes the match by the modifiers its song sets.
+    /// </summary>
     internal sealed class FakeSongRule : SongRule
     {
         private readonly FakeSlotSong _song;
@@ -20,9 +23,33 @@ namespace DigitalStory.Tests.EditMode
 
         public int HitCount { get; private set; }
 
+        public int HiveHitCount { get; private set; }
+
+        public int LastHiveHit { get; private set; } = -1;
+
+        public ISwarmTarget LastHiveAttacker { get; private set; }
+
         public override Vector4 ParamA => new Vector4(1f, 2f, 3f, 4f);
 
         public override Vector4 ParamB => new Vector4(5f, 6f, 7f, 0f);
+
+        protected override float WaspLossFraction => _song.WaspLossFraction;
+
+        protected override float PiperSpeedMultiplier => _song.PiperSpeedMultiplier;
+
+        protected override bool SmokeSlowsPiper => _song.SmokeSlowsPiper;
+
+        protected override float HiveDamageFraction(int hive)
+        {
+            return hive == _song.ShieldedHive ? _song.HiveDamageFraction : 1f;
+        }
+
+        protected override void NotifyHiveHit(int hive, ISwarmTarget attacker, float seconds)
+        {
+            HiveHitCount++;
+            LastHiveHit = hive;
+            LastHiveAttacker = attacker;
+        }
 
         protected override void Begin(in SwarmSongContext context)
         {
