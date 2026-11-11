@@ -22,7 +22,7 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Damage the target takes each second once the wasps arrive.")]
         public float DamagePerSecond { get; private set; } = 25f;
 
-        [field: SerializeField, Min(0f), Tooltip("Furthest metres from the Piper the wasps fly. A target further away is out of reach, and the wasps wrap the air this far toward it.")]
+        [field: SerializeField, Min(0f), Tooltip("Furthest metres from the core the wasps fly. A target further away is out of reach, and the wasps wrap the air this far toward it.")]
         public float MaxRange { get; private set; } = 12f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the wasps wrap the empty air when there is no living target in reach.")]

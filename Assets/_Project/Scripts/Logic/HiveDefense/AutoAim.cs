@@ -66,7 +66,7 @@ namespace DigitalStory.Logic
         /// <summary>True when a beekeeper or a hive is chosen. False when the song strikes the empty point ahead.</summary>
         public bool HasTarget => TargetIndex >= 0 || HiveIndex >= 0;
 
-        /// <summary>Where the song strikes: the target, the mouse's ground point, or the point ahead of the Piper.</summary>
+        /// <summary>Where the song strikes: the target, the mouse's ground point, or the point ahead of the core.</summary>
         public Vector3 AimPoint { get; private set; }
 
         /// <summary>How many beekeepers <see cref="GetNearest"/> holds. Only <see cref="AimRule.ThreeNearest"/> fills it.</summary>
@@ -112,12 +112,12 @@ namespace DigitalStory.Logic
         /// for <see cref="AimConfig.HoldSeconds"/> while it lives and stays in range; other rules' picks never count.
         /// </summary>
         /// <param name="rule">How to choose.</param>
-        /// <param name="range">Metres from the Piper within which a beekeeper may be chosen: the song's own reach. Ignored for Hive.</param>
-        /// <param name="piperPosition">Where the Piper stands.</param>
-        /// <param name="piperForward">Where the Piper faces. Height is ignored.</param>
+        /// <param name="range">Metres from the core within which a beekeeper may be chosen: the song's own reach. Ignored for Hive.</param>
+        /// <param name="corePosition">Where the core is.</param>
+        /// <param name="coreForward">Where the core faces: the way it last moved. Height is ignored.</param>
         /// <param name="mouseLive">True while the mouse wins over auto-aim.</param>
         /// <param name="mousePoint">The mouse's point on the ground. Only read while the mouse is live.</param>
-        public bool Select(AimRule rule, float range, Vector3 piperPosition, Vector3 piperForward, bool mouseLive, Vector3 mousePoint)
+        public bool Select(AimRule rule, float range, Vector3 corePosition, Vector3 coreForward, bool mouseLive, Vector3 mousePoint)
         {
             int held = RuleIndex(rule);
             NearestCount = 0;
@@ -125,7 +125,7 @@ namespace DigitalStory.Logic
 
             if (rule == AimRule.ThreeNearest)
             {
-                FillNearest(mouseLive ? mousePoint : piperPosition, piperPosition, range);
+                FillNearest(mouseLive ? mousePoint : corePosition, corePosition, range);
             }
 
             if (mouseLive)
@@ -138,29 +138,29 @@ namespace DigitalStory.Logic
             if (rule == AimRule.Hive)
             {
                 Hold(held, NoTarget);
-                HiveIndex = PickHive(piperPosition);
+                HiveIndex = PickHive(corePosition);
                 if (HiveIndex >= 0)
                 {
                     AimPoint = _hives[HiveIndex].Position;
                     return true;
                 }
 
-                AimPoint = Ahead(piperPosition, piperForward);
+                AimPoint = Ahead(corePosition, coreForward);
                 return false;
             }
 
-            if (IsHeld(held, piperPosition, range))
+            if (IsHeld(held, corePosition, range))
             {
                 TargetIndex = _heldIndex[held];
             }
             else
             {
-                Hold(held, PickBeekeeper(rule, piperPosition, range));
+                Hold(held, PickBeekeeper(rule, corePosition, range));
             }
 
             if (TargetIndex < 0)
             {
-                AimPoint = Ahead(piperPosition, piperForward);
+                AimPoint = Ahead(corePosition, coreForward);
                 return false;
             }
 
@@ -180,14 +180,14 @@ namespace DigitalStory.Logic
             return index;
         }
 
-        private bool IsHeld(int rule, Vector3 piper, float range)
+        private bool IsHeld(int rule, Vector3 core, float range)
         {
             int index = _heldIndex[rule];
             return index >= 0
                 && index < _targets.Count
                 && _sinceChosen[rule] < _config.HoldSeconds
                 && _targets[index].IsAlive
-                && DistanceSquared(_targets[index].Position, piper) <= range * range;
+                && DistanceSquared(_targets[index].Position, core) <= range * range;
         }
 
         // The rule's pick becomes the result. A new pick starts the rule's hold afresh.
@@ -202,7 +202,7 @@ namespace DigitalStory.Logic
             TargetIndex = index;
         }
 
-        private int PickBeekeeper(AimRule rule, Vector3 piper, float range)
+        private int PickBeekeeper(AimRule rule, Vector3 core, float range)
         {
             float rangeSquared = range * range;
             int best = -1;
@@ -212,13 +212,13 @@ namespace DigitalStory.Logic
             for (int i = 0; i < _targets.Count; i++)
             {
                 ISwarmTarget candidate = _targets[i];
-                if (!candidate.IsAlive || DistanceSquared(candidate.Position, piper) > rangeSquared)
+                if (!candidate.IsAlive || DistanceSquared(candidate.Position, core) > rangeSquared)
                 {
                     continue;
                 }
 
-                float score = Threat(candidate.Position, piper);
-                int count = rule == AimRule.Line ? LineCount(candidate.Position, piper, rangeSquared)
+                float score = Threat(candidate.Position, core);
+                int count = rule == AimRule.Line ? LineCount(candidate.Position, core, rangeSquared)
                     : rule == AimRule.Crowd ? CrowdCount(i)
                     : 0;
 
@@ -233,10 +233,10 @@ namespace DigitalStory.Logic
             return best;
         }
 
-        // Distance to the Piper, less a bonus while the beekeeper stands near a standing hive. Lower is more urgent.
-        private float Threat(Vector3 position, Vector3 piper)
+        // Distance to the core, less a bonus while the beekeeper stands near a standing hive. Lower is more urgent.
+        private float Threat(Vector3 position, Vector3 core)
         {
-            float score = Mathf.Sqrt(DistanceSquared(position, piper));
+            float score = Mathf.Sqrt(DistanceSquared(position, core));
             float radiusSquared = _config.HiveThreatRadius * _config.HiveThreatRadius;
             for (int h = 0; h < _hives.Count; h++)
             {
@@ -265,11 +265,11 @@ namespace DigitalStory.Logic
             return count;
         }
 
-        // Beekeepers in range, ahead of the Piper, inside the strip along the line from the Piper through the candidate.
-        private int LineCount(Vector3 through, Vector3 piper, float rangeSquared)
+        // Beekeepers in range, ahead of the core, inside the strip along the line from the core through the candidate.
+        private int LineCount(Vector3 through, Vector3 core, float rangeSquared)
         {
-            float dx = through.x - piper.x;
-            float dz = through.z - piper.z;
+            float dx = through.x - core.x;
+            float dz = through.z - core.z;
             float lengthSquared = dx * dx + dz * dz;
             if (lengthSquared < Epsilon)
             {
@@ -289,8 +289,8 @@ namespace DigitalStory.Logic
                 }
 
                 Vector3 p = _targets[j].Position;
-                float rx = p.x - piper.x;
-                float rz = p.z - piper.z;
+                float rx = p.x - core.x;
+                float rz = p.z - core.z;
                 if (rx * rx + rz * rz > rangeSquared)
                 {
                     continue;
@@ -307,7 +307,7 @@ namespace DigitalStory.Logic
             return count;
         }
 
-        private int PickHive(Vector3 piper)
+        private int PickHive(Vector3 core)
         {
             int recent = -1;
             float recentAge = _config.HiveRecentSeconds;
@@ -324,7 +324,7 @@ namespace DigitalStory.Logic
                 return recent;
             }
 
-            return _hives.TryGetNearestStanding(piper, out int nearest) ? nearest : -1;
+            return _hives.TryGetNearestStanding(core, out int nearest) ? nearest : -1;
         }
 
         private int NearestTo(Vector3 point, float radius)
@@ -349,14 +349,14 @@ namespace DigitalStory.Logic
             return best;
         }
 
-        // Fills the nearest beekeepers to the reference point that are within range of the Piper. Insertion keeps it sorted.
-        private void FillNearest(Vector3 reference, Vector3 piper, float range)
+        // Fills the nearest beekeepers to the reference point that are within range of the core. Insertion keeps it sorted.
+        private void FillNearest(Vector3 reference, Vector3 core, float range)
         {
             float rangeSquared = range * range;
             int capacity = _nearest.Length;
             for (int i = 0; i < _targets.Count; i++)
             {
-                if (!_targets[i].IsAlive || DistanceSquared(_targets[i].Position, piper) > rangeSquared)
+                if (!_targets[i].IsAlive || DistanceSquared(_targets[i].Position, core) > rangeSquared)
                 {
                     continue;
                 }
@@ -384,12 +384,12 @@ namespace DigitalStory.Logic
             }
         }
 
-        private Vector3 Ahead(Vector3 piper, Vector3 forward)
+        private Vector3 Ahead(Vector3 core, Vector3 forward)
         {
             forward.y = 0f;
             forward = forward.sqrMagnitude < Epsilon ? Vector3.forward : forward.normalized;
-            Vector3 point = piper + (forward * _config.EmptyAimDistance);
-            point.y = piper.y;
+            Vector3 point = core + (forward * _config.EmptyAimDistance);
+            point.y = core.y;
             return point;
         }
 

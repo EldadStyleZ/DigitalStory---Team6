@@ -35,9 +35,9 @@ namespace DigitalStory.Tests.EditMode
 
         protected override float WaspLossFraction => _song.WaspLossFraction;
 
-        protected override float PiperSpeedMultiplier => _song.PiperSpeedMultiplier;
+        protected override float CoreSpeedMultiplier => _song.CoreSpeedMultiplier;
 
-        protected override bool SmokeSlowsPiper => _song.SmokeSlowsPiper;
+        protected override bool SmokeSlowsCore => _song.SmokeSlowsCore;
 
         protected override float HiveDamageFraction(int hive)
         {
@@ -66,7 +66,7 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        protected override void NotifyPiperHit(Vector3 direction, float seconds)
+        protected override void NotifyCoreHit(Vector3 direction, float seconds)
         {
             HitCount++;
         }

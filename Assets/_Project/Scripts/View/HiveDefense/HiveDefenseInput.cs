@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace DigitalStory.View
 {
-    /// <summary>Turns the keyboard and mouse into what the Wasp Piper's player wants this frame.</summary>
+    /// <summary>Turns the keyboard and mouse into what the player wants this frame.</summary>
     /// <remarks>Uses the Input Manager, as the rest of the project does. Read the properties after Update has run.</remarks>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(-1100)] // Before the root (-1000), so the root reads this frame's input.

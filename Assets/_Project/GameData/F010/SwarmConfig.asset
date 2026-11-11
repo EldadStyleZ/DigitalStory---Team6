@@ -35,6 +35,9 @@ MonoBehaviour:
   <StandStillMeters>k__BackingField: 0.05
   <StandDelaySeconds>k__BackingField: 0.5
   <StandBlendSeconds>k__BackingField: 0.75
+  <CoreRingShare>k__BackingField: 0.05
+  <CoreRingRadius>k__BackingField: 0.6
+  <CoreRingGlow>k__BackingField: 0.75
   <BuzzAmplitude>k__BackingField: 0.04
   <BuzzFrequency>k__BackingField: 9
   <DyingSeconds>k__BackingField: 1.5

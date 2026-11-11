@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.HiveCallSong
   _song:
     _title: Hive Call
-    _description: The hives send wasps to the Piper
+    _description: The hives send wasps to the core
     _cooldownSeconds: 3
     _keys: 030000000100000003000000i
   _category: 2

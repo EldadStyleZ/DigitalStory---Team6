@@ -17,7 +17,7 @@ namespace DigitalStory.Data
         [field: SerializeField, Range(0f, 1f), Tooltip("End of the Post band: its seeds run up to, but not including, this.")]
         public float PostHigh { get; private set; } = 0.2f;
 
-        [field: Header("Guard: a defense around the Piper")]
+        [field: Header("Guard: a defense around the core")]
         [field: SerializeField, Range(0f, 1f), Tooltip("Lowest wasp seed of the Guard band.")]
         public float GuardLow { get; private set; } = 0.2f;
 

@@ -16,7 +16,7 @@ namespace DigitalStory.Logic
         private IReadOnlyList<ISwarmTarget> _enemies;
         private FuryMeter _fury;
         private ISwarmTarget _follow;
-        private Vector3 _piper;
+        private Vector3 _core;
         private Vector3 _impact;
 
         public MeteorRule(MeteorSong song)
@@ -37,9 +37,9 @@ namespace DigitalStory.Logic
             _fury = context.Fury ?? throw new ArgumentException("The song context has no Fury meter.", nameof(context));
             ISwarmTarget aim = context.AimTarget;
             bool isAimAlive = aim != null && aim.IsAlive;
-            _piper = context.PiperPosition;
+            _core = context.CorePosition;
             _follow = isAimAlive ? aim : null;
-            _impact = GroundMath.PullIn(isAimAlive ? aim.Position : context.AimPoint, _piper, _song.MaxRange);
+            _impact = GroundMath.PullIn(isAimAlive ? aim.Position : context.AimPoint, _core, _song.MaxRange);
         }
 
         protected internal override void Tick(in SongTick tick)
@@ -64,7 +64,7 @@ namespace DigitalStory.Logic
 
             if (_follow.IsAlive)
             {
-                _impact = GroundMath.PullIn(_follow.Position, _piper, _song.MaxRange);
+                _impact = GroundMath.PullIn(_follow.Position, _core, _song.MaxRange);
             }
 
             if (!_follow.IsAlive || seconds >= _song.RiseSeconds)

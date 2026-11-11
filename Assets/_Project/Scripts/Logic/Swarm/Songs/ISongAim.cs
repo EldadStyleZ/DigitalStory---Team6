@@ -6,9 +6,9 @@ namespace DigitalStory.Logic
     public interface ISongAim
     {
         /// <summary>
-        /// Chooses a target by <paramref name="rule"/> within <paramref name="range"/> metres of the Piper. The mouse wins
+        /// Chooses a target by <paramref name="rule"/> within <paramref name="range"/> metres of the core. The mouse wins
         /// while it is live. <paramref name="target"/> is the chosen beekeeper, or null when there is none; then
-        /// <paramref name="point"/> is where the song strikes: the mouse's ground point, or the ground ahead of the Piper.
+        /// <paramref name="point"/> is where the song strikes: the mouse's ground point, or the ground ahead of the core.
         /// </summary>
         void Choose(AimRule rule, float range, out ISwarmTarget target, out Vector3 point);
     }

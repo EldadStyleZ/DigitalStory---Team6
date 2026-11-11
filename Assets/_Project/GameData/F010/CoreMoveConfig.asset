@@ -10,11 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bde7887e426bf447d888c8be07ccaa7f, type: 3}
-  m_Name: PiperMoveConfig
-  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.PiperMoveConfig
+  m_Name: CoreMoveConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.CoreMoveConfig
   <Speed>k__BackingField: 4.5
+  <PlayAreaHalfSize>k__BackingField: 34
   <SmokeSpeedMultiplier>k__BackingField: 0.6
-  <PlayingHoldSeconds>k__BackingField: 0.6
   <NoteSeconds>k__BackingField: 0.3
-  <TurnDegreesPerSecond>k__BackingField: 720
-  <RunClipSpeed>k__BackingField: 4.5

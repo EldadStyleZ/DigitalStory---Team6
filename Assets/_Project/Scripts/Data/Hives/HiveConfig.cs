@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>A hive: the Piper's life. Its health and how long it counts as under attack.</summary>
+    /// <summary>A hive: the swarm's life. Its health and how long it counts as under attack.</summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Hive Config", fileName = "HiveConfig")]
     public sealed class HiveConfig : ScriptableObject
     {

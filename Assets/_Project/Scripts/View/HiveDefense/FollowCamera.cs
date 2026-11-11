@@ -35,6 +35,12 @@ namespace DigitalStory.View
         /// <summary>The distance the camera returns to after SetDistance.</summary>
         public float DefaultDistance => _distance;
 
+        /// <summary>What the camera follows, or null before <see cref="SetTarget"/>.</summary>
+        public Transform Target => _target;
+
+        /// <summary>The distance the camera is blending to: the default, or the last one SetDistance asked for.</summary>
+        public float WantedDistance => _wantedDistance;
+
         /// <summary>Chooses what to follow and jumps to it at once.</summary>
         public void SetTarget(Transform target)
         {

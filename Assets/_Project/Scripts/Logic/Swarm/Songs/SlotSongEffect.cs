@@ -28,13 +28,13 @@ namespace DigitalStory.Logic
         /// <summary>The song's picture: the form id its squad flies in the compute shader.</summary>
         public abstract SwarmForm Form { get; }
 
-        /// <summary>True when the song strikes a target that auto-aim chooses; false for a song around the Piper.</summary>
+        /// <summary>True when the song strikes a target that auto-aim chooses; false for a song around the core.</summary>
         public virtual bool IsAimed => false;
 
         /// <summary>How auto-aim chooses the song's target (plan section E). Only read while <see cref="IsAimed"/>.</summary>
         public virtual AimRule AimRule => AimRule.Threat;
 
-        /// <summary>Metres from the Piper within which auto-aim may choose the song's target. Only read while <see cref="IsAimed"/>.</summary>
+        /// <summary>Metres from the core within which auto-aim may choose the song's target. Only read while <see cref="IsAimed"/>.</summary>
         public virtual float AimRange => 0f;
 
         /// <summary>

@@ -21,7 +21,7 @@ namespace DigitalStory.Data
         public float SeparationRadius { get; private set; } = 1.2f;
 
         [field: Header("Senses")]
-        [field: SerializeField, Min(0f), Tooltip("Distance at which the beekeeper notices the Piper and chases.")]
+        [field: SerializeField, Min(0f), Tooltip("Distance at which the beekeeper notices the core and chases.")]
         public float NoticeRange { get; private set; } = 7f;
 
         [field: SerializeField, Min(0f), Tooltip("Distance at which the beekeeper stops chasing and returns to the hive.")]
@@ -40,7 +40,7 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Damage a stick hit does to a hive. A smoker does none.")]
         public float HiveDamage { get; private set; } = 6f;
 
-        [field: SerializeField, Min(0), Tooltip("Wasps a stick hit knocks off the Piper. A smoker does none.")]
+        [field: SerializeField, Min(0), Tooltip("Wasps a stick knocks off the swarm when it hits the core. A smoker does none.")]
         public int WaspsKnockedOff { get; private set; } = 72;
     }
 }

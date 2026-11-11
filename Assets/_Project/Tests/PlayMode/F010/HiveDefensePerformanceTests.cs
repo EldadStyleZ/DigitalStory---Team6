@@ -12,7 +12,7 @@ using UnityEngine.TestTools;
 namespace DigitalStory.Tests.PlayMode
 {
     /// <summary>
-    /// Measures the per-frame cost of the Wasp Piper at the maximum swarm: garbage allocated and main thread time.
+    /// Measures the per-frame cost of the hive defense scene at the maximum swarm: garbage allocated and main thread time.
     /// In batch mode there is no vsync and no Game view, so the times are CPU-side numbers, not Editor Profiler numbers.
     /// </summary>
     public sealed class HiveDefensePerformanceTests

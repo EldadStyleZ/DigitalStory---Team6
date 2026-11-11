@@ -2,15 +2,15 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>One step of a running song's rule: the song's clock before and after the step, and where the Piper stands.</summary>
+    /// <summary>One step of a running song's rule: the song's clock before and after the step, and where the core stands.</summary>
     public readonly struct SongTick
     {
         /// <summary>Makes a step from <paramref name="secondsBefore"/> to <paramref name="seconds"/> after the cast.</summary>
-        public SongTick(float secondsBefore, float seconds, Vector3 piperPosition)
+        public SongTick(float secondsBefore, float seconds, Vector3 corePosition)
         {
             SecondsBefore = secondsBefore;
             Seconds = seconds;
-            PiperPosition = piperPosition;
+            CorePosition = corePosition;
         }
 
         /// <summary>Seconds since the cast when the step began.</summary>
@@ -19,7 +19,7 @@ namespace DigitalStory.Logic
         /// <summary>Seconds since the cast when the step ends.</summary>
         public float Seconds { get; }
 
-        /// <summary>Where the Piper stands now.</summary>
-        public Vector3 PiperPosition { get; }
+        /// <summary>Where the core stands now.</summary>
+        public Vector3 CorePosition { get; }
     }
 }

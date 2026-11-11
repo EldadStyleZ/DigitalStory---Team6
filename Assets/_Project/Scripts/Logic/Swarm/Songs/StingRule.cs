@@ -37,10 +37,10 @@ namespace DigitalStory.Logic
             _fury = context.Fury ?? throw new ArgumentException("The song context has no Fury meter.", nameof(context));
             ISwarmTarget aim = context.AimTarget;
             bool isAimAlive = aim != null && aim.IsAlive;
-            Vector3 piper = context.PiperPosition;
+            Vector3 core = context.CorePosition;
             float range = _song.MaxRange;
 
-            if (isAimAlive && GroundMath.DistanceSquared(aim.Position, piper) <= range * range)
+            if (isAimAlive && GroundMath.DistanceSquared(aim.Position, core) <= range * range)
             {
                 _target = aim;
                 _point = aim.Position;
@@ -49,7 +49,7 @@ namespace DigitalStory.Logic
             else
             {
                 _target = null;
-                _point = GroundMath.PullIn(isAimAlive ? aim.Position : context.AimPoint, piper, range);
+                _point = GroundMath.PullIn(isAimAlive ? aim.Position : context.AimPoint, core, range);
                 _endSeconds = _song.AirSeconds;
             }
 

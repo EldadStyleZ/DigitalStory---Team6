@@ -56,29 +56,40 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Lanes per second the wasps flow along the river.")]
         public float FlowSpeed { get; private set; } = 0.08f;
 
-        [field: SerializeField, Min(0f), Tooltip("Length of the river when the Piper moves.")]
+        [field: SerializeField, Min(0f), Tooltip("Length of the river when the core moves.")]
         public float RiverLengthMeters { get; private set; } = 11f;
 
-        [field: SerializeField, Min(0f), Tooltip("Half the width of the river, and of the ring around the Piper. Wide enough that the big wasps keep apart instead of merging into one band. The river is less than half as tall as it is wide.")]
+        [field: SerializeField, Min(0f), Tooltip("Half the width of the river, and of the ring around the core. Wide enough that the big wasps keep apart instead of merging into one band. The river is less than half as tall as it is wide.")]
         public float RiverRadius { get; private set; } = 1.2f;
 
         [field: SerializeField, Min(0f), Tooltip("Sideways sway of the river, in metres.")]
         public float MeanderAmplitude { get; private set; } = 0.25f;
 
-        [field: SerializeField, Min(0f), Tooltip("Metres of path the river needs before it stretches out behind the Piper. On a shorter path, at the start of a run, it curls into the ring around them.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres of path the river needs before it stretches out behind the core. On a shorter path, at the start of a run, it curls into the ring around it.")]
         public float StandingTrailMeters { get; private set; } = 2f;
 
-        [field: SerializeField, Min(0f), Tooltip("Radius of the ring the swarm forms around the Piper. Keep it more than RiverRadius, so the ring never covers them.")]
+        [field: SerializeField, Min(0f), Tooltip("Radius of the ring the swarm forms around the core. Keep it more than RiverRadius plus CoreRingRadius, so the ring never covers the inner ring at its centre.")]
         public float TorusRadius { get; private set; } = 2.4f;
 
-        [field: SerializeField, Min(0f), Tooltip("The Piper counts as standing while they stay within this many metres (on the ground) of where they stopped, so settling never counts as a step.")]
+        [field: SerializeField, Min(0f), Tooltip("The core counts as standing while it stays within this many metres (on the ground) of where it stopped, so settling never counts as a step.")]
         public float StandStillMeters { get; private set; } = 0.05f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds the Piper stands before the river curls into the ring around them.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds the core stands before the river curls into the ring around it.")]
         public float StandDelaySeconds { get; private set; } = 0.5f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds the river takes to ease into the ring, and back out once the Piper walks. 0 switches at once.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds the river takes to ease into the ring, and back out once the core moves. 0 switches at once.")]
         public float StandBlendSeconds { get; private set; } = 0.75f;
+
+        // The core is an invisible point, so a few wasps mark it: a tight ring that stays on it, still or moving.
+        [field: Header("The core")]
+        [field: SerializeField, Range(0f, 0.3f), Tooltip("Share of the wasps that circle the core in a tight inner ring, so the centre of the swarm, which is the player, reads from the camera. 0 hides the inner ring.")]
+        public float CoreRingShare { get; private set; } = 0.05f;
+
+        [field: SerializeField, Min(0f), Tooltip("Radius of the inner ring around the core, in metres. Keep it below TorusRadius minus RiverRadius, so the two rings stay apart.")]
+        public float CoreRingRadius { get; private set; } = 0.6f;
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("How hot the inner ring's wasps glow, from 0 to 1, while no song runs; half that while one does, as the river quiets. The calm river glows at 0.1, the Dome at 0.4, and 0.95 and up flash white.")]
+        public float CoreRingGlow { get; private set; } = 0.75f;
 
         [field: Header("Wasps")]
         [field: SerializeField, Min(0f), Tooltip("Size of the small shake on each wasp, in metres.")]
@@ -94,7 +105,7 @@ namespace DigitalStory.Data
         public float WaspLength { get; private set; } = 0.24f;
 
         [field: Header("Trail and limits")]
-        [field: SerializeField, Min(2), Tooltip("Points the Piper's path trail keeps.")]
+        [field: SerializeField, Min(2), Tooltip("Points the core's path trail keeps.")]
         public int TrailPoints { get; private set; } = 128;
 
         [field: SerializeField, Min(0.01f), Tooltip("Metres of travel between two trail points.")]
@@ -106,9 +117,9 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(1f), Tooltip("Half size of the box that wasps may fill. Used for the draw bounds.")]
         public float BoundsMeters { get; private set; } = 60f;
 
-        // The wasps glow by these colours, so they are light and saturated: the shader whitens each wasp's core itself.
+        // The wasps glow by these colours, so they are light and saturated: the shader whitens the middle of each wasp itself.
         [field: Header("Colours")]
-        [field: SerializeField, Tooltip("Colour of the plain swarm: the river, the ring around the Piper and the collapsed swarm. A warm yellow that glows yellow-white.")]
+        [field: SerializeField, Tooltip("Colour of the plain swarm: the river, the ring around the core and the collapsed swarm. A warm yellow that glows yellow-white.")]
         public Color RiverColor { get; private set; } = new Color(1f, 0.82f, 0.42f, 1f);
 
         [field: SerializeField, Tooltip("Colour of an attack song's form (Sting, Tornado, Meteor, Colossus). A hot red. Red means attack and nothing else.")]
@@ -138,7 +149,7 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Metres above the ground the swarm's light hangs. Lower lights a smaller, brighter pool.")]
         public float LightHeight { get; private set; } = 3f;
 
-        [field: SerializeField, Min(0f), Tooltip("Metres the swarm's light sits toward the camera from the middle of the swarm, so the side of the Piper the camera sees is lit too.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres the swarm's light sits toward the camera from the middle of the swarm, so the side of the swarm the camera sees is lit too.")]
         public float LightTowardCamera { get; private set; } = 1.5f;
 
         /// <summary>The colour the wasps take while a song of <paramref name="category"/> holds their form.</summary>

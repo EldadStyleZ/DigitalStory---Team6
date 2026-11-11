@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.DomeSong
   _song:
     _title: Dome
-    _description: A dome of wasps shields the Piper
+    _description: A dome of wasps shields the core
     _cooldownSeconds: 8
     _keys: 000000000200000001000000i
   _category: 1

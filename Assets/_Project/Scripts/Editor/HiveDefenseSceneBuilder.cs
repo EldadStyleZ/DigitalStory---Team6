@@ -15,7 +15,7 @@ using Object = UnityEngine.Object;
 
 namespace DigitalStory.Editor
 {
-    /// <summary>Creates every F-010 asset, the prefab variants and the Wasp Piper scene from code.</summary>
+    /// <summary>Creates every F-010 asset, the prefab variants and the hive defense scene from code.</summary>
     /// <remarks>
     /// Scene and asset files must not be edited by hand. Config assets are kept when they exist, so tuned values survive a
     /// rebuild. The controller, the prefab variants and the scene are made again each time. Raz's art is never changed.
@@ -30,11 +30,11 @@ namespace DigitalStory.Editor
         private const string ScenePath = Root + "/Scenes/eldad-lab-2-scene.unity";
 
         private const string RazPrefabFolder = Root + "/Art/prefabs";
-        private const string PiperSourcePath = RazPrefabFolder + "/Beekeeper_LowPoly.prefab";
+        private const string BeekeeperSourcePath = RazPrefabFolder + "/Beekeeper_LowPoly.prefab";
         private const string HiveSourcePath = RazPrefabFolder + "/Beehive_LowPoly 1.prefab";
-        private const string PiperFbxPath = Root + "/Art/model/Beekeeper_LowPoly.fbx";
+        private const string BeekeeperFbxPath = Root + "/Art/model/Beekeeper_LowPoly.fbx";
         private const string MixamoFolder = Root + "/Art/Mixamo";
-        private const string ControllerPath = ArtFolder + "/PiperSwarm.controller";
+        private const string ControllerPath = ArtFolder + "/Beekeeper.controller";
         private const string ClipFolder = ArtFolder + "/Clips";
         private const string ColossusControllerPath = ArtFolder + "/Colossus.controller";
         private const string ComputePath = ArtFolder + "/Shaders/WaspSwarm.compute";
@@ -48,7 +48,6 @@ namespace DigitalStory.Editor
         private const int FluteHoleCount = 4; // H J K L (songs-v2, section D).
 
         private const string SpeedParameter = "Speed";
-        private const string IsPlayingParameter = "IsPlaying";
         private const float MovingThreshold = 0.1f;
         private const float BlendSeconds = 0.1f;
         private const float AttackExitTime = 0.95f;
@@ -59,14 +58,13 @@ namespace DigitalStory.Editor
 
         private const string IdleClip = "Idle";
         private const string RunClip = "Run";
-        private const string PlayClip = "PlayFluteTwoHands";
-        private const string RunPlayClip = "RunFluteTwoHands";
 
-        private const float PiperHeight = 1.8f;
+        // The core's CharacterController: a capsule the size of a person, so the core keeps to the paths a person could walk.
+        private const float CoreHeight = 1.8f;
+        private const float CoreRadius = 0.35f;
         private const float BeekeeperHeight = 1.8f;
         private const float HiveHeight = 1.6f;
         private const float HiveBarGap = 0.6f;
-        private const float PiperRadius = 0.35f;
 
         private const float GroundSize = 160f; // Past the scenery to the horizon, so a low camera never sees its edge.
         private const float PlaneBaseSize = 10f;
@@ -116,9 +114,25 @@ namespace DigitalStory.Editor
         // Every config and song asset BuildAll loads or creates. The baked ColossusSampleSet is not a config.
         private static readonly string[] ConfigAssetNames =
         {
-            "SwarmConfig", "SquadConfig", "AimConfig", "PiperMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "SmokeConfig",
+            "SwarmConfig", "SquadConfig", "AimConfig", "CoreMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "SmokeConfig",
             "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
             "DomeSong", "StingSong", "TornadoSong", "GustSong", "MeteorSong", "HiveCallSong", "ColossusSong",
+        };
+
+        // Assets an older build made under names that no longer fit: each moves to its new path, keeping its GUID and any
+        // tuned values, when nothing is there yet.
+        private static readonly (string From, string To)[] RenamedAssets =
+        {
+            (DataFolder + "/PiperMoveConfig.asset", DataFolder + "/CoreMoveConfig.asset"),
+            (ArtFolder + "/PiperSwarm.controller", ControllerPath),
+        };
+
+        // Assets an older build made that only served the Piper, who has gone: the swarm's core has no model.
+        private static readonly string[] RetiredAssets =
+        {
+            PrefabFolder + "/F010Piper.prefab",
+            ClipFolder + "/PlayFluteTwoHands.anim",
+            ClipFolder + "/RunFluteTwoHands.anim",
         };
 
         // Prefab name, target height in metres.
@@ -175,6 +189,8 @@ namespace DigitalStory.Editor
                 return;
             }
 
+            // First, so a config an older build made under its old name is reset too.
+            RenameOrRetireOldAssets();
             for (int index = 0; index < ConfigAssetNames.Length; index++)
             {
                 string path = $"{DataFolder}/{ConfigAssetNames[index]}.asset";
@@ -191,6 +207,7 @@ namespace DigitalStory.Editor
         private static void BuildAll()
         {
             CreateFolders();
+            RenameOrRetireOldAssets();
             Debug.Log("[F010] Folders ready.");
 
             // Starting a new scene unloads assets that nothing uses, so it must come before loading them.
@@ -199,7 +216,7 @@ namespace DigitalStory.Editor
             var swarm = LoadOrCreate<SwarmConfig>("SwarmConfig");
             var squads = LoadOrCreate<SquadConfig>("SquadConfig");
             var aim = LoadOrCreate<AimConfig>("AimConfig");
-            var piperMove = LoadOrCreate<PiperMoveConfig>("PiperMoveConfig");
+            var coreMove = LoadOrCreate<CoreMoveConfig>("CoreMoveConfig");
             var fury = LoadOrCreate<FuryConfig>("FuryConfig");
             var colossus = LoadOrCreate<ColossusConfig>("ColossusConfig");
             var hive = LoadOrCreate<HiveConfig>("HiveConfig");
@@ -213,20 +230,18 @@ namespace DigitalStory.Editor
             Debug.Log("[F010] Config assets ready.");
 
             AnimatorController controller = BuildController();
-            Debug.Log("[F010] Animator controller PiperSwarm ready.");
+            Debug.Log("[F010] Animator controller Beekeeper ready.");
 
-            var piperPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PiperSourcePath);
+            var beekeeperSource = AssetDatabase.LoadAssetAtPath<GameObject>(BeekeeperSourcePath);
             var hivePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(HiveSourcePath);
-            Require(piperPrefab, PiperSourcePath);
+            Require(beekeeperSource, BeekeeperSourcePath);
             Require(hivePrefab, HiveSourcePath);
 
-            GameObject piper = MakePiperPrefab(piperPrefab, controller);
-            Debug.Log("[F010] Prefab F010Piper saved.");
-            BeekeeperView stickView = MakeBeekeeperPrefab("F010StickBeekeeper", piperPrefab, controller, false);
-            BeekeeperView smokerView = MakeBeekeeperPrefab("F010SmokerBeekeeper", piperPrefab, controller, true);
+            BeekeeperView stickView = MakeBeekeeperPrefab("F010StickBeekeeper", beekeeperSource, controller, false);
+            BeekeeperView smokerView = MakeBeekeeperPrefab("F010SmokerBeekeeper", beekeeperSource, controller, true);
             Debug.Log("[F010] Prefabs F010StickBeekeeper and F010SmokerBeekeeper saved.");
             MixamoKit mixamo = PrepareMixamo();
-            GameObject colossusPrefab = MakeColossusPrefab(piperPrefab, controller, colossus, mixamo);
+            GameObject colossusPrefab = MakeColossusPrefab(beekeeperSource, controller, colossus, mixamo);
             BakeSamples(colossusPrefab, swarm, samples);
             Debug.Log("[F010] Prefab F010Colossus saved and its samples baked.");
             var grenade = MakeViewPrefab<SmokeGrenadeView>("F010SmokeGrenade");
@@ -235,12 +250,48 @@ namespace DigitalStory.Editor
 
             AssetDatabase.SaveAssets();
             FillScene(new SceneAssets(
-                swarm, squads, aim, piperMove, fury, colossus, hive, smoke, waves, stick, smoker, songConfig, songs, samples,
-                piper, colossusPrefab, hivePrefab, stickView, smokerView, grenade, cloud));
+                swarm, squads, aim, coreMove, fury, colossus, hive, smoke, waves, stick, smoker, songConfig, songs, samples,
+                colossusPrefab, hivePrefab, stickView, smokerView, grenade, cloud));
             Debug.Log("[F010] Scene filled.");
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             AssetDatabase.SaveAssets();
+        }
+
+        private static void RenameOrRetireOldAssets()
+        {
+            for (int index = 0; index < RenamedAssets.Length; index++)
+            {
+                (string from, string to) = RenamedAssets[index];
+                if (AssetDatabase.LoadMainAssetAtPath(from) == null || AssetDatabase.LoadMainAssetAtPath(to) != null)
+                {
+                    continue;
+                }
+
+                string error = AssetDatabase.MoveAsset(from, to);
+                if (!string.IsNullOrEmpty(error))
+                {
+                    throw new InvalidOperationException($"Could not move {from} to {to}: {error}");
+                }
+
+                Debug.Log($"[F010] Moved {from} to {to}.");
+            }
+
+            for (int index = 0; index < RetiredAssets.Length; index++)
+            {
+                string path = RetiredAssets[index];
+                if (AssetDatabase.LoadMainAssetAtPath(path) == null)
+                {
+                    continue;
+                }
+
+                if (!AssetDatabase.DeleteAsset(path))
+                {
+                    throw new InvalidOperationException($"Could not delete {path}, which only served the Piper.");
+                }
+
+                Debug.Log($"[F010] Deleted {path}, which only served the Piper.");
+            }
         }
 
         private static void CreateFolders()
@@ -345,34 +396,13 @@ namespace DigitalStory.Editor
             }
 
             controller.AddParameter(SpeedParameter, AnimatorControllerParameterType.Float);
-            controller.AddParameter(IsPlayingParameter, AnimatorControllerParameterType.Bool);
 
+            // A beekeeper stands idle, and runs while Speed is above the threshold.
             AnimatorState idle = AddState(machine, IdleClip, false);
             AnimatorState run = AddState(machine, RunClip, true);
-            AnimatorState play = AddState(machine, PlayClip, false);
-            AnimatorState runPlay = AddState(machine, RunPlayClip, true);
             machine.defaultState = idle;
-
-            // Each state can go to the state that matches the two conditions: moving, and playing.
-            // The index is (moving ? 1 : 0) + (playing ? 2 : 0).
-            AnimatorState[] byCondition = { idle, run, play, runPlay };
-            for (int from = 0; from < byCondition.Length; from++)
-            {
-                for (int to = 0; to < byCondition.Length; to++)
-                {
-                    if (from == to)
-                    {
-                        continue;
-                    }
-
-                    AnimatorStateTransition transition = byCondition[from].AddTransition(byCondition[to]);
-                    transition.hasExitTime = false;
-                    transition.hasFixedDuration = true;
-                    transition.duration = BlendSeconds;
-                    transition.AddCondition((to & 1) != 0 ? AnimatorConditionMode.Greater : AnimatorConditionMode.Less, MovingThreshold, SpeedParameter);
-                    transition.AddCondition((to & 2) != 0 ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, 0f, IsPlayingParameter);
-                }
-            }
+            AddSpeedTransition(idle, run, AnimatorConditionMode.Greater);
+            AddSpeedTransition(run, idle, AnimatorConditionMode.Less);
 
             EditorUtility.SetDirty(controller);
             return controller;
@@ -387,7 +417,7 @@ namespace DigitalStory.Editor
             state.writeDefaultValues = true;
             if (isRun)
             {
-                // The Run clip plays faster the faster the Piper moves. Speed is 1 at the full walking speed.
+                // The Run clip plays faster the higher Speed is. Speed is 1 at the beekeeper's walking speed.
                 state.speedParameterActive = true;
                 state.speedParameter = SpeedParameter;
                 state.speed = 1f;
@@ -425,7 +455,7 @@ namespace DigitalStory.Editor
 
         private static AnimationClip FindClip(string clipName)
         {
-            Object[] assets = AssetDatabase.LoadAllAssetsAtPath(PiperFbxPath);
+            Object[] assets = AssetDatabase.LoadAllAssetsAtPath(BeekeeperFbxPath);
             for (int index = 0; index < assets.Length; index++)
             {
                 if (assets[index] is AnimationClip clip && clip.name == clipName && !clip.name.StartsWith("__preview__", StringComparison.Ordinal))
@@ -434,27 +464,10 @@ namespace DigitalStory.Editor
                 }
             }
 
-            throw new InvalidOperationException($"{PiperFbxPath} has no animation clip named '{clipName}'.");
+            throw new InvalidOperationException($"{BeekeeperFbxPath} has no animation clip named '{clipName}'.");
         }
 
         // ---------------------------------------------------------------- Prefabs
-
-        private static GameObject MakePiperPrefab(GameObject source, AnimatorController controller)
-        {
-            var root = new GameObject("F010Piper", typeof(CharacterController), typeof(PiperMotor));
-            var body = root.GetComponent<CharacterController>();
-            body.height = PiperHeight;
-            body.radius = PiperRadius;
-
-            // A CharacterController rests its skin width above the ground, so the capsule is raised by that much
-            // and the feet, at the root, touch the grass.
-            body.center = new Vector3(0f, (PiperHeight * 0.5f) + body.skinWidth, 0f);
-
-            GameObject model = InstantiateModel(source, root.transform);
-            FitToHeight(model.transform, PiperHeight);
-            UseController(model, controller);
-            return SavePrefab(root, "F010Piper");
-        }
 
         private static BeekeeperView MakeBeekeeperPrefab(string name, GameObject source, AnimatorController controller, bool isSmoker)
         {
@@ -499,9 +512,9 @@ namespace DigitalStory.Editor
 
         // The fallback of spec section 6, or a Mixamo model when the folder holds one.
         private static GameObject MakeColossusPrefab(
-            GameObject piperSource, AnimatorController controller, ColossusConfig config, MixamoKit mixamo)
+            GameObject beekeeperSource, AnimatorController controller, ColossusConfig config, MixamoKit mixamo)
         {
-            GameObject source = mixamo != null ? mixamo.Character : piperSource;
+            GameObject source = mixamo != null ? mixamo.Character : beekeeperSource;
             var root = new GameObject("F010Colossus", typeof(ColossusMotor));
             GameObject model = InstantiateModel(source, root.transform);
             FitToHeight(model.transform, config.Height);
@@ -537,7 +550,7 @@ namespace DigitalStory.Editor
 
         // ---------------------------------------------------------------- Mixamo Colossus (spec section 6)
 
-        // Reads Art/Mixamo. Returns null, and leaves the Piper's rig as the puppet, when the folder is missing or holds no
+        // Reads Art/Mixamo. Returns null, and leaves the beekeeper's rig as the puppet, when the folder is missing or holds no
         // character model or no idle or walking clip.
         private static MixamoKit PrepareMixamo()
         {
@@ -1077,19 +1090,6 @@ namespace DigitalStory.Editor
             return existing != null ? existing.transform : model.transform;
         }
 
-        private static Animator EnabledAnimator(GameObject root)
-        {
-            foreach (Animator found in root.GetComponentsInChildren<Animator>(true))
-            {
-                if (found.enabled)
-                {
-                    return found;
-                }
-            }
-
-            throw new InvalidOperationException($"{root.name} has no enabled Animator.");
-        }
-
         private static GameObject SavePrefab(GameObject root, string name)
         {
             GameObject saved = PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabFolder}/{name}.prefab");
@@ -1295,6 +1295,22 @@ namespace DigitalStory.Editor
 
         // ---------------------------------------------------------------- Scene
 
+        // The swarm's core: a CharacterController and its motor at the middle of the map, and nothing to see. The swarm's
+        // inner ring marks it.
+        private static GameObject BuildCore()
+        {
+            var core = new GameObject("Swarm Core", typeof(CharacterController), typeof(SwarmCoreMotor));
+            var body = core.GetComponent<CharacterController>();
+            body.height = CoreHeight;
+            body.radius = CoreRadius;
+
+            // A CharacterController rests its skin width above the ground, so the capsule is raised by that much and its
+            // base, at the root, touches the grass.
+            body.center = new Vector3(0f, (CoreHeight * 0.5f) + body.skinWidth, 0f);
+            core.transform.position = Vector3.zero;
+            return core;
+        }
+
         private static void FillScene(SceneAssets assets)
         {
             BuildLighting();
@@ -1307,9 +1323,7 @@ namespace DigitalStory.Editor
             hives[0] = BuildHive(hiveSource, "Hive A", new Vector3(-HiveSpacing * 0.5f, 0f, 0f));
             hives[1] = BuildHive(hiveSource, "Hive B", new Vector3(HiveSpacing * 0.5f, 0f, 0f));
 
-            var piper = (GameObject)PrefabUtility.InstantiatePrefab(assets.PiperPrefab);
-            piper.name = "Piper";
-            piper.transform.position = Vector3.zero;
+            GameObject core = BuildCore();
             var colossus = (GameObject)PrefabUtility.InstantiatePrefab(assets.ColossusPrefab);
             colossus.name = "Colossus Puppet";
             colossus.transform.position = new Vector3(0f, 0f, -ClearHalfSize * 0.5f);
@@ -1369,7 +1383,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_swarm", assets.Swarm);
             SetObject(serialized, "_squads", assets.Squads);
             SetObject(serialized, "_aim", assets.Aim);
-            SetObject(serialized, "_piperMove", assets.PiperMove);
+            SetObject(serialized, "_coreMove", assets.CoreMove);
             SetObject(serialized, "_fury", assets.Fury);
             SetObject(serialized, "_colossus", assets.Colossus);
             SetObject(serialized, "_hive", assets.Hive);
@@ -1382,8 +1396,7 @@ namespace DigitalStory.Editor
             Property(serialized, "_holeCount").intValue = FluteHoleCount;
             SetObject(serialized, "_colossusSamples", assets.Samples);
             SetObject(serialized, "_input", input.GetComponent<HiveDefenseInput>());
-            SetObject(serialized, "_piperMotor", piper.GetComponent<PiperMotor>());
-            SetObject(serialized, "_piperAnimator", EnabledAnimator(piper));
+            SetObject(serialized, "_coreMotor", core.GetComponent<SwarmCoreMotor>());
             SetObject(serialized, "_followCamera", camera.GetComponent<FollowCamera>());
             SetObject(serialized, "_camera", cameraComponent);
             SetObject(serialized, "_swarmView", swarmObject.GetComponent<SwarmGpuView>());
@@ -1656,7 +1669,7 @@ namespace DigitalStory.Editor
                 SwarmConfig swarm,
                 SquadConfig squads,
                 AimConfig aim,
-                PiperMoveConfig piperMove,
+                CoreMoveConfig coreMove,
                 FuryConfig fury,
                 ColossusConfig colossus,
                 HiveConfig hive,
@@ -1667,7 +1680,6 @@ namespace DigitalStory.Editor
                 SongConfig songConfig,
                 SwarmSongEffect[] songs,
                 ColossusSampleSet samples,
-                GameObject piperPrefab,
                 GameObject colossusPrefab,
                 GameObject hivePrefab,
                 BeekeeperView stickView,
@@ -1678,7 +1690,7 @@ namespace DigitalStory.Editor
                 Swarm = swarm;
                 Squads = squads;
                 Aim = aim;
-                PiperMove = piperMove;
+                CoreMove = coreMove;
                 Fury = fury;
                 Colossus = colossus;
                 Hive = hive;
@@ -1689,7 +1701,6 @@ namespace DigitalStory.Editor
                 SongConfig = songConfig;
                 Songs = songs;
                 Samples = samples;
-                PiperPrefab = piperPrefab;
                 ColossusPrefab = colossusPrefab;
                 HivePrefab = hivePrefab;
                 StickView = stickView;
@@ -1701,7 +1712,7 @@ namespace DigitalStory.Editor
             public SwarmConfig Swarm { get; }
             public SquadConfig Squads { get; }
             public AimConfig Aim { get; }
-            public PiperMoveConfig PiperMove { get; }
+            public CoreMoveConfig CoreMove { get; }
             public FuryConfig Fury { get; }
             public ColossusConfig Colossus { get; }
             public HiveConfig Hive { get; }
@@ -1712,7 +1723,6 @@ namespace DigitalStory.Editor
             public SongConfig SongConfig { get; }
             public SwarmSongEffect[] Songs { get; }
             public ColossusSampleSet Samples { get; }
-            public GameObject PiperPrefab { get; }
             public GameObject ColossusPrefab { get; }
             public GameObject HivePrefab { get; }
             public BeekeeperView StickView { get; }

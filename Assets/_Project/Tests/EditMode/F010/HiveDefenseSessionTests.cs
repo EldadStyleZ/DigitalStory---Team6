@@ -7,8 +7,8 @@ using UnityEngine;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// Uses the default configs, except that the first wave comes after 1 s. The hives stand far from the Piper
-    /// unless a test moves them, so a beekeeper that spawns beside the Piper goes for the Piper.
+    /// Uses the default configs, except that the first wave comes after 1 s. The hives stand far from the core
+    /// unless a test moves them, so a beekeeper that spawns beside the core goes for the core.
     /// </summary>
     public sealed class HiveDefenseSessionTests
     {
@@ -46,11 +46,11 @@ namespace DigitalStory.Tests.EditMode
         {
             HiveDefenseSession session = _world.Session;
             return new SwarmSongContext(
-                _world.Piper, null, _world.Piper, session.Swarm, session.Forms, session.Fury, session.Hives, new List<ISwarmTarget>(), session.Smoke);
+                _world.Core, null, _world.Core, session.Swarm, session.Forms, session.Fury, session.Hives, new List<ISwarmTarget>(), session.Smoke);
         }
 
-        // A stick that spawns 1 m from the Piper, who stands at the origin.
-        private HiveDefenseWorld StickBesidePiper(WaveEntry[] waves = null, bool withSongs = false)
+        // A stick that spawns 1 m from the core, which stands at the origin.
+        private HiveDefenseWorld StickBesideCore(WaveEntry[] waves = null, bool withSongs = false)
         {
             _world = new HiveDefenseWorld(waves ?? OneStick(), spawns: new[] { new Vector3(1f, 0f, 0f) }, withSongs: withSongs);
             return _world;
@@ -69,8 +69,8 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Hives[0].Position, Is.EqualTo(new Vector3(-40f, 0f, 40f)));
             Assert.That(session.ActiveBeekeeperCount, Is.EqualTo(0));
             Assert.That(session.IsColossusActive, Is.False);
-            Assert.That(session.PiperSpeedMultiplier, Is.EqualTo(1f));
-            Assert.That(session.IsPiperRooted, Is.False);
+            Assert.That(session.CoreSpeedMultiplier, Is.EqualTo(1f));
+            Assert.That(session.IsCoreRooted, Is.False);
             Assert.That(session.AimTarget, Is.Null);
         }
 
@@ -226,9 +226,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void StickHitOnPiper_RemovesTheWaspsItKnocksOff()
+        public void StickHitOnCore_RemovesTheWaspsItKnocksOff()
         {
-            StickBesidePiper();
+            StickBesideCore();
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
 
             bool hit = _world.RunUntil(() => _world.Session.Swarm.Count < _world.Swarm.StartingWasps, 10f);
@@ -238,9 +238,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void StickHitOnPiper_UnderTheDome_RemovesFewerWasps()
+        public void StickHitOnCore_UnderTheDome_RemovesFewerWasps()
         {
-            StickBesidePiper(withSongs: true);
+            StickBesideCore(withSongs: true);
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
             _world.Play(DomeHoles);
             Assert.That(_world.Session.Forms.IsDomed, Is.True);
@@ -255,7 +255,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void PiperSpeedMultiplier_UnderTheDome_IsTheDomeAssetsMultiplier()
+        public void CoreSpeedMultiplier_UnderTheDome_IsTheDomeAssetsMultiplier()
         {
             _world = new HiveDefenseWorld(withSongs: true);
             var dome = (DomeSong)_world.Songs[HiveDefenseWorld.DomeIndex];
@@ -263,13 +263,13 @@ namespace DigitalStory.Tests.EditMode
 
             _world.Play(DomeHoles);
 
-            Assert.That(_world.Session.PiperSpeedMultiplier, Is.EqualTo(0.3f).Within(1e-5f));
+            Assert.That(_world.Session.CoreSpeedMultiplier, Is.EqualTo(0.3f).Within(1e-5f));
         }
 
         [Test]
-        public void StickHitOnPiper_UnderTheDome_RipplesTheDomeFromTheHittersSide()
+        public void StickHitOnCore_UnderTheDome_RipplesTheDomeFromTheHittersSide()
         {
-            StickBesidePiper(withSongs: true);
+            StickBesideCore(withSongs: true);
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
             _world.Play(DomeHoles);
 
@@ -278,17 +278,17 @@ namespace DigitalStory.Tests.EditMode
             Vector4 dome = _world.Session.Forms.Slot(SongSlot.Guard).ParamA;
             Assert.That(hit, Is.True);
             Assert.That(dome.w, Is.GreaterThan(0f), "the dome's seconds when it blocked the hit");
-            Assert.That(dome.y, Is.EqualTo(1f).Within(0.05f), "the stick stands on the Piper's +x side");
+            Assert.That(dome.y, Is.EqualTo(1f).Within(0.05f), "the stick stands on the core's +x side");
             Assert.That(dome.z, Is.EqualTo(0f).Within(0.3f));
         }
 
         [Test]
-        public void StickHitOnPiper_DuringHiveCallUnderTheDome_KeepsHiveCall()
+        public void StickHitOnCore_DuringHiveCallUnderTheDome_KeepsHiveCall()
         {
-            StickBesidePiper(withSongs: true);
+            StickBesideCore(withSongs: true);
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
             int hits = 0;
-            _world.Session.ActiveBeekeeper(0).PiperHit += brain => hits++;
+            _world.Session.ActiveBeekeeper(0).CoreHit += brain => hits++;
             _world.Play(DomeHoles);
             Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
 
@@ -298,10 +298,10 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall), "Dome then Hive Call is the safe refill");
         }
 
-        // Plan section A: Hive Call ends when the Piper moves. The Piper is held in place while it lasts, so its position
+        // Plan section A: Hive Call ends when the core moves. The core is held in place while it lasts, so its position
         // never changes: asking to move must end it, or the held key would be refused without a sign.
         [Test]
-        public void HiveCall_ThePlayerAsksToMove_EndsIt_ThoughThePiperIsHeldInPlace()
+        public void HiveCall_ThePlayerAsksToMove_EndsIt_ThoughTheCoreIsHeldInPlace()
         {
             _world = new HiveDefenseWorld();
             Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
@@ -311,7 +311,7 @@ namespace DigitalStory.Tests.EditMode
             _world.Session.Tick(_world.Frame(move: new Vector2(1f, 0f)), HiveDefenseWorld.Step);
 
             Assert.That(_world.Session.Forms.Current, Is.EqualTo(SwarmForm.River));
-            Assert.That(_world.Session.IsPiperRooted, Is.False);
+            Assert.That(_world.Session.IsCoreRooted, Is.False);
         }
 
         [Test]
@@ -328,9 +328,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void StickHitOnPiper_CancelsHiveCallAndSetsTheLastHitPoint()
+        public void StickHitOnCore_CancelsHiveCallAndSetsTheLastHitPoint()
         {
-            StickBesidePiper();
+            StickBesideCore();
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
             Assert.That(_world.Session.Forms.StartHiveCall(), Is.True);
 
@@ -348,7 +348,7 @@ namespace DigitalStory.Tests.EditMode
                 OneStick(),
                 hives: new[] { new Vector3(0f, 0f, 0f), new Vector3(60f, 0f, 0f) },
                 spawns: new[] { new Vector3(1f, 0f, 0f) },
-                piper: new Vector3(0f, 0f, 80f));
+                core: new Vector3(0f, 0f, 80f));
 
             bool hit = _world.RunUntil(() => _world.Session.Hives[0].Health < 300f, 15f);
 
@@ -367,7 +367,7 @@ namespace DigitalStory.Tests.EditMode
                 OneStick(),
                 hives: new[] { new Vector3(0f, 0f, 0f), new Vector3(60f, 0f, 0f) },
                 spawns: new[] { new Vector3(1f, 0f, 0f) },
-                piper: new Vector3(0f, 0f, 80f));
+                core: new Vector3(0f, 0f, 80f));
             var shell = ScriptableObject.CreateInstance<FakeSlotSong>();
             try
             {
@@ -391,7 +391,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void PiperSpeedMultiplier_InSmoke_IsSlowerUnlessARunningSongKeepsTheSmokeOff()
+        public void CoreSpeedMultiplier_InSmoke_IsSlowerUnlessARunningSongKeepsTheSmokeOff()
         {
             _world = new HiveDefenseWorld();
             var wings = ScriptableObject.CreateInstance<FakeSlotSong>();
@@ -399,16 +399,16 @@ namespace DigitalStory.Tests.EditMode
             {
                 _world.Session.Smoke.Throw(Origin, Origin);
                 _world.Run(1.5f);
-                Assert.That(_world.Session.Smoke.IsPiperInSmoke, Is.True);
-                Assert.That(_world.Session.PiperSpeedMultiplier, Is.EqualTo(_world.PiperMove.SmokeSpeedMultiplier).Within(1e-5f));
+                Assert.That(_world.Session.Smoke.IsCoreInSmoke, Is.True);
+                Assert.That(_world.Session.CoreSpeedMultiplier, Is.EqualTo(_world.CoreMove.SmokeSpeedMultiplier).Within(1e-5f));
 
                 wings.SlotToUse = SongSlot.Guard;
-                wings.PiperSpeedMultiplier = 1.6f;
-                wings.SmokeSlowsPiper = false;
+                wings.CoreSpeedMultiplier = 1.6f;
+                wings.SmokeSlowsCore = false;
                 SwarmSongContext context = SongContext();
                 wings.Cast(in context);
 
-                Assert.That(_world.Session.PiperSpeedMultiplier, Is.EqualTo(1.6f).Within(1e-5f));
+                Assert.That(_world.Session.CoreSpeedMultiplier, Is.EqualTo(1.6f).Within(1e-5f));
             }
             finally
             {
@@ -483,14 +483,13 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Colossus_FollowsTheFormAndSteersWithTheInput()
         {
-            _world = new HiveDefenseWorld(piper: new Vector3(5f, 0f, 5f));
+            _world = new HiveDefenseWorld(core: new Vector3(5f, 0f, 5f));
             _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
             Assert.That(_world.Session.Fury.TryUse(), Is.True);
             Assert.That(_world.Session.Forms.StartColossus(ColossusSeconds), Is.True);
 
             _world.Session.Tick(_world.Frame(), HiveDefenseWorld.Step);
             Assert.That(_world.Session.IsColossusActive, Is.True);
-            Assert.That(_world.Session.IsPiperRooted, Is.True);
             Assert.That(_world.Session.ColossusPosition.x, Is.EqualTo(5f).Within(0.01f));
             Assert.That(_world.Session.ColossusPosition.z, Is.EqualTo(5f).Within(0.01f));
 
@@ -514,7 +513,7 @@ namespace DigitalStory.Tests.EditMode
             _world.Run(ColossusSeconds + 1f);
 
             Assert.That(_world.Session.IsColossusActive, Is.False);
-            Assert.That(_world.Session.IsPiperRooted, Is.False);
+            Assert.That(_world.Session.IsCoreRooted, Is.False);
         }
 
         [Test]
@@ -538,6 +537,170 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(keeper.Health, Is.EqualTo(_world.Stick.Health - _world.Colossus.PunchDamage).Within(0.01f));
             Assert.That(keeper.State, Is.EqualTo(BeekeeperState.Stunned));
             Assert.That(_world.Session.Fury.Value, Is.GreaterThan(0f));
+        }
+
+        // Plan section K: the Colossus is the whole swarm. The core rides inside it, so a place the View gives the core
+        // counts for nothing while the giant stands, and nothing is left rooted behind.
+        [Test]
+        public void Colossus_WhileItStands_TheCoreIsWhereTheGiantIsAndIsNotRooted()
+        {
+            _world = new HiveDefenseWorld(core: new Vector3(5f, 0f, 5f));
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+
+            _world.RunWith(1f, _world.Frame(move: new Vector2(1f, 0f)));
+
+            Assert.That(session.IsColossusActive, Is.True);
+            Assert.That(session.IsCoreRooted, Is.False, "nothing is left standing behind");
+            Assert.That(session.ColossusPosition.x, Is.EqualTo(5f + _world.Colossus.Speed).Within(0.2f));
+            Assert.That(session.CorePosition.x, Is.EqualTo(session.ColossusPosition.x).Within(1e-4f));
+            Assert.That(session.CorePosition.z, Is.EqualTo(session.ColossusPosition.z).Within(1e-4f));
+            Assert.That(session.CoreFacing.x, Is.EqualTo(1f).Within(1e-4f), "the core moved with the giant");
+
+            Vector3 giant = session.ColossusPosition;
+            var elsewhere = new HiveDefenseFrame(new Vector3(-20f, 0f, -20f), Vector3.zero, Vector2.zero, 0, false, false);
+            session.Tick(in elsewhere, HiveDefenseWorld.Step);
+
+            Assert.That(session.CorePosition.x, Is.EqualTo(giant.x).Within(1e-4f), "the View's place for the core is ignored");
+            Assert.That(session.CorePosition.z, Is.EqualTo(giant.z).Within(1e-4f));
+        }
+
+        [Test]
+        public void Colossus_WhenItEnds_TheCoreStaysWhereTheGiantStood()
+        {
+            _world = new HiveDefenseWorld();
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.Forms.StartColossus(1f), Is.True);
+            _world.RunWith(0.5f, _world.Frame(move: new Vector2(0f, 1f)));
+            Vector3 stood = session.ColossusPosition;
+            Assert.That(stood.z, Is.GreaterThan(1f), "the giant walked");
+
+            bool ended = _world.RunUntil(() => !session.IsColossusActive, 2f);
+
+            Assert.That(ended, Is.True);
+            Assert.That(session.CorePosition.x, Is.EqualTo(stood.x).Within(1e-4f));
+            Assert.That(session.CorePosition.z, Is.EqualTo(stood.z).Within(1e-4f));
+
+            _world.Run(0.5f);
+
+            Assert.That(session.CorePosition.z, Is.EqualTo(stood.z).Within(1e-4f), "once the View has put it there, it stays");
+        }
+
+        // Plan section K: beekeepers chase and hit the core, which rides in the giant, so a hit on the giant costs wasps as a
+        // hit on the core does. The stick spawns 12 m from where the core stood, too far to notice it there.
+        [Test]
+        public void StickHitOnCore_WhileTheColossusStands_HitsTheGiantAndCostsWasps()
+        {
+            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(12f, 0f, 0f) });
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.RunWith(2.8f, _world.Frame(move: new Vector2(1f, 0f)));
+            Assert.That(session.ActiveBeekeeperCount, Is.EqualTo(1));
+
+            bool hit = _world.RunUntil(() => session.Swarm.Count < _world.Swarm.StartingWasps, 8f);
+
+            Assert.That(hit, Is.True);
+            Assert.That(session.IsColossusActive, Is.True, "the hit came while the giant stood");
+            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps - _world.Stick.WaspsKnockedOff));
+            Assert.That(session.LastHitPoint.x, Is.EqualTo(session.ColossusPosition.x).Within(0.01f), "the hit lands on the giant");
+            Assert.That(session.LastHitPoint.x, Is.GreaterThan(5f), "not where the core stood before the giant");
+        }
+
+        // The ground ends, so the giant keeps to the play area: a giant left past it would drop the core off the ground.
+        [Test]
+        public void Colossus_WalkingPastThePlayArea_StopsAtItsEdge()
+        {
+            _world = new HiveDefenseWorld();
+            float edge = _world.CoreMove.PlayAreaHalfSize;
+            _world.MoveCoreTo(new Vector3(edge - 2f, 0f, 1f));
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+
+            _world.RunWith(3f, _world.Frame(move: new Vector2(1f, -1f)));
+
+            Assert.That(session.IsColossusActive, Is.True);
+            Assert.That(session.ColossusPosition.x, Is.EqualTo(edge).Within(1e-4f), "stopped at the edge");
+            Assert.That(session.ColossusPosition.z, Is.LessThan(-3f), "still free to walk along it");
+            Assert.That(session.CorePosition.x, Is.EqualTo(edge).Within(1e-4f), "the core rides inside the giant");
+
+            _world.RunWith(0.5f, _world.Frame(move: new Vector2(-1f, 0f)));
+
+            Assert.That(session.ColossusPosition.x, Is.LessThan(edge - 1f), "free to walk back in");
+        }
+
+        // The core keeps to the play area as well: a core the View moved past it is held at its edge, and the View puts
+        // it there, so it never walks off the ground. A side of 1 or -1 is 10 m past that edge, and 0 is 5 m in.
+        [TestCase(1, 0)]
+        [TestCase(-1, -1)]
+        [TestCase(0, 1)]
+        public void Core_MovedPastThePlayArea_IsHeldAtItsEdge(int sideX, int sideZ)
+        {
+            _world = new HiveDefenseWorld();
+            HiveDefenseSession session = _world.Session;
+            float edge = _world.CoreMove.PlayAreaHalfSize;
+
+            _world.MoveCoreTo(new Vector3(Past(sideX, edge), 0.5f, Past(sideZ, edge)));
+
+            Assert.That(session.CorePosition.x, Is.EqualTo(HeldAt(sideX, edge)).Within(1e-4f));
+            Assert.That(session.CorePosition.z, Is.EqualTo(HeldAt(sideZ, edge)).Within(1e-4f));
+            Assert.That(session.CorePosition.y, Is.EqualTo(0.5f).Within(1e-4f), "only the place on the ground is held");
+        }
+
+        private const float InsideMetres = 5f;
+        private const float PastMetres = 10f;
+
+        private static float Past(int side, float edge) => side == 0 ? InsideMetres : side * (edge + PastMetres);
+
+        private static float HeldAt(int side, float edge) => side == 0 ? InsideMetres : side * edge;
+
+        // When the giant ends inside a hive or a wall, the core is put there, and the controller pushes it out on the next
+        // frame. That push is the core being put somewhere, not the player moving it, so it keeps the giant's facing,
+        // which aimed songs strike ahead of. The core turns again on the next real step.
+        [Test]
+        public void Colossus_ThePushOutWhereTheGiantEnded_DoesNotTurnTheCore()
+        {
+            _world = new HiveDefenseWorld();
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.Forms.StartColossus(1f), Is.True);
+            _world.RunWith(0.5f, _world.Frame(move: new Vector2(0f, 1f)));
+            Assert.That(_world.RunUntil(() => !session.IsColossusActive, 2f), Is.True);
+            Vector3 stood = session.CorePosition;
+
+            _world.MoveCoreTo(stood + new Vector3(1.2f, 0f, 0f));
+
+            Assert.That(session.CorePosition.x, Is.EqualTo(stood.x + 1.2f).Within(1e-4f), "the core is where it was pushed");
+            Assert.That(session.CoreFacing.z, Is.EqualTo(1f).Within(1e-4f), "still the way the giant walked");
+
+            _world.MoveCoreTo(session.CorePosition + new Vector3(1f, 0f, 0f));
+
+            Assert.That(session.CoreFacing.x, Is.EqualTo(1f).Within(1e-4f), "a real step turns it");
+        }
+
+        // Plan section K: a collapse ends the giant, from a hit or the smoke later in the same tick. The core stays where
+        // the giant stood, and from the next tick the View's core counts again.
+        [Test]
+        public void Colossus_WhenTheSwarmCollapses_TheCoreStaysWhereTheGiantStoodAndMovesAgain()
+        {
+            _world = new HiveDefenseWorld();
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.RunWith(0.5f, _world.Frame(move: new Vector2(1f, 0f)));
+            Vector3 stood = session.ColossusPosition;
+            Assert.That(stood.x, Is.GreaterThan(1f), "the giant walked");
+
+            session.Swarm.Lose(_world.Swarm.StartingWasps - (_world.Swarm.CollapseBelow / 2));
+            Assert.That(session.Forms.Current, Is.EqualTo(SwarmForm.Collapsed));
+            _world.Run(HiveDefenseWorld.Step);
+            _world.Run(HiveDefenseWorld.Step);
+
+            Assert.That(session.IsColossusActive, Is.False);
+            Assert.That(session.CorePosition.x, Is.EqualTo(stood.x).Within(1e-4f), "where the giant stood");
+            Assert.That(session.CorePosition.z, Is.EqualTo(stood.z).Within(1e-4f));
+
+            _world.MoveCoreTo(stood + new Vector3(0f, 0f, 3f));
+
+            Assert.That(session.CorePosition.z, Is.EqualTo(stood.z + 3f).Within(1e-4f), "the View's core counts again");
+            Assert.That(session.CoreFacing.z, Is.EqualTo(1f).Within(1e-4f));
         }
 
         // ---- Song discovery ----
@@ -658,12 +821,15 @@ namespace DigitalStory.Tests.EditMode
 
         // ---- Songs cast even with nothing to hit ----
 
+        // Plan section K: with no Piper to face anywhere, "ahead" is the way the core last moved. It keeps that way while
+        // the core stands still to play.
         [TestCase(HiveDefenseWorld.MeteorIndex)]
         [TestCase(HiveDefenseWorld.StingIndex)]
-        public void Cast_AimedSongWithNothingToHit_StrikesSixMetresAheadOfThePipersFacing(int song)
+        public void Cast_AimedSongWithNothingToHit_StrikesSixMetresAheadOfWhereTheCoreLastMoved(int song)
         {
-            _world = new HiveDefenseWorld(piper: new Vector3(5f, 0f, 5f), withAllSongs: true);
-            _world.Facing = Vector3.right;
+            _world = new HiveDefenseWorld(core: new Vector3(4f, 0f, 5f), withAllSongs: true);
+            _world.MoveCoreTo(new Vector3(5f, 0f, 5f));
+            Assert.That(_world.Session.CoreFacing, Is.EqualTo(Vector3.right), "the core moved along +x");
             var cast = new List<int>();
             _world.Session.Caster.SongCast += cast.Add;
 
@@ -678,10 +844,10 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Cast_FacingWithHeightAndAnyLength_StillStrikesSixMetresAheadOnTheGround()
+        public void Cast_AfterAMoveWithHeightAndAnyLength_StillStrikesSixMetresAheadOnTheGround()
         {
-            _world = new HiveDefenseWorld(withAllSongs: true);
-            _world.Facing = new Vector3(0f, 3f, -0.5f);
+            _world = new HiveDefenseWorld(core: new Vector3(0f, 0f, 0.5f), withAllSongs: true);
+            _world.MoveCoreTo(new Vector3(0f, 3f, 0f));
 
             _world.Play(_world.Session.Caster[HiveDefenseWorld.MeteorIndex].Song.Keys);
 
@@ -744,7 +910,7 @@ namespace DigitalStory.Tests.EditMode
             try
             {
                 var rules = new HiveDefenseRules(
-                    _world.Swarm, _world.Squads, _world.PiperMove, _world.Fury, _world.Colossus, _world.Hive, _world.Smoke,
+                    _world.Swarm, _world.Squads, _world.CoreMove, _world.Fury, _world.Colossus, _world.Hive, _world.Smoke,
                     _world.WaveConfig, _world.Stick, _world.Smoker, _world.Aim, _world.SongConfig, new SwarmSongEffect[] { dome },
                     HiveDefenseWorld.HoleCount);
 

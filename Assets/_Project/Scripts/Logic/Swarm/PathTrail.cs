@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>The Piper's recent path, resampled to one point every fixed distance, so the river can flow along it.</summary>
+    /// <summary>The core's recent path, resampled to one point every fixed distance, so the river can flow along it.</summary>
     public sealed class PathTrail
     {
         private readonly int _capacity;

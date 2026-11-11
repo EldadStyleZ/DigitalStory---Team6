@@ -20,13 +20,13 @@ namespace DigitalStory.Tests.EditMode
             + "\"<CooldownSeconds>k__BackingField\":4.5,\"<HiveDamage>k__BackingField\":0,"
             + "\"<WaspsKnockedOff>k__BackingField\":0}";
 
-        private static readonly Vector3 PiperFar = new Vector3(FarAway, 0f, FarAway);
+        private static readonly Vector3 CoreFar = new Vector3(FarAway, 0f, FarAway);
 
         private sealed class Recorder
         {
             public readonly List<int> HiveHits = new List<int>();
             public readonly List<Vector3> Grenades = new List<Vector3>();
-            public int PiperHits;
+            public int CoreHits;
             public int Deaths;
             public BeekeeperBrain LastSender;
 
@@ -37,10 +37,10 @@ namespace DigitalStory.Tests.EditMode
                     LastSender = sender;
                     HiveHits.Add(index);
                 };
-                brain.PiperHit += sender =>
+                brain.CoreHit += sender =>
                 {
                     LastSender = sender;
-                    PiperHits++;
+                    CoreHits++;
                 };
                 brain.GrenadeThrown += (sender, landing) =>
                 {
@@ -79,9 +79,9 @@ namespace DigitalStory.Tests.EditMode
             return new HiveSet(hives);
         }
 
-        private static BeekeeperSenses Senses(HiveSet hives, Vector3 piper)
+        private static BeekeeperSenses Senses(HiveSet hives, Vector3 core)
         {
-            return new BeekeeperSenses(piper, hives, Vector3.zero);
+            return new BeekeeperSenses(core, hives, Vector3.zero);
         }
 
         private static BeekeeperBrain SpawnAt(BeekeeperConfig config, Vector3 position)
@@ -162,7 +162,7 @@ namespace DigitalStory.Tests.EditMode
 
             brain.Spawn(new Vector3(1f, 0f, 1f));
             var hives = HivesAt(new Vector3(0f, 0f, 100f));
-            brain.Tick(Senses(hives, PiperFar), Step);
+            brain.Tick(Senses(hives, CoreFar), Step);
 
             Assert.That(brain.IsAlive, Is.True);
             Assert.That(brain.Health, Is.EqualTo(StickConfig().Health));
@@ -172,7 +172,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Spawn_AfterBeingHit_NoLongerChasesAPiperOutOfNoticeRange()
+        public void Spawn_AfterBeingHit_NoLongerChasesACoreOutOfNoticeRange()
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             brain.TakeDamage(1f);
@@ -193,7 +193,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 30f), new Vector3(0f, 0f, -90f));
 
-            Advance(brain, Senses(hives, PiperFar), 1f);
+            Advance(brain, Senses(hives, CoreFar), 1f);
 
             Assert.That(brain.Position.z, Is.EqualTo(config.Speed).Within(0.05f));
             Assert.That(Mathf.Abs(brain.Position.x), Is.LessThan(0.01f));
@@ -207,7 +207,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(30f, 0f, 0f));
 
-            Advance(brain, Senses(hives, PiperFar), 0.5f);
+            Advance(brain, Senses(hives, CoreFar), 0.5f);
 
             Assert.That(brain.Facing.magnitude, Is.EqualTo(1f).Within(0.001f));
             Assert.That(brain.Facing.x, Is.GreaterThan(0.99f));
@@ -220,7 +220,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 40f), new Vector3(-20f, 0f, 0f));
 
-            Advance(brain, Senses(hives, PiperFar), 1f);
+            Advance(brain, Senses(hives, CoreFar), 1f);
 
             Assert.That(brain.Position.x, Is.LessThan(-2f));
         }
@@ -230,11 +230,11 @@ namespace DigitalStory.Tests.EditMode
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 30f), new Vector3(0f, 0f, -50f));
-            Advance(brain, Senses(hives, PiperFar), 1f);
+            Advance(brain, Senses(hives, CoreFar), 1f);
             float zBefore = brain.Position.z;
 
             hives[0].Damage(10000f);
-            Advance(brain, Senses(hives, PiperFar), 1f);
+            Advance(brain, Senses(hives, CoreFar), 1f);
 
             Assert.That(brain.Position.z, Is.LessThan(zBefore - 1f));
         }
@@ -247,7 +247,7 @@ namespace DigitalStory.Tests.EditMode
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
             hives[0].Damage(10000f);
 
-            Advance(brain, Senses(hives, PiperFar), 3f);
+            Advance(brain, Senses(hives, CoreFar), 3f);
 
             Assert.That(brain.Position, Is.EqualTo(Vector3.zero));
             Assert.That(brain.IsMoving, Is.False);
@@ -260,7 +260,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
-            var pushed = new BeekeeperSenses(PiperFar, hives, new Vector3(1f, 0f, 0f));
+            var pushed = new BeekeeperSenses(CoreFar, hives, new Vector3(1f, 0f, 0f));
 
             Advance(brain, pushed, 1f);
 
@@ -275,7 +275,7 @@ namespace DigitalStory.Tests.EditMode
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
 
             bool started = AdvanceUntil(
                 brain, in senses, () => brain.State == BeekeeperState.WindUp, 10f);
@@ -292,7 +292,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
             AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
 
             Advance(brain, senses, config.WindUpSeconds - 0.15f);
@@ -310,7 +310,7 @@ namespace DigitalStory.Tests.EditMode
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 50f), new Vector3(0f, 0f, -10f));
 
-            Advance(brain, Senses(hives, PiperFar), 2f);
+            Advance(brain, Senses(hives, CoreFar), 2f);
 
             Assert.That(recorder.HiveHits, Is.Not.Empty);
             Assert.That(recorder.HiveHits[0], Is.EqualTo(1));
@@ -322,7 +322,7 @@ namespace DigitalStory.Tests.EditMode
             var config = StickConfig();
             var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
             AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
             float atStart = brain.WindUpProgress;
 
@@ -340,7 +340,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
             Assert.That(brain.IsTargetingHive, Is.False);
 
             AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
@@ -352,7 +352,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void IsTargetingHive_SwingAtThePiper_IsFalse()
+        public void IsTargetingHive_SwingAtTheCore_IsFalse()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, new Vector3(0f, 0f, 0f));
@@ -371,7 +371,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
 
             AdvanceUntil(brain, in senses, () => recorder.HiveHits.Count == 1, 3f);
 
@@ -387,7 +387,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
             AdvanceUntil(brain, in senses, () => recorder.HiveHits.Count == 1, 3f);
 
             Advance(brain, senses, config.CooldownSeconds + config.WindUpSeconds - 0.25f);
@@ -404,7 +404,7 @@ namespace DigitalStory.Tests.EditMode
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
 
-            Advance(brain, Senses(hives, PiperFar), 5f);
+            Advance(brain, Senses(hives, CoreFar), 5f);
 
             Assert.That(recorder.Grenades, Is.Empty);
         }
@@ -416,7 +416,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 10f), new Vector3(0f, 0f, -60f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
             AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
 
             hives[0].Damage(10000f);
@@ -428,10 +428,10 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(brain.Position.z, Is.LessThan(9f));
         }
 
-        // ---------- Noticing and chasing the Piper ----------
+        // ---------- Noticing and chasing the core ----------
 
         [Test]
-        public void Tick_PiperJustInsideNoticeRange_StartsChasing()
+        public void Tick_CoreJustInsideNoticeRange_StartsChasing()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -439,11 +439,11 @@ namespace DigitalStory.Tests.EditMode
 
             brain.Tick(Senses(hives, new Vector3(config.NoticeRange - Margin, 0f, 0f)), TinyStep);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
         }
 
         [Test]
-        public void Tick_PiperExactlyAtNoticeRange_StartsChasing()
+        public void Tick_CoreExactlyAtNoticeRange_StartsChasing()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -451,11 +451,11 @@ namespace DigitalStory.Tests.EditMode
 
             brain.Tick(Senses(hives, new Vector3(config.NoticeRange, 0f, 0f)), TinyStep);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
         }
 
         [Test]
-        public void Tick_PiperJustOutsideNoticeRange_KeepsGoingToTheHive()
+        public void Tick_CoreJustOutsideNoticeRange_KeepsGoingToTheHive()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -467,7 +467,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_PiperHeightIsIgnoredWhenNoticing()
+        public void Tick_CoreHeightIsIgnoredWhenNoticing()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -475,18 +475,18 @@ namespace DigitalStory.Tests.EditMode
 
             brain.Tick(Senses(hives, new Vector3(config.NoticeRange - 1f, 30f, 0f)), TinyStep);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
         }
 
         [Test]
-        public void Tick_Chasing_WalksTowardThePiperAtSpeed()
+        public void Tick_Chasing_WalksTowardTheCoreAtSpeed()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, -FarAway));
-            var piper = new Vector3(6f, 0f, 0f);
+            var core = new Vector3(6f, 0f, 0f);
 
-            Advance(brain, Senses(hives, piper), 1f);
+            Advance(brain, Senses(hives, core), 1f);
 
             Assert.That(brain.Position.x, Is.EqualTo(config.Speed).Within(0.1f));
             Assert.That(brain.IsMoving, Is.True);
@@ -503,11 +503,11 @@ namespace DigitalStory.Tests.EditMode
 
             brain.Tick(Senses(hives, new Vector3(config.NoticeRange + 3f, 0f, 0f)), TinyStep);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
         }
 
         [Test]
-        public void Tick_PiperBeyondGiveUpRange_GoesBackToTheHive()
+        public void Tick_CoreBeyondGiveUpRange_GoesBackToTheHive()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -520,7 +520,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_PiperJustInsideGiveUpRange_KeepsChasing()
+        public void Tick_CoreJustInsideGiveUpRange_KeepsChasing()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -529,11 +529,11 @@ namespace DigitalStory.Tests.EditMode
 
             brain.Tick(Senses(hives, new Vector3(config.GiveUpRange - Margin, 0f, 0f)), TinyStep);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
         }
 
         [Test]
-        public void Tick_GaveUpAndPiperStaysBetweenRanges_DoesNotChaseAgain()
+        public void Tick_GaveUpAndCoreStaysBetweenRanges_DoesNotChaseAgain()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -547,7 +547,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_ChasingBeekeeperLosesItsHive_StillChasesThePiper()
+        public void Tick_ChasingBeekeeperLosesItsHive_StillChasesTheCore()
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 30f));
@@ -557,13 +557,13 @@ namespace DigitalStory.Tests.EditMode
             hives[0].Damage(10000f);
             Advance(brain, senses, 0.1f);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper).Or.EqualTo(BeekeeperState.WindUp));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore).Or.EqualTo(BeekeeperState.WindUp));
         }
 
-        // ---------- Hitting the Piper (stick) ----------
+        // ---------- Hitting the core (stick) ----------
 
         [Test]
-        public void Tick_PiperWithinAttackRange_WindsUpThenHitsOnlyAfterTheWindUp()
+        public void Tick_CoreWithinAttackRange_WindsUpThenHitsOnlyAfterTheWindUp()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -574,10 +574,10 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(brain.State, Is.EqualTo(BeekeeperState.WindUp));
             Advance(brain, senses, config.WindUpSeconds - 0.15f);
-            Assert.That(recorder.PiperHits, Is.EqualTo(0));
+            Assert.That(recorder.CoreHits, Is.EqualTo(0));
 
             Advance(brain, senses, 0.3f);
-            Assert.That(recorder.PiperHits, Is.EqualTo(1));
+            Assert.That(recorder.CoreHits, Is.EqualTo(1));
             Assert.That(recorder.HiveHits, Is.Empty);
             Assert.That(recorder.LastSender, Is.SameAs(brain));
         }
@@ -591,25 +591,25 @@ namespace DigitalStory.Tests.EditMode
 
             brain.Tick(Senses(hives, new Vector3(config.AttackRange + 1f, 0f, 0f)), TinyStep);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
             Assert.That(brain.WindUpProgress, Is.EqualTo(0f));
         }
 
         [Test]
-        public void Tick_StickCooldownOnThePiper_BlocksTheNextHitUntilCooldownAndWindUpPass()
+        public void Tick_StickCooldownOnTheCore_BlocksTheNextHitUntilCooldownAndWindUpPass()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
             var senses = Senses(hives, new Vector3(1f, 0f, 0f));
-            AdvanceUntil(brain, in senses, () => recorder.PiperHits == 1, 3f);
+            AdvanceUntil(brain, in senses, () => recorder.CoreHits == 1, 3f);
 
             Advance(brain, senses, config.CooldownSeconds + config.WindUpSeconds - 0.25f);
-            Assert.That(recorder.PiperHits, Is.EqualTo(1));
+            Assert.That(recorder.CoreHits, Is.EqualTo(1));
 
             Advance(brain, senses, 0.5f);
-            Assert.That(recorder.PiperHits, Is.EqualTo(2));
+            Assert.That(recorder.CoreHits, Is.EqualTo(2));
         }
 
         // ---------- Damage, aggro and death ----------
@@ -679,22 +679,22 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void TakeDamage_PiperBeyondNoticeRange_MakesItChaseThePiperAnyway()
+        public void TakeDamage_CoreBeyondNoticeRange_MakesItChaseTheCoreAnyway()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, -FarAway));
-            var piper = new Vector3(config.NoticeRange + 3f, 0f, 0f);
+            var core = new Vector3(config.NoticeRange + 3f, 0f, 0f);
 
             brain.TakeDamage(1f);
-            Advance(brain, Senses(hives, piper), 1f);
+            Advance(brain, Senses(hives, core), 1f);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
             Assert.That(brain.Position.x, Is.GreaterThan(2f));
         }
 
         [Test]
-        public void TakeDamage_ThenPiperBeyondGiveUpRange_GivesUpTheChase()
+        public void TakeDamage_ThenCoreBeyondGiveUpRange_GivesUpTheChase()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -721,7 +721,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(brain.IsMoving, Is.False);
             Assert.That(brain.State, Is.EqualTo(BeekeeperState.Dead));
             Assert.That(recorder.HiveHits, Is.Empty);
-            Assert.That(recorder.PiperHits, Is.EqualTo(0));
+            Assert.That(recorder.CoreHits, Is.EqualTo(0));
         }
 
         [Test]
@@ -748,7 +748,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
             AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
 
             brain.TakeDamage(10000f);
@@ -765,7 +765,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 100f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
 
             brain.Stun(1f);
             brain.Tick(senses, Step);
@@ -786,7 +786,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 100f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
 
             brain.Stun(1f);
             brain.Stun(0.2f);
@@ -800,7 +800,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 100f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
 
             brain.Stun(0.2f);
             brain.Stun(1f);
@@ -820,7 +820,7 @@ namespace DigitalStory.Tests.EditMode
             brain.Stun(0.5f);
             Advance(brain, senses, 0.8f);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChasePiper).Or.EqualTo(BeekeeperState.WindUp));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore).Or.EqualTo(BeekeeperState.WindUp));
         }
 
         [Test]
@@ -830,7 +830,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 10f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
             AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
 
             brain.Stun(1f);
@@ -862,7 +862,7 @@ namespace DigitalStory.Tests.EditMode
             var pushed = SpawnAt(config, Vector3.zero);
             var steady = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
 
             pushed.Knockback(new Vector3(8f, 0f, 0f));
             Advance(pushed, senses, 0.1f);
@@ -888,7 +888,7 @@ namespace DigitalStory.Tests.EditMode
             brain.TakeDamage(10000f);
 
             brain.Knockback(new Vector3(8f, 0f, 0f));
-            Advance(brain, Senses(hives, PiperFar), 1f);
+            Advance(brain, Senses(hives, CoreFar), 1f);
 
             Assert.That(brain.Position, Is.EqualTo(Vector3.zero));
         }
@@ -896,7 +896,7 @@ namespace DigitalStory.Tests.EditMode
         // ---------- Smoker ----------
 
         [Test]
-        public void Tick_SmokerWithPiperInRange_WindsUpWithoutWalkingCloser()
+        public void Tick_SmokerWithCoreInRange_WindsUpWithoutWalkingCloser()
         {
             var config = SmokerConfig();
             var brain = SpawnAt(config, Vector3.zero);
@@ -910,14 +910,14 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_SmokerThrowsAfterItsWindUpAtThePiper()
+        public void Tick_SmokerThrowsAfterItsWindUpAtTheCore()
         {
             var config = SmokerConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
-            var piper = new Vector3(6f, 0f, 0f);
-            var senses = Senses(hives, piper);
+            var core = new Vector3(6f, 0f, 0f);
+            var senses = Senses(hives, core);
             AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
 
             Advance(brain, senses, config.WindUpSeconds - 0.15f);
@@ -925,8 +925,8 @@ namespace DigitalStory.Tests.EditMode
 
             Advance(brain, senses, 0.3f);
             Assert.That(recorder.Grenades.Count, Is.EqualTo(1));
-            Assert.That(GroundDistance(recorder.Grenades[0], piper), Is.LessThan(0.5f));
-            Assert.That(recorder.PiperHits, Is.EqualTo(0));
+            Assert.That(GroundDistance(recorder.Grenades[0], core), Is.LessThan(0.5f));
+            Assert.That(recorder.CoreHits, Is.EqualTo(0));
             Assert.That(recorder.HiveHits, Is.Empty);
         }
 
@@ -937,8 +937,8 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, Vector3.zero);
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
-            var piper = new Vector3(config.AttackRange - 0.5f, 0f, 0f);
-            var senses = Senses(hives, piper);
+            var core = new Vector3(config.AttackRange - 0.5f, 0f, 0f);
+            var senses = Senses(hives, core);
             brain.TakeDamage(1f);
 
             Advance(brain, senses, config.WindUpSeconds + 0.3f);
@@ -954,7 +954,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, Vector3.zero);
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, 30f));
-            var senses = Senses(hives, PiperFar);
+            var senses = Senses(hives, CoreFar);
 
             bool threw = AdvanceUntil(brain, in senses, () => recorder.Grenades.Count > 0, 30f);
 
@@ -990,7 +990,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
 
-            Advance(brain, Senses(hives, PiperFar), 1f);
+            Advance(brain, Senses(hives, CoreFar), 1f);
 
             Assert.That(brain.Position.z, Is.EqualTo(config.Speed).Within(0.05f));
             Assert.That(brain.Config, Is.SameAs(config));

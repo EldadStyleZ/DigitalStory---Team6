@@ -17,7 +17,7 @@ namespace DigitalStory.Logic
     /// Hive Call ends the Strike song and keeps the Guard and Post songs; an Attack or Power cast ends Hive Call, and a
     /// Defense cast keeps it. The Colossus ends the Strike and Guard songs and Hive Call, and keeps the Post song. A collapse
     /// ends every slot and the Gust at once.
-    /// What a running song changes in the match (the Dome's cut of every loss and its slower Piper, say) comes from its rule
+    /// What a running song changes in the match (the Dome's cut of every loss and its slower core, say) comes from its rule
     /// and is read here, multiplied over the running rules, so a new song needs no change to this class or to the session.
     /// </remarks>
     public sealed class SwarmFormMachine : IDamageShield
@@ -32,7 +32,7 @@ namespace DigitalStory.Logic
         private SwarmForm _current = SwarmForm.River;
         private float _secondsInForm;
         private float _colossusSeconds;
-        private Vector3 _piper;
+        private Vector3 _core;
         private float _gustSeconds = NoGust;
         private float _gustDuration;
         private Vector3 _gustCenter;
@@ -58,21 +58,24 @@ namespace DigitalStory.Logic
 
         /// <summary>
         /// True while the Dome runs in the Guard slot. Its return beat does not count. What the dome does (fewer wasps lost, a
-        /// slower Piper) comes from its rule, through <see cref="WaspLossFraction"/> and <see cref="PiperSpeedMultiplier"/>.
+        /// slower core) comes from its rule, through <see cref="WaspLossFraction"/> and <see cref="CoreSpeedMultiplier"/>.
         /// </summary>
         public bool IsDomed => _slots.RunningForm(SongSlot.Guard) == SwarmForm.Dome;
 
-        /// <summary>True in Hive Call and the Colossus: the Piper stands still and plays.</summary>
-        public bool IsPiperRooted => _current == SwarmForm.HiveCall || _current == SwarmForm.Colossus;
+        /// <summary>
+        /// True in Hive Call: the core stands still while the call lasts. The Colossus does not root it: the core rides inside
+        /// the giant, which the session moves.
+        /// </summary>
+        public bool IsCoreRooted => _current == SwarmForm.HiveCall;
 
         /// <summary>The share, from 0 to 1, of each wasp loss that reaches the swarm: what every running song lets through, multiplied. 1 with none.</summary>
         public float WaspLossFraction => _slots.WaspLossFraction();
 
-        /// <summary>How much the running songs multiply the Piper's walking speed. 1 with none.</summary>
-        public float PiperSpeedMultiplier => _slots.PiperSpeedMultiplier();
+        /// <summary>How much the running songs multiply the core's speed. 1 with none.</summary>
+        public float CoreSpeedMultiplier => _slots.CoreSpeedMultiplier();
 
-        /// <summary>True unless a running song keeps smoke from slowing the Piper.</summary>
-        public bool SmokeSlowsPiper => _slots.SmokeSlowsPiper();
+        /// <summary>True unless a running song keeps smoke from slowing the core.</summary>
+        public bool SmokeSlowsCore => _slots.SmokeSlowsCore();
 
         /// <summary>Seconds since the last Gust began, or -1 when there is none or it has finished.</summary>
         public float GustSeconds => _gustSeconds;
@@ -135,7 +138,7 @@ namespace DigitalStory.Logic
                 return false;
             }
 
-            _piper = context.PiperPosition;
+            _core = context.CorePosition;
 
             if (_current == SwarmForm.HiveCall && song.Category != SongCategory.Defense)
             {
@@ -177,7 +180,7 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>
-        /// Starts Hive Call, which lasts until the Piper moves, an Attack or Power song is cast, the swarm is full, or the Piper
+        /// Starts Hive Call, which lasts until the core moves, an Attack or Power song is cast, the swarm is full, or the core
         /// is hit while no Guard song runs. It ends the Strike song at once and keeps the Guard and Post songs.
         /// </summary>
         public bool StartHiveCall()
@@ -221,16 +224,16 @@ namespace DigitalStory.Logic
             }
         }
 
-        /// <summary>Where the Piper stands now. Songs that act around the Piper, such as the Tornado, act where it stands when they land.</summary>
-        public void SetPiper(Vector3 position)
+        /// <summary>Where the core stands now. Songs that act around the core, such as the Tornado, act where it stands when they land.</summary>
+        public void SetCore(Vector3 position)
         {
-            _piper = position;
+            _core = position;
         }
 
-        /// <summary>The Piper was hit from <paramref name="from"/>. Running songs hear of it, and it ends Hive Call unless a Guard song runs.</summary>
+        /// <summary>The core was hit from <paramref name="from"/>. Running songs hear of it, and it ends Hive Call unless a Guard song runs.</summary>
         public void NotifyHit(Vector3 from)
         {
-            _slots.NotifyPiperHit(GroundMath.Direction(_piper, from));
+            _slots.NotifyCoreHit(GroundMath.Direction(_core, from));
 
             if (_current == SwarmForm.HiveCall && !_slots.IsRunning(SongSlot.Guard))
             {
@@ -238,8 +241,8 @@ namespace DigitalStory.Logic
             }
         }
 
-        /// <summary>The Piper moved. Ends Hive Call.</summary>
-        public void NotifyPiperMoved()
+        /// <summary>The core moved. Ends Hive Call.</summary>
+        public void NotifyCoreMoved()
         {
             if (_current == SwarmForm.HiveCall)
             {
@@ -257,7 +260,7 @@ namespace DigitalStory.Logic
 
             _secondsInForm += deltaTime;
             TickForm(deltaTime, standingHives);
-            _slots.Tick(deltaTime, _piper);
+            _slots.Tick(deltaTime, _core);
             TickGust(deltaTime);
         }
 

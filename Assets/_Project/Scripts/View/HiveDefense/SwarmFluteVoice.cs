@@ -5,14 +5,14 @@ using UnityEngine;
 
 namespace DigitalStory.View
 {
-    /// <summary>Sounds the flute note of the hole the Wasp Piper just played, for as long as its key is held.</summary>
+    /// <summary>Sounds the flute note of the hole the player just played, for as long as its key is held.</summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(AudioSource))]
     [AddComponentMenu("DigitalStory/Swarm Flute Voice")]
     public sealed class SwarmFluteVoice : MonoBehaviour
     {
         private SoundConfig _sound;
-        private PiperMoveConfig _move;
+        private CoreMoveConfig _move;
         private HiveDefenseInput _input;
         private AudioSource _source;
         private FluteSynth _synth;
@@ -27,7 +27,7 @@ namespace DigitalStory.View
 
         /// <summary>Supplies what to play. Call once, before this object starts.</summary>
         /// <exception cref="ArgumentNullException">A config is missing.</exception>
-        public void Initialize(SoundConfig sound, PiperMoveConfig move)
+        public void Initialize(SoundConfig sound, CoreMoveConfig move)
         {
             _sound = sound != null ? sound : throw new ArgumentNullException(nameof(sound));
             _move = move != null ? move : throw new ArgumentNullException(nameof(move));

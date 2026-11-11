@@ -27,7 +27,7 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Seconds a hive hit counts as recent for Honeycomb.")]
         public float HiveRecentSeconds { get; private set; } = 3f;
 
-        [field: SerializeField, Min(0f), Tooltip("Metres ahead of the Piper that an aimed song strikes when nobody is in range.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres ahead of the core that an aimed song strikes when nobody is in range.")]
         public float EmptyAimDistance { get; private set; } = 6f;
 
         [field: SerializeField, Min(0f), Tooltip("Metres from the mouse's ground point within which a beekeeper is picked while the mouse is live.")]

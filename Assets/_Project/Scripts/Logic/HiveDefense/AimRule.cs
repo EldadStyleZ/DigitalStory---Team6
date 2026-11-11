@@ -6,10 +6,10 @@ namespace DigitalStory.Logic
         /// <summary>The most threatening beekeeper (Sting, Scythe).</summary>
         Threat = 0,
 
-        /// <summary>The few nearest the Piper, or nearest the cursor while the mouse is live (Hydra).</summary>
+        /// <summary>The few nearest the core, or nearest the cursor while the mouse is live (Hydra).</summary>
         ThreeNearest = 1,
 
-        /// <summary>The beekeeper whose line from the Piper holds the most beekeepers (Lance).</summary>
+        /// <summary>The beekeeper whose line from the core holds the most beekeepers (Lance).</summary>
         Line = 2,
 
         /// <summary>The beekeeper with the most others close by (Meteor, Nest, Maelstrom).</summary>

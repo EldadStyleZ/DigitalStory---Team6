@@ -281,7 +281,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void ThreeNearest_FillsTheNearestThreeToThePiper_NearestFirst()
+        public void ThreeNearest_FillsTheNearestThreeToTheCore_NearestFirst()
         {
             Add(0f, 4f);
             Add(0f, 2f);
@@ -372,7 +372,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Line_DoesNotCountBeekeepersBehindThePiper()
+        public void Line_DoesNotCountBeekeepersBehindTheCore()
         {
             Add(0f, -3f);
             Add(0f, 4f);
@@ -410,7 +410,7 @@ namespace DigitalStory.Tests.EditMode
 
             Select(AimRule.Crowd, 18f);
 
-            // Index 0 has no one near it. Indexes 1, 2 and 3 each have two, and index 1 is nearest the Piper.
+            // Index 0 has no one near it. Indexes 1, 2 and 3 each have two, and index 1 is nearest the core.
             Assert.That(_aim.TargetIndex, Is.EqualTo(1));
         }
 
@@ -516,7 +516,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Hive_AllDestroyed_StrikesAheadOfThePiper()
+        public void Hive_AllDestroyed_StrikesAheadOfTheCore()
         {
             Hive only = AddHive(10f, 0f);
             only.Damage(only.MaxHealth);
@@ -577,7 +577,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void EmptyMap_StrikesSixMetresAheadOfWhereThePiperFaces()
+        public void EmptyMap_StrikesSixMetresAheadOfWhereTheCoreFaces()
         {
             Build();
 
@@ -593,14 +593,14 @@ namespace DigitalStory.Tests.EditMode
         public void EmptyMap_AheadFollowsTheFacing_IgnoresHeight_AndSurvivesNoFacing()
         {
             Build();
-            var piper = new Vector3(2f, 1f, 3f);
+            var core = new Vector3(2f, 1f, 3f);
 
-            _aim.Select(AimRule.Crowd, 18f, piper, new Vector3(1f, 5f, 0f), false, Vector3.zero);
+            _aim.Select(AimRule.Crowd, 18f, core, new Vector3(1f, 5f, 0f), false, Vector3.zero);
             Assert.That(_aim.AimPoint.x, Is.EqualTo(8f).Within(Tolerance));
             Assert.That(_aim.AimPoint.y, Is.EqualTo(1f).Within(Tolerance));
             Assert.That(_aim.AimPoint.z, Is.EqualTo(3f).Within(Tolerance));
 
-            _aim.Select(AimRule.Crowd, 18f, piper, Vector3.zero, false, Vector3.zero);
+            _aim.Select(AimRule.Crowd, 18f, core, Vector3.zero, false, Vector3.zero);
             Assert.That(_aim.AimPoint.x, Is.EqualTo(2f).Within(Tolerance));
             Assert.That(_aim.AimPoint.z, Is.EqualTo(9f).Within(Tolerance));
         }

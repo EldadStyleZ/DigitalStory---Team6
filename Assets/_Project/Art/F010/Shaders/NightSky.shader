@@ -1,4 +1,4 @@
-// A night sky for the Wasp Piper scene: deep blue overhead, a purple band at the horizon, dark below it,
+// A night sky for the hive defense scene: deep blue overhead, a purple band at the horizon, dark below it,
 // small fixed stars and a big moon with a soft halo. No lighting. The stars come from a hash of the view direction,
 // so they stay put when the camera moves. HiveDefenseSceneBuilder makes the material and sets the moon's direction.
 Shader "Skybox/DigitalStory/NightSky"

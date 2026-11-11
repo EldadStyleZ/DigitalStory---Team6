@@ -93,7 +93,7 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>Advances every slot: running rules act, and a return beat that is over empties its slot.</summary>
-        public void Tick(float deltaTime, Vector3 piperPosition)
+        public void Tick(float deltaTime, Vector3 corePosition)
         {
             for (int index = 0; index < SlotCount; index++)
             {
@@ -109,7 +109,7 @@ namespace DigitalStory.Logic
 
                 if (!rule.IsReleased)
                 {
-                    rule.Tick(new SongTick(before, _seconds[index], piperPosition));
+                    rule.Tick(new SongTick(before, _seconds[index], corePosition));
 
                     // Something that heard the rule land may have cast over it.
                     if (_rules[index] != rule)
@@ -125,14 +125,14 @@ namespace DigitalStory.Logic
             }
         }
 
-        /// <summary>Tells every running rule that the Piper was hit from <paramref name="direction"/>.</summary>
-        public void NotifyPiperHit(Vector3 direction)
+        /// <summary>Tells every running rule that the core was hit from <paramref name="direction"/>.</summary>
+        public void NotifyCoreHit(Vector3 direction)
         {
             for (int index = 0; index < SlotCount; index++)
             {
                 if (TryGetRunning(index, out SongRule rule))
                 {
-                    rule.NotifyPiperHit(direction, _seconds[index]);
+                    rule.NotifyCoreHit(direction, _seconds[index]);
                 }
             }
         }
@@ -164,27 +164,27 @@ namespace DigitalStory.Logic
             return fraction;
         }
 
-        /// <summary>The running rules' multipliers of the Piper's speed, multiplied together. 1 with none.</summary>
-        public float PiperSpeedMultiplier()
+        /// <summary>The running rules' multipliers of the core's speed, multiplied together. 1 with none.</summary>
+        public float CoreSpeedMultiplier()
         {
             float multiplier = 1f;
             for (int index = 0; index < SlotCount; index++)
             {
                 if (TryGetRunning(index, out SongRule rule))
                 {
-                    multiplier *= rule.PiperSpeedMultiplier;
+                    multiplier *= rule.CoreSpeedMultiplier;
                 }
             }
 
             return multiplier;
         }
 
-        /// <summary>False when a running rule keeps smoke from slowing the Piper.</summary>
-        public bool SmokeSlowsPiper()
+        /// <summary>False when a running rule keeps smoke from slowing the core.</summary>
+        public bool SmokeSlowsCore()
         {
             for (int index = 0; index < SlotCount; index++)
             {
-                if (TryGetRunning(index, out SongRule rule) && !rule.SmokeSlowsPiper)
+                if (TryGetRunning(index, out SongRule rule) && !rule.SmokeSlowsCore)
                 {
                     return false;
                 }

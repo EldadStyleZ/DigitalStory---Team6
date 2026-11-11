@@ -16,7 +16,7 @@ namespace DigitalStory.View
     public sealed class SwarmGlowLight : MonoBehaviour
     {
         // Share of the way to the new value the light covers in a second, roughly. Its place follows faster than its
-        // colour and strength, so it keeps up with the Piper while a change of song still fades in.
+        // colour and strength, so it keeps up with the core while a change of song still fades in.
         private const float FollowPerSecond = 5f;
         private const float MoveFollowPerSecond = 12f;
 

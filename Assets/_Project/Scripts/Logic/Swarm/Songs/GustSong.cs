@@ -28,19 +28,19 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Seconds the pulse ripples through the swarm.")]
         public float Seconds { get; private set; } = 0.8f;
 
-        [field: SerializeField, Min(0f), Tooltip("Metres around the Piper in which smoke is cleared, and that the pulse reaches.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres around the core in which smoke is cleared, and that the pulse reaches.")]
         public float ClearRadius { get; private set; } = 6f;
 
-        [field: SerializeField, Min(0f), Tooltip("Metres around the Piper within which beekeepers are pushed out, each as the ring reaches it. Keep it within ClearRadius, where the ring stops.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres around the core within which beekeepers are pushed out, each as the ring reaches it. Keep it within ClearRadius, where the ring stops.")]
         public float PushRadius { get; private set; } = 3f;
 
-        [field: SerializeField, Min(0f), Tooltip("Metres per second a beekeeper is pushed away from the Piper.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres per second a beekeeper is pushed away from the core.")]
         public float PushSpeed { get; private set; } = 4f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the pulse draws the wasps in before its ring starts. Keep it equal to GustInhaleSeconds in WaspSwarm.compute, so the push lands with the ring.")]
         public float InhaleSeconds { get; private set; } = 0.12f;
 
-        [field: SerializeField, Min(0f), Tooltip("Metres from the Piper at which the ring starts. Keep it equal to GustStartRadius in WaspSwarm.compute.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres from the core at which the ring starts. Keep it equal to GustStartRadius in WaspSwarm.compute.")]
         public float RingStartRadius { get; private set; } = 0.6f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the ring takes to grow from its start to ClearRadius, slowing as it goes. Keep it equal to GustRingSeconds in WaspSwarm.compute.")]
@@ -48,15 +48,15 @@ namespace DigitalStory.Logic
 
         public override void Cast(in SwarmSongContext context)
         {
-            Vector3 piper = context.PiperPosition;
+            Vector3 core = context.CorePosition;
             IReadOnlyList<ISwarmTarget> enemies = context.Enemies ?? throw new ArgumentException("The song context has no beekeeper list.", nameof(context));
 
-            if (!context.Forms.StartGust(this, piper, enemies))
+            if (!context.Forms.StartGust(this, core, enemies))
             {
                 return;
             }
 
-            context.Smoke?.ClearWithin(piper, ClearRadius);
+            context.Smoke?.ClearWithin(core, ClearRadius);
         }
 
         /// <summary>

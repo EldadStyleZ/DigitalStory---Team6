@@ -84,7 +84,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(dome.Radius, Is.EqualTo(2.2f));
             Assert.That(dome.Share, Is.EqualTo(0.35f));
             Assert.That(dome.LossFraction, Is.EqualTo(0.15f), "hits cost 85% fewer wasps");
-            Assert.That(dome.SpeedMultiplier, Is.EqualTo(0.5f), "the Piper at x0.5");
+            Assert.That(dome.SpeedMultiplier, Is.EqualTo(0.5f), "the core at x0.5");
             Assert.That(sting.Seconds, Is.EqualTo(4f));
             Assert.That(sting.Share, Is.EqualTo(0.3f));
             Assert.That(sting.ArriveSeconds, Is.EqualTo(0.6f));
@@ -145,21 +145,21 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Dome_WhileItRuns_LetsThroughItsAssetsShareOfEachLossAndSlowsThePiper()
+        public void Dome_WhileItRuns_LetsThroughItsAssetsShareOfEachLossAndSlowsTheCore()
         {
             var song = Make<DomeSong>();
             JsonUtility.FromJsonOverwrite("{\"<LossFraction>k__BackingField\":0.4,\"<SpeedMultiplier>k__BackingField\":0.7}", song);
             Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f));
-            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(1f));
+            Assert.That(_forms.CoreSpeedMultiplier, Is.EqualTo(1f));
 
             Cast(song);
 
             Assert.That(_forms.WaspLossFraction, Is.EqualTo(0.4f).Within(1e-5f));
-            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(0.7f).Within(1e-5f));
-            Assert.That(_forms.SmokeSlowsPiper, Is.True, "the dome does not keep the smoke off");
+            Assert.That(_forms.CoreSpeedMultiplier, Is.EqualTo(0.7f).Within(1e-5f));
+            Assert.That(_forms.SmokeSlowsCore, Is.True, "the dome does not keep the smoke off");
             _forms.Tick(5f, 2);
             Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f), "its return beat shields nothing");
-            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(1f));
+            Assert.That(_forms.CoreSpeedMultiplier, Is.EqualTo(1f));
         }
 
         [Test]
@@ -326,7 +326,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Sting_AimBeyondItsReach_WrapsTheAirTwelveMetresAway()
         {
-            Cast(Make<StingSong>(), piper: new Vector3(1f, 0f, 1f), aimPoint: new Vector3(1f, 0f, -29f));
+            Cast(Make<StingSong>(), core: new Vector3(1f, 0f, 1f), aimPoint: new Vector3(1f, 0f, -29f));
 
             Assert.That(Strike.ParamA.x, Is.EqualTo(1f).Within(1e-3f));
             Assert.That(Strike.ParamA.z, Is.EqualTo(-11f).Within(1e-3f));
@@ -360,7 +360,7 @@ namespace DigitalStory.Tests.EditMode
             _forms.Tick(0.3f, 2);
 
             Assert.That(near.DamageTaken, Is.EqualTo(30f));
-            Assert.That(near.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f), "6 m/s straight away from the Piper");
+            Assert.That(near.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f), "6 m/s straight away from the core");
             Assert.That(near.LastKnockback.z, Is.EqualTo(0f).Within(1e-3f));
             Assert.That(far.DamageTaken, Is.EqualTo(0f));
             Assert.That(far.LastKnockback, Is.EqualTo(Vector3.zero));
@@ -380,11 +380,11 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tornado_MeasuresFromThePiper()
+        public void Tornado_MeasuresFromTheCore()
         {
             var target = new FakeSwarmTarget { Position = new Vector3(21f, 0f, 20f) };
             _enemies.Add(target);
-            Cast(Make<TornadoSong>(), piper: new Vector3(20f, 0f, 20f));
+            Cast(Make<TornadoSong>(), core: new Vector3(20f, 0f, 20f));
 
             _forms.Tick(0.3f, 2);
 
@@ -393,7 +393,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tornado_PiperWalksBeforeItsHit_HitsAroundWhereThePiperStandsThen()
+        public void Tornado_CoreWalksBeforeItsHit_HitsAroundWhereTheCoreStandsThen()
         {
             var ahead = new FakeSwarmTarget { Position = new Vector3(7f, 0f, 0f) };
             var behind = new FakeSwarmTarget { Position = new Vector3(-4.5f, 0f, 0f) };
@@ -401,7 +401,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(behind);
             Cast(Make<TornadoSong>());
 
-            _forms.SetPiper(new Vector3(3f, 0f, 0f));
+            _forms.SetCore(new Vector3(3f, 0f, 0f));
             _forms.Tick(0.3f, 2);
 
             Assert.That(ahead.DamageTaken, Is.EqualTo(30f), "4 m from where the column stands when it hits");
@@ -467,7 +467,7 @@ namespace DigitalStory.Tests.EditMode
         {
             var onTop = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 2f) };
             _enemies.Add(onTop);
-            Cast(Make<TornadoSong>(), piper: new Vector3(2f, 0f, 2f));
+            Cast(Make<TornadoSong>(), core: new Vector3(2f, 0f, 2f));
 
             _forms.Tick(0.3f, 2);
 
@@ -476,11 +476,11 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tornado_Landed_IsRaisedAtItsHitTimeWhereThePiperStands()
+        public void Tornado_Landed_IsRaisedAtItsHitTimeWhereTheCoreStands()
         {
             var landings = new List<Vector3>();
             _forms.Landed += (form, point) => landings.Add(point);
-            Cast(Make<TornadoSong>(), piper: new Vector3(2f, 0f, 2f));
+            Cast(Make<TornadoSong>(), core: new Vector3(2f, 0f, 2f));
 
             _forms.Tick(0.29f, 2);
             Assert.That(landings, Is.Empty);
@@ -492,10 +492,10 @@ namespace DigitalStory.Tests.EditMode
         // Gust
 
         [Test]
-        public void Gust_Cast_ClearsSmokeWithinSixMetresOfThePiperAndPulses()
+        public void Gust_Cast_ClearsSmokeWithinSixMetresOfTheCoreAndPulses()
         {
             var song = Make<GustSong>();
-            SwarmSongContext context = Context(piper: new Vector3(4f, 0f, 7f));
+            SwarmSongContext context = Context(core: new Vector3(4f, 0f, 7f));
 
             song.Cast(in context);
 
@@ -532,7 +532,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(far);
             _enemies.Add(dead);
 
-            Cast(Make<GustSong>(), piper: new Vector3(1f, 0f, 1f));
+            Cast(Make<GustSong>(), core: new Vector3(1f, 0f, 1f));
             _forms.Tick(0.8f, 2);
 
             Assert.That(near.LastKnockback.x, Is.EqualTo(4f).Within(1e-3f));
@@ -662,7 +662,7 @@ namespace DigitalStory.Tests.EditMode
             song.Cast(in context);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
-            Assert.That(_forms.IsPiperRooted, Is.True);
+            Assert.That(_forms.IsCoreRooted, Is.True);
         }
 
         [Test]
@@ -762,7 +762,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Cast_SongsAroundThePiper_NeverAskTheAimChooser()
+        public void Cast_SongsAroundTheCore_NeverAskTheAimChooser()
         {
             var aim = new FakeSongAim();
             var context = new SwarmSongContext(default, null, default, _body, _forms, _fury, _hives, _enemies, _smoke, aim);
@@ -782,15 +782,15 @@ namespace DigitalStory.Tests.EditMode
             return song;
         }
 
-        private void Cast(SwarmSongEffect song, Vector3 piper = default, ISwarmTarget aim = null, Vector3 aimPoint = default)
+        private void Cast(SwarmSongEffect song, Vector3 core = default, ISwarmTarget aim = null, Vector3 aimPoint = default)
         {
-            SwarmSongContext context = Context(piper, aim, true, aimPoint);
+            SwarmSongContext context = Context(core, aim, true, aimPoint);
             song.Cast(in context);
         }
 
-        private SwarmSongContext Context(Vector3 piper = default, ISwarmTarget aim = null, bool smoke = true, Vector3 aimPoint = default)
+        private SwarmSongContext Context(Vector3 core = default, ISwarmTarget aim = null, bool smoke = true, Vector3 aimPoint = default)
         {
-            return new SwarmSongContext(piper, aim, aimPoint, _body, _forms, _fury, _hives, _enemies, smoke ? _smoke : null);
+            return new SwarmSongContext(core, aim, aimPoint, _body, _forms, _fury, _hives, _enemies, smoke ? _smoke : null);
         }
 
         private static void AssertSong(SwarmSongEffect song, string title, float cooldown, params int[] keys)

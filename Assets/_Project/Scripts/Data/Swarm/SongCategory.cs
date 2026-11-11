@@ -6,7 +6,7 @@ namespace DigitalStory.Data
         /// <summary>Hurts beekeepers. Shown in red.</summary>
         Attack,
 
-        /// <summary>Protects the Piper. Shown in blue.</summary>
+        /// <summary>Protects the core. Shown in blue.</summary>
         Defense,
 
         /// <summary>Strengthens the swarm. Shown in gold.</summary>

@@ -15,7 +15,7 @@ using UnityEngine.UIElements;
 namespace DigitalStory.Tests.PlayMode
 {
     /// <summary>
-    /// Renders the Wasp Piper scene's camera into PNG files so a reviewer can see the swarm without opening the Editor.
+    /// Renders the hive defense scene's camera into PNG files so a reviewer can see the swarm without opening the Editor.
     /// Each test is ignored unless the F010_SNAPSHOT_DIR environment variable names a folder. Every song is played with
     /// the keys on its own asset, so a change of keys never breaks these tests.
     /// </summary>
@@ -83,7 +83,7 @@ namespace DigitalStory.Tests.PlayMode
         private const string GrowSuffix = "-grow";
 
         private HiveDefenseRoot _root;
-        private PiperMotor _piper;
+        private SwarmCoreMotor _core;
         private Camera _camera;
         private SnapshotCapturer _capturer;
         private string _directory;
@@ -112,10 +112,10 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             _root = UnityEngine.Object.FindAnyObjectByType<HiveDefenseRoot>();
-            _piper = UnityEngine.Object.FindAnyObjectByType<PiperMotor>();
+            _core = UnityEngine.Object.FindAnyObjectByType<SwarmCoreMotor>();
             _camera = Camera.main != null ? Camera.main : UnityEngine.Object.FindAnyObjectByType<Camera>();
             Assert.That(_root, Is.Not.Null);
-            Assert.That(_piper, Is.Not.Null);
+            Assert.That(_core, Is.Not.Null);
             Assert.That(_camera, Is.Not.Null);
 
             // Made in the loaded scene, so the next test's scene load removes it.
@@ -136,7 +136,7 @@ namespace DigitalStory.Tests.PlayMode
         {
             yield return Wait(StandSeconds);
             yield return Capture("snap-1-river-standing");
-            yield return CaptureClose("snap-1-river-standing", PiperFocus());
+            yield return CaptureClose("snap-1-river-standing", CoreFocus());
 
             // One hive hurt (shorter bar and the red ring), one destroyed (flattened and dark, no bar).
             Hive hurt = _root.Session.Hives[0];
@@ -157,13 +157,13 @@ namespace DigitalStory.Tests.PlayMode
             {
                 float dt = Time.deltaTime;
                 angle += TurnRate * dt;
-                _piper.Move(new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle)), 1f, false, dt);
+                _core.Move(new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle)), 1f, false, dt);
                 elapsed += dt;
                 yield return null;
             }
 
             yield return Capture("snap-2-river-walking");
-            yield return CaptureClose("snap-2-river-walking", PiperFocus());
+            yield return CaptureClose("snap-2-river-walking", CoreFocus());
         }
 
         [UnityTest]
@@ -174,7 +174,7 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(_root.Session.Forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
             yield return Wait(SongSeconds);
             yield return Capture("snap-3-dome");
-            yield return CaptureClose("snap-3-dome", PiperFocus());
+            yield return CaptureClose("snap-3-dome", CoreFocus());
         }
 
         [UnityTest]
@@ -257,10 +257,10 @@ namespace DigitalStory.Tests.PlayMode
             // The hit: the column has grown from the ground and the shock ring flies out to the reach.
             yield return WaitSince(castTime, TornadoGrowShotSeconds);
             yield return CaptureClose(
-                "snap-8-tornado" + GrowSuffix, _piper.Position + (Vector3.up * TornadoFocusHeight), WideCloseDistance, LowPitch);
+                "snap-8-tornado" + GrowSuffix, _core.Position + (Vector3.up * TornadoFocusHeight), WideCloseDistance, LowPitch);
             yield return WaitSince(castTime, TornadoSeconds);
             yield return Capture("snap-8-tornado");
-            yield return CaptureClose("snap-8-tornado", _piper.Position + (Vector3.up * TornadoFocusHeight), WideCloseDistance, LowPitch);
+            yield return CaptureClose("snap-8-tornado", _core.Position + (Vector3.up * TornadoFocusHeight), WideCloseDistance, LowPitch);
         }
 
         // Camera.Render does not draw UI Toolkit, so the HUD panel is pointed at a render texture for a few frames,
@@ -336,38 +336,38 @@ namespace DigitalStory.Tests.PlayMode
             float castTime = Time.time;
             SlotState strike = _root.Session.Forms.Slot(SongSlot.Strike);
             Assert.That(strike.Form, Is.EqualTo(SwarmForm.Meteor));
-            Vector3 piper = _piper.Position;
+            Vector3 core = _core.Position;
             Vector3 impact = strike.ParamA;
 
             yield return WaitSince(castTime, MeteorRiseShotSeconds);
-            yield return CaptureMeteor("snap-10-meteor-rise", piper, impact);
+            yield return CaptureMeteor("snap-10-meteor-rise", core, impact);
             yield return WaitSince(castTime, MeteorDiveShotSeconds);
-            yield return CaptureMeteor("snap-10-meteor-dive", piper, impact);
+            yield return CaptureMeteor("snap-10-meteor-dive", core, impact);
             yield return WaitSince(castTime, MeteorImpactShotSeconds);
-            yield return CaptureMeteor("snap-10-meteor-impact", piper, impact);
+            yield return CaptureMeteor("snap-10-meteor-impact", core, impact);
         }
 
-        // Spec 9.3: once the Piper stops, the river curls back into the ring around them.
+        // Spec 9.3: once the core stops, the river curls back into the ring around it.
         [UnityTest]
         public IEnumerator Snapshot11_StopAfterWalk()
         {
-            Vector3 start = _piper.Position;
+            Vector3 start = _core.Position;
             float elapsed = 0f;
-            while (GroundDistance(start, _piper.Position) < StopAfterWalkMeters && elapsed < MaxWalkSeconds)
+            while (GroundDistance(start, _core.Position) < StopAfterWalkMeters && elapsed < MaxWalkSeconds)
             {
                 float dt = Time.deltaTime;
-                _piper.Move(Vector3.forward, 1f, false, dt);
+                _core.Move(Vector3.forward, 1f, false, dt);
                 elapsed += dt;
                 yield return null;
             }
 
-            Assert.That(GroundDistance(start, _piper.Position), Is.GreaterThanOrEqualTo(StopAfterWalkMeters));
+            Assert.That(GroundDistance(start, _core.Position), Is.GreaterThanOrEqualTo(StopAfterWalkMeters));
             yield return Wait(StopAfterWalkSeconds);
             yield return Capture("snap-11-stop-after-walk");
-            yield return CaptureClose("snap-11-stop-after-walk", PiperFocus());
+            yield return CaptureClose("snap-11-stop-after-walk", CoreFocus());
         }
 
-        // Plan section G, M1: the Dome (blue, around the Piper) and the Sting (red, on a beekeeper) at once, while the rest
+        // Plan section G, M1: the Dome (blue, around the core) and the Sting (red, on a beekeeper) at once, while the rest
         // of the swarm still flows as the yellow river.
         [UnityTest]
         public IEnumerator Snapshot12_DomeAndSting()
@@ -456,13 +456,13 @@ namespace DigitalStory.Tests.PlayMode
 
         private IEnumerator WalkToNearestBeekeeper() => WalkToNearestBeekeeper(NearBeekeeperMeters);
 
-        // Walks the Piper toward the nearest beekeeper until it is this close, so both are in the picture.
+        // Walks the core toward the nearest beekeeper until it is this close, so both are in the picture.
         private IEnumerator WalkToNearestBeekeeper(float stopMeters)
         {
             float elapsed = 0f;
             while (elapsed < MaxWalkSeconds && TryNearestBeekeeper(out BeekeeperBrain nearest))
             {
-                Vector3 offset = nearest.Position - _piper.Position;
+                Vector3 offset = nearest.Position - _core.Position;
                 offset.y = 0f;
                 if (offset.magnitude <= stopMeters)
                 {
@@ -470,7 +470,7 @@ namespace DigitalStory.Tests.PlayMode
                 }
 
                 float dt = Time.deltaTime;
-                _piper.Move(offset.normalized, 1f, false, dt);
+                _core.Move(offset.normalized, 1f, false, dt);
                 elapsed += dt;
                 yield return null;
             }
@@ -489,7 +489,7 @@ namespace DigitalStory.Tests.PlayMode
                     continue;
                 }
 
-                float distance = (brain.Position - _piper.Position).sqrMagnitude;
+                float distance = (brain.Position - _core.Position).sqrMagnitude;
                 if (distance < best)
                 {
                     best = distance;
@@ -500,16 +500,16 @@ namespace DigitalStory.Tests.PlayMode
             return nearest != null;
         }
 
-        private Vector3 PiperFocus() => _piper.Position + (Vector3.up * CloseFocusHeight);
+        private Vector3 CoreFocus() => _core.Position + (Vector3.up * CloseFocusHeight);
 
         private Vector3 MidpointToNearestBeekeeper()
         {
             if (!TryNearestBeekeeper(out BeekeeperBrain nearest))
             {
-                return PiperFocus();
+                return CoreFocus();
             }
 
-            return ((_piper.Position + nearest.Position) * 0.5f) + (Vector3.up * CloseFocusHeight);
+            return ((_core.Position + nearest.Position) * 0.5f) + (Vector3.up * CloseFocusHeight);
         }
 
         private IEnumerator Capture(string name)
@@ -526,10 +526,10 @@ namespace DigitalStory.Tests.PlayMode
             return CapturePosed(name + CloseSuffix, focus, distance, pitch, _camera.transform.eulerAngles.y);
         }
 
-        // Looks across the line from the Piper to the impact, so both stand apart in the picture, then from the game camera.
-        private IEnumerator CaptureMeteor(string name, Vector3 piper, Vector3 impact)
+        // Looks across the line from the core to the impact, so both stand apart in the picture, then from the game camera.
+        private IEnumerator CaptureMeteor(string name, Vector3 core, Vector3 impact)
         {
-            Vector3 across = impact - piper;
+            Vector3 across = impact - core;
             across.y = 0f;
             float yaw = _camera.transform.eulerAngles.y;
             if (across.sqrMagnitude > 0f)
@@ -537,7 +537,7 @@ namespace DigitalStory.Tests.PlayMode
                 yaw = (Mathf.Atan2(across.x, across.z) * Mathf.Rad2Deg) + QuarterTurnDegrees;
             }
 
-            Vector3 focus = ((piper + impact) * 0.5f) + (Vector3.up * MeteorFocusHeight);
+            Vector3 focus = ((core + impact) * 0.5f) + (Vector3.up * MeteorFocusHeight);
             yield return CapturePosed(name, focus, MeteorViewDistance, MeteorViewPitch, yaw);
             yield return Capture(name + GameSuffix);
         }

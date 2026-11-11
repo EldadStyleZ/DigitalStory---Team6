@@ -58,9 +58,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // With no shield, every loss and all damage gets through.
-        private void Tick(float deltaTime, HiveSet hives = null, Vector3? piper = null, IDamageShield shield = null)
+        private void Tick(float deltaTime, HiveSet hives = null, Vector3? core = null, IDamageShield shield = null)
         {
-            _field.Tick(deltaTime, hives ?? SetOf(), _swarm, piper ?? Far, shield ?? new FakeDamageShield());
+            _field.Tick(deltaTime, hives ?? SetOf(), _swarm, core ?? Far, shield ?? new FakeDamageShield());
         }
 
         private void LandACloudAt(Vector3 position)
@@ -305,55 +305,55 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_PiperInsideCloud_SwarmLosesWaspsPerSecond()
+        public void Tick_CoreInsideCloud_SwarmLosesWaspsPerSecond()
         {
             LandACloudAt(Landing);
 
-            Tick(1f, piper: Landing);
+            Tick(1f, core: Landing);
 
             Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps - (int)_config.WaspLossPerSecond));
-            Assert.That(_field.IsPiperInSmoke, Is.True);
+            Assert.That(_field.IsCoreInSmoke, Is.True);
         }
 
         [Test]
-        public void Tick_PiperExactlyOnTheEdge_IsInSmoke()
+        public void Tick_CoreExactlyOnTheEdge_IsInSmoke()
         {
             LandACloudAt(Landing);
 
-            Tick(0.1f, piper: Landing + new Vector3(0f, 0f, Radius));
+            Tick(0.1f, core: Landing + new Vector3(0f, 0f, Radius));
 
-            Assert.That(_field.IsPiperInSmoke, Is.True);
+            Assert.That(_field.IsCoreInSmoke, Is.True);
         }
 
         [Test]
-        public void Tick_PiperJustOutsideTheEdge_IsSafe()
+        public void Tick_CoreJustOutsideTheEdge_IsSafe()
         {
             LandACloudAt(Landing);
 
-            Tick(1f, piper: Landing + new Vector3(0f, 0f, Radius + 0.01f));
+            Tick(1f, core: Landing + new Vector3(0f, 0f, Radius + 0.01f));
 
-            Assert.That(_field.IsPiperInSmoke, Is.False);
+            Assert.That(_field.IsCoreInSmoke, Is.False);
             Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps));
         }
 
         [Test]
-        public void Tick_PiperHeightIsIgnored()
+        public void Tick_CoreHeightIsIgnored()
         {
             LandACloudAt(Landing);
 
-            Tick(0.1f, piper: Landing + new Vector3(0f, 5f, 0f));
+            Tick(0.1f, core: Landing + new Vector3(0f, 5f, 0f));
 
-            Assert.That(_field.IsPiperInSmoke, Is.True);
+            Assert.That(_field.IsCoreInSmoke, Is.True);
         }
 
         [Test]
-        public void Tick_PiperInSmokeWithDome_LosesOnlyTheDomeShare()
+        public void Tick_CoreInSmokeWithDome_LosesOnlyTheDomeShare()
         {
             LandACloudAt(Landing);
             var dome = new FakeDamageShield { WaspLossFraction = 0.15f };
             int expected = _swarmConfig.StartingWasps - (int)Math.Round(_config.WaspLossPerSecond * dome.WaspLossFraction);
 
-            Tick(1f, piper: Landing, shield: dome);
+            Tick(1f, core: Landing, shield: dome);
 
             Assert.That(_swarm.Count, Is.EqualTo(expected));
         }
@@ -365,60 +365,60 @@ namespace DigitalStory.Tests.EditMode
 
             for (int i = 0; i < 60; i++)
             {
-                Tick(1f / 60f, piper: Landing);
+                Tick(1f / 60f, core: Landing);
             }
 
             Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps - (int)_config.WaspLossPerSecond).Within(1));
         }
 
         [Test]
-        public void Tick_TwoCloudsOverlapPiper_DrainsOnlyOnce()
+        public void Tick_TwoCloudsOverlapCore_DrainsOnlyOnce()
         {
             LandACloudAt(Landing);
             LandACloudAt(Landing);
             int before = _swarm.Count;
 
-            Tick(1f, piper: Landing);
+            Tick(1f, core: Landing);
 
             Assert.That(before - _swarm.Count, Is.EqualTo((int)_config.WaspLossPerSecond));
         }
 
         [Test]
-        public void Tick_NoCloud_PiperIsNotInSmoke()
+        public void Tick_NoCloud_CoreIsNotInSmoke()
         {
-            Tick(1f, piper: Landing);
+            Tick(1f, core: Landing);
 
-            Assert.That(_field.IsPiperInSmoke, Is.False);
+            Assert.That(_field.IsCoreInSmoke, Is.False);
         }
 
         [Test]
-        public void IsPiperInSmoke_BeforeAnyTick_IsFalse()
+        public void IsCoreInSmoke_BeforeAnyTick_IsFalse()
         {
-            Assert.That(_field.IsPiperInSmoke, Is.False);
+            Assert.That(_field.IsCoreInSmoke, Is.False);
         }
 
         [Test]
-        public void Tick_CloudExpires_PiperIsNoLongerInSmoke()
+        public void Tick_CloudExpires_CoreIsNoLongerInSmoke()
         {
             LandACloudAt(Landing);
-            Tick(LifeSeconds, piper: Landing);
+            Tick(LifeSeconds, core: Landing);
 
-            Tick(0.1f, piper: Landing);
+            Tick(0.1f, core: Landing);
 
-            Assert.That(_field.IsPiperInSmoke, Is.False);
+            Assert.That(_field.IsCoreInSmoke, Is.False);
         }
 
         [Test]
-        public void Tick_PiperWalksOut_StopsLosingWasps()
+        public void Tick_CoreWalksOut_StopsLosingWasps()
         {
             LandACloudAt(Landing);
-            Tick(1f, piper: Landing);
+            Tick(1f, core: Landing);
             int afterFirst = _swarm.Count;
 
-            Tick(1f, piper: Far);
+            Tick(1f, core: Far);
 
             Assert.That(_swarm.Count, Is.EqualTo(afterFirst));
-            Assert.That(_field.IsPiperInSmoke, Is.False);
+            Assert.That(_field.IsCoreInSmoke, Is.False);
         }
 
         [Test]
@@ -494,7 +494,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(hive.Health, Is.EqualTo(hive.MaxHealth).Within(Tolerance));
             Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps));
-            Assert.That(_field.IsPiperInSmoke, Is.False);
+            Assert.That(_field.IsCoreInSmoke, Is.False);
         }
 
         [Test]

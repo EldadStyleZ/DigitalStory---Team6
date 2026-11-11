@@ -26,11 +26,11 @@ namespace DigitalStory.Tests.EditMode
         /// <summary>The share of each wasp loss its rule lets through while it runs.</summary>
         public float WaspLossFraction { get; set; } = 1f;
 
-        /// <summary>How much its rule multiplies the Piper's speed while it runs.</summary>
-        public float PiperSpeedMultiplier { get; set; } = 1f;
+        /// <summary>How much its rule multiplies the core's speed while it runs.</summary>
+        public float CoreSpeedMultiplier { get; set; } = 1f;
 
-        /// <summary>False when its rule keeps smoke from slowing the Piper.</summary>
-        public bool SmokeSlowsPiper { get; set; } = true;
+        /// <summary>False when its rule keeps smoke from slowing the core.</summary>
+        public bool SmokeSlowsCore { get; set; } = true;
 
         /// <summary>The hive its rule shields, or -1 for none.</summary>
         public int ShieldedHive { get; set; } = -1;

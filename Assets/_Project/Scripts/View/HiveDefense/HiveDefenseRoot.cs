@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 namespace DigitalStory.View
 {
     /// <summary>
-    /// The Wasp Piper scene's single composition root. It builds the rules and the session, connects every view to them,
+    /// The hive defense scene's single composition root. It builds the rules and the session, connects every view to them,
     /// feeds the session each frame and shows what the session decided. It holds no game rule.
     /// </summary>
     [DisallowMultipleComponent]
@@ -18,8 +18,8 @@ namespace DigitalStory.View
         private const int RequiredHiveCount = 2;
         private const float MinimumTrailMeters = 0.001f;
 
-        // Share of the river's length behind the Piper where its light hangs: nearer the head than the middle, so the
-        // Piper walks in the light too.
+        // Share of the river's length behind the core where its light hangs: nearer the head than the middle, so the
+        // inner ring at the core is in the light too.
         private const float RiverLightShare = 0.35f;
 
         // Share of the way per second the attack light covers toward its target, slower than the light's own follow,
@@ -39,8 +39,8 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("How auto-aim chooses what an aimed song strikes.")]
         private AimConfig _aim;
 
-        [SerializeField, Tooltip("How fast the Piper moves and what slows it.")]
-        private PiperMoveConfig _piperMove;
+        [SerializeField, Tooltip("How fast the core moves and what slows it.")]
+        private CoreMoveConfig _coreMove;
 
         [SerializeField, Tooltip("The Fury meter's numbers.")]
         private FuryConfig _fury;
@@ -66,7 +66,7 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("How long the song window is and how many notes it remembers.")]
         private SongConfig _songConfig;
 
-        [SerializeField, Tooltip("Every song the Piper can play, including the Dome, Tornado and Meteor songs.")]
+        [SerializeField, Tooltip("Every song the player can play, including the Dome, Tornado and Meteor songs.")]
         private SwarmSongEffect[] _songs = new SwarmSongEffect[0];
 
         [SerializeField, Min(1), Tooltip("How many holes the flute has. The input has four keys: H J K L.")]
@@ -82,13 +82,10 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Reads the keyboard and mouse.")]
         private HiveDefenseInput _input;
 
-        [SerializeField, Tooltip("Walks the Piper.")]
-        private PiperMotor _piperMotor;
+        [SerializeField, Tooltip("Moves the swarm's core, the point the swarm gathers around.")]
+        private SwarmCoreMotor _coreMotor;
 
-        [SerializeField, Tooltip("The Piper's Animator. May stay empty.")]
-        private Animator _piperAnimator;
-
-        [SerializeField, Tooltip("Follows the Piper, or the giant while it stands.")]
+        [SerializeField, Tooltip("Follows the core, from further back while the giant stands.")]
         private FollowCamera _followCamera;
 
         [SerializeField, Tooltip("The camera that the mouse aim is relative to.")]
@@ -134,21 +131,19 @@ namespace DigitalStory.View
         private HiveDefenseHudView _hud;
 
         [Header("Sound")]
-        [SerializeField, Tooltip("Sounds each note the Piper plays. May stay empty, and the flute is then silent.")]
+        [SerializeField, Tooltip("Sounds each note the player plays. May stay empty, and the flute is then silent.")]
         private SwarmFluteVoice _fluteVoice;
 
         [SerializeField, Tooltip("How the flute sounds. Needed when the flute voice is set; it must have a pitch for every hole.")]
         private SoundConfig _sound;
 
         private PathTrail _trail;
-        private Transform _piperTransform;
-        private Transform _colossusTransform;
         private Vector3 _lastAimPoint;
         private Vector3 _attackSpot;
         private bool _isAttackSpotSet;
         private int _holeMask;
         private bool _hasFormChangedThisTick;
-        private bool _isFollowingColossus;
+        private bool _isCameraBackForColossus;
         private bool _isRestarting;
         private bool _isReady;
 
@@ -156,8 +151,7 @@ namespace DigitalStory.View
         public HiveDefenseSession Session { get; private set; }
 
         /// <summary>
-        /// The one entry point for a played note. Collects the hole for the next tick and shows the playing pose.
-        /// The hole counts from 0.
+        /// The one entry point for a played note. Collects the hole for the next tick and sounds it. The hole counts from 0.
         /// </summary>
         public void PressHole(int hole)
         {
@@ -167,7 +161,6 @@ namespace DigitalStory.View
             }
 
             _holeMask |= HiveDefenseFrame.HoleBit(hole);
-            _piperMotor.NotifyNotePlayed();
 
             if (_fluteVoice != null)
             {
@@ -191,19 +184,16 @@ namespace DigitalStory.View
                 spawns[index] = _spawnPoints[index].position;
             }
 
-            _piperTransform = _piperMotor.transform;
-            _colossusTransform = _colossusMotor.transform;
-
             var rules = new HiveDefenseRules(
-                _swarm, _squads, _piperMove, _fury, _colossus, _hive, _smoke, _waves, _stick, _smoker, _aim, _songConfig, _songs, _holeCount);
+                _swarm, _squads, _coreMove, _fury, _colossus, _hive, _smoke, _waves, _stick, _smoker, _aim, _songConfig, _songs, _holeCount);
             var random = new Mulberry32Random(unchecked((uint)_seed));
-            Session = new HiveDefenseSession(rules, positions, spawns, _piperMotor.Position, random);
+            Session = new HiveDefenseSession(rules, positions, spawns, _coreMotor.Position, random);
 
             _trail = new PathTrail(_swarm.TrailPoints, _swarm.TrailSpacing);
-            _trail.Reset(_piperMotor.Position);
+            _trail.Reset(_coreMotor.Position);
 
             _input.Initialize(_camera);
-            _piperMotor.Initialize(_piperMove, _piperAnimator);
+            _coreMotor.Initialize(_coreMove);
             _swarmView.Initialize(_swarm, _trail);
             _glowLight.Initialize(_swarm);
             _attackGlowLight.Initialize(_swarm);
@@ -221,12 +211,12 @@ namespace DigitalStory.View
             if (_fluteVoice != null)
             {
                 // A held key keeps its note sounding past the shortest note length.
-                _fluteVoice.Initialize(_sound, _piperMove);
+                _fluteVoice.Initialize(_sound, _coreMove);
                 _fluteVoice.Connect(_input);
             }
 
-            _followCamera.SetTarget(_piperTransform);
-            _lastAimPoint = _piperMotor.Position;
+            _followCamera.SetTarget(_coreMotor.transform);
+            _lastAimPoint = _coreMotor.Position;
             _input.HolePressed += PressHole;
             _isReady = true;
         }
@@ -298,27 +288,21 @@ namespace DigitalStory.View
                 return;
             }
 
+            // While the giant stands the move steers the giant, which the session moves with the core inside it, so the
+            // motor only settles the core on the ground.
             bool isColossus = Session.IsColossusActive;
             Vector3 move = _input.Move;
-            // While the giant stands the Piper stays put but still animates, plays and settles.
-            _piperMotor.Move(
-                isColossus ? Vector3.zero : move, Session.PiperSpeedMultiplier, isColossus || Session.IsPiperRooted, dt);
-
-            _piperMotor.SetChannelling(Session.IsPiperRooted);
-
-            Vector3 piper = _piperMotor.Position;
-            _trail.Push(piper);
+            _coreMotor.Move(
+                isColossus ? Vector3.zero : move, Session.CoreSpeedMultiplier, isColossus || Session.IsCoreRooted, dt);
 
             if (_input.TryGetAimPoint(out Vector3 aim))
             {
                 _lastAimPoint = aim;
             }
 
-            // While the giant stands, the move steers the giant and the Piper stays where it is. The mouse aims only while
-            // it is live; otherwise auto-aim chooses.
+            // The mouse aims only while it is live; otherwise auto-aim chooses.
             var frame = new HiveDefenseFrame(
-                piper,
-                _piperMotor.Forward,
+                _coreMotor.Position,
                 _lastAimPoint,
                 new Vector2(move.x, move.z),
                 _holeMask,
@@ -329,8 +313,15 @@ namespace DigitalStory.View
             _hasFormChangedThisTick = false;
             Session.Tick(in frame, dt);
 
-            FeedSwarm(piper);
-            FeedGlow(piper, dt);
+            // The session says where the core is: inside the giant while it stands, where the giant stood when it ends, and
+            // never past the play area's edge. Once the giant is gone the core is put down clear of hives and walls, so the
+            // controller has nothing to jump out of on the next move.
+            _coreMotor.PlaceAt(Session.CorePosition, !Session.IsColossusActive);
+            Vector3 core = _coreMotor.Position;
+            _trail.Push(core);
+
+            FeedSwarm(core);
+            FeedGlow(core, dt);
             FeedCamera();
         }
 
@@ -349,42 +340,42 @@ namespace DigitalStory.View
             }
         }
 
-        // One light stands in for the glow of the wasps that stay with the Piper, and a second one for the Strike squad,
+        // One light stands in for the glow of the wasps that stay with the core, and a second one for the Strike squad,
         // the wasps that attack. The first hangs over the middle of the river or the ring in the river's colour, over the
-        // Piper in the Guard song's colour while one shields them, or over the giant; it is as strong as the swarm is full
+        // core in the Guard song's colour while one shields it, or over the giant; it is as strong as the swarm is full
         // and the share that stays. The second travels with the striking squad in its colour, and fades as the squad flies
         // home. Both sit a little toward the camera, so the sides it sees are lit.
-        private void FeedGlow(Vector3 piper, float deltaTime)
+        private void FeedGlow(Vector3 core, float deltaTime)
         {
             SwarmFormMachine forms = Session.Forms;
             SwarmForm form = forms.Current;
             SlotState guard = forms.Slot(SongSlot.Guard);
             SlotState strike = forms.Slot(SongSlot.Strike);
-            Vector3 middle = RiverMiddle(piper);
+            Vector3 middle = RiverMiddle(core);
             Color color = _swarm.RiverColor;
 
             if (form == SwarmForm.Colossus)
             {
-                middle = _colossusTransform.position;
+                middle = Session.ColossusPosition;
                 color = _swarmView.CastColor;
             }
             else if (form == SwarmForm.HiveCall)
             {
-                middle = piper;
+                middle = core;
                 color = _swarmView.CastColor;
             }
             else if (guard.IsActive && guard.ReleasedSeconds < 0f)
             {
-                middle = piper;
+                middle = core;
                 color = _swarm.ColorOf(guard.Category);
             }
 
             float attackShare = 0f;
-            Vector3 attackAt = piper;
+            Vector3 attackAt = core;
             if (strike.IsActive)
             {
                 attackShare = (strike.High - strike.Low) * StrikeLightLeft(strike);
-                attackAt = StrikeLightPoint(piper, strike);
+                attackAt = StrikeLightPoint(core, strike);
             }
 
             Vector3 towardCamera = -_camera.transform.forward;
@@ -427,10 +418,10 @@ namespace DigitalStory.View
             return beat > 0f ? 1f - Mathf.Clamp01(strike.ReleasedSeconds / beat) : 0f;
         }
 
-        // Where the striking squad is: on the sting's target, or on the meteor's ball (over the Piper while it climbs and
+        // Where the striking squad is: on the sting's target, or on the meteor's ball (over the core while it climbs and
         // hangs, then along the line down to the impact point, as MeteorSteer in WaspSwarm.compute flies it), or around the
-        // Piper for a song that strikes there, such as the Tornado.
-        private static Vector3 StrikeLightPoint(Vector3 piper, in SlotState strike)
+        // core for a song that strikes there, such as the Tornado.
+        private static Vector3 StrikeLightPoint(Vector3 core, in SlotState strike)
         {
             Vector4 a = strike.ParamA;
             Vector3 target = new Vector3(a.x, a.y, a.z);
@@ -441,11 +432,11 @@ namespace DigitalStory.View
 
             if (strike.Form != SwarmForm.Meteor)
             {
-                return piper;
+                return core;
             }
 
             Vector4 b = strike.ParamB;
-            Vector3 top = piper + (Vector3.up * a.w);
+            Vector3 top = core + (Vector3.up * a.w);
             float diveSeconds = strike.Seconds - b.x;
             if (diveSeconds <= 0f)
             {
@@ -456,30 +447,30 @@ namespace DigitalStory.View
             return Vector3.Lerp(top, target, dive);
         }
 
-        // About a third of the way along the river behind the Piper, or the Piper while the river curls into the ring around
-        // them. It follows the swarm's own blend in WaspSwarm.compute (RiverTarget): a short path, or standing, makes the ring.
-        private Vector3 RiverMiddle(Vector3 piper)
+        // About a third of the way along the river behind the core, or the core while the river curls into the ring around
+        // it. It follows the swarm's own blend in WaspSwarm.compute (RiverTarget): a short path, or standing, makes the ring.
+        private Vector3 RiverMiddle(Vector3 core)
         {
             float length = _trail.Length;
             if (!(length > 0f))
             {
-                return piper;
+                return core;
             }
 
             float back = Mathf.Min(_swarm.RiverLengthMeters, length) * RiverLightShare;
             Vector3 river = _trail.PointAt(back / length);
-            river.y = piper.y;
+            river.y = core.y;
             float trailShare = Mathf.Clamp01(length / Mathf.Max(_swarm.StandingTrailMeters, MinimumTrailMeters));
             float riverShare = trailShare * (1f - _swarmView.StandingShare);
-            return Vector3.Lerp(piper, river, riverShare);
+            return Vector3.Lerp(core, river, riverShare);
         }
 
-        private void FeedSwarm(Vector3 piper)
+        private void FeedSwarm(Vector3 core)
         {
             SwarmFormMachine forms = Session.Forms;
             _swarmView.SetActiveCount(Session.Swarm.Count);
             _swarmView.SetForm(forms.Current);
-            _swarmView.SetPiper(piper, _piperMotor.Forward);
+            _swarmView.SetCore(core, Session.CoreFacing);
 
             for (int index = 0; index < Slots.Length; index++)
             {
@@ -494,23 +485,22 @@ namespace DigitalStory.View
             _swarmView.SetLastHit(Session.LastHitPoint);
         }
 
+        // The camera always follows the core, which rides inside the giant while it stands; it only steps back for the giant.
         private void FeedCamera()
         {
             bool isColossus = Session.IsColossusActive;
-            if (isColossus == _isFollowingColossus)
+            if (isColossus == _isCameraBackForColossus)
             {
                 return;
             }
 
-            _isFollowingColossus = isColossus;
+            _isCameraBackForColossus = isColossus;
             if (isColossus)
             {
-                _followCamera.SetTarget(_colossusTransform);
                 _followCamera.SetDistance(_colossus.CameraDistance);
             }
             else
             {
-                _followCamera.SetTarget(_piperTransform);
                 _followCamera.ResetDistance();
             }
         }
@@ -520,7 +510,7 @@ namespace DigitalStory.View
             Require(_swarm, nameof(_swarm));
             Require(_squads, nameof(_squads));
             Require(_aim, nameof(_aim));
-            Require(_piperMove, nameof(_piperMove));
+            Require(_coreMove, nameof(_coreMove));
             Require(_fury, nameof(_fury));
             Require(_colossus, nameof(_colossus));
             Require(_hive, nameof(_hive));
@@ -531,7 +521,7 @@ namespace DigitalStory.View
             Require(_songConfig, nameof(_songConfig));
             Require(_colossusSamples, nameof(_colossusSamples));
             Require(_input, nameof(_input));
-            Require(_piperMotor, nameof(_piperMotor));
+            Require(_coreMotor, nameof(_coreMotor));
             Require(_followCamera, nameof(_followCamera));
             Require(_camera, nameof(_camera));
             Require(_swarmView, nameof(_swarmView));

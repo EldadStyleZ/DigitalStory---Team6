@@ -60,7 +60,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_forms.SecondsInForm, Is.EqualTo(0f));
             Assert.That(_forms.IsDomed, Is.False);
-            Assert.That(_forms.IsPiperRooted, Is.False);
+            Assert.That(_forms.IsCoreRooted, Is.False);
             Assert.That(_forms.GustSeconds, Is.EqualTo(-1f));
             Assert.That(_forms.Slot(SongSlot.Post).IsActive, Is.False);
             Assert.That(_forms.Slot(SongSlot.Guard).IsActive, Is.False);
@@ -80,7 +80,7 @@ namespace DigitalStory.Tests.EditMode
             Start(SwarmForm.Dome, 5f);
 
             Assert.That(_forms.IsDomed, Is.True);
-            Assert.That(_forms.IsPiperRooted, Is.False);
+            Assert.That(_forms.IsCoreRooted, Is.False);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River), "the Dome runs in the Guard slot beside the river");
             Assert.That(_changes, Is.Empty);
         }
@@ -124,7 +124,7 @@ namespace DigitalStory.Tests.EditMode
             _forms.Tick(0.5f, 2);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(_changes[_changes.Count - 1], Is.EqualTo(SwarmForm.River));
-            Assert.That(_forms.IsPiperRooted, Is.False);
+            Assert.That(_forms.IsCoreRooted, Is.False);
         }
 
         [Test]
@@ -225,15 +225,18 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_fury.Value, Is.EqualTo(0f));
         }
 
+        // Plan section K: the core rides inside the giant, so nothing is left rooted behind. Only Hive Call roots it.
         [Test]
-        public void StartColossus_RootsThePiper()
+        public void StartColossus_DoesNotRootTheCore()
         {
             _forms.StartColossus(12f);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
-            Assert.That(_forms.IsPiperRooted, Is.True);
+            Assert.That(_forms.IsCoreRooted, Is.False);
         }
 
+        // The giant no longer roots the core, so the collapse has no root to lift. What it must do is end the giant at once,
+        // with one change of form that the session and the View follow.
         [Test]
         public void Colossus_SwarmCollapses_EndsInTheCollapse()
         {
@@ -242,18 +245,18 @@ namespace DigitalStory.Tests.EditMode
             _body.Lose(_config.StartingWasps - 100);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
-            Assert.That(_forms.IsPiperRooted, Is.False);
+            Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Colossus, SwarmForm.Collapsed }));
         }
 
         // Hive Call
 
         [Test]
-        public void StartHiveCall_RootsThePiper()
+        public void StartHiveCall_RootsTheCore()
         {
             _forms.StartHiveCall();
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
-            Assert.That(_forms.IsPiperRooted, Is.True);
+            Assert.That(_forms.IsCoreRooted, Is.True);
         }
 
         [Test]
@@ -285,19 +288,19 @@ namespace DigitalStory.Tests.EditMode
             _forms.NotifyHit(Vector3.right);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
-            Assert.That(_forms.IsPiperRooted, Is.False);
+            Assert.That(_forms.IsCoreRooted, Is.False);
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.HiveCall, SwarmForm.River }));
         }
 
         [Test]
-        public void NotifyPiperMoved_DuringHiveCall_CancelsIt()
+        public void NotifyCoreMoved_DuringHiveCall_CancelsIt()
         {
             _forms.StartHiveCall();
 
-            _forms.NotifyPiperMoved();
+            _forms.NotifyCoreMoved();
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
-            Assert.That(_forms.IsPiperRooted, Is.False);
+            Assert.That(_forms.IsCoreRooted, Is.False);
         }
 
         [Test]
@@ -307,7 +310,7 @@ namespace DigitalStory.Tests.EditMode
             _forms.NotifyHit(Vector3.right);
 
             _forms.NotifyHit(Vector3.right);
-            _forms.NotifyPiperMoved();
+            _forms.NotifyCoreMoved();
 
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.HiveCall, SwarmForm.River }));
         }
@@ -322,7 +325,7 @@ namespace DigitalStory.Tests.EditMode
             _changes.Clear();
 
             _forms.NotifyHit(Vector3.right);
-            _forms.NotifyPiperMoved();
+            _forms.NotifyCoreMoved();
 
             Assert.That(_forms.Current, Is.EqualTo(wholeSwarm));
             Assert.That(_forms.IsDomed, Is.EqualTo(wasDomed));
@@ -376,7 +379,7 @@ namespace DigitalStory.Tests.EditMode
             _body.Lose(_config.StartingWasps - 100);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
-            Assert.That(_forms.IsPiperRooted, Is.False);
+            Assert.That(_forms.IsCoreRooted, Is.False);
         }
 
         [Test]

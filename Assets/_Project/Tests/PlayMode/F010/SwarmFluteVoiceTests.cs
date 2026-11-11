@@ -15,14 +15,14 @@ namespace DigitalStory.Tests.PlayMode
 
         private GameObject _host;
         private SoundConfig _sound;
-        private PiperMoveConfig _move;
+        private CoreMoveConfig _move;
         private SwarmFluteVoice _voice;
 
         [SetUp]
         public void Create()
         {
             _sound = ScriptableObject.CreateInstance<SoundConfig>();
-            _move = ScriptableObject.CreateInstance<PiperMoveConfig>();
+            _move = ScriptableObject.CreateInstance<CoreMoveConfig>();
             _host = new GameObject("SwarmFluteVoice");
             _voice = _host.AddComponent<SwarmFluteVoice>();
             _voice.Initialize(_sound, _move);

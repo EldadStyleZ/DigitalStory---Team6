@@ -6,8 +6,8 @@ namespace DigitalStory.Logic
 {
     /// <summary>
     /// Smoke grenades in flight and the clouds they leave. Clouds hurt hives and drain the swarm
-    /// while the Piper stands in one. Grenades and clouds are pooled (capacity 16), so nothing allocates per tick.
-    /// A hive or the Piper is hurt once per tick however many clouds overlap it.
+    /// while the core stands in one. Grenades and clouds are pooled (capacity 16), so nothing allocates per tick.
+    /// A hive, or the swarm at the core, is hurt once per tick however many clouds overlap it.
     /// </summary>
     public sealed class SmokeField : ISmokeClearer
     {
@@ -40,8 +40,8 @@ namespace DigitalStory.Logic
         /// <summary>Raised when a cloud expires or is cleared.</summary>
         public event Action<SmokeCloud> CloudEnded;
 
-        /// <summary>True when the Piper stood in a cloud as of the last <see cref="Tick"/>.</summary>
-        public bool IsPiperInSmoke { get; private set; }
+        /// <summary>True when the core stood in a cloud as of the last <see cref="Tick"/>.</summary>
+        public bool IsCoreInSmoke { get; private set; }
 
         /// <summary>How many clouds are on the ground.</summary>
         public int CloudCount => _cloudCount;
@@ -65,10 +65,10 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>
-        /// Advances grenades and clouds, hurts hives, drains the swarm and updates <see cref="IsPiperInSmoke"/>. Only the
+        /// Advances grenades and clouds, hurts hives, drains the swarm and updates <see cref="IsCoreInSmoke"/>. Only the
         /// share that <paramref name="shield"/> lets through reaches the swarm and each hive.
         /// </summary>
-        public void Tick(float deltaTime, HiveSet hives, SwarmBody swarm, Vector3 piperPosition, IDamageShield shield)
+        public void Tick(float deltaTime, HiveSet hives, SwarmBody swarm, Vector3 corePosition, IDamageShield shield)
         {
             if (hives == null)
             {
@@ -100,7 +100,7 @@ namespace DigitalStory.Logic
 
             LandGrenades(deltaTime);
             HurtHives(hives, shield);
-            HurtSwarm(swarm, piperPosition, shield);
+            HurtSwarm(swarm, corePosition, shield);
             AgeClouds();
         }
 
@@ -198,10 +198,10 @@ namespace DigitalStory.Logic
             }
         }
 
-        private void HurtSwarm(SwarmBody swarm, Vector3 piperPosition, IDamageShield shield)
+        private void HurtSwarm(SwarmBody swarm, Vector3 corePosition, IDamageShield shield)
         {
-            float seconds = LongestEffectAt(piperPosition, out bool inside);
-            IsPiperInSmoke = inside;
+            float seconds = LongestEffectAt(corePosition, out bool inside);
+            IsCoreInSmoke = inside;
             if (seconds > 0f)
             {
                 swarm.Drain(_config.WaspLossPerSecond, seconds, shield.WaspLossFraction);

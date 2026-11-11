@@ -8,7 +8,7 @@ using UnityEngine.UIElements;
 namespace DigitalStory.View
 {
     /// <summary>
-    /// Shows the Wasp Piper's HUD: wasps, Fury, the songbook of found songs, recent notes, hives and waves. It also creates and
+    /// Shows the hive defense HUD: wasps, Fury, the songbook of found songs, recent notes, hives and waves. It also creates and
     /// initializes the <see cref="HiveOffscreenIndicatorView"/> and <see cref="EndScreenView"/> on this object.
     /// </summary>
     /// <remarks>The UIDocument's Visual Tree Asset must be HiveDefenseHud.uxml. Everything shown is a label or a bar width.</remarks>

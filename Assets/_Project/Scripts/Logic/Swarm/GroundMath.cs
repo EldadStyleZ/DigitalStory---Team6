@@ -17,10 +17,10 @@ namespace DigitalStory.Logic
             return dx * dx + dz * dz;
         }
 
-        /// <summary>The point, or its pull-in along the ground to <paramref name="maxRange"/> metres from the Piper when it is further. Its height is kept.</summary>
-        public static Vector3 PullIn(Vector3 point, Vector3 piper, float maxRange)
+        /// <summary>The point, or its pull-in along the ground to <paramref name="maxRange"/> metres from the core when it is further. Its height is kept.</summary>
+        public static Vector3 PullIn(Vector3 point, Vector3 core, float maxRange)
         {
-            float distanceSquared = DistanceSquared(point, piper);
+            float distanceSquared = DistanceSquared(point, core);
 
             if (distanceSquared <= maxRange * maxRange)
             {
@@ -28,7 +28,7 @@ namespace DigitalStory.Logic
             }
 
             float scale = maxRange / Mathf.Sqrt(distanceSquared);
-            return new Vector3(piper.x + (point.x - piper.x) * scale, point.y, piper.z + (point.z - piper.z) * scale);
+            return new Vector3(core.x + (point.x - core.x) * scale, point.y, core.z + (point.z - core.z) * scale);
         }
 
         /// <summary>The unit direction along the ground from <paramref name="from"/> to <paramref name="to"/>, or forward when they stand on the same spot.</summary>

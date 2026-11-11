@@ -1,4 +1,4 @@
-/* The Wasp Piper's HUD. Colours match the existing HUD (HudConfig). */
+/* The hive defense HUD. Colours match the existing HUD (HudConfig). */
 .hud-root {
     --text: rgb(243, 234, 214);
     --caption: rgb(170, 167, 187);

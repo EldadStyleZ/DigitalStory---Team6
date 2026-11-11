@@ -29,7 +29,7 @@ namespace DigitalStory.Tests.EditMode
         private readonly List<Vector3> _landings = new List<Vector3>();
         private ISwarmTarget _aim;
         private Vector3 _aimPoint;
-        private Vector3 _piper;
+        private Vector3 _core;
 
         [SetUp]
         public void SetUp()
@@ -57,7 +57,7 @@ namespace DigitalStory.Tests.EditMode
             _landings.Clear();
             _aim = null;
             _aimPoint = Vector3.zero;
-            _piper = Vector3.zero;
+            _core = Vector3.zero;
             _forms.Landed += (form, point) =>
             {
                 if (form == SwarmForm.Meteor)
@@ -200,19 +200,19 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_AtTheImpact_MeasuresFromTheImpactPointNotThePiper()
+        public void Tick_AtTheImpact_MeasuresFromTheImpactPointNotTheCore()
         {
             var atTarget = new FakeSwarmTarget { Position = new Vector3(10f, 0f, 1f) };
-            var atPiper = new FakeSwarmTarget { Position = new Vector3(0f, 0f, 1f) };
+            var atCore = new FakeSwarmTarget { Position = new Vector3(0f, 0f, 1f) };
             _enemies.Add(atTarget);
-            _enemies.Add(atPiper);
+            _enemies.Add(atCore);
             _aimPoint = new Vector3(10f, 0f, 0f);
             Cast();
 
             _forms.Tick(1.32f, 2);
 
             Assert.That(atTarget.DamageTaken, Is.EqualTo(60f));
-            Assert.That(atPiper.DamageTaken, Is.EqualTo(0f));
+            Assert.That(atCore.DamageTaken, Is.EqualTo(0f));
         }
 
         [Test]
@@ -304,9 +304,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void ImpactPoint_AimPointBeyondMaxRange_IsPulledInToEighteenMetresFromThePiper()
+        public void ImpactPoint_AimPointBeyondMaxRange_IsPulledInToEighteenMetresFromTheCore()
         {
-            _piper = new Vector3(10f, 0f, 10f);
+            _core = new Vector3(10f, 0f, 10f);
             _aimPoint = new Vector3(40f, 0f, 10f);
 
             Cast();
@@ -566,7 +566,7 @@ namespace DigitalStory.Tests.EditMode
 
         private SwarmSongContext Context()
         {
-            return new SwarmSongContext(_piper, _aim, _aimPoint, _body, _forms, _fury, _hives, _enemies, null);
+            return new SwarmSongContext(_core, _aim, _aimPoint, _body, _forms, _fury, _hives, _enemies, null);
         }
     }
 }

@@ -13,7 +13,7 @@ namespace DigitalStory.Logic
         {
         }
 
-        [field: SerializeField, Min(0f), Tooltip("Metres above the Piper the meteors climb to.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres above the core the meteors climb to.")]
         public float Height { get; private set; } = 12f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the meteors climb. The impact point follows the aimed beekeeper until the climb ends.")]
@@ -22,7 +22,7 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Seconds the meteors dive. They land when the dive ends; the burst after it is the slot's return beat.")]
         public float DiveSeconds { get; private set; } = 0.5f;
 
-        [field: SerializeField, Min(0f), Tooltip("Furthest metres from the Piper that the impact can be.")]
+        [field: SerializeField, Min(0f), Tooltip("Furthest metres from the core that the impact can be.")]
         public float MaxRange { get; private set; } = 18f;
 
         [field: SerializeField, Min(0f), Tooltip("Metres around the impact point that the landing reaches.")]

@@ -54,8 +54,8 @@ namespace DigitalStory.Logic
         public bool IsAlive => _state != BeekeeperState.Dead;
 
         /// <summary>
-        /// True while a swing, or the recovery after it, is aimed at a hive; false when it is aimed at the Piper.
-        /// A hive attack and a Piper attack share the WindUp and Recover states.
+        /// True while a swing, or the recovery after it, is aimed at a hive; false when it is aimed at the core.
+        /// A hive attack and a core attack share the WindUp and Recover states.
         /// </summary>
         public bool IsTargetingHive => _isTargetingHive;
 
@@ -79,8 +79,8 @@ namespace DigitalStory.Logic
         /// <summary>Stick: the hive index it hit.</summary>
         public event Action<BeekeeperBrain, int> HiveHit;
 
-        /// <summary>Stick: it hit the Piper.</summary>
-        public event Action<BeekeeperBrain> PiperHit;
+        /// <summary>Stick: it hit the core.</summary>
+        public event Action<BeekeeperBrain> CoreHit;
 
         /// <summary>Smoker: where the grenade will land.</summary>
         public event Action<BeekeeperBrain, Vector3> GrenadeThrown;
@@ -146,7 +146,7 @@ namespace DigitalStory.Logic
             ApplySeparation(senses.Separation, deltaTime);
         }
 
-        /// <summary>Takes away health. Any damage makes it chase the Piper.</summary>
+        /// <summary>Takes away health. Any damage makes it chase the core.</summary>
         public void TakeDamage(float amount)
         {
             if (_state == BeekeeperState.Dead || amount <= 0f)
@@ -261,25 +261,25 @@ namespace DigitalStory.Logic
 
             if (isSmoker)
             {
-                GrenadeThrown?.Invoke(this, senses.PiperPosition);
+                GrenadeThrown?.Invoke(this, senses.CorePosition);
                 return;
             }
 
-            // The stick only lands if the Piper is still within reach, so stepping away from a swing dodges it.
-            if (FlatSqrDistance(_position, senses.PiperPosition) <= _config.AttackRange * _config.AttackRange)
+            // The stick only lands if the core is still within reach, so stepping away from a swing dodges it.
+            if (FlatSqrDistance(_position, senses.CorePosition) <= _config.AttackRange * _config.AttackRange)
             {
-                PiperHit?.Invoke(this);
+                CoreHit?.Invoke(this);
             }
         }
 
         private void Decide(in BeekeeperSenses senses, float deltaTime)
         {
-            float piperSqr = FlatSqrDistance(_position, senses.PiperPosition);
-            if (piperSqr > _config.GiveUpRange * _config.GiveUpRange)
+            float coreSqr = FlatSqrDistance(_position, senses.CorePosition);
+            if (coreSqr > _config.GiveUpRange * _config.GiveUpRange)
             {
                 _hasAggro = false;
             }
-            else if (piperSqr <= _config.NoticeRange * _config.NoticeRange)
+            else if (coreSqr <= _config.NoticeRange * _config.NoticeRange)
             {
                 _hasAggro = true;
             }
@@ -287,14 +287,14 @@ namespace DigitalStory.Logic
             float attackSqr = _config.AttackRange * _config.AttackRange;
             if (_hasAggro)
             {
-                _state = BeekeeperState.ChasePiper;
-                if (piperSqr <= attackSqr)
+                _state = BeekeeperState.ChaseCore;
+                if (coreSqr <= attackSqr)
                 {
-                    StartWindUp(senses.PiperPosition, NoHive);
+                    StartWindUp(senses.CorePosition, NoHive);
                 }
                 else
                 {
-                    WalkToward(senses.PiperPosition, deltaTime);
+                    WalkToward(senses.CorePosition, deltaTime);
                 }
 
                 return;

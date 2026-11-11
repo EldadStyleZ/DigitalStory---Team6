@@ -11,7 +11,7 @@ namespace DigitalStory.Logic
         public HiveDefenseRules(
             SwarmConfig swarm,
             SquadConfig squads,
-            PiperMoveConfig piperMove,
+            CoreMoveConfig coreMove,
             FuryConfig fury,
             ColossusConfig colossus,
             HiveConfig hive,
@@ -26,7 +26,7 @@ namespace DigitalStory.Logic
         {
             Swarm = swarm ?? throw new ArgumentNullException(nameof(swarm));
             Squads = squads ?? throw new ArgumentNullException(nameof(squads));
-            PiperMove = piperMove ?? throw new ArgumentNullException(nameof(piperMove));
+            CoreMove = coreMove ?? throw new ArgumentNullException(nameof(coreMove));
             Fury = fury ?? throw new ArgumentNullException(nameof(fury));
             Colossus = colossus ?? throw new ArgumentNullException(nameof(colossus));
             Hive = hive ?? throw new ArgumentNullException(nameof(hive));
@@ -46,8 +46,8 @@ namespace DigitalStory.Logic
         /// <summary>The song slots' seed bands and the return beat after a song lets go.</summary>
         public SquadConfig Squads { get; }
 
-        /// <summary>How fast the Piper moves and what slows it.</summary>
-        public PiperMoveConfig PiperMove { get; }
+        /// <summary>How fast the core moves and what slows it.</summary>
+        public CoreMoveConfig CoreMove { get; }
 
         /// <summary>The Fury meter's numbers.</summary>
         public FuryConfig Fury { get; }
@@ -70,13 +70,13 @@ namespace DigitalStory.Logic
         /// <summary>The smoker beekeeper's numbers.</summary>
         public BeekeeperConfig Smoker { get; }
 
-        /// <summary>The aiming numbers, such as how far ahead of the Piper an aimed song strikes when there is nothing to hit.</summary>
+        /// <summary>The aiming numbers, such as how far ahead of the core an aimed song strikes when there is nothing to hit.</summary>
         public AimConfig Aim { get; }
 
         /// <summary>How long the song window is and how many notes it remembers.</summary>
         public SongConfig SongConfig { get; }
 
-        /// <summary>The songs the Piper can play.</summary>
+        /// <summary>The songs the player can play.</summary>
         public IReadOnlyList<SwarmSongEffect> Songs { get; }
 
         /// <summary>How many holes the flute has.</summary>

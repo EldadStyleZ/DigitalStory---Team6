@@ -5,8 +5,8 @@ using UnityEngine;
 namespace DigitalStory.Logic
 {
     /// <summary>
-    /// The tornado: a column around the Piper that, once it stands at full height, hurts and throws back every beekeeper in
-    /// reach of where the Piper stands then, once.
+    /// The tornado: a column around the core that, once it stands at full height, hurts and throws back every beekeeper in
+    /// reach of where the core stands then, once.
     /// </summary>
     internal sealed class TornadoRule : SongRule
     {
@@ -43,7 +43,7 @@ namespace DigitalStory.Logic
             if (!_hasHit && tick.Seconds >= _song.HitSeconds)
             {
                 _hasHit = true;
-                Hit(tick.PiperPosition);
+                Hit(tick.CorePosition);
             }
 
             if (tick.Seconds >= _song.Seconds)
@@ -52,7 +52,7 @@ namespace DigitalStory.Logic
             }
         }
 
-        private void Hit(Vector3 piper)
+        private void Hit(Vector3 core)
         {
             float reachSquared = _song.Radius * _song.Radius;
             float totalDamage = 0f;
@@ -61,13 +61,13 @@ namespace DigitalStory.Logic
             {
                 ISwarmTarget enemy = _enemies[i];
 
-                if (!enemy.IsAlive || GroundMath.DistanceSquared(enemy.Position, piper) > reachSquared)
+                if (!enemy.IsAlive || GroundMath.DistanceSquared(enemy.Position, core) > reachSquared)
                 {
                     continue;
                 }
 
                 enemy.TakeDamage(_song.Damage);
-                enemy.Knockback(GroundMath.Direction(piper, enemy.Position) * _song.KnockbackSpeed);
+                enemy.Knockback(GroundMath.Direction(core, enemy.Position) * _song.KnockbackSpeed);
                 totalDamage += _song.Damage;
             }
 
@@ -76,7 +76,7 @@ namespace DigitalStory.Logic
                 _fury.AddDamage(totalDamage);
             }
 
-            Land(piper);
+            Land(core);
         }
     }
 }

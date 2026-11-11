@@ -11,14 +11,21 @@ namespace DigitalStory.Logic
     /// After Won or Lost, <see cref="Tick"/> does nothing.
     /// </summary>
     /// <remarks>
+    /// The swarm is the player, and its core is the point it gathers around: the View moves the core, and the session
+    /// reads it each tick. While the giant stands the core rides inside it, so the session moves the core with the giant and
+    /// the View puts it where <see cref="CorePosition"/> says; when the giant ends, the core stays where it stood. The core
+    /// and the giant keep to the play area, so a core the View moved past its edge is put back at the edge the same way.
     /// It is also the aim chooser of the songs it casts (<see cref="ISongAim"/>): an aimed song asks it for its target by the
     /// song's own rule, and the mouse wins while it is live. The marker's target, chosen every tick, uses the rule and reach
     /// of the aimed song the player knows from the start (the Sting), read from its asset, so the marker and that song agree.
     /// </remarks>
     public sealed class HiveDefenseSession : ISongAim
     {
-        // Not game tuning: a Piper that moved less than this (squared metres) since the last tick counts as standing still.
+        // Not game tuning: a core that moved less than this (squared metres) since the last tick counts as standing still.
         private const float MovedSqrMetres = 0.0001f;
+
+        // Not game tuning: a step shorter than 1 mm (the controller settling) does not turn the core.
+        private const float TurnSqrMetres = 0.000001f;
         private const float CoincidentSqrMetres = 0.00000001f;
         private const int MaxHoleBits = 31;
 
@@ -35,8 +42,8 @@ namespace DigitalStory.Logic
         private readonly SlotSongEffect _markerSong;
 
         private HiveDefenseState _state = HiveDefenseState.Playing;
-        private Vector3 _piperPosition;
-        private Vector3 _piperFacing = Vector3.forward;
+        private Vector3 _corePosition;
+        private Vector3 _coreFacing = Vector3.forward;
         private Vector3 _lastHitPoint;
         private Vector3 _aimPoint;
         private ISwarmTarget _aimTarget;
@@ -44,6 +51,7 @@ namespace DigitalStory.Logic
         private Vector3 _mousePoint;
         private int _activeCount;
         private bool _isColossusActive;
+        private bool _isCoreSettling;
         private bool _furyHasFilled;
         private Vector3 _colossusPosition;
         private Vector3 _colossusFacing = Vector3.forward;
@@ -53,7 +61,7 @@ namespace DigitalStory.Logic
             HiveDefenseRules rules,
             IReadOnlyList<Vector3> hivePositions,
             IReadOnlyList<Vector3> spawnPoints,
-            Vector3 piperStart,
+            Vector3 coreStart,
             IRandomSource random)
         {
             _rules = rules ?? throw new ArgumentNullException(nameof(rules));
@@ -81,8 +89,8 @@ namespace DigitalStory.Logic
             }
 
             _markerSong = FindMarkerSong(rules.Songs);
-            _piperPosition = piperStart;
-            _lastHitPoint = piperStart;
+            _corePosition = KeepInPlayArea(coreStart);
+            _lastHitPoint = _corePosition;
 
             Swarm = new SwarmBody(rules.Swarm);
             Fury = new FuryMeter(rules.Fury);
@@ -120,7 +128,7 @@ namespace DigitalStory.Logic
             {
                 var brain = new BeekeeperBrain(index < sticks ? rules.Stick : rules.Smoker);
                 brain.HiveHit += OnHiveHit;
-                brain.PiperHit += OnPiperHit;
+                brain.CoreHit += OnCoreHit;
                 brain.GrenadeThrown += OnGrenadeThrown;
                 brain.Died += OnBeekeeperDied;
                 _pool[index] = brain;
@@ -165,29 +173,42 @@ namespace DigitalStory.Logic
         /// <summary>The smoke grenades and clouds.</summary>
         public SmokeField Smoke { get; }
 
-        /// <summary>The Piper's position as of the last tick.</summary>
-        public Vector3 PiperPosition => _piperPosition;
+        /// <summary>
+        /// Where the core is as of the last tick: where the View moved it, or, while the giant stands, the giant's place on
+        /// the ground at the core's own height. When the giant ends the core stays where the giant stood. Either way it is
+        /// inside the play area, a square <see cref="CoreMoveConfig.PlayAreaHalfSize"/> from the world origin on each side.
+        /// </summary>
+        public Vector3 CorePosition => _corePosition;
 
         /// <summary>
-        /// How much the Piper's speed is multiplied: by the running songs (the dome slows it), and in smoke unless a running
+        /// The way the core last moved, a unit vector on the ground; forward until it first moves. While the giant walks the
+        /// core moves with it. An aimed song with nothing to strike strikes the ground ahead of it.
+        /// </summary>
+        public Vector3 CoreFacing => _coreFacing;
+
+        /// <summary>
+        /// How much the core's speed is multiplied: by the running songs (the dome slows it), and in smoke unless a running
         /// song keeps smoke from slowing it. 1 otherwise.
         /// </summary>
-        public float PiperSpeedMultiplier
+        public float CoreSpeedMultiplier
         {
             get
             {
-                float multiplier = Forms.PiperSpeedMultiplier;
-                if (Smoke.IsPiperInSmoke && Forms.SmokeSlowsPiper)
+                float multiplier = Forms.CoreSpeedMultiplier;
+                if (Smoke.IsCoreInSmoke && Forms.SmokeSlowsCore)
                 {
-                    multiplier *= _rules.PiperMove.SmokeSpeedMultiplier;
+                    multiplier *= _rules.CoreMove.SmokeSpeedMultiplier;
                 }
 
                 return multiplier;
             }
         }
 
-        /// <summary>True while the Piper must stand still (Hive Call and the giant).</summary>
-        public bool IsPiperRooted => Forms.IsPiperRooted;
+        /// <summary>
+        /// True while the core must stand still: Hive Call. The giant does not root it, because the core rides inside the
+        /// giant and nothing is left standing behind.
+        /// </summary>
+        public bool IsCoreRooted => Forms.IsCoreRooted;
 
         /// <summary>
         /// The beekeeper an aimed song would strike as of the last tick, or null when there is none: while the mouse is live
@@ -197,7 +218,7 @@ namespace DigitalStory.Logic
 
         /// <summary>
         /// Where an aimed song strikes as of the last tick: the aimed beekeeper, the mouse's ground point while the mouse is
-        /// live, or else the ground ahead of where the Piper faces.
+        /// live, or else the ground ahead of where the core last moved.
         /// </summary>
         public Vector3 AimPoint => _aimPoint;
 
@@ -265,18 +286,8 @@ namespace DigitalStory.Logic
 
             float dt = Mathf.Min(deltaTime, _rules.Swarm.MaxDeltaTime);
 
-            // The Piper is held in place while it is rooted, so asking to move counts as moving: it ends Hive Call. While the
-            // giant stands the move steers the giant, and this does nothing.
-            Vector3 step = frame.PiperPosition - _piperPosition;
-            step.y = 0f;
-            if (step.sqrMagnitude > MovedSqrMetres || frame.Move.sqrMagnitude > 0f)
-            {
-                Forms.NotifyPiperMoved();
-            }
-
-            _piperPosition = frame.PiperPosition;
-            _piperFacing = GroundFacing(frame.PiperFacing, _piperFacing);
-            Forms.SetPiper(_piperPosition);
+            ReadCore(in frame);
+            Forms.SetCore(_corePosition);
 
             Caster.Tick(dt);
             _isMouseLive = frame.IsMouseLive;
@@ -290,7 +301,7 @@ namespace DigitalStory.Logic
             Forms.Tick(dt, standing);
 
             TickColossus(frame, dt);
-            Smoke.Tick(dt, Hives, Swarm, _piperPosition, Forms);
+            Smoke.Tick(dt, Hives, Swarm, _corePosition, Forms);
             Hives.Tick(dt);
             TickBeekeepers(dt);
             Waves.Tick(dt, _activeCount);
@@ -339,12 +350,51 @@ namespace DigitalStory.Logic
                 "rules");
         }
 
-        // Only the direction on the ground counts. A facing with no length keeps the last one.
-        private static Vector3 GroundFacing(Vector3 facing, Vector3 last)
+        // While the giant stands the core rides inside it, so the View's core is ignored and TickColossus moves it. Otherwise
+        // the core is where the View moved it, held inside the play area, and faces the way it moved; only the step on the
+        // ground counts, and a step too short to turn it keeps the last facing. The core is held in place while it is rooted,
+        // so asking to move counts as moving: it ends Hive Call. The first read after the giant ends is the core settling
+        // where it was put, which can be inside a hive or a wall that the controller pushes it out of, so it neither turns
+        // the core nor counts as a move.
+        private void ReadCore(in HiveDefenseFrame frame)
         {
-            facing.y = 0f;
-            float sqr = facing.sqrMagnitude;
-            return sqr > CoincidentSqrMetres ? facing / Mathf.Sqrt(sqr) : last;
+            if (_isColossusActive)
+            {
+                return;
+            }
+
+            Vector3 core = KeepInPlayArea(frame.CorePosition);
+            if (_isCoreSettling)
+            {
+                _isCoreSettling = false;
+                _corePosition = core;
+                return;
+            }
+
+            Vector3 step = core - _corePosition;
+            step.y = 0f;
+            float stepSqr = step.sqrMagnitude;
+            if (stepSqr > MovedSqrMetres || frame.Move.sqrMagnitude > 0f)
+            {
+                Forms.NotifyCoreMoved();
+            }
+
+            if (stepSqr > TurnSqrMetres)
+            {
+                _coreFacing = step / Mathf.Sqrt(stepSqr);
+            }
+
+            _corePosition = core;
+        }
+
+        // The ground ends, so the core and the giant keep to a square around the world origin, the middle of the map.
+        // Only the place on the ground is held; the height stays.
+        private Vector3 KeepInPlayArea(Vector3 position)
+        {
+            float half = _rules.CoreMove.PlayAreaHalfSize;
+            position.x = Mathf.Clamp(position.x, -half, half);
+            position.z = Mathf.Clamp(position.z, -half, half);
+            return position;
         }
 
         private void SetState(HiveDefenseState state)
@@ -363,7 +413,7 @@ namespace DigitalStory.Logic
 
         private void Choose(AimRule rule, float range)
         {
-            _autoAim.Select(rule, range, _piperPosition, _piperFacing, _isMouseLive, _mousePoint);
+            _autoAim.Select(rule, range, _corePosition, _coreFacing, _isMouseLive, _mousePoint);
             _aimTarget = _autoAim.Target;
             _aimPoint = _autoAim.AimPoint;
         }
@@ -389,7 +439,7 @@ namespace DigitalStory.Logic
                     return;
                 }
 
-                var context = new SwarmSongContext(_piperPosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke, this);
+                var context = new SwarmSongContext(_corePosition, AimTarget, _aimPoint, Swarm, Forms, Fury, Hives, _enemies, Smoke, this);
                 Caster.Press(hole, context);
             }
         }
@@ -400,12 +450,13 @@ namespace DigitalStory.Logic
             if (formIsColossus && !_isColossusActive)
             {
                 _isColossusActive = true;
-                _colossusPosition = new Vector3(_piperPosition.x, 0f, _piperPosition.z);
+                _colossusPosition = new Vector3(_corePosition.x, 0f, _corePosition.z);
                 _colossusFacing = Vector3.forward;
             }
             else if (!formIsColossus && _isColossusActive)
             {
                 _isColossusActive = false;
+                _isCoreSettling = true;
             }
 
             // The chain always ticks, so an attack that was started cannot linger into the next giant.
@@ -424,9 +475,15 @@ namespace DigitalStory.Logic
 
             if (move.sqrMagnitude > 0f)
             {
-                _colossusPosition += new Vector3(move.x, 0f, move.y) * (_rules.Colossus.Speed * dt);
+                // The giant walks through hives and scenery, but never past the play area, where the ground ends.
+                _colossusPosition = KeepInPlayArea(_colossusPosition + (new Vector3(move.x, 0f, move.y) * (_rules.Colossus.Speed * dt)));
                 _colossusFacing = new Vector3(move.x, 0f, move.y).normalized;
+                _coreFacing = _colossusFacing;
             }
+
+            // The core rides inside the giant, so the beekeepers chase and hit the giant, and the core is left where the giant
+            // stood when it ends.
+            _corePosition = new Vector3(_colossusPosition.x, _corePosition.y, _colossusPosition.z);
 
             if (frame.Punch)
             {
@@ -448,7 +505,7 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                var senses = new BeekeeperSenses(_piperPosition, Hives, SeparationFor(slot));
+                var senses = new BeekeeperSenses(_corePosition, Hives, SeparationFor(slot));
                 _pool[slot].Tick(in senses, dt);
             }
         }
@@ -540,11 +597,11 @@ namespace DigitalStory.Logic
             Forms.NotifyHiveHit(hiveIndex, brain);
         }
 
-        private void OnPiperHit(BeekeeperBrain brain)
+        private void OnCoreHit(BeekeeperBrain brain)
         {
             Swarm.Lose(brain.Config.WaspsKnockedOff, Forms.WaspLossFraction);
             Forms.NotifyHit(brain.Position);
-            _lastHitPoint = _piperPosition;
+            _lastHitPoint = _corePosition;
         }
 
         private void OnGrenadeThrown(BeekeeperBrain brain, Vector3 landing)

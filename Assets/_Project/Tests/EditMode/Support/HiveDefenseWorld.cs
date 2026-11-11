@@ -9,7 +9,8 @@ namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
     /// A small match for tests: default configs, a short first-wave delay and the waves, hives and spawn points a test chooses.
-    /// The Piper stands still at <see cref="Piper"/>, facing <see cref="Facing"/>, unless a test changes them.
+    /// The core stands still at <see cref="Core"/> unless a test moves it. After each tick the world puts the core where the
+    /// session says it is, as the View does, so it rides inside the giant and stays where the giant stood.
     /// </summary>
     internal sealed class HiveDefenseWorld : IDisposable
     {
@@ -35,15 +36,15 @@ namespace DigitalStory.Tests.EditMode
             WaveEntry[] waves = null,
             Vector3[] hives = null,
             Vector3[] spawns = null,
-            Vector3 piper = default,
+            Vector3 core = default,
             bool smokerForSecondKind = true,
             bool withSongs = false,
             bool withAllSongs = false)
         {
-            Piper = piper;
+            Core = core;
             Swarm = Make<SwarmConfig>();
             Squads = Make<SquadConfig>();
-            PiperMove = Make<PiperMoveConfig>();
+            CoreMove = Make<CoreMoveConfig>();
             Fury = Make<FuryConfig>();
             Colossus = Make<ColossusConfig>();
             Hive = Make<HiveConfig>();
@@ -76,19 +77,19 @@ namespace DigitalStory.Tests.EditMode
 
             Songs = songs;
             var rules = new HiveDefenseRules(
-                Swarm, Squads, PiperMove, Fury, Colossus, Hive, Smoke, WaveConfig, Stick, Smoker, Aim,
+                Swarm, Squads, CoreMove, Fury, Colossus, Hive, Smoke, WaveConfig, Stick, Smoker, Aim,
                 SongConfig, songs, HoleCount);
             Session = new HiveDefenseSession(
                 rules,
                 hives ?? new[] { new Vector3(-40f, 0f, 40f), new Vector3(40f, 0f, 40f) },
                 spawns ?? new[] { new Vector3(30f, 0f, -30f), new Vector3(-30f, 0f, -30f) },
-                Piper,
+                Core,
                 new FixedRandomSource());
         }
 
         public SwarmConfig Swarm { get; }
         public SquadConfig Squads { get; }
-        public PiperMoveConfig PiperMove { get; }
+        public CoreMoveConfig CoreMove { get; }
         public FuryConfig Fury { get; }
         public ColossusConfig Colossus { get; }
         public HiveConfig Hive { get; }
@@ -104,14 +105,13 @@ namespace DigitalStory.Tests.EditMode
 
         public WaveConfig WaveConfig { get; }
         public HiveDefenseSession Session { get; }
-        public Vector3 Piper { get; set; }
-        public Vector3 Facing { get; set; } = Vector3.forward;
+        public Vector3 Core { get; set; }
 
-        /// <summary>A frame with the Piper where it stands, facing where it faces, the mouse idle unless a test says, and nothing pressed.</summary>
+        /// <summary>A frame with the core where it is, the mouse idle unless a test says, and nothing pressed.</summary>
         public HiveDefenseFrame Frame(
             Vector2 move = default, int holes = 0, bool punch = false, bool kick = false, Vector3? aim = null, bool isMouseLive = false)
         {
-            return new HiveDefenseFrame(Piper, Facing, aim ?? Piper, move, holes, punch, kick, isMouseLive);
+            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, punch, kick, isMouseLive);
         }
 
         /// <summary>Ticks with idle frames for the given seconds.</summary>
@@ -120,12 +120,20 @@ namespace DigitalStory.Tests.EditMode
             RunWith(seconds, Frame());
         }
 
+        /// <summary>Ticks with the frame's input for the given seconds, each tick from where the core is then.</summary>
         public void RunWith(float seconds, HiveDefenseFrame frame)
         {
             for (float time = 0f; time < seconds; time += Step)
             {
-                Session.Tick(frame, Step);
+                Tick(frame);
             }
+        }
+
+        /// <summary>Moves the core to <paramref name="position"/> in one tick, as the View would, so it faces the way it moved.</summary>
+        public void MoveCoreTo(Vector3 position)
+        {
+            Core = position;
+            Tick(Frame());
         }
 
         /// <summary>Plays the holes one a tick, as the player would press them.</summary>
@@ -147,7 +155,7 @@ namespace DigitalStory.Tests.EditMode
                     return true;
                 }
 
-                Session.Tick(Frame(), Step);
+                Tick(Frame());
             }
 
             return condition();
@@ -160,6 +168,15 @@ namespace DigitalStory.Tests.EditMode
             {
                 Session.ActiveBeekeeper(index).TakeDamage(10000f);
             }
+        }
+
+        // One tick from where the core is now, then the core goes where the session says it is, as the View puts it.
+        private void Tick(HiveDefenseFrame frame)
+        {
+            var now = new HiveDefenseFrame(
+                Core, frame.AimPoint, frame.Move, frame.PressedHoleMask, frame.Punch, frame.Kick, frame.IsMouseLive);
+            Session.Tick(now, Step);
+            Core = Session.CorePosition;
         }
 
         public void Dispose()

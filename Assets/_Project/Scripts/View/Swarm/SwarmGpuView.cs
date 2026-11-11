@@ -73,8 +73,8 @@ namespace DigitalStory.View
         private static readonly int DeltaTimeId = Shader.PropertyToID("_DeltaTime");
         private static readonly int FormStartTimeId = Shader.PropertyToID("_FormStartTime");
         private static readonly int PreviousFormStartTimeId = Shader.PropertyToID("_PreviousFormStartTime");
-        private static readonly int PiperPositionId = Shader.PropertyToID("_PiperPosition");
-        private static readonly int PiperForwardId = Shader.PropertyToID("_PiperForward");
+        private static readonly int CorePositionId = Shader.PropertyToID("_CorePosition");
+        private static readonly int CoreForwardId = Shader.PropertyToID("_CoreForward");
         private static readonly int HiveAId = Shader.PropertyToID("_HiveA");
         private static readonly int HiveBId = Shader.PropertyToID("_HiveB");
         private static readonly int LastHitId = Shader.PropertyToID("_LastHit");
@@ -98,6 +98,9 @@ namespace DigitalStory.View
         private static readonly int StandingTrailMetersId = Shader.PropertyToID("_StandingTrailMeters");
         private static readonly int StandingShareId = Shader.PropertyToID("_StandingShare");
         private static readonly int TorusRadiusId = Shader.PropertyToID("_TorusRadius");
+        private static readonly int CoreRingShareId = Shader.PropertyToID("_CoreRingShare");
+        private static readonly int CoreRingRadiusId = Shader.PropertyToID("_CoreRingRadius");
+        private static readonly int CoreRingGlowId = Shader.PropertyToID("_CoreRingGlow");
         private static readonly int DyingSecondsId = Shader.PropertyToID("_DyingSeconds");
         private static readonly int WaspLengthId = Shader.PropertyToID("_WaspLength");
         private static readonly int BuzzAmplitudeId = Shader.PropertyToID("_BuzzAmplitude");
@@ -152,8 +155,8 @@ namespace DigitalStory.View
         private SwarmForm _previousForm = SwarmForm.River;
         private float _formStartTime;
         private float _previousFormStartTime;
-        private Vector3 _piperPosition;
-        private Vector3 _piperForward = Vector3.forward;
+        private Vector3 _corePosition;
+        private Vector3 _coreForward = Vector3.forward;
         private Vector3 _standingAnchor;
         private float _standingSeconds;
         private float _standingShare;
@@ -186,7 +189,7 @@ namespace DigitalStory.View
         /// <summary>The colour last given to <see cref="SetCastColor"/>, which Hive Call and the Colossus show, for tests and debugging.</summary>
         public Color CastColor => _castColor;
 
-        /// <summary>How far the river has curled into the ring around the standing Piper: 0 while it flows behind them, 1 once it is a ring.</summary>
+        /// <summary>How far the river has curled into the ring around the standing core: 0 while it flows behind it, 1 once it is a ring.</summary>
         public float StandingShare => _standingShare;
 
         /// <summary>True while a song holds the slot (SongSlot as an int) as of the last <see cref="SetSlot"/>, for tests and debugging.</summary>
@@ -240,7 +243,7 @@ namespace DigitalStory.View
 
             _swarmCompute.Dispatch(_simulateKernel, _groupCount, 1, 1);
 
-            var bounds = new Bounds(_piperPosition, Vector3.one * (_config.BoundsMeters * 2f));
+            var bounds = new Bounds(_corePosition, Vector3.one * (_config.BoundsMeters * 2f));
             _renderParams.worldBounds = bounds;
             Graphics.RenderMeshIndirect(_renderParams, _mesh, _argsBuffer);
 
@@ -260,7 +263,7 @@ namespace DigitalStory.View
         }
 
         /// <summary>
-        /// Supplies the swarm's settings and the Piper's trail, and starts the count at SwarmConfig.StartingWasps.
+        /// Supplies the swarm's settings and the core's trail, and starts the count at SwarmConfig.StartingWasps.
         /// Call before this object starts; calling again (a restart) starts the swarm over.
         /// Logs an error and switches this view off when a wasp shader is missing or the device has no compute shaders.
         /// Logs an error and draws the wasps without their glow when only the glow shader is missing.
@@ -427,14 +430,14 @@ namespace DigitalStory.View
             _isGustFresh = true;
         }
 
-        /// <summary>Where the Piper stands and faces. Only the facing on the ground is used.</summary>
-        public void SetPiper(Vector3 position, Vector3 forward)
+        /// <summary>Where the core is and the way it faces. Only the facing on the ground is used.</summary>
+        public void SetCore(Vector3 position, Vector3 forward)
         {
-            _piperPosition = position;
+            _corePosition = position;
             forward.y = 0f;
             if (forward.sqrMagnitude > MinimumSquaredLength)
             {
-                _piperForward = forward.normalized;
+                _coreForward = forward.normalized;
             }
         }
 
@@ -755,19 +758,19 @@ namespace DigitalStory.View
             }
         }
 
-        // Spec 9.3: while the Piper stands, the river curls into a torus around them. The PathTrail never shrinks while
-        // the Piper stands (it only stores points as they walk), so its length cannot tell standing from walking. This
-        // measures standing directly instead: the Piper stands while they stay within StandStillMeters (on the ground)
-        // of where they stopped, so settling never counts as a step. After StandDelaySeconds the river eases into the
-        // torus over StandBlendSeconds, and eases back as soon as they walk.
+        // Spec 9.3: while the core stands, the river curls into a torus around it. The PathTrail never shrinks while
+        // the core stands (it only stores points as it moves), so its length cannot tell standing from walking. This
+        // measures standing directly instead: the core stands while it stays within StandStillMeters (on the ground)
+        // of where it stopped, so settling never counts as a step. After StandDelaySeconds the river eases into the
+        // torus over StandBlendSeconds, and eases back as soon as it moves.
         private void TrackStanding(float deltaTime)
         {
             float stillMeters = _config.StandStillMeters;
-            Vector3 drift = _piperPosition - _standingAnchor;
+            Vector3 drift = _corePosition - _standingAnchor;
             drift.y = 0f;
             if (drift.sqrMagnitude > stillMeters * stillMeters)
             {
-                _standingAnchor = _piperPosition;
+                _standingAnchor = _corePosition;
                 _standingSeconds = 0f;
             }
             else
@@ -842,8 +845,8 @@ namespace DigitalStory.View
             compute.SetFloat(DeltaTimeId, deltaTime);
             compute.SetFloat(FormStartTimeId, _formStartTime);
             compute.SetFloat(PreviousFormStartTimeId, _previousFormStartTime);
-            compute.SetVector(PiperPositionId, _piperPosition);
-            compute.SetVector(PiperForwardId, _piperForward);
+            compute.SetVector(CorePositionId, _corePosition);
+            compute.SetVector(CoreForwardId, _coreForward);
             compute.SetFloat(StandingShareId, _standingShare);
             compute.SetVector(HiveAId, _firstHive);
             compute.SetVector(HiveBId, _secondHive);
@@ -869,6 +872,9 @@ namespace DigitalStory.View
             compute.SetFloat(MeanderAmplitudeId, _config.MeanderAmplitude);
             compute.SetFloat(StandingTrailMetersId, _config.StandingTrailMeters);
             compute.SetFloat(TorusRadiusId, _config.TorusRadius);
+            compute.SetFloat(CoreRingShareId, _config.CoreRingShare);
+            compute.SetFloat(CoreRingRadiusId, _config.CoreRingRadius);
+            compute.SetFloat(CoreRingGlowId, _config.CoreRingGlow);
             compute.SetFloat(DyingSecondsId, _config.DyingSeconds);
 
             _material.SetFloat(WaspLengthId, _config.WaspLength);

@@ -11,7 +11,7 @@ namespace DigitalStory.Tests.EditMode
     /// <summary>
     /// The slot engine of plan section C, through <see cref="SwarmFormMachine"/>: three slots with fixed seed bands, one song in
     /// each, a return beat after a song lets go, and how the Gust pulse, Hive Call, the Colossus and the collapse treat the slots.
-    /// The Sting's target stands 3 m from the Piper, who stands at the origin, unless a test moves them.
+    /// The Sting's target stands 3 m from the core, which stands at the origin, unless a test moves them.
     /// </summary>
     public sealed class SongSlotsTests
     {
@@ -32,7 +32,7 @@ namespace DigitalStory.Tests.EditMode
         private SwarmFormMachine _forms;
         private FakeSwarmTarget _aim;
         private Vector3 _aimPoint;
-        private Vector3 _piper;
+        private Vector3 _core;
         private StingSong _sting;
         private TornadoSong _tornado;
         private MeteorSong _meteor;
@@ -66,7 +66,7 @@ namespace DigitalStory.Tests.EditMode
             _post = Make<FakeSlotSong>();
             _aim = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 0f) };
             _aimPoint = Vector3.zero;
-            _piper = Vector3.zero;
+            _core = Vector3.zero;
             _enemies.Clear();
             Build();
         }
@@ -324,7 +324,7 @@ namespace DigitalStory.Tests.EditMode
         {
             Cast(_dome);
             Tick(1f);
-            _piper = new Vector3(4f, 0f, 7f);
+            _core = new Vector3(4f, 0f, 7f);
 
             Cast(_gust);
 
@@ -407,7 +407,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(_dome);
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.HiveCall));
-            Assert.That(_forms.IsPiperRooted, Is.True);
+            Assert.That(_forms.IsCoreRooted, Is.True);
             Assert.That(Guard.Form, Is.EqualTo(SwarmForm.Dome));
         }
 
@@ -449,12 +449,12 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void PiperMoves_DuringHiveCallUnderTheDome_EndsHiveCallButKeepsTheDome()
+        public void CoreMoves_DuringHiveCallUnderTheDome_EndsHiveCallButKeepsTheDome()
         {
             Cast(_dome);
             Cast(_hiveCall);
 
-            _forms.NotifyPiperMoved();
+            _forms.NotifyCoreMoved();
 
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
             Assert.That(Guard.ReleasedSeconds, Is.EqualTo(-1f));
@@ -766,7 +766,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Dome_ABlockedHit_GivesTheHitsSideAndTime()
         {
-            _piper = new Vector3(1f, 0f, 1f);
+            _core = new Vector3(1f, 0f, 1f);
             Cast(_dome);
             Tick(1.5f);
 
@@ -826,8 +826,8 @@ namespace DigitalStory.Tests.EditMode
         public void Modifiers_NoSongRunning_ChangeNothing()
         {
             Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f));
-            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(1f));
-            Assert.That(_forms.SmokeSlowsPiper, Is.True);
+            Assert.That(_forms.CoreSpeedMultiplier, Is.EqualTo(1f));
+            Assert.That(_forms.SmokeSlowsCore, Is.True);
             Assert.That(_forms.HiveDamageFraction(0), Is.EqualTo(1f));
         }
 
@@ -835,8 +835,8 @@ namespace DigitalStory.Tests.EditMode
         public void Modifiers_TwoRunningSongs_Multiply()
         {
             _post.WaspLossFraction = 0.5f;
-            _post.PiperSpeedMultiplier = 1.6f;
-            _post.SmokeSlowsPiper = false;
+            _post.CoreSpeedMultiplier = 1.6f;
+            _post.SmokeSlowsCore = false;
             _post.ShieldedHive = 1;
             _post.HiveDamageFraction = 0.25f;
 
@@ -844,8 +844,8 @@ namespace DigitalStory.Tests.EditMode
             Cast(_post);
 
             Assert.That(_forms.WaspLossFraction, Is.EqualTo(0.5f * _dome.LossFraction).Within(Tolerance));
-            Assert.That(_forms.PiperSpeedMultiplier, Is.EqualTo(1.6f * _dome.SpeedMultiplier).Within(Tolerance));
-            Assert.That(_forms.SmokeSlowsPiper, Is.False);
+            Assert.That(_forms.CoreSpeedMultiplier, Is.EqualTo(1.6f * _dome.SpeedMultiplier).Within(Tolerance));
+            Assert.That(_forms.SmokeSlowsCore, Is.False);
             Assert.That(_forms.HiveDamageFraction(1), Is.EqualTo(0.25f).Within(Tolerance));
             Assert.That(_forms.HiveDamageFraction(0), Is.EqualTo(1f), "only the shielded hive");
         }
@@ -854,7 +854,7 @@ namespace DigitalStory.Tests.EditMode
         public void Modifiers_ASongThatLetGo_ChangesNothingDuringItsReturnBeat()
         {
             _post.WaspLossFraction = 0.5f;
-            _post.SmokeSlowsPiper = false;
+            _post.SmokeSlowsCore = false;
             _post.ShieldedHive = 0;
             _post.HiveDamageFraction = 0.25f;
             _post.ReleaseAfter = 1f;
@@ -864,7 +864,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(Post.ReleasedSeconds, Is.GreaterThanOrEqualTo(0f), "the return beat plays");
             Assert.That(_forms.WaspLossFraction, Is.EqualTo(1f));
-            Assert.That(_forms.SmokeSlowsPiper, Is.True);
+            Assert.That(_forms.SmokeSlowsCore, Is.True);
             Assert.That(_forms.HiveDamageFraction(0), Is.EqualTo(1f));
         }
 
@@ -908,7 +908,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(_sting);
             var attacker = new FakeSwarmTarget();
 
-            Assert.That(() => { _ = _forms.WaspLossFraction * _forms.PiperSpeedMultiplier * _forms.HiveDamageFraction(0); }, Is.Not.AllocatingGCMemory());
+            Assert.That(() => { _ = _forms.WaspLossFraction * _forms.CoreSpeedMultiplier * _forms.HiveDamageFraction(0); }, Is.Not.AllocatingGCMemory());
             Assert.That(() => { _forms.NotifyHiveHit(0, attacker); }, Is.Not.AllocatingGCMemory());
         }
 
@@ -961,7 +961,7 @@ namespace DigitalStory.Tests.EditMode
 
         private SwarmSongContext Context()
         {
-            return new SwarmSongContext(_piper, _aim, _aimPoint, _body, _forms, _fury, _hives, _enemies, null);
+            return new SwarmSongContext(_core, _aim, _aimPoint, _body, _forms, _fury, _hives, _enemies, null);
         }
 
         private void Tick(float seconds)
