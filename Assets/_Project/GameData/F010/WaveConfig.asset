@@ -13,17 +13,17 @@ MonoBehaviour:
   m_Name: WaveConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.WaveConfig
   _waves:
-  - _sticks: 3
+  - _sticks: 4
     _smokers: 0
-  - _sticks: 4
+  - _sticks: 5
     _smokers: 1
-  - _sticks: 4
-    _smokers: 3
   - _sticks: 6
-    _smokers: 4
-  - _sticks: 8
-    _smokers: 5
+    _smokers: 3
+  - _sticks: 12
+    _smokers: 8
+  - _sticks: 17
+    _smokers: 11
   <FirstFarmSeconds>k__BackingField: 45
-  <FarmSeconds>k__BackingField: 35
+  <FarmSeconds>k__BackingField: 40
   <EarlyBonusPerSecond>k__BackingField: 5
-  <SpawnIntervalSeconds>k__BackingField: 1.2
+  <SpawnIntervalSeconds>k__BackingField: 3

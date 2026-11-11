@@ -8,7 +8,7 @@ using UnityEngine.UIElements;
 namespace DigitalStory.View
 {
     /// <summary>
-    /// Shows the hive defense HUD: wasps, Fury, the songbook of found songs, recent notes, hives, the phase and the first round's lesson. It also creates and
+    /// Shows the hive defense HUD: wasps over the capacity, the swarm's level, nests, Fury, the songbook of found songs, recent notes, hives, the phase and the first round's lesson. It also creates and
     /// initializes the <see cref="HiveOffscreenIndicatorView"/> and <see cref="EndScreenView"/> on this object.
     /// </summary>
     /// <remarks>The UIDocument's Visual Tree Asset must be HiveDefenseHud.uxml. Everything shown is a label or a bar width.</remarks>
@@ -27,8 +27,17 @@ namespace DigitalStory.View
         private const int HoleColours = 6;
         private const float BarScale = 1000f;
 
-        [SerializeField, Tooltip("The swarm's look and numbers: the category colours and the low-wasps warning.")]
+        [SerializeField, Tooltip("The swarm's look: the category colours.")]
         private SwarmConfig _swarmConfig;
+
+        [SerializeField, Tooltip("The nests' numbers: how many wasps a nest gives and how many notes it hums.")]
+        private NestConfig _nestConfig;
+
+        [SerializeField, Min(0.1f), Tooltip("How long the 'A nest hums' line stays, in seconds.")]
+        private float _humSeconds = 5f;
+
+        [SerializeField, Min(0.1f), Tooltip("How long the 'Level 3' flash stays after a nest is collected, in seconds.")]
+        private float _levelSeconds = 2.5f;
 
         [SerializeField, Min(0.1f), Tooltip("How long the 'New song' line stays, in seconds.")]
         private float _discoverySeconds = 3f;
@@ -57,6 +66,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Lesson step 2: the first song. The notes are the Sting's.")]
         private string _stingText = "Play J K H.";
 
+        [SerializeField, Tooltip("Lesson step after the Sting: collecting a nest.")]
+        private string _collectNestText = "Fly to the glowing nest and stay until it is yours.";
+
         [SerializeField, Tooltip("Lesson step 3: taking wasps from a hive.")]
         private string _visitHiveText = "Fly to a hive to take its wasps.";
 
@@ -78,6 +90,8 @@ namespace DigitalStory.View
         private HiveDefenseSession _session;
         private bool _isReady;
         private HiveOffscreenIndicatorView _indicator;
+        private NestOffscreenIndicatorView _nestIndicator;
+        private NestHudView _nestHud;
         private EndScreenView _endScreen;
 
         private Label _waspCount;
@@ -126,6 +140,11 @@ namespace DigitalStory.View
                 throw new InvalidOperationException("The HUD needs the SwarmConfig. Set it on the HiveDefenseHudView.");
             }
 
+            if (_nestConfig == null)
+            {
+                throw new InvalidOperationException("The HUD needs the NestConfig. Set it on the HiveDefenseHudView.");
+            }
+
             _furyPanel = Require<VisualElement>(root, "fury-panel");
             _furyFill = Require<VisualElement>(root, "fury-fill");
             _furyKeys = Require<Label>(root, "fury-keys");
@@ -145,9 +164,10 @@ namespace DigitalStory.View
             session.Discovery.Discovered += OnDiscovered;
             session.Caster.SongNotReady += OnSongNotReady;
             _phase = new PhaseView(session, topCenter, _callWaveHint, _bannerSeconds, _grantedSeconds);
-            _lesson = new LessonView(session.Tutorial, lessonLine, _moveText, _stingText, _visitHiveText, _healHiveText, _callWaveText);
+            _lesson = new LessonView(session.Tutorial, lessonLine, _moveText, _stingText, _collectNestText, _visitHiveText, _healHiveText, _callWaveText);
             _messageLeft = 0f;
             _messageLine.RemoveFromClassList(LineShownClass);
+            _nestHud = new NestHudView(session, _nestConfig, root, _humSeconds, _levelSeconds);
             BuildNotes(notes);
             _hives = new HivePanelsView(session, hives, _flashSeconds, _holdToHealText, _healingText);
 
@@ -157,8 +177,15 @@ namespace DigitalStory.View
                 throw new InvalidOperationException("The HUD needs a camera for the off-screen hive arrows. Set one, or tag the main camera.");
             }
 
+            // The edge arrows keep clear of every block of the HUD, so none of them ever covers a panel or a line.
+            VisualElement[] keepOut =
+            {
+                Require<VisualElement>(root, "top-left"), topCenter, hives, Require<VisualElement>(root, "bottom"), songbook,
+            };
             _indicator = GetOrAdd<HiveOffscreenIndicatorView>();
-            _indicator.Initialize(session.Hives, camera, offscreen);
+            _indicator.Initialize(session.Hives, camera, offscreen, keepOut);
+            _nestIndicator = GetOrAdd<NestOffscreenIndicatorView>();
+            _nestIndicator.Initialize(session.Nests, camera, offscreen, keepOut);
             _endScreen = GetOrAdd<EndScreenView>();
             _endScreen.Initialize(session, endScreen);
             _isReady = true; // Last, so Update never runs on a half-built HUD.
@@ -176,6 +203,7 @@ namespace DigitalStory.View
             _phase.Tick(Time.deltaTime);
             _lesson.Tick();
             _songbook.Tick(Time.deltaTime);
+            _nestHud.Tick(Time.deltaTime);
             ShowNotes();
             ShowLines(Time.deltaTime);
             _hives.Tick(Time.deltaTime);
@@ -198,6 +226,12 @@ namespace DigitalStory.View
             {
                 _phase.Dispose();
                 _phase = null;
+            }
+
+            if (_nestHud != null)
+            {
+                _nestHud.Dispose();
+                _nestHud = null;
             }
 
             if (_session != null)
@@ -271,7 +305,7 @@ namespace DigitalStory.View
         {
             SwarmBody swarm = _session.Swarm;
             int count = swarm.Count;
-            int max = swarm.Max;
+            int max = swarm.Capacity;
             if (count != _shownWasps || max != _shownMax)
             {
                 _shownWasps = count;
@@ -280,7 +314,7 @@ namespace DigitalStory.View
                     + " / " + max.ToString("N0", CultureInfo.InvariantCulture);
             }
 
-            bool isLow = count < _swarmConfig.LowWasps;
+            bool isLow = swarm.IsLow;
             if (!_isLowKnown || isLow != _isLow)
             {
                 _isLowKnown = true;

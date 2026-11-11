@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DigitalStory.Logic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -17,9 +18,13 @@ namespace DigitalStory.View
         [SerializeField, Min(0f), Tooltip("How far in from the screen edge the arrow's centre sits, in panel pixels.")]
         private float _edgeMargin = 48f;
 
+        [SerializeField, Min(0f), Tooltip("Panel pixels the arrow's centre keeps from each HUD block: half the arrow's size and a small gap.")]
+        private float _clearance = 24f;
+
         private HiveSet _hives;
         private Camera _camera;
         private VisualElement _layer;
+        private IReadOnlyList<VisualElement> _keepOut;
         private Label[] _arrows;
         private bool[] _isShown;
 
@@ -41,10 +46,14 @@ namespace DigitalStory.View
             }
         }
 
-        /// <summary>Builds one arrow per hive in <paramref name="layer"/>, which must cover the whole screen.</summary>
+        /// <summary>
+        /// Builds one arrow per hive in <paramref name="layer"/>, which must cover the whole screen. The arrows keep clear of
+        /// the HUD blocks in <paramref name="keepOut"/>.
+        /// </summary>
         /// <exception cref="ArgumentNullException">A reference is missing.</exception>
-        public void Initialize(HiveSet hives, Camera camera, VisualElement layer)
+        public void Initialize(HiveSet hives, Camera camera, VisualElement layer, IReadOnlyList<VisualElement> keepOut)
         {
+            _keepOut = keepOut ?? throw new ArgumentNullException(nameof(keepOut));
             _hives = hives ?? throw new ArgumentNullException(nameof(hives));
             _camera = camera != null ? camera : throw new ArgumentNullException(nameof(camera));
             _layer = layer ?? throw new ArgumentNullException(nameof(layer));
@@ -76,44 +85,13 @@ namespace DigitalStory.View
             {
                 Hive hive = _hives[index];
                 bool wants = hasSize && !hive.IsDestroyed && hive.IsUnderAttack
-                    && TryPlace(_arrows[index], hive.Position, width, height);
+                    && OffscreenArrow.TryPlace(_camera, _arrows[index], hive.Position, width, height, _edgeMargin, _keepOut, _clearance);
                 if (_isShown[index] != wants)
                 {
                     _isShown[index] = wants;
                     _arrows[index].EnableInClassList(ShownClass, wants);
                 }
             }
-        }
-
-        // Returns false when the hive is on screen. Otherwise moves the arrow to the edge, pointing at the hive.
-        private bool TryPlace(Label arrow, Vector3 world, float width, float height)
-        {
-            Vector3 view = _camera.WorldToViewportPoint(world);
-            bool isInFront = view.z > 0f;
-            if (isInFront && view.x >= 0f && view.x <= 1f && view.y >= 0f && view.y <= 1f)
-            {
-                return false;
-            }
-
-            // Panel pixels from the centre, y down. A hive behind the camera points the opposite way.
-            float sign = isInFront ? 1f : -1f;
-            float dx = (view.x - 0.5f) * width * sign;
-            float dy = -(view.y - 0.5f) * height * sign;
-            if (Mathf.Approximately(dx, 0f) && Mathf.Approximately(dy, 0f))
-            {
-                dy = 1f;
-            }
-
-            float halfWidth = Mathf.Max(1f, width * 0.5f - _edgeMargin);
-            float halfHeight = Mathf.Max(1f, height * 0.5f - _edgeMargin);
-            float scale = Mathf.Min(
-                Mathf.Abs(dx) > 0.0001f ? halfWidth / Mathf.Abs(dx) : float.MaxValue,
-                Mathf.Abs(dy) > 0.0001f ? halfHeight / Mathf.Abs(dy) : float.MaxValue);
-
-            arrow.style.left = width * 0.5f + dx * scale;
-            arrow.style.top = height * 0.5f + dy * scale;
-            arrow.style.rotate = new Rotate(new Angle(Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, AngleUnit.Degree));
-            return true;
         }
     }
 }

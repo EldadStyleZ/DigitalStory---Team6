@@ -90,6 +90,7 @@ namespace DigitalStory.View
 
             caster.SongCast += OnSongCast;
             caster.SongNotReady += OnSongRefused;
+            session.Discovery.Hummed += OnHummed;
         }
 
         /// <summary>Stops listening to the caster.</summary>
@@ -97,6 +98,7 @@ namespace DigitalStory.View
         {
             _session.Caster.SongCast -= OnSongCast;
             _session.Caster.SongNotReady -= OnSongRefused;
+            _session.Discovery.Hummed -= OnHummed;
         }
 
         /// <summary>Updates the chips. Call once per frame.</summary>
@@ -303,6 +305,13 @@ namespace DigitalStory.View
         {
             _brightLeft[song] = BrightSeconds;
             _chips[song].RemoveFromClassList(BrightClass); // So the next Tick lights it again, even in the middle of a flash.
+        }
+
+        // A nest hums a song: its slot lights once, like a cast, so the player sees which one to look at.
+        private void OnHummed(int song)
+        {
+            _brightLeft[song] = BrightSeconds;
+            _chips[song].RemoveFromClassList(BrightClass);
         }
 
         private void OnSongRefused(int song, SongRefusal refusal)

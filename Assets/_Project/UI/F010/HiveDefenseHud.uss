@@ -16,6 +16,7 @@
     --survive: rgb(255, 150, 40);
     --health: rgb(77, 217, 77);
     --store: rgb(255, 199, 38);
+    --nest: rgb(255, 200, 120);
 
     position: absolute;
     left: 0;
@@ -163,11 +164,9 @@
     margin-top: 2px;
 }
 
-/* Hives, down the left side */
+/* Hives, down the left side: in the top-left column under the wasps, Fury and the nest count, so nothing overlaps as it grows */
 .hives {
-    position: absolute;
-    left: 12px;
-    top: 92px;
+    flex-direction: column;
 }
 
 .hive-panel {
@@ -543,4 +542,85 @@
     color: var(--caption);
     margin-top: 12px;
     padding: 0;
+}
+
+/* Swarm level and nests. Quiet: small text beside the wasp count and under the Fury bar. */
+.level-label {
+    color: var(--nest);
+    font-size: 11px;
+    -unity-font-style: bold;
+    padding: 0;
+    margin-left: 8px;
+}
+
+.nest-count {
+    align-self: flex-start;
+    margin-bottom: 4px;
+    color: var(--nest);
+    font-size: 11px;
+    background-color: var(--panel);
+    border-radius: 6px;
+    padding: 1px 8px;
+}
+
+.top-center .level-line {
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: var(--nest);
+    margin-top: 2px;
+}
+
+.hum-line {
+    color: var(--nest);
+    -unity-font-style: bold;
+}
+
+/* The collecting bar sits at the bottom centre, above the notes. */
+.collect-box {
+    display: none;
+    align-items: center;
+    width: 160px;
+    margin-bottom: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background-color: var(--panel);
+}
+
+.collect--shown {
+    display: flex;
+}
+
+.collect-label {
+    color: var(--nest);
+    font-size: 12px;
+    padding: 0;
+}
+
+.collect-track {
+    align-self: stretch;
+    height: 6px;
+}
+
+.collect-fill {
+    background-color: var(--nest);
+}
+
+/* Arrows to open nests, off screen. Smaller and quieter than the hive alarm arrows. */
+.nest-arrow {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    translate: -50% -50%;
+    background-color: var(--nest);
+    border-radius: 13px;
+    color: var(--key-text);
+    font-size: 18px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    padding: 0;
+    display: none;
+}
+
+.nest-arrow--shown {
+    display: flex;
 }

@@ -3,9 +3,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using DigitalStory.Data;
 using DigitalStory.Logic;
 using DigitalStory.View;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -88,6 +90,27 @@ namespace DigitalStory.Tests.PlayMode
         private const float BesideHiveMetres = 2f;
         private const float FlowShotSeconds = 0.3f;
         private const int HalfSongNotesMissing = 1;
+        private const string NestConfigPath = "Assets/_Project/GameData/F010/NestConfig.asset";
+        private const string CoreMoveConfigPath = "Assets/_Project/GameData/F010/CoreMoveConfig.asset";
+        private const float NestShowSeconds = 1.5f;
+        private const float NestFocusHeight = 2.5f;
+        private const float BesideNestMetres = 1.5f;
+        private const float OutsideNestRingMetres = 5f;
+        private const float NestStayMarginSeconds = 0.3f;
+        private const float HalfCollectShare = 0.5f;
+        private const float NestRingPitch = 45f;
+        private const float NestsInViewBackMetres = 4f;
+        private const float NestsSettleSeconds = 2f;
+        private const float NestBehindCameraMetres = 12f;
+        private const float InsideEdgeMetres = 4f;
+        private const int LevelFiveNests = 4;
+        private const float DomeShotSeconds = 1.5f;
+        private const float DomeFocusHeight = 1f;
+        private const float DomeShotDistance = 10f;
+        private const float TornadoShotDistance = 18f;
+        private const float LevelShotPitch = 30f;
+        private const string LevelOneSuffix = "-level1";
+        private const string LevelFiveSuffix = "-level5";
 
         private HiveDefenseRoot _root;
         private SwarmCoreMotor _core;
@@ -189,6 +212,9 @@ namespace DigitalStory.Tests.PlayMode
         public IEnumerator Snapshot4_HiveCall()
         {
             yield return Wait(SongSeconds);
+
+            // The swarm starts full, and Hive Call ends at once with no room for the stores, so half of it is lost first.
+            _root.Session.Swarm.Lose(_root.Session.Swarm.Count / 2);
             yield return Play(KeysOf<HiveCallSong>());
             Assert.That(_root.Session.Forms.Current, Is.EqualTo(SwarmForm.HiveCall));
             yield return Wait(HiveCallShotSeconds);
@@ -397,6 +423,9 @@ namespace DigitalStory.Tests.PlayMode
         public IEnumerator Snapshot13_Collect()
         {
             Hive hive = _root.Session.Hives[0];
+
+            // The swarm starts full, and a full swarm takes no store, so half of it is lost first.
+            _root.Session.Swarm.Lose(_root.Session.Swarm.Count / 2);
             yield return ApproachHive(hive.Position);
             Assert.That(_root.Session.NearHive, Is.EqualTo(0));
             Assert.That(_root.Session.IsCollecting, Is.True);
@@ -446,6 +475,241 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(_root.Session.Phase, Is.EqualTo(MatchPhase.Survive));
             Assert.That(_root.Session.AreSongsFree, Is.False);
             yield return CaptureHud("snap-13-survive");
+        }
+
+        // Plan section H: an open nest glows warm and pulses, with its light, its motes and the faint ring on the ground at
+        // the collect radius.
+        [UnityTest]
+        public IEnumerator Snapshot14_NestOpen()
+        {
+            Nest nest = _root.Session.Nests[0];
+            Assert.That(nest.IsOpen, Is.True);
+            yield return Wait(NestShowSeconds);
+            yield return CaptureClose("snap-14-nest-open", nest.Position + (Vector3.up * NestFocusHeight), WideCloseDistance, ClosePitch);
+        }
+
+        // Plan section H, from the game camera at night: an open nest and the nearest closed one standing beside it as the
+        // camera sees them, both ahead of the core, so the glowing one and the dark one can be told apart.
+        [UnityTest]
+        public IEnumerator Snapshot14_NestsGame()
+        {
+            Assert.That(TryNestsSideBySide(out Nest open, out Nest closed), Is.True, "no open nest has a closed one beside it");
+            float nearer = Mathf.Min(open.Position.z, closed.Position.z);
+            _core.PlaceAt(new Vector3((open.Position.x + closed.Position.x) * 0.5f, 0f, nearer - NestsInViewBackMetres), true);
+            yield return Wait(NestsSettleSeconds);
+            yield return Capture("snap-14-nests-game");
+        }
+
+        // Plan section H: while the core collects, the ring on the ground fills clockwise from the top, here half way, and
+        // motes stream from the nest down to it. The core waits outside the ring first, so the camera has caught up.
+        [UnityTest]
+        public IEnumerator Snapshot14_Collecting()
+        {
+            NestConfig config = LoadNestConfig();
+            Nest nest = _root.Session.Nests[0];
+            _core.PlaceAt(nest.Position + (Vector3.back * OutsideNestRingMetres), true);
+            yield return Wait(SettleCameraSeconds);
+            Assert.That(nest.Progress01, Is.EqualTo(0f), "the nest was being collected from outside its ring");
+
+            _core.PlaceAt(nest.Position + (Vector3.back * BesideNestMetres), true);
+            yield return Wait(config.CollectSeconds * HalfCollectShare);
+            Assert.That(nest.Progress01, Is.GreaterThan(0.3f).And.LessThan(0.7f), "the collecting is not about half way");
+            yield return CaptureClose("snap-14-collecting", nest.Position + (Vector3.up * CloseFocusHeight), WideCloseDistance, NestRingPitch);
+        }
+
+        // Plan section H: the same Dome at level 1 and at level 5, after four nests, from the same pose, side by side: the
+        // shell is bigger by the level's size multiplier.
+        [UnityTest]
+        public IEnumerator Snapshot14_LevelDome()
+        {
+            return LevelShots<DomeSong>("snap-14-level-dome", SongSlot.Guard, SwarmForm.Dome, DomeShotSeconds, DomeFocusHeight, DomeShotDistance);
+        }
+
+        // The same for the Tornado: the column is wider and taller at level 5.
+        [UnityTest]
+        public IEnumerator Snapshot14_LevelTornado()
+        {
+            return LevelShots<TornadoSong>(
+                "snap-14-level-tornado", SongSlot.Strike, SwarmForm.Tornado, TornadoSeconds, TornadoFocusHeight, TornadoShotDistance);
+        }
+
+        // Plan section H in the HUD: the level beside the wasps, "Nests 2/8", the level line and the hum line after the second
+        // nest, the hummed song's first notes on its empty slot, and an arrow at the screen's edge to an open nest out of
+        // sight. Clearing the first wave opens the next nests; NestField.OpenAfterWave is what the session calls then.
+        [UnityTest]
+        public IEnumerator Snapshot14_Hud()
+        {
+            NestConfig config = LoadNestConfig();
+            HiveDefenseSession session = _root.Session;
+            int hummed = -1;
+            Action<int> onHummed = song => hummed = song;
+            session.Discovery.Hummed += onHummed;
+            try
+            {
+                yield return Wait(SongSeconds);
+                yield return CollectNests(config.OpenAtStart);
+            }
+            finally
+            {
+                session.Discovery.Hummed -= onHummed;
+            }
+
+            Assert.That(session.Level, Is.EqualTo(1 + config.OpenAtStart));
+            Assert.That(hummed, Is.GreaterThanOrEqualTo(0), "no nest hummed a song");
+            Assert.That(session.Discovery.KnownNotes(hummed), Is.GreaterThanOrEqualTo(config.HummedNotes));
+
+            // The core stands north of the southernmost open nest, so that nest is behind the camera, which looks north.
+            session.Nests.OpenAfterWave(1);
+            Nest open = SouthernmostOpenNest();
+            Assert.That(open, Is.Not.Null, "clearing the first wave opened no nest");
+            float edge = LoadCoreMove().PlayAreaHalfSize - InsideEdgeMetres;
+            _core.PlaceAt(new Vector3(open.Position.x, 0f, Mathf.Min(open.Position.z + NestBehindCameraMetres, edge)), true);
+            yield return Wait(SettleCameraSeconds);
+            var arrows = UnityEngine.Object.FindAnyObjectByType<NestOffscreenIndicatorView>();
+            Assert.That(arrows, Is.Not.Null, "the HUD has no NestOffscreenIndicatorView");
+            Assert.That(arrows.ShownCount, Is.GreaterThanOrEqualTo(1), "no arrow points at an open nest out of sight");
+            yield return CaptureHud("snap-14-hud");
+        }
+
+        // Casts the song at level 1 and takes it, collects four nests, comes back to the same spot and takes it again at level
+        // 5, then puts the two pictures side by side, level 1 on the left.
+        private IEnumerator LevelShots<T>(string name, SongSlot slot, SwarmForm form, float shotSeconds, float focusHeight, float distance)
+            where T : SwarmSongEffect
+        {
+            Vector3 spot = _core.Position;
+            Vector3 focus = spot + (Vector3.up * focusHeight);
+            float yaw = _camera.transform.eulerAngles.y;
+            yield return Wait(SongSeconds);
+            Assert.That(_root.Session.Level, Is.EqualTo(1));
+            yield return CastAndCapture<T>(name + LevelOneSuffix, slot, form, shotSeconds, focus, distance, yaw);
+
+            yield return CollectNests(LevelFiveNests);
+            Assert.That(_root.Session.Level, Is.EqualTo(1 + LevelFiveNests));
+            _core.PlaceAt(spot, true);
+            yield return Wait(StandSeconds);
+            Assert.That(_root.Session.Forms.Slot(slot).IsActive, Is.False, "the level-1 song still runs");
+            yield return CastAndCapture<T>(name + LevelFiveSuffix, slot, form, shotSeconds, focus, distance, yaw);
+
+            CombineSideBySide(name + LevelOneSuffix, name + LevelFiveSuffix, name);
+        }
+
+        private IEnumerator CastAndCapture<T>(
+            string fileName, SongSlot slot, SwarmForm form, float shotSeconds, Vector3 focus, float distance, float yaw)
+            where T : SwarmSongEffect
+        {
+            yield return Play(KeysOf<T>());
+            float castTime = Time.time;
+            Assert.That(_root.Session.Forms.Slot(slot).Form, Is.EqualTo(form), typeof(T).Name + " did not cast");
+            yield return WaitSince(castTime, shotSeconds);
+            yield return CapturePosed(fileName, focus, distance, LevelShotPitch, yaw);
+        }
+
+        // Collects the first nests in the order they open, as a player would over the first rounds: the ones open at the
+        // start, then those each cleared wave opens. NestField.OpenAfterWave is what the session calls when a wave is cleared.
+        private IEnumerator CollectNests(int count)
+        {
+            NestConfig config = LoadNestConfig();
+            NestField nests = _root.Session.Nests;
+            int wave = 0;
+            for (int index = 0; index < count; index++)
+            {
+                while (!nests[index].IsOpen && wave < config.OpenAfterWave.Count)
+                {
+                    wave++;
+                    nests.OpenAfterWave(wave);
+                }
+
+                Assert.That(nests[index].IsOpen, Is.True, "nest " + index + " never opened");
+                _core.PlaceAt(nests[index].Position + (Vector3.back * BesideNestMetres), true);
+                yield return Wait(config.CollectSeconds + NestStayMarginSeconds);
+                Assert.That(nests[index].IsCollected, Is.True, "nest " + index + " was not collected");
+            }
+        }
+
+        // The nearest pair of an open nest and a closed one that stand further apart across the picture than along it, so
+        // neither tree hides the other from the game camera, which looks north.
+        private bool TryNestsSideBySide(out Nest open, out Nest closed)
+        {
+            NestField nests = _root.Session.Nests;
+            open = null;
+            closed = null;
+            float best = float.MaxValue;
+            for (int first = 0; first < nests.Count; first++)
+            {
+                for (int second = 0; second < nests.Count; second++)
+                {
+                    Nest lit = nests[first];
+                    Nest dark = nests[second];
+                    Vector3 offset = dark.Position - lit.Position;
+                    bool isSideBySide = Mathf.Abs(offset.x) >= Mathf.Abs(offset.z);
+                    float distance = GroundDistance(lit.Position, dark.Position);
+                    if (lit.IsOpen && !dark.IsOpen && !dark.IsCollected && isSideBySide && distance < best)
+                    {
+                        best = distance;
+                        open = lit;
+                        closed = dark;
+                    }
+                }
+            }
+
+            return open != null;
+        }
+
+        private Nest SouthernmostOpenNest()
+        {
+            NestField nests = _root.Session.Nests;
+            Nest southernmost = null;
+            for (int index = 0; index < nests.Count; index++)
+            {
+                if (nests[index].IsOpen && (southernmost == null || nests[index].Position.z < southernmost.Position.z))
+                {
+                    southernmost = nests[index];
+                }
+            }
+
+            return southernmost;
+        }
+
+        // Writes the two pictures, of the same height, side by side in one file, the first on the left.
+        private void CombineSideBySide(string left, string right, string name)
+        {
+            var leftImage = new Texture2D(2, 2, TextureFormat.RGB24, false);
+            var rightImage = new Texture2D(2, 2, TextureFormat.RGB24, false);
+            Texture2D both = null;
+            try
+            {
+                Assert.That(leftImage.LoadImage(File.ReadAllBytes(Path.Combine(_directory, left + ".png"))), Is.True, left);
+                Assert.That(rightImage.LoadImage(File.ReadAllBytes(Path.Combine(_directory, right + ".png"))), Is.True, right);
+                Assert.That(rightImage.height, Is.EqualTo(leftImage.height), "the two pictures differ in height");
+                both = new Texture2D(leftImage.width + rightImage.width, leftImage.height, TextureFormat.RGB24, false);
+                both.SetPixels(0, 0, leftImage.width, leftImage.height, leftImage.GetPixels());
+                both.SetPixels(leftImage.width, 0, rightImage.width, rightImage.height, rightImage.GetPixels());
+                both.Apply();
+                File.WriteAllBytes(Path.Combine(_directory, name + ".png"), both.EncodeToPNG());
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(leftImage);
+                UnityEngine.Object.Destroy(rightImage);
+                if (both != null)
+                {
+                    UnityEngine.Object.Destroy(both);
+                }
+            }
+        }
+
+        private static NestConfig LoadNestConfig()
+        {
+            var nests = AssetDatabase.LoadAssetAtPath<NestConfig>(NestConfigPath);
+            Assert.That(nests, Is.Not.Null, "There is no NestConfig at " + NestConfigPath + ". Rebuild the scene.");
+            return nests;
+        }
+
+        private static CoreMoveConfig LoadCoreMove()
+        {
+            var coreMove = AssetDatabase.LoadAssetAtPath<CoreMoveConfig>(CoreMoveConfigPath);
+            Assert.That(coreMove, Is.Not.Null, "There is no CoreMoveConfig at " + CoreMoveConfigPath + ". Rebuild the scene.");
+            return coreMove;
         }
 
         // Stops outside the hive's collect ring until the camera has caught up, then steps in beside the hive.

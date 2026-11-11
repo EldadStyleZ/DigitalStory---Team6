@@ -21,13 +21,14 @@ namespace DigitalStory.View
         /// <summary>Builds the view. The prompts are indexed by <see cref="TutorialStep"/>; the entry for Done is empty.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
         /// <exception cref="ArgumentException">A step has no prompt.</exception>
-        public LessonView(Tutorial tutorial, Label line, string move, string sting, string visitHive, string healHive, string callWave)
+        public LessonView(Tutorial tutorial, Label line, string move, string sting, string collectNest, string visitHive, string healHive, string callWave)
         {
             _tutorial = tutorial ?? throw new ArgumentNullException(nameof(tutorial));
             _line = line ?? throw new ArgumentNullException(nameof(line));
             _prompts = new string[Enum.GetValues(typeof(TutorialStep)).Length];
             _prompts[(int)TutorialStep.Move] = Prompt(move, nameof(move));
             _prompts[(int)TutorialStep.PlaySting] = Prompt(sting, nameof(sting));
+            _prompts[(int)TutorialStep.CollectNest] = Prompt(collectNest, nameof(collectNest));
             _prompts[(int)TutorialStep.VisitHive] = Prompt(visitHive, nameof(visitHive));
             _prompts[(int)TutorialStep.HealHive] = Prompt(healHive, nameof(healHive));
             _prompts[(int)TutorialStep.CallWave] = Prompt(callWave, nameof(callWave));

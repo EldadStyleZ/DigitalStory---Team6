@@ -51,6 +51,12 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Each hive's numbers.")]
         private HiveConfig _hive;
 
+        [SerializeField, Tooltip("The wild nests' numbers: when they open, how the core collects one, what one gives and where they may stand.")]
+        private NestConfig _nests;
+
+        [SerializeField, Tooltip("What each swarm level multiplies the songs' sizes and damage by.")]
+        private SwarmLevelConfig _swarmLevel;
+
         [SerializeField, Tooltip("The smoke grenade and cloud numbers.")]
         private SmokeConfig _smoke;
 
@@ -102,6 +108,9 @@ namespace DigitalStory.View
 
         [SerializeField, Tooltip("Draws the two hives, in the same order as the hives' positions.")]
         private HiveView[] _hives = new HiveView[0];
+
+        [SerializeField, Tooltip("Draws the wild nests, in the order they open. Each stands where its nest is, so the first ones are those open at the start.")]
+        private NestView[] _nestViews = new NestView[0];
 
         [SerializeField, Tooltip("Where beekeepers enter. At least one.")]
         private Transform[] _spawnPoints = new Transform[0];
@@ -201,16 +210,26 @@ namespace DigitalStory.View
                 positions[index] = _hives[index].transform.position;
             }
 
+            var nests = new Vector3[_nestViews.Length];
+            for (int index = 0; index < nests.Length; index++)
+            {
+                nests[index] = _nestViews[index].transform.position;
+            }
+
             var spawns = new Vector3[_spawnPoints.Length];
             for (int index = 0; index < spawns.Length; index++)
             {
                 spawns[index] = _spawnPoints[index].position;
             }
 
+            // A nest moved by hand in the scene must still keep the plan's rules (section H), so a broken layout stops here.
+            NestLayout.Check(nests, positions, _nests, _coreMove.PlayAreaHalfSize);
+
             var rules = new HiveDefenseRules(
-                _swarm, _squads, _coreMove, _fury, _colossus, _hive, _smoke, _waves, _stick, _smoker, _aim, _songConfig, _songs, _holeCount);
+                _swarm, _squads, _coreMove, _fury, _colossus, _hive, _nests, _swarmLevel, _smoke, _waves, _stick, _smoker, _aim,
+                _songConfig, _songs, _holeCount);
             var random = new Mulberry32Random(unchecked((uint)_seed));
-            Session = new HiveDefenseSession(rules, positions, spawns, _coreMotor.Position, random);
+            Session = new HiveDefenseSession(rules, positions, nests, spawns, _coreMotor.Position, random);
 
             _trail = new PathTrail(_swarm.TrailPoints, _swarm.TrailSpacing);
             _trail.Reset(_coreMotor.Position);
@@ -225,6 +244,11 @@ namespace DigitalStory.View
             for (int index = 0; index < _hives.Length; index++)
             {
                 _hives[index].Initialize(Session.Hives[index], _camera, _hive);
+            }
+
+            for (int index = 0; index < _nestViews.Length; index++)
+            {
+                _nestViews[index].Initialize(Session.Nests[index], _nests);
             }
 
             _beekeeperPool.Initialize(Session, _stickPrefab, _smokerPrefab);
@@ -446,8 +470,10 @@ namespace DigitalStory.View
                 towardCamera.Normalize();
             }
 
+            // Full is the capacity, which grows with each nest, so a full swarm of 800 at the start glows as bright as a
+            // full one later, and a hurt swarm dims.
             SwarmBody swarm = Session.Swarm;
-            float strength = swarm.Max > 0 ? (float)swarm.Count / swarm.Max : 0f;
+            float strength = swarm.Capacity > 0 ? (float)swarm.Count / swarm.Capacity : 0f;
             Vector3 lift = (Vector3.up * _swarm.LightHeight) + (towardCamera * _swarm.LightTowardCamera);
             _glowLight.Show(middle + lift, color, strength * (1f - attackShare));
 
@@ -575,6 +601,8 @@ namespace DigitalStory.View
             Require(_fury, nameof(_fury));
             Require(_colossus, nameof(_colossus));
             Require(_hive, nameof(_hive));
+            Require(_nests, nameof(_nests));
+            Require(_swarmLevel, nameof(_swarmLevel));
             Require(_smoke, nameof(_smoke));
             Require(_waves, nameof(_waves));
             Require(_stick, nameof(_stick));
@@ -615,6 +643,17 @@ namespace DigitalStory.View
             for (int index = 0; index < _hives.Length; index++)
             {
                 Require(_hives[index], $"{nameof(_hives)}[{index}]");
+            }
+
+            if (_nestViews == null || _nestViews.Length != _nests.NestCount)
+            {
+                throw new InvalidOperationException(
+                    $"{name}: HiveDefenseRoot needs {_nests.NestCount} nest views, as many as '{_nests.name}' opens, in the order they open.");
+            }
+
+            for (int index = 0; index < _nestViews.Length; index++)
+            {
+                Require(_nestViews[index], $"{nameof(_nestViews)}[{index}]");
             }
 
             if (_spawnPoints == null || _spawnPoints.Length == 0)

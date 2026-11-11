@@ -32,6 +32,9 @@ namespace DigitalStory.Editor
         private const string RazPrefabFolder = Root + "/Art/prefabs";
         private const string BeekeeperSourcePath = RazPrefabFolder + "/Beekeeper_LowPoly.prefab";
         private const string HiveSourcePath = RazPrefabFolder + "/Beehive_LowPoly 1.prefab";
+        private const string NestTreeSourcePath = RazPrefabFolder + "/WaspNestTree_LowPoly 1.prefab";
+        private const string NestObjectName = "WaspNest"; // The nest in Raz's tree, which NestView lights and hides.
+        private const string NestEmissionProperty = "_EmissionColor"; // What NestView pulses on the nest.
         private const string BeekeeperFbxPath = Root + "/Art/model/Beekeeper_LowPoly.fbx";
         private const string MixamoFolder = Root + "/Art/Mixamo";
         private const string ControllerPath = ArtFolder + "/Beekeeper.controller";
@@ -77,6 +80,21 @@ namespace DigitalStory.Editor
         private const int SceneryAttempts = 30;
         private const int SceneSeed = 1010;
 
+        // The nest trees (plan section H). NestConfig holds the rules every layout keeps; these only choose one of the many
+        // layouts that keep them. The nests stay inside the clear middle, short of the scenery around the edge, and apart
+        // from each other and the spawn points, so no two collect circles touch and no beekeeper enters under a nest.
+        private const float NestTreeHeight = 5f;
+        private const float NestInsideHalfSize = 24f;
+        private const float NestSpacing = 8f;
+        private const float NestSpawnClearance = 8f;
+        private const float NestHiveMargin = 0.5f;
+        // Degrees off straight ahead (+Z), one nest to each side, so both are in the opening view and neither tree stands
+        // between the camera and a core walking straight ahead to the north spawn.
+        private const float FirstNestsNarrowestBearing = 20f;
+        private const float FirstNestsWidestBearing = 35f;
+        private const float LaterNestJitterDegrees = 10f;
+        private const int NestAttempts = 2000;
+
         private const string RightHandName = "RightHand";
         private const string FluteName = "Flute";
 
@@ -114,8 +132,8 @@ namespace DigitalStory.Editor
         // Every config and song asset BuildAll loads or creates. The baked ColossusSampleSet is not a config.
         private static readonly string[] ConfigAssetNames =
         {
-            "SwarmConfig", "SquadConfig", "AimConfig", "CoreMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "SmokeConfig",
-            "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
+            "SwarmConfig", "SquadConfig", "AimConfig", "CoreMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "NestConfig",
+            "SwarmLevelConfig", "SmokeConfig", "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
             "DomeSong", "StingSong", "TornadoSong", "GustSong", "MeteorSong", "HiveCallSong", "ColossusSong",
         };
 
@@ -220,6 +238,8 @@ namespace DigitalStory.Editor
             var fury = LoadOrCreate<FuryConfig>("FuryConfig");
             var colossus = LoadOrCreate<ColossusConfig>("ColossusConfig");
             var hive = LoadOrCreate<HiveConfig>("HiveConfig");
+            var nests = LoadOrCreate<NestConfig>("NestConfig");
+            var swarmLevel = LoadOrCreate<SwarmLevelConfig>("SwarmLevelConfig");
             var smoke = LoadOrCreate<SmokeConfig>("SmokeConfig");
             var waves = LoadOrCreate<WaveConfig>("WaveConfig");
             var songConfig = LoadOrCreate<SongConfig>("F010SongConfig");
@@ -234,8 +254,10 @@ namespace DigitalStory.Editor
 
             var beekeeperSource = AssetDatabase.LoadAssetAtPath<GameObject>(BeekeeperSourcePath);
             var hivePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(HiveSourcePath);
+            var nestTreePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(NestTreeSourcePath);
             Require(beekeeperSource, BeekeeperSourcePath);
             Require(hivePrefab, HiveSourcePath);
+            Require(nestTreePrefab, NestTreeSourcePath);
 
             BeekeeperView stickView = MakeBeekeeperPrefab("F010StickBeekeeper", beekeeperSource, controller, false);
             BeekeeperView smokerView = MakeBeekeeperPrefab("F010SmokerBeekeeper", beekeeperSource, controller, true);
@@ -250,8 +272,8 @@ namespace DigitalStory.Editor
 
             AssetDatabase.SaveAssets();
             FillScene(new SceneAssets(
-                swarm, squads, aim, coreMove, fury, colossus, hive, smoke, waves, stick, smoker, songConfig, songs, samples,
-                colossusPrefab, hivePrefab, stickView, smokerView, grenade, cloud));
+                swarm, squads, aim, coreMove, fury, colossus, hive, nests, swarmLevel, smoke, waves, stick, smoker, songConfig, songs,
+                samples, colossusPrefab, hivePrefab, nestTreePrefab, stickView, smokerView, grenade, cloud));
             Debug.Log("[F010] Scene filled.");
 
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -1322,6 +1344,7 @@ namespace DigitalStory.Editor
             var hiveSource = AssetDatabase.LoadAssetAtPath<GameObject>(HiveSourcePath);
             hives[0] = BuildHive(hiveSource, "Hive A", new Vector3(-HiveSpacing * 0.5f, 0f, 0f));
             hives[1] = BuildHive(hiveSource, "Hive B", new Vector3(HiveSpacing * 0.5f, 0f, 0f));
+            NestView[] nests = BuildNests(assets.NestTreePrefab, assets.Nests, assets.CoreMove, hives, spawns);
 
             GameObject core = BuildCore();
             var colossus = (GameObject)PrefabUtility.InstantiatePrefab(assets.ColossusPrefab);
@@ -1376,6 +1399,7 @@ namespace DigitalStory.Editor
             var hudSerialized = new SerializedObject(hud.GetComponent<HiveDefenseHudView>());
             SetObject(hudSerialized, "_camera", cameraComponent);
             SetObject(hudSerialized, "_swarmConfig", assets.Swarm);
+            SetObject(hudSerialized, "_nestConfig", assets.Nests);
             hudSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             var rootObject = new GameObject("Hive Defense Root", typeof(HiveDefenseRoot));
@@ -1387,6 +1411,8 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_fury", assets.Fury);
             SetObject(serialized, "_colossus", assets.Colossus);
             SetObject(serialized, "_hive", assets.Hive);
+            SetObject(serialized, "_nests", assets.Nests);
+            SetObject(serialized, "_swarmLevel", assets.SwarmLevel);
             SetObject(serialized, "_smoke", assets.Smoke);
             SetObject(serialized, "_waves", assets.Waves);
             SetObject(serialized, "_stick", assets.Stick);
@@ -1403,6 +1429,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_glowLight", glowLight.GetComponent<SwarmGlowLight>());
             SetObject(serialized, "_attackGlowLight", attackLight.GetComponent<SwarmGlowLight>());
             SetObjects(serialized, "_hives", hives);
+            SetObjects(serialized, "_nestViews", nests);
             SetObjects(serialized, "_spawnPoints", ChildTransforms(spawns));
             SetObject(serialized, "_beekeeperPool", beekeeperPool.GetComponent<BeekeeperViewPool>());
             SetObject(serialized, "_stickPrefab", assets.StickView);
@@ -1611,6 +1638,191 @@ namespace DigitalStory.Editor
             return hive.GetComponent<HiveView>();
         }
 
+        // Plan section H: Raz's nest trees, in the order they open. The places are chosen with the scene's seeded random, so
+        // every build gives the same layout, and checked against NestConfig's rules before anything is placed.
+        private static NestView[] BuildNests(GameObject source, NestConfig config, CoreMoveConfig coreMove, HiveView[] hives, Transform spawns)
+        {
+            var hivePositions = new Vector3[hives.Length];
+            for (int index = 0; index < hives.Length; index++)
+            {
+                hivePositions[index] = hives[index].transform.position;
+            }
+
+            Transform[] spawnPoints = ChildTransforms(spawns);
+            var spawnPositions = new Vector3[spawnPoints.Length];
+            for (int index = 0; index < spawnPoints.Length; index++)
+            {
+                spawnPositions[index] = spawnPoints[index].position;
+            }
+
+            List<Vector3> positions = PickNestPositions(config, hivePositions, spawnPositions);
+            NestLayout.Check(positions, hivePositions, config, coreMove.PlayAreaHalfSize);
+
+            var parent = new GameObject("Nests").transform;
+            var views = new NestView[positions.Count];
+            for (int index = 0; index < views.Length; index++)
+            {
+                views[index] = BuildNestTree(source, parent, $"Nest {index + 1}", positions[index]);
+            }
+
+            return views;
+        }
+
+        // The ones open at the start stand ahead of the core, where the opening camera looks, one to each side. The rest stand
+        // one in each equal slice of the circle around the middle, so they are spread around it, and the nearer ones open
+        // first, so each wave's nests are a longer trip than the last.
+        private static List<Vector3> PickNestPositions(NestConfig config, Vector3[] hives, Vector3[] spawns)
+        {
+            var random = new System.Random(SceneSeed);
+            var placed = new List<Vector3>(config.NestCount);
+            for (int index = 0; index < config.OpenAtStart; index++)
+            {
+                float side = index % 2 == 0 ? -1f : 1f;
+                placed.Add(PickNest(
+                    random, placed, hives, spawns, config, side * FirstNestsNarrowestBearing, side * FirstNestsWidestBearing,
+                    config.FirstNestsNearest, config.FirstNestsFarthest, $"nest {index}, open at the start"));
+            }
+
+            int later = config.NestCount - config.OpenAtStart;
+            var laterNests = new List<Vector3>(later);
+            for (int index = 0; index < later; index++)
+            {
+                float slice = index * 360f / later;
+                Vector3 nest = PickNest(
+                    random, placed, hives, spawns, config, slice - LaterNestJitterDegrees, slice + LaterNestJitterDegrees,
+                    config.LaterNestsNearest, config.LaterNestsFarthest, $"nest {config.OpenAtStart + index}, opened after a wave");
+                placed.Add(nest);
+                laterNests.Add(nest);
+            }
+
+            laterNests.Sort((left, right) => GroundRadius(left).CompareTo(GroundRadius(right)));
+            placed.RemoveRange(config.OpenAtStart, later);
+            placed.AddRange(laterNests);
+            return placed;
+        }
+
+        private static Vector3 PickNest(
+            System.Random random,
+            List<Vector3> placed,
+            Vector3[] hives,
+            Vector3[] spawns,
+            NestConfig config,
+            float fromBearing,
+            float toBearing,
+            float nearest,
+            float farthest,
+            string which)
+        {
+            for (int attempt = 0; attempt < NestAttempts; attempt++)
+            {
+                float bearing = Mathf.Lerp(fromBearing, toBearing, (float)random.NextDouble()) * Mathf.Deg2Rad;
+                float radius = Mathf.Lerp(nearest, farthest, (float)random.NextDouble());
+                var point = new Vector3(Mathf.Sin(bearing) * radius, 0f, Mathf.Cos(bearing) * radius);
+                bool isInside = Mathf.Abs(point.x) <= NestInsideHalfSize && Mathf.Abs(point.z) <= NestInsideHalfSize;
+                if (isInside
+                    && IsClearOf(point, hives, config.HiveClearance + NestHiveMargin)
+                    && IsClearOf(point, spawns, NestSpawnClearance)
+                    && IsClearOf(point, placed, NestSpacing))
+                {
+                    return point;
+                }
+            }
+
+            throw new InvalidOperationException($"[F010] Found no place for {which} that keeps NestConfig's rules and the builder's spacing.");
+        }
+
+        private static bool IsClearOf(Vector3 point, IReadOnlyList<Vector3> others, float distance)
+        {
+            for (int index = 0; index < others.Count; index++)
+            {
+                Vector3 offset = others[index] - point;
+                offset.y = 0f;
+                if (offset.sqrMagnitude < distance * distance)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static float GroundRadius(Vector3 point) => new Vector2(point.x, point.z).magnitude;
+
+        // NestView stands where the nest is, and Raz's tree under it keeps its own rotation, which stands the Z-up model
+        // upright, with its trunk on that spot, scaled to a tree's height. The tree is static; the nest in it is not, because
+        // NestView tints it and hides it once it is collected.
+        private static NestView BuildNestTree(GameObject source, Transform parent, string name, Vector3 position)
+        {
+            var nest = new GameObject(name, typeof(NestView));
+            nest.transform.SetParent(parent, false);
+            nest.transform.position = position;
+
+            var tree = (GameObject)PrefabUtility.InstantiatePrefab(source, nest.transform);
+            tree.transform.localPosition = Vector3.zero;
+            FitToHeight(tree.transform, NestTreeHeight);
+
+            Transform nestObject = FindByName(tree.transform, NestObjectName, false);
+            if (nestObject == null)
+            {
+                throw new InvalidOperationException($"[F010] {source.name} has no child named {NestObjectName}, which NestView shows.");
+            }
+
+            Transform[] all = tree.GetComponentsInChildren<Transform>(true);
+            for (int index = 0; index < all.Length; index++)
+            {
+                all[index].gameObject.isStatic = !all[index].IsChildOf(nestObject);
+            }
+
+            Renderer[] nestRenderers = nestObject.GetComponentsInChildren<Renderer>(true);
+            for (int index = 0; index < nestRenderers.Length; index++)
+            {
+                Material[] materials = nestRenderers[index].sharedMaterials;
+                for (int slot = 0; slot < materials.Length; slot++)
+                {
+                    materials[slot] = NestGlowMaterial(materials[slot]);
+                }
+
+                nestRenderers[index].sharedMaterials = materials;
+            }
+
+            return nest.GetComponent<NestView>();
+        }
+
+        // A copy of the nest's own material, with its colour and texture, that can glow: NestView pulses its emission while
+        // the nest is open. The emission is switched on in the asset, so the shader variant that draws it is in every build.
+        // Raz's material and prefab stay as they are; only the scene's trees use the copy.
+        private static Material NestGlowMaterial(Material original)
+        {
+            if (original == null)
+            {
+                throw new InvalidOperationException($"[F010] The nest in {NestTreeSourcePath} has an empty material slot.");
+            }
+
+            string path = $"{ArtFolder}/NestGlow_{Sanitize(original.name)}.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(original);
+                AssetDatabase.CreateAsset(material, path);
+            }
+            else
+            {
+                material.shader = original.shader;
+                material.CopyPropertiesFromMaterial(original);
+            }
+
+            if (!material.HasProperty(NestEmissionProperty))
+            {
+                throw new InvalidOperationException($"[F010] The nest's shader {original.shader.name} has no {NestEmissionProperty}, so it cannot glow.");
+            }
+
+            material.EnableKeyword("_EMISSION");
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            material.SetColor(NestEmissionProperty, Color.black);
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+
         // ---------------------------------------------------------------- Helpers
 
         private static string BackingField(string propertyName) => $"<{propertyName}>k__BackingField";
@@ -1673,6 +1885,8 @@ namespace DigitalStory.Editor
                 FuryConfig fury,
                 ColossusConfig colossus,
                 HiveConfig hive,
+                NestConfig nests,
+                SwarmLevelConfig swarmLevel,
                 SmokeConfig smoke,
                 WaveConfig waves,
                 BeekeeperConfig stick,
@@ -1682,6 +1896,7 @@ namespace DigitalStory.Editor
                 ColossusSampleSet samples,
                 GameObject colossusPrefab,
                 GameObject hivePrefab,
+                GameObject nestTreePrefab,
                 BeekeeperView stickView,
                 BeekeeperView smokerView,
                 SmokeGrenadeView grenade,
@@ -1694,6 +1909,8 @@ namespace DigitalStory.Editor
                 Fury = fury;
                 Colossus = colossus;
                 Hive = hive;
+                Nests = nests;
+                SwarmLevel = swarmLevel;
                 Smoke = smoke;
                 Waves = waves;
                 Stick = stick;
@@ -1703,6 +1920,7 @@ namespace DigitalStory.Editor
                 Samples = samples;
                 ColossusPrefab = colossusPrefab;
                 HivePrefab = hivePrefab;
+                NestTreePrefab = nestTreePrefab;
                 StickView = stickView;
                 SmokerView = smokerView;
                 Grenade = grenade;
@@ -1716,6 +1934,8 @@ namespace DigitalStory.Editor
             public FuryConfig Fury { get; }
             public ColossusConfig Colossus { get; }
             public HiveConfig Hive { get; }
+            public NestConfig Nests { get; }
+            public SwarmLevelConfig SwarmLevel { get; }
             public SmokeConfig Smoke { get; }
             public WaveConfig Waves { get; }
             public BeekeeperConfig Stick { get; }
@@ -1725,6 +1945,7 @@ namespace DigitalStory.Editor
             public ColossusSampleSet Samples { get; }
             public GameObject ColossusPrefab { get; }
             public GameObject HivePrefab { get; }
+            public GameObject NestTreePrefab { get; }
             public BeekeeperView StickView { get; }
             public BeekeeperView SmokerView { get; }
             public SmokeGrenadeView Grenade { get; }

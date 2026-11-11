@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: affbb3f5f131b4c25a7b8818c7c3f081, type: 3}
+  m_Name: NestConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.NestConfig
+  <CollectRadius>k__BackingField: 2.5
+  <CollectSeconds>k__BackingField: 2
+  <CapacityPerNest>k__BackingField: 400
+  <WaspsPerNest>k__BackingField: 400
+  <HummedNotes>k__BackingField: 2
+  <OpenAtStart>k__BackingField: 2
+  _openAfterWave: 02000000020000000100000001000000i
+  <HiveClearance>k__BackingField: 12
+  <FirstNestsNearest>k__BackingField: 10
+  <FirstNestsFarthest>k__BackingField: 14
+  <LaterNestsNearest>k__BackingField: 16
+  <LaterNestsFarthest>k__BackingField: 30
+  <LaterNestsWidestGapDegrees>k__BackingField: 90

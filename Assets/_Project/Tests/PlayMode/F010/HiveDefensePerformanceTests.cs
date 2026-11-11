@@ -110,7 +110,8 @@ namespace DigitalStory.Tests.PlayMode
             _root = Object.FindAnyObjectByType<HiveDefenseRoot>();
             Assert.That(_root, Is.Not.Null);
 
-            // Wasps that arrive fill the swarm to its maximum.
+            // The capacity grows to its ceiling, as nests raise it, and wasps that arrive fill the swarm to it.
+            _root.Session.Swarm.GrowCapacity(_root.Session.Swarm.Max);
             _root.Session.Swarm.Gain(_root.Session.Swarm.Max);
             Assert.That(_root.Session.Swarm.Count, Is.EqualTo(_root.Session.Swarm.Max));
 

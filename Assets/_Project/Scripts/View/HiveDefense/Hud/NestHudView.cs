@@ -1,0 +1,172 @@
+using System;
+using System.Globalization;
+using System.Text;
+using DigitalStory.Data;
+using DigitalStory.Logic;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace DigitalStory.View
+{
+    /// <summary>
+    /// The nests in the HUD: the swarm's level beside the wasp count, "Nests 2/8", a short "Level 3  +400 wasps" flash when a nest
+    /// is collected, a bar with the word "Collecting" at the bottom centre while the core collects, and the line "A nest hums: J K ..."
+    /// when a nest hums a song. It listens to the match and unsubscribes in <see cref="Dispose"/>.
+    /// </summary>
+    /// <remarks>Timers are floats advanced by <see cref="Tick"/>. Text and widths change only when a value changes.</remarks>
+    public sealed class NestHudView : IDisposable
+    {
+        private const string ShownClass = "line--shown";
+        private const string CollectShownClass = "collect--shown";
+        private const float BarScale = 1000f;
+
+        private readonly HiveDefenseSession _session;
+        private readonly NestConfig _config;
+        private readonly Label _level;
+        private readonly Label _count;
+        private readonly VisualElement _collect;
+        private readonly VisualElement _collectFill;
+        private readonly Label _hum;
+        private readonly Label _levelLine;
+        private readonly float _humSeconds;
+        private readonly float _levelSeconds;
+        private readonly StringBuilder _text = new StringBuilder(48);
+        private float _humLeft;
+        private float _levelLeft;
+        private int _shownLevel = -1;
+        private int _shownCollected = -1;
+        private int _shownCount = -1;
+        private int _shownBar = -1;
+        private bool _isCollecting;
+
+        /// <summary>Finds "level-label", "nest-count", "collect-box", "collect-fill", "hum-line" and "level-line" in the root and starts listening.</summary>
+        /// <exception cref="ArgumentNullException">An argument is missing.</exception>
+        /// <exception cref="InvalidOperationException">The UXML lacks an element.</exception>
+        public NestHudView(HiveDefenseSession session, NestConfig config, VisualElement root, float humSeconds, float levelSeconds)
+        {
+            _session = session ?? throw new ArgumentNullException(nameof(session));
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            if (root == null)
+            {
+                throw new ArgumentNullException(nameof(root));
+            }
+
+            _level = Require<Label>(root, "level-label");
+            _count = Require<Label>(root, "nest-count");
+            _collect = Require<VisualElement>(root, "collect-box");
+            _collectFill = Require<VisualElement>(root, "collect-fill");
+            _hum = Require<Label>(root, "hum-line");
+            _levelLine = Require<Label>(root, "level-line");
+            _humSeconds = humSeconds;
+            _levelSeconds = levelSeconds;
+            _collect.RemoveFromClassList(CollectShownClass);
+            _hum.RemoveFromClassList(ShownClass);
+            _levelLine.RemoveFromClassList(ShownClass);
+
+            session.Nests.NestCollected += OnNestCollected;
+            session.Discovery.Hummed += OnHummed;
+        }
+
+        /// <summary>Stops listening to the match.</summary>
+        public void Dispose()
+        {
+            _session.Nests.NestCollected -= OnNestCollected;
+            _session.Discovery.Hummed -= OnHummed;
+        }
+
+        /// <summary>Updates the level, the counter, the collecting bar and the timers. Call once per frame.</summary>
+        public void Tick(float deltaTime)
+        {
+            int level = _session.Level;
+            if (level != _shownLevel)
+            {
+                _shownLevel = level;
+                _level.text = "Lv " + Number(level);
+            }
+
+            NestField nests = _session.Nests;
+            int collected = nests.CollectedCount;
+            if (collected != _shownCollected || nests.Count != _shownCount)
+            {
+                _shownCollected = collected;
+                _shownCount = nests.Count;
+                _count.text = "Nests " + Number(collected) + "/" + Number(nests.Count);
+            }
+
+            // Only an open nest is being collected: a collected one reports 1 for good, and a closed one 0.
+            float progress = 0f;
+            for (int index = 0; index < nests.Count; index++)
+            {
+                if (nests[index].IsOpen)
+                {
+                    progress = Mathf.Max(progress, nests[index].Progress01);
+                }
+            }
+
+            bool isCollecting = progress > 0f;
+            if (isCollecting != _isCollecting)
+            {
+                _isCollecting = isCollecting;
+                _collect.EnableInClassList(CollectShownClass, isCollecting);
+            }
+
+            int bar = (int)(Mathf.Clamp01(progress) * BarScale);
+            if (bar != _shownBar)
+            {
+                _shownBar = bar;
+                _collectFill.style.width = Length.Percent(bar / BarScale * 100f);
+            }
+
+            _humLeft = Countdown(_humLeft, deltaTime, _hum);
+            _levelLeft = Countdown(_levelLeft, deltaTime, _levelLine);
+        }
+
+        private static float Countdown(float left, float deltaTime, VisualElement line)
+        {
+            if (left <= 0f)
+            {
+                return 0f;
+            }
+
+            left -= deltaTime;
+            if (left <= 0f)
+            {
+                line.RemoveFromClassList(ShownClass);
+                return 0f;
+            }
+
+            return left;
+        }
+
+        private void OnNestCollected(int index)
+        {
+            _levelLine.text = "Level " + Number(_session.Level) + "  +" + Number(_config.WaspsPerNest) + " wasps";
+            _levelLeft = _levelSeconds;
+            _levelLine.AddToClassList(ShownClass);
+        }
+
+        private void OnHummed(int song)
+        {
+            SongDefinition definition = _session.Caster[song].Song;
+            int notes = Mathf.Min(_config.HummedNotes, definition.Keys.Count);
+            _text.Clear();
+            _text.Append("A nest hums: ");
+            for (int key = 0; key < notes; key++)
+            {
+                _text.Append(HiveDefenseInput.HoleName(definition.Keys[key])).Append(' ');
+            }
+
+            _text.Append("...");
+            _hum.text = _text.ToString();
+            _humLeft = _humSeconds;
+            _hum.AddToClassList(ShownClass);
+        }
+
+        private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+        private static T Require<T>(VisualElement root, string name) where T : VisualElement
+        {
+            return root.Q<T>(name) ?? throw new InvalidOperationException("The HUD UXML has no element named " + name + ".");
+        }
+    }
+}

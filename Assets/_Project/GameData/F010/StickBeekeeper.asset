@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: StickBeekeeper
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.BeekeeperConfig
   <Kind>k__BackingField: 0
-  <Health>k__BackingField: 60
+  <Health>k__BackingField: 90
   <Speed>k__BackingField: 2.6
   <SeparationRadius>k__BackingField: 1.2
   <NoticeRange>k__BackingField: 7

@@ -12,13 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: db20aba9b99bc4c71ac412759a73ff94, type: 3}
   m_Name: SwarmConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.SwarmConfig
-  <StartingWasps>k__BackingField: 2000
+  <StartingWasps>k__BackingField: 800
+  <StartingCapacity>k__BackingField: 800
   <MaxWasps>k__BackingField: 4000
-  <CollapseBelow>k__BackingField: 240
+  <CollapseShare>k__BackingField: 0.12
   <CollapseBlockSeconds>k__BackingField: 3
-  <RespawnWasps>k__BackingField: 1000
-  <MinRespawnWasps>k__BackingField: 300
-  <LowWasps>k__BackingField: 600
+  <RespawnShare>k__BackingField: 0.5
+  <MinRespawnShare>k__BackingField: 0.15
+  <LowShare>k__BackingField: 0.3
   <RiverSpring>k__BackingField: 40
   <RiverDamping>k__BackingField: 0.6
   <ShapeSpring>k__BackingField: 180

@@ -16,8 +16,8 @@ namespace DigitalStory.Tests.PlayMode
     /// <summary>
     /// Loads the hive defense scene and checks that it starts, draws the swarm, answers the flute, keeps the core inside the
     /// giant, the camera on the core and the core in the play area and out of the hives, and animates the beekeepers. It also
-    /// checks the farm and survive phases and the wasp economy through the root, as the keys would drive them. Every song is
-    /// played with the keys on its own asset, so a change of keys never breaks these tests.
+    /// checks the farm and survive phases, the wasp economy and the nests that grow the swarm through the root, as the keys
+    /// would drive them. Every song is played with the keys on its own asset, so a change of keys never breaks these tests.
     /// </summary>
     public sealed class HiveDefenseSceneTests
     {
@@ -27,6 +27,7 @@ namespace DigitalStory.Tests.PlayMode
         private const string CoreMoveConfigPath = "Assets/_Project/GameData/F010/CoreMoveConfig.asset";
         private const string WaveConfigPath = "Assets/_Project/GameData/F010/WaveConfig.asset";
         private const string HiveConfigPath = "Assets/_Project/GameData/F010/HiveConfig.asset";
+        private const string NestConfigPath = "Assets/_Project/GameData/F010/NestConfig.asset";
         private const string GroundName = "Ground";
         private const string SceneryName = "Scenery";
         private const int FramesToSettle = 3;
@@ -58,6 +59,11 @@ namespace DigitalStory.Tests.PlayMode
         private const int CollectHive = 0;
         private const float CollectSeconds = 0.3f;
         private const float GiveSeconds = 0.5f;
+        private const float BesideNestMetres = 1.5f;
+        private const float NestStayMarginSeconds = 0.5f;
+        private const float NestBurstSeconds = 1.2f; // NestView's burst, 0.9 s, and a little more.
+        private const string NestObjectName = "WaspNest";
+        private const int StartingLevel = 1;
 
         // The controller rests its skin width away from what it touches, so a capsule this much thinner than the core's
         // overlaps only what the core is really inside.
@@ -287,6 +293,9 @@ namespace DigitalStory.Tests.PlayMode
             System.Action<int> onGranted = wasps => granted += wasps;
             session.Waves.WaveCalledEarly += onCalled;
             session.WaspsGranted += onGranted;
+
+            // The swarm starts full, and a grant only fills it up to its capacity, so half of it is lost first.
+            session.Swarm.Lose(session.Swarm.Count / 2);
             int before = session.Swarm.Count;
             try
             {
@@ -341,9 +350,12 @@ namespace DigitalStory.Tests.PlayMode
             HiveDefenseSession session = _root.Session;
             Hive hive = session.Hives[CollectHive];
             float storeBefore = hive.Store;
+
+            // The swarm starts full, so half of it is lost first, to make room for the store.
+            session.Swarm.Lose(session.Swarm.Count / 2);
             int before = session.Swarm.Count;
             Assert.That(storeBefore, Is.GreaterThan(0f), "the hive starts with no store");
-            Assert.That(session.Swarm.Count, Is.LessThan(session.Swarm.Max), "the swarm is full, so it can take nothing");
+            Assert.That(session.Swarm.Count, Is.LessThan(session.Swarm.Capacity), "the swarm is full, so it can take nothing");
 
             motor.PlaceAt(BesideHive(hive.Position), true);
             yield return null;
@@ -388,6 +400,88 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(healed, Is.GreaterThan(0f));
             Assert.That(paid, Is.GreaterThan(0));
             Assert.That(paid, Is.EqualTo(Mathf.RoundToInt(healed * config.WaspsPerHealthPoint)));
+        }
+
+        // Plan section H: the swarm starts full, at its starting capacity, at level 1, with the first nests open and the
+        // rest closed, and the nests' views show which are which.
+        [UnityTest]
+        public IEnumerator Match_OnLoad_StartsFullAtLevelOneWithTheFirstNestsOpen()
+        {
+            HiveDefenseSession session = _root.Session;
+            NestConfig nests = LoadNestConfig();
+            Assert.That(session.Swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps));
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(_swarmConfig.StartingCapacity));
+            Assert.That(session.Swarm.Count, Is.EqualTo(session.Swarm.Capacity), "the swarm does not start full");
+            Assert.That(session.Swarm.Max, Is.EqualTo(_swarmConfig.MaxWasps));
+            Assert.That(session.Level, Is.EqualTo(StartingLevel));
+            Assert.That(session.Nests.Count, Is.EqualTo(nests.NestCount));
+            Assert.That(session.Nests.OpenCount, Is.EqualTo(nests.OpenAtStart));
+            Assert.That(session.Nests.CollectedCount, Is.EqualTo(0));
+            yield return null;
+
+            for (int index = 0; index < session.Nests.Count; index++)
+            {
+                bool isOpen = index < nests.OpenAtStart;
+                Assert.That(session.Nests[index].IsOpen, Is.EqualTo(isOpen), "nest " + index);
+                Assert.That(NestViewAt(session.Nests[index].Position).IsOpenShown, Is.EqualTo(isOpen), "nest view " + index);
+            }
+        }
+
+        // Plan section H: staying beside an open nest for the collect time takes it: the capacity, the count and the level
+        // rise, and once its burst has played the nest is gone from its tree.
+        [UnityTest]
+        public IEnumerator Core_StayingAtAnOpenNest_CollectsItAndGrowsTheSwarm()
+        {
+            var motor = Object.FindAnyObjectByType<SwarmCoreMotor>();
+            HiveDefenseSession session = _root.Session;
+            NestConfig nests = LoadNestConfig();
+            Nest nest = session.Nests[0];
+            Assert.That(nest.IsOpen, Is.True, "the first nest is not open at the start");
+            int capacity = session.Swarm.Capacity;
+            int count = session.Swarm.Count;
+            NestView view = NestViewAt(nest.Position);
+
+            motor.PlaceAt(BesideNest(nest.Position), true);
+            yield return null;
+            Assert.That(GroundDistance(motor.Position, nest.Position), Is.LessThan(nests.CollectRadius), "the core is not within the nest's collect radius");
+            yield return WaitGameSeconds(nests.CollectSeconds + NestStayMarginSeconds);
+
+            Assert.That(nest.IsCollected, Is.True);
+            Assert.That(session.Nests.CollectedCount, Is.EqualTo(1));
+            Assert.That(session.Level, Is.EqualTo(StartingLevel + 1));
+            int grownCapacity = Mathf.Min(capacity + nests.CapacityPerNest, session.Swarm.Max);
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(grownCapacity));
+            Assert.That(session.Swarm.Count, Is.EqualTo(Mathf.Min(count + nests.WaspsPerNest, grownCapacity)));
+            Assert.That(view.IsOpenShown, Is.False);
+
+            yield return WaitGameSeconds(NestBurstSeconds);
+            Transform shown = FindBone(view.transform, NestObjectName);
+            Assert.That(shown, Is.Not.Null, "the nest tree has no " + NestObjectName);
+            Assert.That(shown.gameObject.activeInHierarchy, Is.False, "the collected nest is still in its tree");
+        }
+
+        // Plan section H: a nest that is not open yet cannot be collected, however long the core stays.
+        [UnityTest]
+        public IEnumerator Core_AtAClosedNest_CannotCollectIt()
+        {
+            var motor = Object.FindAnyObjectByType<SwarmCoreMotor>();
+            HiveDefenseSession session = _root.Session;
+            NestConfig nests = LoadNestConfig();
+            Nest nest = session.Nests[nests.OpenAtStart];
+            Assert.That(nest.IsOpen, Is.False, "the first nest that opens after a wave is open at the start");
+            int capacity = session.Swarm.Capacity;
+
+            motor.PlaceAt(BesideNest(nest.Position), true);
+            yield return null;
+            Assert.That(GroundDistance(motor.Position, nest.Position), Is.LessThan(nests.CollectRadius), "the core is not within the nest's collect radius");
+            yield return WaitGameSeconds((nests.CollectSeconds * 2f) + NestStayMarginSeconds);
+
+            Assert.That(nest.IsCollected, Is.False);
+            Assert.That(nest.Progress01, Is.EqualTo(0f));
+            Assert.That(session.Nests.CollectedCount, Is.EqualTo(0));
+            Assert.That(session.Level, Is.EqualTo(StartingLevel));
+            Assert.That(session.Swarm.Capacity, Is.EqualTo(capacity));
+            Assert.That(NestViewAt(nest.Position).IsOpenShown, Is.False);
         }
 
         // Plan section K: there is no Piper. The swarm's core is an invisible point with a CharacterController.
@@ -448,7 +542,7 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(follow.WantedDistance, Is.EqualTo(colossus.CameraDistance).Within(1e-4f));
             Assert.That(GroundDistance(follow.transform.position, motor.Position), Is.GreaterThan(before + StepBackMetres), "the camera did not step back");
 
-            session.Swarm.Lose(session.Swarm.Count - (_swarmConfig.CollapseBelow / 2));
+            session.Swarm.Lose(session.Swarm.Count - (session.Swarm.CollapseLine / 2));
             Assert.That(session.Forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             yield return null;
 
@@ -562,6 +656,35 @@ namespace DigitalStory.Tests.PlayMode
             var hive = AssetDatabase.LoadAssetAtPath<HiveConfig>(HiveConfigPath);
             Assert.That(hive, Is.Not.Null, "There is no HiveConfig at " + HiveConfigPath + ". Rebuild the scene.");
             return hive;
+        }
+
+        private static NestConfig LoadNestConfig()
+        {
+            var nests = AssetDatabase.LoadAssetAtPath<NestConfig>(NestConfigPath);
+            Assert.That(nests, Is.Not.Null, "There is no NestConfig at " + NestConfigPath + ". Rebuild the scene.");
+            return nests;
+        }
+
+        // A spot on the camera's side of a nest's tree, clear of its trunk and well inside its collect radius.
+        private static Vector3 BesideNest(Vector3 nest) => nest + (Vector3.back * BesideNestMetres);
+
+        private static NestView NestViewAt(Vector3 place)
+        {
+            NestView nearest = null;
+            float best = float.MaxValue;
+            foreach (NestView view in Object.FindObjectsByType<NestView>())
+            {
+                float distance = GroundDistance(view.transform.position, place);
+                if (distance < best)
+                {
+                    best = distance;
+                    nearest = view;
+                }
+            }
+
+            Assert.That(nearest, Is.Not.Null, "The scene has no NestView.");
+            Assert.That(best, Is.LessThan(SamePlaceMetres), "no NestView stands at the nest");
+            return nearest;
         }
 
         // A spot on the camera's side of a hive, clear of its model and well inside its collect radius.
