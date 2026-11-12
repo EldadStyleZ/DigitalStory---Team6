@@ -73,6 +73,12 @@ namespace DigitalStory.Logic
         /// <summary>True from a collapse until the respawn.</summary>
         public bool IsCollapsed => _isCollapsed;
 
+        /// <summary>
+        /// Seconds until the collapsed swarm comes back, for the HUD's count (plan section O): the collapse block left, which
+        /// ends in the respawn while a hive stands. 0 while the swarm is not collapsed, and once the block is over.
+        /// </summary>
+        public float SecondsToRespawn => _isCollapsed ? _blockLeft : 0f;
+
         /// <summary>The swarm collapses when a loss leaves fewer wasps than this: SwarmConfig.CollapseShare of the capacity.</summary>
         public int CollapseLine => ShareOfCapacity(_config.CollapseShare);
 

@@ -79,9 +79,18 @@ namespace DigitalStory.Tests.EditMode
             return new HiveSet(hives);
         }
 
-        private static BeekeeperSenses Senses(HiveSet hives, Vector3 core)
+        // A smoker with the stick's numbers, so its short reach shows the chase on foot. Smokers keep the notice and give-up
+        // ranges that sticks gave up (plan section O).
+        private static BeekeeperConfig HunterConfig()
         {
-            return new BeekeeperSenses(core, hives, Vector3.zero);
+            var config = ScriptableObject.CreateInstance<BeekeeperConfig>();
+            JsonUtility.FromJsonOverwrite("{\"<Kind>k__BackingField\":1}", config);
+            return config;
+        }
+
+        private static BeekeeperSenses Senses(HiveSet hives, Vector3 core, bool canSeeCore = true)
+        {
+            return new BeekeeperSenses(core, hives, Vector3.zero, canSeeCore);
         }
 
         private static BeekeeperBrain SpawnAt(BeekeeperConfig config, Vector3 position)
@@ -172,7 +181,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Spawn_AfterBeingHit_NoLongerChasesACoreOutOfNoticeRange()
+        public void Spawn_AfterBeingHit_IsNoLongerProvoked()
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             brain.TakeDamage(1f);
@@ -182,6 +191,7 @@ namespace DigitalStory.Tests.EditMode
             brain.Tick(Senses(hives, new Vector3(10f, 0f, 0f)), Step);
 
             Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+            Assert.That(brain.IsProvoked, Is.False);
         }
 
         // ---------- Going to the hive ----------
@@ -428,63 +438,104 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(brain.Position.z, Is.LessThan(9f));
         }
 
-        // ---------- Noticing and chasing the core ----------
+        // ---------- Sticks go for the hives (plan section O) ----------
 
+        // The owner: "if I camp the hive they try to hit me instead of the hive".
         [Test]
-        public void Tick_CoreJustInsideNoticeRange_StartsChasing()
+        public void Tick_StickAtItsHiveWithTheCoreBesideIt_HitsTheHiveAndNeverTheCore()
         {
             var config = StickConfig();
-            var brain = SpawnAt(config, Vector3.zero);
-            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            var brain = SpawnAt(config, new Vector3(0f, 0f, 9f));
+            var recorder = new Recorder(brain);
+            var hives = HivesAt(new Vector3(0f, 0f, 10f));
+            var senses = Senses(hives, new Vector3(0.5f, 0f, 9.5f));
 
-            brain.Tick(Senses(hives, new Vector3(config.NoticeRange - Margin, 0f, 0f)), TinyStep);
+            Advance(brain, senses, (config.WindUpSeconds * 3f) + (config.CooldownSeconds * 2f) + 0.3f);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
+            Assert.That(recorder.HiveHits.Count, Is.EqualTo(3), "a hit at about 0.6 s, 2.6 s and 4.6 s");
+            Assert.That(recorder.CoreHits, Is.EqualTo(0));
+            Assert.That(brain.IsTargetingHive, Is.True);
         }
 
         [Test]
-        public void Tick_CoreExactlyAtNoticeRange_StartsChasing()
+        public void Tick_StickWithTheCoreInsideItsNoticeRange_WalksOnToItsHive()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
-            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            var hives = HivesAt(new Vector3(0f, 0f, 30f));
 
-            brain.Tick(Senses(hives, new Vector3(config.NoticeRange, 0f, 0f)), TinyStep);
+            Advance(brain, Senses(hives, new Vector3(1f, 0f, 0.5f)), 1f);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+            Assert.That(brain.Position.z, Is.EqualTo(config.Speed).Within(0.05f));
+            Assert.That(brain.IsProvoked, Is.False);
         }
 
         [Test]
-        public void Tick_CoreJustOutsideNoticeRange_KeepsGoingToTheHive()
+        public void TakeDamage_Stick_ChasesTheCoreForExactlyProvokedSecondsThenGoesBackToItsHive()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
-            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            var hives = HivesAt(new Vector3(0f, 0f, -FarAway));
+            var senses = Senses(hives, new Vector3(FarAway, 0f, 0f));
 
-            brain.Tick(Senses(hives, new Vector3(config.NoticeRange + Margin, 0f, 0f)), TinyStep);
+            brain.TakeDamage(1f);
+            Assert.That(brain.IsProvoked, Is.True);
+            Advance(brain, senses, config.ProvokedSeconds - 0.1f);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore), "far beyond its give-up range, it still chases");
+            Assert.That(brain.Position.x, Is.GreaterThan(9f));
 
+            Advance(brain, senses, 0.2f);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+            Assert.That(brain.IsProvoked, Is.False);
+            Assert.That(brain.Facing.z, Is.LessThan(-0.99f), "it turned back toward its hive");
+        }
+
+        [Test]
+        public void TakeDamage_AgainWhileProvoked_StartsTheTimeAgain()
+        {
+            var config = StickConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var hives = HivesAt(new Vector3(0f, 0f, -FarAway));
+            var senses = Senses(hives, new Vector3(FarAway, 0f, 0f));
+            brain.TakeDamage(1f);
+            Advance(brain, senses, config.ProvokedSeconds - 1f);
+
+            brain.TakeDamage(1f);
+            Advance(brain, senses, config.ProvokedSeconds - 0.1f);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore), "the second hurt started the time again");
+
+            Advance(brain, senses, 0.2f);
             Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
         }
 
         [Test]
-        public void Tick_CoreHeightIsIgnoredWhenNoticing()
+        public void TakeDamage_ProvocationEndsDuringASwingAtTheCore_DropsTheSwingAndGoesBackToItsHive()
         {
             var config = StickConfig();
+            JsonUtility.FromJsonOverwrite("{\"<ProvokedSeconds>k__BackingField\":0.3}", config);
             var brain = SpawnAt(config, Vector3.zero);
+            var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            var senses = Senses(hives, new Vector3(1f, 0f, 0f));
+            brain.TakeDamage(1f);
+            brain.Tick(senses, Step);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.WindUp));
 
-            brain.Tick(Senses(hives, new Vector3(config.NoticeRange - 1f, 30f, 0f)), TinyStep);
+            Advance(brain, senses, config.WindUpSeconds + 1f);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
+            Assert.That(recorder.CoreHits, Is.EqualTo(0));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
         }
 
         [Test]
-        public void Tick_Chasing_WalksTowardTheCoreAtSpeed()
+        public void Tick_ProvokedStickChasing_WalksTowardTheCoreAtSpeed()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, -FarAway));
             var core = new Vector3(6f, 0f, 0f);
+            brain.TakeDamage(1f);
 
             Advance(brain, Senses(hives, core), 1f);
 
@@ -494,9 +545,93 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_ChasingBetweenNoticeAndGiveUpRange_KeepsChasing()
+        public void Tick_ProvokedStickLosesItsHive_StillChasesTheCore()
         {
-            var config = StickConfig();
+            var brain = SpawnAt(StickConfig(), Vector3.zero);
+            var hives = HivesAt(new Vector3(0f, 0f, 30f));
+            var senses = Senses(hives, new Vector3(5f, 0f, 0f));
+            brain.TakeDamage(1f);
+            Advance(brain, senses, 0.1f);
+
+            hives[0].Damage(10000f);
+            Advance(brain, senses, 0.1f);
+
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore).Or.EqualTo(BeekeeperState.WindUp));
+        }
+
+        // ---------- Smokers hunt the swarm by their ranges (plan section O) ----------
+
+        [Test]
+        public void Tick_SmokerThatNoticedTheCore_ThrowsAtTheCore_OneThatDidNot_ThrowsAtItsHive()
+        {
+            var config = SmokerConfig();
+            var hunting = SpawnAt(config, Vector3.zero);
+            var walking = SpawnAt(config, Vector3.zero);
+            var hunted = new Recorder(hunting);
+            var walked = new Recorder(walking);
+            var hives = HivesAt(new Vector3(0f, 0f, 20f));
+            var core = new Vector3(config.NoticeRange - 1f, 0f, 0f);
+            var faraway = new Vector3(-config.GiveUpRange - 10f, 0f, 0f);
+
+            AdvanceUntil(hunting, Senses(hives, core), () => hunted.Grenades.Count > 0, 5f);
+            AdvanceUntil(walking, Senses(hives, faraway), () => walked.Grenades.Count > 0, 10f);
+
+            Assert.That(GroundDistance(hunted.Grenades[0], core), Is.LessThan(0.5f), "in its notice range: at the core");
+            Assert.That(GroundDistance(walked.Grenades[0], hives[0].Position), Is.LessThan(0.5f), "otherwise at a hive");
+        }
+
+        [Test]
+        public void Tick_HunterCoreJustInsideNoticeRange_StartsChasing()
+        {
+            var config = HunterConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+
+            brain.Tick(Senses(hives, new Vector3(config.NoticeRange - Margin, 0f, 0f)), TinyStep);
+
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
+        }
+
+        [Test]
+        public void Tick_HunterCoreExactlyAtNoticeRange_StartsChasing()
+        {
+            var config = HunterConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+
+            brain.Tick(Senses(hives, new Vector3(config.NoticeRange, 0f, 0f)), TinyStep);
+
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
+        }
+
+        [Test]
+        public void Tick_HunterCoreJustOutsideNoticeRange_KeepsGoingToTheHive()
+        {
+            var config = HunterConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+
+            brain.Tick(Senses(hives, new Vector3(config.NoticeRange + Margin, 0f, 0f)), TinyStep);
+
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+        }
+
+        [Test]
+        public void Tick_HunterIgnoresTheCoresHeightWhenNoticing()
+        {
+            var config = HunterConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+
+            brain.Tick(Senses(hives, new Vector3(config.NoticeRange - 1f, 30f, 0f)), TinyStep);
+
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
+        }
+
+        [Test]
+        public void Tick_HunterChasingBetweenNoticeAndGiveUpRange_KeepsChasing()
+        {
+            var config = HunterConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
             brain.Tick(Senses(hives, new Vector3(config.NoticeRange - 1f, 0f, 0f)), TinyStep);
@@ -507,9 +642,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_CoreBeyondGiveUpRange_GoesBackToTheHive()
+        public void Tick_HunterCoreBeyondGiveUpRange_GoesBackToTheHive()
         {
-            var config = StickConfig();
+            var config = HunterConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
             brain.Tick(Senses(hives, new Vector3(config.NoticeRange - 1f, 0f, 0f)), TinyStep);
@@ -520,9 +655,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_CoreJustInsideGiveUpRange_KeepsChasing()
+        public void Tick_HunterCoreJustInsideGiveUpRange_KeepsChasing()
         {
-            var config = StickConfig();
+            var config = HunterConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
             brain.Tick(Senses(hives, new Vector3(config.NoticeRange - 1f, 0f, 0f)), TinyStep);
@@ -533,9 +668,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_GaveUpAndCoreStaysBetweenRanges_DoesNotChaseAgain()
+        public void Tick_HunterGaveUpAndCoreStaysBetweenRanges_DoesNotChaseAgain()
         {
-            var config = StickConfig();
+            var config = HunterConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
             brain.Tick(Senses(hives, new Vector3(config.NoticeRange - 1f, 0f, 0f)), TinyStep);
@@ -546,30 +681,149 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
         }
 
+        // ---------- The collapsed swarm cannot be seen (plan section O) ----------
+
         [Test]
-        public void Tick_ChasingBeekeeperLosesItsHive_StillChasesTheCore()
+        public void Tick_CoreUnseen_ASmokerInRangeThrowsAtItsHiveInstead()
+        {
+            var config = SmokerConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var recorder = new Recorder(brain);
+            var hives = HivesAt(new Vector3(0f, 0f, 10f));
+            var core = new Vector3(3f, 0f, 0f);
+
+            AdvanceUntil(brain, Senses(hives, core, false), () => recorder.Grenades.Count > 0, 5f);
+
+            Assert.That(recorder.Grenades.Count, Is.EqualTo(1));
+            Assert.That(GroundDistance(recorder.Grenades[0], hives[0].Position), Is.LessThan(0.5f));
+        }
+
+        [Test]
+        public void Tick_CoreUnseen_AProvokedStickStopsChasingAndWalksToItsHive()
         {
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, 30f));
-            var senses = Senses(hives, new Vector3(5f, 0f, 0f));
-            Advance(brain, senses, 0.1f);
+            brain.TakeDamage(1f);
+            brain.Tick(Senses(hives, new Vector3(6f, 0f, 0f)), Step);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore));
 
-            hives[0].Damage(10000f);
-            Advance(brain, senses, 0.1f);
+            brain.Tick(Senses(hives, new Vector3(6f, 0f, 0f), false), Step);
 
-            Assert.That(brain.State, Is.EqualTo(BeekeeperState.ChaseCore).Or.EqualTo(BeekeeperState.WindUp));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+            Assert.That(brain.IsProvoked, Is.False);
         }
 
-        // ---------- Hitting the core (stick) ----------
+        [Test]
+        public void Tick_CoreUnseenDuringASwingAtIt_DropsTheSwingAndNoHitLands()
+        {
+            var config = StickConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var recorder = new Recorder(brain);
+            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            var core = new Vector3(1f, 0f, 0f);
+            brain.TakeDamage(1f);
+            brain.Tick(Senses(hives, core), Step);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.WindUp));
+
+            Advance(brain, Senses(hives, core, false), config.WindUpSeconds + 0.5f);
+
+            Assert.That(recorder.CoreHits, Is.EqualTo(0));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+        }
 
         [Test]
-        public void Tick_CoreWithinAttackRange_WindsUpThenHitsOnlyAfterTheWindUp()
+        public void Tick_CoreUnseenDuringASmokersThrowAtIt_ThrowsNothingAtTheCore()
+        {
+            var config = SmokerConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var recorder = new Recorder(brain);
+            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            var core = new Vector3(5f, 0f, 0f);
+            brain.Tick(Senses(hives, core), Step);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.WindUp));
+
+            Advance(brain, Senses(hives, core, false), config.WindUpSeconds + 0.5f);
+
+            Assert.That(recorder.Grenades, Is.Empty);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+        }
+
+        [Test]
+        public void Tick_CoreUnseenWhileRecovering_NeverTurnsBackOnTheCore()
+        {
+            var config = StickConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var recorder = new Recorder(brain);
+            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            var core = new Vector3(1f, 0f, 0f);
+            brain.TakeDamage(1f);
+            AdvanceUntil(brain, Senses(hives, core), () => recorder.CoreHits == 1, 2f);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.Recover));
+
+            Advance(brain, Senses(hives, core, false), config.CooldownSeconds + config.WindUpSeconds + 0.5f);
+
+            Assert.That(recorder.CoreHits, Is.EqualTo(1));
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+        }
+
+        [Test]
+        public void Tick_CoreUnseenWhileStunned_TheStickForgetsItsProvocation()
+        {
+            var brain = SpawnAt(StickConfig(), Vector3.zero);
+            var hives = HivesAt(new Vector3(0f, 0f, 30f));
+            var core = new Vector3(6f, 0f, 0f);
+            brain.TakeDamage(1f);
+            brain.Stun(0.5f);
+
+            Advance(brain, Senses(hives, core, false), 0.3f);
+            Advance(brain, Senses(hives, core), 0.5f);
+
+            Assert.That(brain.IsProvoked, Is.False);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+        }
+
+        [Test]
+        public void Tick_CoreSeenAgainAfterTheRespawn_ASmokerInRangeThrowsAtItAgain()
+        {
+            var config = SmokerConfig();
+            var brain = SpawnAt(config, Vector3.zero);
+            var recorder = new Recorder(brain);
+            var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            var core = new Vector3(4f, 0f, 0f);
+            Advance(brain, Senses(hives, core, false), 1f);
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+
+            AdvanceUntil(brain, Senses(hives, core), () => recorder.Grenades.Count > 0, 2f);
+
+            Assert.That(recorder.Grenades.Count, Is.EqualTo(1));
+            Assert.That(GroundDistance(recorder.Grenades[0], core), Is.LessThan(0.5f));
+        }
+
+        [Test]
+        public void TakeDamage_WhileTheCoreIsUnseen_TheStickStaysOnItsWayToTheHive()
+        {
+            var brain = SpawnAt(StickConfig(), Vector3.zero);
+            var hives = HivesAt(new Vector3(0f, 0f, 30f));
+            var core = new Vector3(6f, 0f, 0f);
+
+            brain.TakeDamage(1f);
+            brain.Tick(Senses(hives, core, false), Step);
+            Advance(brain, Senses(hives, core), 0.5f);
+
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive), "a hurt while the swarm is gone is forgotten by its return");
+        }
+
+        // ---------- Hitting the core (a provoked stick) ----------
+
+        [Test]
+        public void Tick_ProvokedStickWithTheCoreInReach_WindsUpThenHitsOnlyAfterTheWindUp()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
             var senses = Senses(hives, new Vector3(config.AttackRange - 0.3f, 0f, 0f));
+            brain.TakeDamage(1f);
             AdvanceUntil(brain, in senses, () => brain.State == BeekeeperState.WindUp, 1f);
 
             Assert.That(brain.State, Is.EqualTo(BeekeeperState.WindUp));
@@ -583,11 +837,12 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_StickChasingBeyondAttackRange_DoesNotWindUpYet()
+        public void Tick_ProvokedStickChasingBeyondAttackRange_DoesNotWindUpYet()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
+            brain.TakeDamage(1f);
 
             brain.Tick(Senses(hives, new Vector3(config.AttackRange + 1f, 0f, 0f)), TinyStep);
 
@@ -596,13 +851,14 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_StickCooldownOnTheCore_BlocksTheNextHitUntilCooldownAndWindUpPass()
+        public void Tick_ProvokedStickCooldownOnTheCore_BlocksTheNextHitUntilCooldownAndWindUpPass()
         {
             var config = StickConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var recorder = new Recorder(brain);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
             var senses = Senses(hives, new Vector3(1f, 0f, 0f));
+            brain.TakeDamage(1f);
             AdvanceUntil(brain, in senses, () => recorder.CoreHits == 1, 3f);
 
             Advance(brain, senses, config.CooldownSeconds + config.WindUpSeconds - 0.25f);
@@ -694,9 +950,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void TakeDamage_ThenCoreBeyondGiveUpRange_GivesUpTheChase()
+        public void TakeDamage_HunterThenCoreBeyondGiveUpRange_GivesUpTheChase()
         {
-            var config = StickConfig();
+            var config = HunterConfig();
             var brain = SpawnAt(config, Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, FarAway));
             brain.TakeDamage(1f);
@@ -815,6 +1071,7 @@ namespace DigitalStory.Tests.EditMode
             var brain = SpawnAt(StickConfig(), Vector3.zero);
             var hives = HivesAt(new Vector3(0f, 0f, -FarAway));
             var senses = Senses(hives, new Vector3(6f, 0f, 0f));
+            brain.TakeDamage(1f);
             Advance(brain, senses, 0.1f);
 
             brain.Stun(0.5f);

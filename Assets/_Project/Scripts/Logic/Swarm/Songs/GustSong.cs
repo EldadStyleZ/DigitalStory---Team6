@@ -6,12 +6,14 @@ using UnityEngine;
 namespace DigitalStory.Logic
 {
     /// <summary>
-    /// A pulse ripples out through the whole swarm, whatever it is doing, blows nearby smoke away and pushes close beekeepers
-    /// back. It takes no slot, so it never ends a running Dome.
+    /// A pulse ripples out through the whole swarm, whatever it is doing, blows nearby smoke away and shoves the beekeepers
+    /// within its radius out, and each one it shoves cannot act for a moment (plan section O). It takes no slot, so it never
+    /// ends a running Dome.
     /// </summary>
     /// <remarks>
     /// The pulse first draws the wasps in, then its ring grows from where the Gust began. Each beekeeper within
-    /// <see cref="PushRadius"/> is pushed on the step the ring reaches it, so the push lands where the picture shows it.
+    /// <see cref="PushRadius"/> is pushed and stunned on the step the ring reaches it, so the shove lands where the picture
+    /// shows it.
     /// The radius it clears and pulses through, and the push's reach, grow with the swarm's level, as it stood at the cast;
     /// the ring still starts at <see cref="RingStartRadius"/>, where the shader starts it.
     /// </remarks>
@@ -33,11 +35,16 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Metres around the core in which smoke is cleared, and that the pulse reaches.")]
         public float ClearRadius { get; private set; } = 6f;
 
+        // Plan section O: the Gust becomes a real shove, over its whole radius (was 3 m), at 9 m/s (was 4) and with 0.5 s that
+        // a shoved beekeeper cannot act.
         [field: SerializeField, Min(0f), Tooltip("Metres around the core within which beekeepers are pushed out, each as the ring reaches it. Keep it within ClearRadius, where the ring stops.")]
-        public float PushRadius { get; private set; } = 3f;
+        public float PushRadius { get; private set; } = 6f;
 
         [field: SerializeField, Min(0f), Tooltip("Metres per second a beekeeper is pushed away from the core.")]
-        public float PushSpeed { get; private set; } = 4f;
+        public float PushSpeed { get; private set; } = 9f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds every pushed beekeeper cannot act.")]
+        public float StunSeconds { get; private set; } = 0.5f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the pulse draws the wasps in before its ring starts. Keep it equal to GustInhaleSeconds in WaspSwarm.compute, so the push lands with the ring.")]
         public float InhaleSeconds { get; private set; } = 0.12f;
@@ -87,8 +94,8 @@ namespace DigitalStory.Logic
             return Mathf.Lerp(RingStartRadius, ClearRadius * sizeScale, eased);
         }
 
-        // Pushes every living beekeeper within the grown PushRadius of the centre that the ring reached between the two
-        // times. The ring only grows, so each beekeeper it passes is pushed once.
+        // Pushes and stuns every living beekeeper within the grown PushRadius of the centre that the ring reached between the
+        // two times. The ring only grows, so each beekeeper it passes is shoved once.
         internal void PushWhereTheRingPassed(IReadOnlyList<ISwarmTarget> enemies, Vector3 center, float before, float after, float sizeScale)
         {
             float inner = RingRadius(before, sizeScale);
@@ -116,6 +123,7 @@ namespace DigitalStory.Logic
                 if (squared > innerSquared && squared <= outerSquared)
                 {
                     enemy.Knockback(GroundMath.Direction(center, enemy.Position) * PushSpeed);
+                    enemy.Stun(StunSeconds);
                 }
             }
         }

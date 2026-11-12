@@ -9,7 +9,8 @@ namespace DigitalStory.Logic
     /// Everything a swarm song may read or change when it is cast, and how strong the swarm's level makes it (plan section
     /// H): a song multiplies its radius, reach and height by <see cref="SizeScale"/> and its damage by
     /// <see cref="DamageScale"/>, and takes what grows by whole steps, such as the Hydra's heads, from <see cref="Level"/>,
-    /// and keeps them for that cast. No song reads the live wasp count for its strength.
+    /// and keeps them for that cast. No song reads the live wasp count for its strength, except the Sting, which sends one
+    /// sting for every 400 of <see cref="LivingWasps"/> by the owner's decision (plan section O).
     /// </summary>
     public readonly struct SwarmSongContext
     {
@@ -94,7 +95,7 @@ namespace DigitalStory.Logic
         /// <summary>
         /// Makes a context at swarm level <paramref name="level"/>, whose sizes are multiplied by <paramref name="sizeScale"/>
         /// and whose damage by <paramref name="damageScale"/> (<see cref="SwarmLevelConfig"/>). Both scales must be above 0,
-        /// and the level at least 1.
+        /// and the level at least 1. <see cref="LivingWasps"/> is the swarm's count now, before any price is paid.
         /// </summary>
         /// <exception cref="ArgumentOutOfRangeException">A scale is 0 or less, or not a number, or the level is below 1.</exception>
         public SwarmSongContext(
@@ -112,6 +113,27 @@ namespace DigitalStory.Logic
             float sizeScale,
             float damageScale,
             int level)
+            : this(corePosition, aimTarget, aimPoint, swarm, forms, fury, hives, enemies, smoke, aim, areSongsFree, sizeScale, damageScale, level, swarm != null ? swarm.Count : 0)
+        {
+        }
+
+        // The one that sets every value. A copy aimed elsewhere keeps the count it was made with.
+        private SwarmSongContext(
+            Vector3 corePosition,
+            ISwarmTarget aimTarget,
+            Vector3 aimPoint,
+            SwarmBody swarm,
+            SwarmFormMachine forms,
+            FuryMeter fury,
+            HiveSet hives,
+            IReadOnlyList<ISwarmTarget> enemies,
+            ISmokeClearer smoke,
+            ISongAim aim,
+            bool areSongsFree,
+            float sizeScale,
+            float damageScale,
+            int level,
+            int livingWasps)
         {
             if (!(sizeScale > 0f) || float.IsInfinity(sizeScale))
             {
@@ -142,6 +164,7 @@ namespace DigitalStory.Logic
             SizeScale = sizeScale;
             DamageScale = damageScale;
             Level = level;
+            LivingWasps = livingWasps;
         }
 
         /// <summary>Where the core stands.</summary>
@@ -195,11 +218,17 @@ namespace DigitalStory.Logic
         /// </summary>
         public int Level { get; }
 
+        /// <summary>
+        /// How many wasps were alive when the context was made: as the notes completed, before the cast paid its price. Only
+        /// the Sting reads it, by the owner's decision (plan section O), to send one sting for every 400.
+        /// </summary>
+        public int LivingWasps { get; }
+
         /// <summary>The same context, aimed at <paramref name="target"/> (or null) and <paramref name="point"/>.</summary>
         public SwarmSongContext AimedAt(ISwarmTarget target, Vector3 point)
         {
             return new SwarmSongContext(
-                CorePosition, target, point, Swarm, Forms, Fury, Hives, Enemies, Smoke, Aim, AreSongsFree, SizeScale, DamageScale, Level);
+                CorePosition, target, point, Swarm, Forms, Fury, Hives, Enemies, Smoke, Aim, AreSongsFree, SizeScale, DamageScale, Level, LivingWasps);
         }
     }
 }

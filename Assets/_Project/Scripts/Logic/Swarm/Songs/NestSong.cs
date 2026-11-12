@@ -7,9 +7,10 @@ namespace DigitalStory.Logic
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Nest", fileName = "NestSong")]
     public sealed class NestSong : SlotSongEffect
     {
-        // K L J H: the Honeycomb played backwards. 100 wasps, which stay on the lane while it stands.
+        // K L J H: the Honeycomb played backwards. 200 wasps, which stay on the lane while it stands. The playtest bot set it
+        // (was 100) after plan section O made the stings cheaper, so the towers still take a real share of a win's wasps.
         public NestSong()
-            : base(new SongDefinition("Nest", "A trap of wasps waits on the lane", 8f, 2, 3, 1, 0), SongCategory.Attack, 0.15f, 100)
+            : base(new SongDefinition("Nest", "A trap of wasps waits on the lane", 8f, 2, 3, 1, 0), SongCategory.Attack, 0.15f, 200)
         {
         }
 
@@ -51,6 +52,9 @@ namespace DigitalStory.Logic
 
         /// <summary>The nest's picture.</summary>
         public override SwarmForm Form => SwarmForm.Nest;
+
+        /// <summary>One of the big hits (plan section O): the swarm's motion freezes for a moment on each.</summary>
+        public override bool HitsHard => true;
 
         protected internal override SongRule CreateRule()
         {

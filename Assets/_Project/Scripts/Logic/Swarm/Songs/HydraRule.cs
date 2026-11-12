@@ -174,7 +174,7 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                target.TakeDamage(_damage);
+                Hit(target, _damage);
                 totalDamage += _damage;
             }
 

@@ -11,6 +11,8 @@ namespace DigitalStory.Logic
     /// (or a default rule to draw the marker). Read the result from <see cref="Target"/>, <see cref="HiveIndex"/>
     /// and <see cref="AimPoint"/>. All distances ignore height. Nothing is allocated after construction.
     /// Each rule holds its own pick, so the marker's choice every frame never stands in for what a cast's rule would choose.
+    /// <see cref="FillThreats"/> lists the beekeepers by the Threat rule's score, for a song that strikes several (the Sting's
+    /// stings, plan section O).
     /// </remarks>
     public sealed class AutoAim
     {
@@ -26,6 +28,7 @@ namespace DigitalStory.Logic
         private readonly float[] _hiveHealth;
         private readonly float[] _hiveSinceHit;
         private readonly int[] _nearest;
+        private readonly int[] _threats;
         private readonly int[] _heldIndex = new int[RuleCount];
         private readonly float[] _sinceChosen = new float[RuleCount];
 
@@ -45,6 +48,7 @@ namespace DigitalStory.Logic
             }
 
             _nearest = new int[Mathf.Max(1, config.NearestCount)];
+            _threats = new int[Mathf.Max(1, config.ThreatCount)];
             for (int rule = 0; rule < RuleCount; rule++)
             {
                 _heldIndex[rule] = NoTarget;
@@ -72,6 +76,9 @@ namespace DigitalStory.Logic
         /// <summary>How many beekeepers <see cref="GetNearest"/> holds. Only <see cref="AimRule.ThreeNearest"/> fills it.</summary>
         public int NearestCount { get; private set; }
 
+        /// <summary>How many beekeepers <see cref="GetThreat"/> holds, as of the last <see cref="FillThreats"/>.</summary>
+        public int ThreatCount { get; private set; }
+
         /// <summary>The index in the target list of the nearest beekeeper number <paramref name="slot"/>, nearest first.</summary>
         public int GetNearest(int slot)
         {
@@ -81,6 +88,58 @@ namespace DigitalStory.Logic
             }
 
             return _nearest[slot];
+        }
+
+        /// <summary>The index in the target list of the beekeeper number <paramref name="slot"/> by threat, most threatening first.</summary>
+        public int GetThreat(int slot)
+        {
+            if (slot < 0 || slot >= ThreatCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(slot));
+            }
+
+            return _threats[slot];
+        }
+
+        /// <summary>
+        /// Lists the living beekeepers within <paramref name="range"/> metres of <paramref name="corePosition"/> by the Threat
+        /// rule's score, most threatening first and the lower index first on a tie, as many as
+        /// <see cref="AimConfig.ThreatCount"/>. Read them with <see cref="ThreatCount"/> and <see cref="GetThreat"/>. It holds
+        /// no pick and leaves <see cref="Select"/>'s result alone.
+        /// </summary>
+        public void FillThreats(Vector3 corePosition, float range)
+        {
+            float rangeSquared = range * range;
+            int capacity = _threats.Length;
+            ThreatCount = 0;
+            for (int i = 0; i < _targets.Count; i++)
+            {
+                if (!_targets[i].IsAlive || DistanceSquared(_targets[i].Position, corePosition) > rangeSquared)
+                {
+                    continue;
+                }
+
+                float score = Threat(_targets[i].Position, corePosition);
+                int at = ThreatCount;
+                while (at > 0 && score < Threat(_targets[_threats[at - 1]].Position, corePosition))
+                {
+                    at--;
+                }
+
+                if (at >= capacity)
+                {
+                    continue;
+                }
+
+                int last = Mathf.Min(ThreatCount, capacity - 1);
+                for (int k = last; k > at; k--)
+                {
+                    _threats[k] = _threats[k - 1];
+                }
+
+                _threats[at] = i;
+                ThreatCount = Mathf.Min(ThreatCount + 1, capacity);
+            }
         }
 
         /// <summary>Ages every rule's hold timer and notes which hives were hit.</summary>

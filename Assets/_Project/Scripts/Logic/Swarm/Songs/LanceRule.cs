@@ -127,7 +127,7 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                enemy.TakeDamage(_damage);
+                Hit(enemy, _damage);
                 totalDamage += _damage;
 
                 if (enemy.IsAlive)

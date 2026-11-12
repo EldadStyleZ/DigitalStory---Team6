@@ -87,8 +87,8 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(dome.SpeedMultiplier, Is.EqualTo(0.5f), "the core at x0.5");
             Assert.That(sting.Seconds, Is.EqualTo(4f));
             Assert.That(sting.Share, Is.EqualTo(0.3f));
-            Assert.That(sting.ArriveSeconds, Is.EqualTo(0.6f));
-            Assert.That(sting.DamagePerSecond, Is.EqualTo(25f));
+            Assert.That(sting.ArriveSeconds, Is.EqualTo(0.35f), "plan section O: was 0.6");
+            Assert.That(sting.DamagePerSecond, Is.EqualTo(20f), "the playtest bot after plan section O: was 25");
             Assert.That(sting.MaxRange, Is.EqualTo(12f));
             Assert.That(sting.AirSeconds, Is.EqualTo(1f));
             Assert.That(tornado.Seconds, Is.EqualTo(1.5f));
@@ -99,15 +99,17 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(tornado.HitSeconds, Is.EqualTo(0.3f));
             Assert.That(tornado.WallRadius, Is.EqualTo(1.5f));
             Assert.That(tornado.Damage, Is.EqualTo(30f));
-            Assert.That(tornado.KnockbackSpeed, Is.EqualTo(6f));
+            Assert.That(tornado.KnockbackSpeed, Is.EqualTo(12f), "plan section O: was 6");
+            Assert.That(tornado.StunSeconds, Is.EqualTo(1f));
             Assert.That(gust.Seconds, Is.EqualTo(0.8f));
             Assert.That(gust.ClearRadius, Is.EqualTo(6f));
-            Assert.That(gust.PushRadius, Is.EqualTo(3f));
-            Assert.That(gust.PushSpeed, Is.EqualTo(4f));
+            Assert.That(gust.PushRadius, Is.EqualTo(6f), "plan section O: its whole radius, was 3");
+            Assert.That(gust.PushSpeed, Is.EqualTo(9f), "plan section O: was 4");
+            Assert.That(gust.StunSeconds, Is.EqualTo(0.5f));
             Assert.That(gust.InhaleSeconds, Is.EqualTo(0.12f), "the inhale, 0 to .12 s");
             Assert.That(gust.RingStartRadius, Is.EqualTo(0.6f), "the ring grows from .6 m");
             Assert.That(gust.RingSeconds, Is.EqualTo(0.5f));
-            Assert.That(colossus.Seconds, Is.EqualTo(12f));
+            Assert.That(colossus.Seconds, Is.EqualTo(11f), "the playtest bot after plan section O: was 12");
         }
 
         [Test]
@@ -176,6 +178,111 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(guard.High, Is.EqualTo(0.55f).Within(1e-5f));
         }
 
+        // Plan section O: the Dome shields everything inside it, hives included. The hives stand at x = -10 and x = 10.
+        [Test]
+        public void Dome_WhileItStands_ShieldsAHiveWhoseCentreIsInsideItsRadius_AndNoOther()
+        {
+            var song = Make<DomeSong>();
+
+            Cast(song, core: new Vector3(8.5f, 0f, 1f));
+
+            Assert.That(_forms.HiveDamageFraction(1), Is.EqualTo(song.LossFraction).Within(1e-5f), "1.8 m from its centre");
+            Assert.That(_forms.HiveDamageFraction(0), Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void Dome_HiveJustOutsideItsRadius_IsNotShielded()
+        {
+            var song = Make<DomeSong>();
+
+            Cast(song, core: new Vector3(10f - song.Radius - 0.05f, 0f, 0f));
+
+            Assert.That(_forms.HiveDamageFraction(1), Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void Dome_RadiusGrownByTheLevel_ReachesAHiveFurtherOut()
+        {
+            var song = Make<DomeSong>();
+            var context = new SwarmSongContext(
+                new Vector3(7.5f, 0f, 0f), null, default, _body, _forms, _fury, _hives, _enemies, _smoke, null, false, 1.24f, 1.24f, 3);
+
+            song.Cast(in context);
+
+            Assert.That(_forms.HiveDamageFraction(1), Is.EqualTo(song.LossFraction).Within(1e-5f), "2.5 m, inside 2.2 x 1.24 m");
+        }
+
+        [Test]
+        public void Dome_TheCoreWalksAway_LeavesTheHiveUnshielded()
+        {
+            Cast(Make<DomeSong>(), core: new Vector3(9f, 0f, 0f));
+
+            _forms.SetCore(new Vector3(0f, 0f, 0f));
+            _forms.Tick(0.1f, _hives);
+
+            Assert.That(_forms.HiveDamageFraction(1), Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void Dome_LetsGo_StopsShieldingTheHive()
+        {
+            var song = Make<DomeSong>();
+            Cast(song, core: new Vector3(9f, 0f, 0f));
+
+            _forms.Tick(song.Seconds, _hives);
+
+            Assert.That(_forms.HiveDamageFraction(1), Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void Dome_HiveInsideIt_TakesTheDomesShareOfTheSmoke()
+        {
+            var song = Make<DomeSong>();
+            var smokeConfig = ScriptableObject.CreateInstance<SmokeConfig>();
+            try
+            {
+                var field = new SmokeField(smokeConfig);
+                field.Throw(new Vector3(10f, 0f, 0f), new Vector3(10f, 0f, 0f));
+                field.Tick(smokeConfig.FlightSeconds, _hives, _body, new Vector3(30f, 0f, 30f), _forms);
+                Cast(song, core: new Vector3(9f, 0f, 0f));
+                float before = _hives[1].Health;
+
+                field.Tick(1f, _hives, _body, new Vector3(30f, 0f, 30f), _forms);
+
+                Assert.That(before - _hives[1].Health, Is.EqualTo(smokeConfig.HiveDamagePerSecond * song.LossFraction).Within(1e-3f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(smokeConfig);
+            }
+        }
+
+        [Test]
+        public void Dome_StickHitsAHiveInsideIt_RipplesTheDomeFromTheSticksSide()
+        {
+            var stick = new FakeSwarmTarget { Position = new Vector3(10f, 0f, 1.5f) };
+            Cast(Make<DomeSong>(), core: new Vector3(9f, 0f, 0f));
+            _forms.Tick(0.5f, _hives);
+
+            _forms.NotifyHiveHit(1, stick);
+
+            Vector4 dome = _forms.Slot(SongSlot.Guard).ParamA;
+            Assert.That(dome.w, Is.EqualTo(0.5f).Within(1e-4f), "the dome's seconds when it blocked the hit");
+            Assert.That(dome.y, Is.EqualTo(new Vector3(1f, 0f, 1.5f).normalized.x).Within(1e-4f));
+            Assert.That(dome.z, Is.EqualTo(new Vector3(1f, 0f, 1.5f).normalized.z).Within(1e-4f));
+        }
+
+        [Test]
+        public void Dome_StickHitsAHiveOutsideIt_DoesNotRipple()
+        {
+            var stick = new FakeSwarmTarget { Position = new Vector3(-10f, 0f, 1.5f) };
+            Cast(Make<DomeSong>(), core: new Vector3(9f, 0f, 0f));
+
+            _forms.NotifyHiveHit(0, stick);
+
+            Assert.That(_forms.Slot(SongSlot.Guard).ParamA.w, Is.EqualTo(-1f));
+        }
+
         // Sting
 
         [Test]
@@ -205,66 +312,84 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(Strike.Low, Is.EqualTo(0.55f).Within(1e-5f));
             Assert.That(Strike.High, Is.EqualTo(0.85f).Within(1e-5f));
             Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(2f, 0f, 1f)));
+            Assert.That(Strike.ParamB.x, Is.EqualTo(2f), "800 wasps send two stings, which share the squad");
         }
 
         [Test]
         public void Sting_Tick_HurtsNothingBeforeItArrives()
         {
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
-            Cast(Make<StingSong>(), aim: target);
+            var song = Make<StingSong>();
+            Cast(song, aim: target);
 
-            _forms.Tick(0.59f, _hives);
+            _forms.Tick(song.ArriveSeconds - 0.01f, _hives);
 
             Assert.That(target.DamageTaken, Is.EqualTo(0f));
             Assert.That(_fury.Value, Is.EqualTo(0f));
         }
 
+        // Changed with the felt hit (plan section O): the damage comes in pulses on the picture's squeezes, from the arrival,
+        // each the damage of the time to the next squeeze.
         [Test]
-        public void Sting_Tick_HurtsByDamagePerSecondFromItsArrival()
+        public void Sting_Tick_HurtsOnItsArrivalAndOnEachSqueeze_ByDamagePerSecond()
         {
+            OneSting();
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
-            Cast(Make<StingSong>(), aim: target);
-            _forms.Tick(0.6f, _hives);
+            var song = Make<StingSong>();
+            Cast(song, aim: target);
 
-            _forms.Tick(0.5f, _hives);
+            _forms.Tick(song.ArriveSeconds, _hives);
+            float pulse = song.DamagePerSecond * song.SqueezeSeconds;
+            Assert.That(target.DamageTaken, Is.EqualTo(pulse).Within(1e-3f), "the arrival deals the time to the next squeeze at once");
+            _forms.Tick(song.SqueezeSeconds * 0.5f, _hives);
+            Assert.That(target.DamageTaken, Is.EqualTo(pulse).Within(1e-3f), "nothing between squeezes");
 
-            Assert.That(target.DamageTaken, Is.EqualTo(12.5f).Within(1e-3f));
+            _forms.Tick(song.SqueezeSeconds, _hives);
+
+            Assert.That(target.DamageTaken, Is.EqualTo(song.DamagePerSecond * 0.5f).Within(1e-3f), "half a second's damage by the next squeeze");
         }
 
         [Test]
         public void Sting_Tick_FillsFuryFromTheDamage()
         {
+            OneSting();
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
-            Cast(Make<StingSong>(), aim: target);
+            var song = Make<StingSong>();
+            Cast(song, aim: target);
 
-            _forms.Tick(1.6f, _hives);
+            _forms.Tick(song.ArriveSeconds + (3.5f * song.SqueezeSeconds), _hives);
 
-            Assert.That(_fury.Value, Is.EqualTo(25f / _furyConfig.DamagePerFuryPoint).Within(1e-3f), "25 damage, at DamagePerFuryPoint a point");
+            Assert.That(_fury.Value, Is.EqualTo(song.DamagePerSecond / _furyConfig.DamagePerFuryPoint).Within(1e-3f), "a second's damage, the arrival's pulse and three squeezes, at DamagePerFuryPoint a point");
         }
 
         [Test]
         public void Sting_StepPastItsEnd_OnlyHurtsUntilItsEnd()
         {
+            OneSting();
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
-            Cast(Make<StingSong>(), aim: target);
+            var song = Make<StingSong>();
+            Cast(song, aim: target);
 
             _forms.Tick(10f, _hives);
 
-            Assert.That(target.DamageTaken, Is.EqualTo(85f).Within(1e-2f), "3.4 s at 25 a second, from 0.6 s to 4 s");
+            float held = song.DamagePerSecond * (song.Seconds - song.ArriveSeconds);
+            Assert.That(target.DamageTaken, Is.EqualTo(held).Within(1e-2f), "its damage a second from its arrival to its end");
             Assert.That(Strike.IsActive, Is.False);
         }
 
         [Test]
         public void Sting_TargetDies_LetsGoAndHurtsNoMore()
         {
+            OneSting();
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
-            Cast(Make<StingSong>(), aim: target);
-            _forms.Tick(1.1f, _hives);
+            var song = Make<StingSong>();
+            Cast(song, aim: target);
+            _forms.Tick(song.ArriveSeconds + (1.5f * song.SqueezeSeconds), _hives);
             target.IsAlive = false;
 
             _forms.Tick(0.5f, _hives);
 
-            Assert.That(target.DamageTaken, Is.EqualTo(12.5f).Within(1e-3f));
+            Assert.That(target.DamageTaken, Is.EqualTo(song.DamagePerSecond * 0.5f).Within(1e-3f), "the arrival's pulse and the next squeeze's");
             Assert.That(Strike.ReleasedSeconds, Is.GreaterThanOrEqualTo(0f));
         }
 
@@ -315,12 +440,14 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Sting_TargetExactlyTwelveMetresAway_IsWrapped()
         {
+            OneSting();
             var target = new FakeSwarmTarget { Position = new Vector3(0f, 0f, 12f) };
-            Cast(Make<StingSong>(), aim: target);
+            var song = Make<StingSong>();
+            Cast(song, aim: target);
 
-            _forms.Tick(1.6f, _hives);
+            _forms.Tick(song.ArriveSeconds + (3.5f * song.SqueezeSeconds), _hives);
 
-            Assert.That(target.DamageTaken, Is.EqualTo(25f).Within(1e-3f));
+            Assert.That(target.DamageTaken, Is.EqualTo(song.DamagePerSecond).Within(1e-3f));
         }
 
         [Test]
@@ -349,7 +476,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tornado_AtItsHitTime_HurtsAndThrowsEveryBeekeeperWithinFiveMetres()
+        public void Tornado_AtItsHitTime_HurtsThrowsAndStunsEveryBeekeeperWithinFiveMetres()
         {
             var near = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 0f) };
             var far = new FakeSwarmTarget { Position = new Vector3(5.5f, 0f, 0f) };
@@ -360,10 +487,12 @@ namespace DigitalStory.Tests.EditMode
             _forms.Tick(0.3f, _hives);
 
             Assert.That(near.DamageTaken, Is.EqualTo(30f));
-            Assert.That(near.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f), "6 m/s straight away from the core");
+            Assert.That(near.LastKnockback.x, Is.EqualTo(12f).Within(1e-3f), "plan section O: thrown at 12 m/s straight away from the core");
             Assert.That(near.LastKnockback.z, Is.EqualTo(0f).Within(1e-3f));
+            Assert.That(near.LastStunSeconds, Is.EqualTo(1f), "and cannot act for 1 s");
             Assert.That(far.DamageTaken, Is.EqualTo(0f));
             Assert.That(far.LastKnockback, Is.EqualTo(Vector3.zero));
+            Assert.That(far.StunCount, Is.EqualTo(0));
         }
 
         [Test]
@@ -389,7 +518,7 @@ namespace DigitalStory.Tests.EditMode
             _forms.Tick(0.3f, _hives);
 
             Assert.That(target.DamageTaken, Is.EqualTo(30f));
-            Assert.That(target.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f));
+            Assert.That(target.LastKnockback.x, Is.EqualTo(12f).Within(1e-3f));
         }
 
         [Test]
@@ -405,7 +534,7 @@ namespace DigitalStory.Tests.EditMode
             _forms.Tick(0.3f, _hives);
 
             Assert.That(ahead.DamageTaken, Is.EqualTo(30f), "4 m from where the column stands when it hits");
-            Assert.That(ahead.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f));
+            Assert.That(ahead.LastKnockback.x, Is.EqualTo(12f).Within(1e-3f));
             Assert.That(behind.DamageTaken, Is.EqualTo(0f), "within 5 m of the cast, but 7.5 m from the column");
         }
 
@@ -463,7 +592,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tornado_BeekeeperOnTheSpot_IsStillThrownSixMetresPerSecond()
+        public void Tornado_BeekeeperOnTheSpot_IsStillThrownTwelveMetresPerSecond()
         {
             var onTop = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 2f) };
             _enemies.Add(onTop);
@@ -471,7 +600,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(0.3f, _hives);
 
-            Assert.That(onTop.LastKnockback.magnitude, Is.EqualTo(6f).Within(1e-3f));
+            Assert.That(onTop.LastKnockback.magnitude, Is.EqualTo(12f).Within(1e-3f));
             Assert.That(float.IsNaN(onTop.LastKnockback.x), Is.False);
         }
 
@@ -521,29 +650,50 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Gust_RingHasPassed_PushedBeekeepersWithinThreeMetresOutAtFourMetresPerSecond()
+        public void Gust_RingHasPassed_PushedBeekeepersWithinItsRadiusOutAtNineMetresPerSecond()
         {
             var near = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 1f) };
             var edge = new FakeSwarmTarget { Position = new Vector3(1f, 2f, 4f) };
-            var far = new FakeSwarmTarget { Position = new Vector3(4.5f, 0f, 1f) };
+            var wide = new FakeSwarmTarget { Position = new Vector3(6.5f, 0f, 1f) };
+            var far = new FakeSwarmTarget { Position = new Vector3(7.5f, 0f, 1f) };
             var dead = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 1f), IsAlive = false };
             _enemies.Add(near);
             _enemies.Add(edge);
+            _enemies.Add(wide);
             _enemies.Add(far);
             _enemies.Add(dead);
 
             Cast(Make<GustSong>(), core: new Vector3(1f, 0f, 1f));
             _forms.Tick(0.8f, _hives);
 
-            Assert.That(near.LastKnockback.x, Is.EqualTo(4f).Within(1e-3f));
+            Assert.That(near.LastKnockback.x, Is.EqualTo(9f).Within(1e-3f), "plan section O: was 4 m/s");
             Assert.That(near.LastKnockback.z, Is.EqualTo(0f).Within(1e-3f));
-            Assert.That(edge.LastKnockback.z, Is.EqualTo(4f).Within(1e-3f), "3 m on the ground counts, however high");
+            Assert.That(edge.LastKnockback.z, Is.EqualTo(9f).Within(1e-3f), "3 m on the ground counts, however high");
+            Assert.That(wide.LastKnockback.x, Is.EqualTo(9f).Within(1e-3f), "5.5 m: its radius is the Gust's 6 m now, not 3 m");
             Assert.That(edge.LastKnockback.y, Is.EqualTo(0f));
             Assert.That(far.LastKnockback, Is.EqualTo(Vector3.zero));
             Assert.That(dead.LastKnockback, Is.EqualTo(Vector3.zero));
             Assert.That(near.DamageTaken, Is.EqualTo(0f), "a gust pushes, it does not hurt");
             Assert.That(near.KnockbackCount, Is.EqualTo(1), "once");
             Assert.That(edge.KnockbackCount, Is.EqualTo(1));
+        }
+
+        // Plan section O: the Gust becomes a real shove. Each beekeeper it pushes cannot act for half a second.
+        [Test]
+        public void Gust_EveryBeekeeperItPushes_CannotActForHalfASecond()
+        {
+            var near = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
+            var far = new FakeSwarmTarget { Position = new Vector3(0f, 0f, 6.5f) };
+            _enemies.Add(near);
+            _enemies.Add(far);
+
+            Cast(Make<GustSong>());
+            _forms.Tick(0.8f, _hives);
+
+            Assert.That(near.StunCount, Is.EqualTo(1));
+            Assert.That(near.LastStunSeconds, Is.EqualTo(0.5f));
+            Assert.That(far.StunCount, Is.EqualTo(0));
+            Assert.That(_smoke.CallCount, Is.EqualTo(1), "and it still clears smoke");
         }
 
         // The owner's rule: an impact hurts on the frame it visibly lands. The ring reaches 3 m about 0.25 s after the cast.
@@ -582,7 +732,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(0.02f, _hives);
             Assert.That(middle.KnockbackCount, Is.EqualTo(1), "0.20 s");
-            Assert.That(middle.LastKnockback.z, Is.EqualTo(4f).Within(1e-3f));
+            Assert.That(middle.LastKnockback.z, Is.EqualTo(9f).Within(1e-3f));
             Assert.That(edge.KnockbackCount, Is.EqualTo(0), "the ring is at " + song.RingRadius(0.2f) + " m");
 
             _forms.Tick(0.04f, _hives);
@@ -590,7 +740,7 @@ namespace DigitalStory.Tests.EditMode
 
             _forms.Tick(0.02f, _hives);
             Assert.That(edge.KnockbackCount, Is.EqualTo(1), "0.26 s");
-            Assert.That(edge.LastKnockback.x, Is.EqualTo(-4f).Within(1e-3f));
+            Assert.That(edge.LastKnockback.x, Is.EqualTo(-9f).Within(1e-3f));
 
             _forms.Tick(0.6f, _hives);
             Assert.That(close.KnockbackCount + middle.KnockbackCount + edge.KnockbackCount, Is.EqualTo(3), "each is pushed once");
@@ -696,7 +846,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Colossus_Cast_UsesAllFuryAndLastsTwelveSeconds()
+        public void Colossus_Cast_UsesAllFuryAndLastsItsSeconds()
         {
             var song = Make<ColossusSong>();
             _fury.AddDamage(1000f);
@@ -706,7 +856,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(_fury.Value, Is.EqualTo(0f));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
-            _forms.Tick(11.5f, _hives);
+            _forms.Tick(song.Seconds - 0.5f, _hives);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
             _forms.Tick(0.5f, _hives);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
@@ -729,19 +879,21 @@ namespace DigitalStory.Tests.EditMode
 
         // Aiming: an aimed song asks for its target by its own rule as it is cast (plan section E)
 
+        // Changed with the many stings (plan section O): the Sting asks for the most threatening beekeepers by the Threat
+        // rule, one for each sting, instead of one target; what it proves stays: the Threat rule within its range decides.
         [Test]
-        public void Sting_CastWithAnAimChooser_AsksForTheThreatWithinItsRangeAndStingsTheAnswer()
+        public void Sting_CastWithAnAimChooser_AsksForTheThreatsWithinItsRangeAndStingsTheAnswer()
         {
             var chosen = new FakeSwarmTarget { Position = new Vector3(3f, 0f, 4f) };
-            var aim = new FakeSongAim { Target = chosen, Point = chosen.Position };
+            var aim = new FakeSongAim { Threats = new ISwarmTarget[] { chosen }, Point = chosen.Position };
             var ignored = new FakeSwarmTarget { Position = new Vector3(-2f, 0f, 0f) };
             var song = Make<StingSong>();
 
             var context = new SwarmSongContext(default, ignored, ignored.Position, _body, _forms, _fury, _hives, _enemies, _smoke, aim);
             song.Cast(in context);
 
-            Assert.That(aim.Calls, Is.EqualTo(1));
-            Assert.That(aim.LastRule, Is.EqualTo(AimRule.Threat));
+            Assert.That(aim.ThreatCalls, Is.EqualTo(1));
+            Assert.That(aim.LastThreatCount, Is.EqualTo(song.StingCount(_body.Count)));
             Assert.That(aim.LastRange, Is.EqualTo(song.MaxRange));
             Assert.That((Vector3)Strike.ParamA, Is.EqualTo(new Vector3(3f, 0f, 4f)));
         }
@@ -774,6 +926,13 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(aim.Calls, Is.EqualTo(0));
             Assert.That(_forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
             Assert.That(Strike.Form, Is.EqualTo(SwarmForm.Tornado));
+        }
+
+        // The swarm starts with 800 wasps, which send two stings (plan section O). A test of one sting's numbers leaves 400.
+        private void OneSting()
+        {
+            _body.Lose(_body.Count - 400);
+            Assert.That(_body.Count, Is.EqualTo(400));
         }
 
         private T Make<T>() where T : SwarmSongEffect

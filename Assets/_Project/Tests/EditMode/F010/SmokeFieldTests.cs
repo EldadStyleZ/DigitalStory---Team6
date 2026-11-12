@@ -383,6 +383,26 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(before - _swarm.Count, Is.EqualTo((int)_config.WaspLossPerSecond));
         }
 
+        // Plan section O: a collapsed swarm cannot be smoked. It is not in a cloud, so nothing slows the core, and it comes
+        // back into the smoke on the respawn.
+        [Test]
+        public void Tick_CollapsedSwarmInACloud_IsNotInSmoke_AndIsAgainOnceItRespawns()
+        {
+            LandACloudAt(Landing);
+            _swarm.Lose(_swarm.Count);
+
+            Tick(1f, core: Landing);
+            Assert.That(_field.IsCoreInSmoke, Is.False);
+            Assert.That(_swarm.Count, Is.EqualTo(0));
+
+            _swarm.Tick(_swarmConfig.CollapseBlockSeconds, SetOf(HiveAt(Far)));
+            Assert.That(_swarm.IsCollapsed, Is.False);
+            int respawned = _swarm.Count;
+            Tick(0.25f, core: Landing);
+            Assert.That(_field.IsCoreInSmoke, Is.True);
+            Assert.That(_swarm.Count, Is.EqualTo(respawned - (int)(_config.WaspLossPerSecond * 0.25f)), "a short breath, so the drain cannot collapse it again");
+        }
+
         [Test]
         public void Tick_NoCloud_CoreIsNotInSmoke()
         {

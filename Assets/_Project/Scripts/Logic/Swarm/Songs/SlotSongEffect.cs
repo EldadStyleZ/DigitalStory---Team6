@@ -37,6 +37,12 @@ namespace DigitalStory.Logic
         /// <summary>True when the song strikes a target that auto-aim chooses; false for a song around the core.</summary>
         public virtual bool IsAimed => false;
 
+        /// <summary>
+        /// True for a song whose hits are the big ones (plan section O): the Meteor, the Lance, the Hydra, the Nest and the
+        /// Tornado's throw. The swarm's motion freezes for a moment on each of their hits. False unless a song says otherwise.
+        /// </summary>
+        public virtual bool HitsHard => false;
+
         /// <summary>How auto-aim chooses the song's target (plan section E). Only read while <see cref="IsAimed"/>.</summary>
         public virtual AimRule AimRule => AimRule.Threat;
 

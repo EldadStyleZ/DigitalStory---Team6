@@ -67,64 +67,42 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Length of the river when the core moves.")]
         public float RiverLengthMeters { get; private set; } = 11f;
 
-        [field: SerializeField, Min(0f), Tooltip("Half the width of the river, and of the ring around the core. Wide enough that the big wasps keep apart instead of merging into one band. The river is less than half as tall as it is wide.")]
+        [field: SerializeField, Min(0f), Tooltip("Half the width of the river. Wide enough that the big wasps keep apart instead of merging into one band. The river is less than half as tall as it is wide.")]
         public float RiverRadius { get; private set; } = 1.2f;
 
         [field: SerializeField, Min(0f), Tooltip("Sideways sway of the river, in metres.")]
         public float MeanderAmplitude { get; private set; } = 0.25f;
 
-        [field: SerializeField, Min(0f), Tooltip("Metres of path the river needs before it stretches out behind the core. On a shorter path, at the start of a run, it curls into the ring around it.")]
+        [field: SerializeField, Min(0f), Tooltip("Metres of path the river needs before it stretches out behind the core. On a shorter path, at the start of a run, the swarm flies the figure-eight round the core.")]
         public float StandingTrailMeters { get; private set; } = 2f;
-
-        [field: SerializeField, Min(0f), Tooltip("Radius of the ring the swarm forms around the core. Keep it more than RiverRadius plus CoreRingRadius, so the ring never covers the inner ring at its centre.")]
-        public float TorusRadius { get; private set; } = 2.4f;
 
         [field: SerializeField, Min(0f), Tooltip("The core counts as standing while it stays within this many metres (on the ground) of where it stopped, so settling never counts as a step.")]
         public float StandStillMeters { get; private set; } = 0.05f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds the core stands before the river curls into the ring around it.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds the core stands before the river winds into the figure-eight round it.")]
         public float StandDelaySeconds { get; private set; } = 0.5f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds the river takes to ease into the ring, and back out once the core moves. 0 switches at once.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds the river takes to wind into the figure-eight, and to unwind out of it once the core moves. 0 switches at once.")]
         public float StandBlendSeconds { get; private set; } = 0.75f;
 
-        // The core is an invisible point, so a few wasps mark it: a tight ring that stays on it, still or moving.
-        [field: Header("The core")]
-        [field: SerializeField, Range(0f, 0.3f), Tooltip("Share of the wasps that circle the core in a tight inner ring, so the centre of the swarm, which is the player, reads from the camera. 0 hides the inner ring.")]
-        public float CoreRingShare { get; private set; } = 0.05f;
+        // The core is an invisible point, and nothing marks it. While it stands, the free swarm flows round a figure-eight in
+        // the air whose crossing sits over it, so the eye finds the core where the loop crosses itself. The sizes grow with
+        // the swarm's level, as the songs' do.
+        [field: Header("The figure-eight")]
+        [field: SerializeField, Min(0f), Tooltip("Metres on the ground from the crossing, over the core, to the tip of each lobe, at level 1.")]
+        public float EightRadius { get; private set; } = 2.6f;
 
-        [field: SerializeField, Min(0), Tooltip("The fewest wasps the inner ring keeps, however small the swarm is. A share alone leaves a young swarm of 800 with a ring too thin to see.")]
-        public int CoreRingLeastWasps { get; private set; } = 100;
+        [field: SerializeField, Min(0f), Tooltip("Metres above the core the eight crosses itself, at level 1. Keep it above EightRadius times the sine of EightTilt, so the low lobe stays off the ground.")]
+        public float EightHeight { get; private set; } = 1.4f;
 
-        [field: SerializeField, Range(0f, 0.5f), Tooltip("The largest share of the wasps the inner ring may take to reach its fewest wasps, so a swarm near collapse still has a river.")]
-        public float CoreRingMostShare { get; private set; } = 0.25f;
+        [field: SerializeField, Range(0f, 1.2f), Tooltip("Radians the eight's plane tilts, so one lobe rises as the other dips. 0 lays it flat.")]
+        public float EightTilt { get; private set; } = 0.5f;
 
-        /// <summary>The share of the living wasps that circle the core, for a swarm of this many.</summary>
-        public float CoreRingShareFor(int livingWasps)
-        {
-            if (CoreRingShare <= 0f || livingWasps <= 0)
-            {
-                return 0f;
-            }
+        [field: SerializeField, Min(0f), Tooltip("Metres the ribbon of wasps spreads to each side of the eight's line, at level 1. Keep it well under half of EightRadius, so each lobe keeps its hole.")]
+        public float EightThickness { get; private set; } = 0.45f;
 
-            float shareForLeast = (float)CoreRingLeastWasps / livingWasps;
-            return Mathf.Min(Mathf.Max(CoreRingShare, shareForLeast), Mathf.Max(CoreRingShare, CoreRingMostShare));
-        }
-
-        [field: SerializeField, Min(0f), Tooltip("Radius of the inner ring around the core, in metres. Keep it below TorusRadius minus RiverRadius, so the two rings stay apart.")]
-        public float CoreRingRadius { get; private set; } = 0.6f;
-
-        [field: SerializeField, Range(0f, 1f), Tooltip("How hot the inner ring's wasps glow, from 0 to 1, while no song runs; half that while one does, as the river quiets. The calm river glows at 0.1, the Dome at 0.4, and 0.95 and up flash white.")]
-        public float CoreRingGlow { get; private set; } = 0.75f;
-
-        // The river curls into the ring around the stopped core and stretches out behind the moving one in a blend whose
-        // straight path crosses the core. WaspSwarm.compute swings it round the core and keeps it out of this circle, or
-        // hundreds of wasps pile onto the inner ring for half a second at every stop and start.
-        [field: SerializeField, Min(0f), Tooltip("Metres around the core, on the ground, that the river keeps clear of, so it flows around the inner ring instead of across it when it curls into the ring around the stopped core or stretches out behind it again. Keep it above CoreRingRadius plus the inner ring's 0.25 m band, and at most TorusRadius minus RiverRadius, the inner edge of the ring around the core. 0 lets the river cross the core.")]
-        public float CoreClearRadius { get; private set; } = 1.2f;
-
-        [field: SerializeField, Min(0f), Tooltip("Metres per second a river wasp inside CoreClearRadius is eased back out to its edge. Faster than the core walks, so the moving core parts the swarm in front of it, and slow enough that a wasp let go by a song inside the circle drifts out instead of jumping.")]
-        public float CoreClearSpeed { get; private set; } = 8f;
+        [field: SerializeField, Min(0.5f), Tooltip("Seconds a wasp takes to fly once round the whole eight.")]
+        public float EightLapSeconds { get; private set; } = 5f;
 
         [field: Header("Wasps")]
         [field: SerializeField, Min(0f), Tooltip("Size of the small shake on each wasp, in metres.")]
@@ -154,7 +132,7 @@ namespace DigitalStory.Data
 
         // The wasps glow by these colours, so they are light and saturated: the shader whitens the middle of each wasp itself.
         [field: Header("Colours")]
-        [field: SerializeField, Tooltip("Colour of the plain swarm: the river, the ring around the core and the collapsed swarm. A warm yellow that glows yellow-white.")]
+        [field: SerializeField, Tooltip("Colour of the plain swarm: the river, the figure-eight round the core and the collapsed swarm. A warm yellow that glows yellow-white.")]
         public Color RiverColor { get; private set; } = new Color(1f, 0.82f, 0.42f, 1f);
 
         [field: SerializeField, Tooltip("Colour of an attack song's form (Sting, Tornado, Meteor, Colossus). A hot red. Red means attack and nothing else.")]

@@ -114,13 +114,17 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(3)]
         public void Sting_Damage_GrowsWithTheLevel(int level)
         {
+            // 400 wasps send one sting (plan section O), so the level alone grows its damage here.
+            _body.Lose(400);
             var target = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
-            Cast(Make<StingSong>(), level, aim: target);
+            var song = Make<StingSong>();
+            Cast(song, level, aim: target);
 
-            _forms.Tick(1.6f, _hives);
+            // Its damage comes in pulses on the squeezes from the arrival (plan section O): four make a second's.
+            _forms.Tick(song.ArriveSeconds + (3.5f * song.SqueezeSeconds), _hives);
 
-            Assert.That(target.DamageTaken, Is.EqualTo(25f * Scale(level)).Within(1e-3f), "1 s of 25 a second after the arrival");
-            Assert.That(_fury.Value, Is.EqualTo(25f * Scale(level) / _furyConfig.DamagePerFuryPoint).Within(1e-3f), "the grown damage fills Fury");
+            Assert.That(target.DamageTaken, Is.EqualTo(song.DamagePerSecond * Scale(level)).Within(1e-3f), "1 s of its damage: the arrival's pulse and three squeezes");
+            Assert.That(_fury.Value, Is.EqualTo(song.DamagePerSecond * Scale(level) / _furyConfig.DamagePerFuryPoint).Within(1e-3f), "the grown damage fills Fury");
         }
 
         [Test]
@@ -175,7 +179,7 @@ namespace DigitalStory.Tests.EditMode
             _forms.Tick(0.3f, _hives);
 
             Assert.That(near.DamageTaken, Is.EqualTo(30f * Scale(level)).Within(1e-3f));
-            Assert.That(near.LastKnockback.x, Is.EqualTo(6f).Within(1e-3f));
+            Assert.That(near.LastKnockback.x, Is.EqualTo(12f).Within(1e-3f), "plan section O: thrown at 12 m/s at every level");
         }
 
         [Test]
@@ -202,8 +206,8 @@ namespace DigitalStory.Tests.EditMode
             Cast(Make<MeteorSong>(), level, aimPoint: new Vector3(0f, 0f, 5f));
 
             Assert.That(Strike.ParamA.w, Is.EqualTo(12f * Scale(level)).Within(1e-4f), "height");
-            Assert.That(Strike.ParamB.x, Is.EqualTo(0.8f), "the climb takes as long");
-            Assert.That(Strike.ParamB.y, Is.EqualTo(0.5f), "and the dive");
+            Assert.That(Strike.ParamB.x, Is.EqualTo(0.6f), "the climb takes as long");
+            Assert.That(Strike.ParamB.y, Is.EqualTo(0.4f), "and the dive");
             Assert.That(Strike.ParamB.z, Is.EqualTo(3f * Scale(level)).Within(1e-4f), "radius");
         }
 
@@ -272,20 +276,21 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_forms.GustRadius, Is.EqualTo(6f * Scale(level)).Within(1e-4f), "the picture's pulse reaches as far");
         }
 
+        // Changed with plan section O: the Gust shoves over its whole 6 m radius at 9 m/s (was 3 m at 4 m/s); what it proves stays.
         [Test]
         public void Gust_PushRadius_GrowsWithTheLevel()
         {
-            var beside = new FakeSwarmTarget { Position = new Vector3(3.2f, 0f, 0f) };
+            var beside = new FakeSwarmTarget { Position = new Vector3(6.2f, 0f, 0f) };
             _enemies.Add(beside);
 
             Cast(Make<GustSong>(), 1);
             _forms.Tick(0.8f, _hives);
-            Assert.That(beside.KnockbackCount, Is.EqualTo(0), "beyond 3 m");
+            Assert.That(beside.KnockbackCount, Is.EqualTo(0), "beyond 6 m");
 
             Cast(Make<GustSong>(), 2);
             _forms.Tick(0.8f, _hives);
-            Assert.That(beside.KnockbackCount, Is.EqualTo(1), "within 3.36 m");
-            Assert.That(beside.LastKnockback.x, Is.EqualTo(4f).Within(1e-3f), "the push is no faster");
+            Assert.That(beside.KnockbackCount, Is.EqualTo(1), "within 6.72 m");
+            Assert.That(beside.LastKnockback.x, Is.EqualTo(9f).Within(1e-3f), "the push is no faster");
         }
 
         // The ring starts where the shader starts it and grows to the grown radius, so the push still lands with the picture.

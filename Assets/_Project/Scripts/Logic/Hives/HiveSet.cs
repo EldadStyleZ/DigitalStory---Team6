@@ -92,6 +92,23 @@ namespace DigitalStory.Logic
             }
         }
 
+        /// <summary>True while a standing hive is under attack: it was hurt within HiveConfig.UnderAttackSeconds (<see cref="Hive.IsUnderAttack"/>).</summary>
+        public bool HasHiveUnderAttack
+        {
+            get
+            {
+                for (int i = 0; i < _hives.Length; i++)
+                {
+                    if (!_hives[i].IsDestroyed && _hives[i].IsUnderAttack)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
         /// <summary>Raised when a hive falls, with that hive's index.</summary>
         public event Action<int> HiveDestroyed;
 

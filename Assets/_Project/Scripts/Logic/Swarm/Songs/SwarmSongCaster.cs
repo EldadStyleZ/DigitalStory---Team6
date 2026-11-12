@@ -16,7 +16,8 @@ namespace DigitalStory.Logic
     /// line. A refused song still uses up its notes and starts no cooldown. A cast pays its <see cref="Price"/> as it
     /// happens: nothing for a song's first cast in the match (the caster lives one match), so finding a song is never
     /// punished; nothing in a farm phase (<see cref="SwarmSongContext.AreSongsFree"/>) unless the song is a tower
-    /// (<see cref="SwarmSongEffect.CostsInFarmPhase"/>); and its <see cref="SwarmSongEffect.WaspCost"/> otherwise. A refused
+    /// (<see cref="SwarmSongEffect.CostsInFarmPhase"/>); and its <see cref="SwarmSongEffect.WaspCostFor"/> the wasps alive as
+    /// the notes complete otherwise, which only the Sting's count changes (plan section O). A refused
     /// cast keeps the song's free cast. Nothing is cast, or even remembered, while the swarm is collapsed.
     /// </remarks>
     public sealed class SwarmSongCaster
@@ -96,11 +97,12 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>
-        /// The wasps casting the song would cost now: nothing for its first cast in the match, nothing while
-        /// <paramref name="areSongsFree"/> (a farm phase) unless it is a tower, and its <see cref="SwarmSongEffect.WaspCost"/>
-        /// otherwise. A cast that goes ahead pays exactly this.
+        /// The wasps casting the song would cost now, with <paramref name="livingWasps"/> alive: nothing for its first cast in
+        /// the match, nothing while <paramref name="areSongsFree"/> (a farm phase) unless it is a tower, and its
+        /// <see cref="SwarmSongEffect.WaspCostFor"/> otherwise, which is its <see cref="SwarmSongEffect.WaspCost"/> for every
+        /// song but the Sting (plan section O). A cast that goes ahead pays exactly this.
         /// </summary>
-        public int Price(int song, bool areSongsFree)
+        public int Price(int song, bool areSongsFree, int livingWasps)
         {
             SwarmSongEffect effect = _songs[song];
 
@@ -109,7 +111,7 @@ namespace DigitalStory.Logic
                 return 0;
             }
 
-            return effect.WaspCost;
+            return effect.WaspCostFor(livingWasps);
         }
 
         /// <summary>The hole of a recent note, 0 being the oldest.</summary>
@@ -181,7 +183,7 @@ namespace DigitalStory.Logic
 
             // Paid last, so a song refused for any other reason costs nothing and keeps its free cast. Paying never
             // collapses the swarm.
-            int price = Price(song, context.AreSongsFree);
+            int price = Price(song, context.AreSongsFree, context.LivingWasps);
             if (price > 0 && !context.Swarm.TrySpend(price))
             {
                 return Refuse(song, SongRefusal.NotEnoughWasps);

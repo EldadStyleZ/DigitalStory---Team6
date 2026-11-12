@@ -68,6 +68,9 @@ namespace DigitalStory.Tests.EditMode
             _aimPoint = Vector3.zero;
             _core = Vector3.zero;
             _enemies.Clear();
+
+            // 400 wasps send one sting (plan section O), so these tests of the slot engine see one sting's numbers.
+            JsonUtility.FromJsonOverwrite("{\"<StartingWasps>k__BackingField\":400}", _swarmConfig);
             Build();
         }
 
@@ -136,7 +139,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(Strike.ReleasedSeconds, Is.EqualTo(-1f));
             Assert.That(Strike.Seconds, Is.EqualTo(1f).Within(Tolerance));
             Assert.That(_forms.IsDomed, Is.True);
-            Assert.That(_aim.DamageTaken, Is.EqualTo(10f).Within(1e-3f), "25 a second from its arrival at 0.6 s");
+            Assert.That(_aim.DamageTaken, Is.EqualTo(StingDamageBy(1f)).Within(1e-3f), "its pulses from its arrival");
         }
 
         [Test]
@@ -179,7 +182,7 @@ namespace DigitalStory.Tests.EditMode
             _aim = null;
             _aimPoint = new Vector3(6f, 0f, 0f);
             Cast(_meteor);
-            Tick(1.2f);
+            Tick(_meteor.RiseSeconds + _meteor.DiveSeconds - 0.1f);
 
             _aimPoint = new Vector3(-6f, 0f, 0f);
             Cast(_sting);
@@ -245,13 +248,13 @@ namespace DigitalStory.Tests.EditMode
             Cast(_sting);
 
             Tick(4f);
-            Assert.That(_aim.DamageTaken, Is.EqualTo(85f).Within(1e-3f), "25 a second from 0.6 s to 4 s");
+            Assert.That(_aim.DamageTaken, Is.EqualTo(StingDamageBy(_sting.Seconds)).Within(1e-3f), "its damage a second from its arrival to its end");
             Assert.That(Strike.ReleasedSeconds, Is.EqualTo(0f).Within(Tolerance));
 
             Tick(0.5f);
             Assert.That(Strike.IsActive, Is.True);
-            Assert.That(_aim.DamageTaken, Is.EqualTo(85f).Within(1e-3f));
-            Assert.That(_fury.Value, Is.EqualTo(85f / _furyConfig.DamagePerFuryPoint).Within(1e-3f));
+            Assert.That(_aim.DamageTaken, Is.EqualTo(StingDamageBy(_sting.Seconds)).Within(1e-3f));
+            Assert.That(_fury.Value, Is.EqualTo(StingDamageBy(_sting.Seconds) / _furyConfig.DamagePerFuryPoint).Within(1e-3f));
         }
 
         [Test]
@@ -262,7 +265,7 @@ namespace DigitalStory.Tests.EditMode
             _aim.IsAlive = false;
 
             Tick(0.1f);
-            Assert.That(_aim.DamageTaken, Is.EqualTo(10f).Within(1e-3f));
+            Assert.That(_aim.DamageTaken, Is.EqualTo(StingDamageBy(1f)).Within(1e-3f));
             Assert.That(Strike.IsActive, Is.True);
             Assert.That(Strike.ReleasedSeconds, Is.EqualTo(0.1f).Within(1e-3f), "it let go when the target was found dead");
 
@@ -390,7 +393,7 @@ namespace DigitalStory.Tests.EditMode
             _aim = null;
             _aimPoint = new Vector3(6f, 0f, 0f);
             Cast(_meteor);
-            Tick(1f);
+            Tick(_meteor.RiseSeconds + _meteor.DiveSeconds - 0.2f);
 
             Cast(_hiveCall);
             Tick(1f);
@@ -506,7 +509,7 @@ namespace DigitalStory.Tests.EditMode
             _aim = null;
             _aimPoint = new Vector3(6f, 0f, 0f);
             Cast(_meteor);
-            Tick(1f);
+            Tick(_meteor.RiseSeconds + _meteor.DiveSeconds - 0.2f);
             FillFury();
 
             Cast(_colossus);
@@ -579,7 +582,7 @@ namespace DigitalStory.Tests.EditMode
             Collapse();
             Tick(1f);
 
-            Assert.That(_aim.DamageTaken, Is.EqualTo(10f).Within(1e-3f));
+            Assert.That(_aim.DamageTaken, Is.EqualTo(StingDamageBy(1f)).Within(1e-3f));
         }
 
         [Test]
@@ -685,14 +688,15 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(() => new SwarmFormMachine(_body, _fury, null), Throws.ArgumentNullException);
         }
 
-        // Rules never read the wasp count
+        // Rules never read the wasp count, but for the Sting's count of stings, by the owner's decision (plan section O)
 
-        // A thin swarm just above the collapse line of 96, and the full starting swarm of 800.
+        // Changed with plan section O: a thin swarm just above the collapse line of 96, and 399, both send one sting; the
+        // full swarm of 800 sends two, which the next test proves.
         [TestCase(120)]
-        [TestCase(800)]
+        [TestCase(399)]
         public void Songs_AtAnyWaspCount_HitAsHardAndTakeTheSameSquad(int wasps)
         {
-            _body.Lose(_swarmConfig.StartingWasps - wasps);
+            _body.Lose(_body.Count - wasps);
             Assert.That(_body.Count, Is.EqualTo(wasps));
             var enemy = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
             _enemies.Add(enemy);
@@ -700,31 +704,50 @@ namespace DigitalStory.Tests.EditMode
 
             Cast(_tornado);
             Tick(0.3f);
-            Assert.That(enemy.DamageTaken, Is.EqualTo(30f).Within(1e-3f));
+            Assert.That(enemy.DamageTaken, Is.EqualTo(_tornado.Damage).Within(1e-3f));
 
             Cast(_sting);
             Tick(4f);
-            Assert.That(enemy.DamageTaken, Is.EqualTo(115f).Within(1e-3f));
+            Assert.That(enemy.DamageTaken, Is.EqualTo(_tornado.Damage + StingDamageBy(_sting.Seconds)).Within(1e-3f));
 
             Cast(_meteor);
             AssertSquad(Strike, 0.55f, 0.9f);
-            Tick(1.32f);
-            Assert.That(enemy.DamageTaken, Is.EqualTo(175f).Within(1e-3f));
+            Tick(_meteor.RiseSeconds + _meteor.DiveSeconds + 0.02f);
+            Assert.That(enemy.DamageTaken, Is.EqualTo(_tornado.Damage + StingDamageBy(_sting.Seconds) + _meteor.Damage).Within(1e-3f));
+        }
+
+        // The owner's one exception: the Sting sends one sting for every 400 living wasps, and each hurts as hard, so twice
+        // the wasps hurt one target twice as hard; the squad stays the same share, shared between the stings.
+        [Test]
+        public void Sting_TwiceTheWasps_SendsTwiceTheStingsFromTheSameSquad()
+        {
+            Assert.That(_body.Gain(400), Is.EqualTo(400));
+            var enemy = new FakeSwarmTarget { Position = new Vector3(2f, 0f, 0f) };
+            _enemies.Add(enemy);
+            _aim = enemy;
+
+            Cast(_sting);
+            AssertSquad(Strike, 0.55f, 0.85f);
+            Tick(4f);
+
+            Assert.That(Strike.ParamB.x, Is.EqualTo(2f));
+            Assert.That(enemy.DamageTaken, Is.EqualTo(2f * StingDamageBy(_sting.Seconds)).Within(1e-3f));
         }
 
         // The numbers each song gives its picture (plan section B, the "CPU:" lines)
 
+        // Changed with plan section O: ParamB carried the second target for a duet; it now carries the count of stings in x.
         [Test]
-        public void Sting_Params_AreTheLiveTargetAndTheSecondTarget()
+        public void Sting_Params_AreTheLiveTargetAndTheCountOfStings()
         {
             Cast(_sting);
-            AssertVector(Strike.ParamA, 3f, 0f, 0f, 0.6f);
+            AssertVector(Strike.ParamA, 3f, 0f, 0f, 0.35f);
 
             _aim.Position = new Vector3(4f, 0f, 1f);
             Tick(0.1f);
 
-            AssertVector(Strike.ParamA, 4f, 0f, 1f, 0.6f);
-            AssertVector(Strike.ParamB, 4f, 0f, 1f, 0f);
+            AssertVector(Strike.ParamA, 4f, 0f, 1f, 0.35f);
+            AssertVector(Strike.ParamB, 1f, 0f, 0f, 0f);
         }
 
         [Test]
@@ -756,7 +779,7 @@ namespace DigitalStory.Tests.EditMode
             Cast(_meteor);
 
             AssertVector(Strike.ParamA, 6f, 0f, 2f, 12f);
-            AssertVector(Strike.ParamB, 0.8f, 0.5f, 3f, 0f);
+            AssertVector(Strike.ParamB, 0.6f, 0.4f, 3f, 0f);
         }
 
         [Test]
@@ -813,7 +836,7 @@ namespace DigitalStory.Tests.EditMode
             _forms.Landed += (form, point) => points.Add(point);
             Cast(_sting);
 
-            Tick(0.59f);
+            Tick(_sting.ArriveSeconds - 0.01f);
             Assert.That(points, Is.Empty);
             Assert.That(_aim.DamageTaken, Is.EqualTo(0f));
 
@@ -972,6 +995,24 @@ namespace DigitalStory.Tests.EditMode
         private void Tick(float seconds)
         {
             _forms.Tick(seconds, _hives);
+        }
+
+        // What one sting has dealt by <paramref name="seconds"/> after its cast, by the Sting's own numbers. Changed with the felt
+        // hit (plan section O): it deals in pulses, on its arrival and on every squeeze after, each the damage of the time to
+        // the next squeeze or to its end, so by a time it has dealt up to the squeeze after the last one that fell.
+        private float StingDamageBy(float seconds)
+        {
+            float dealtTo = _sting.ArriveSeconds;
+            for (int squeeze = 0; ; squeeze++)
+            {
+                float at = _sting.ArriveSeconds + (squeeze * _sting.SqueezeSeconds);
+                if (at > seconds || at >= _sting.Seconds)
+                {
+                    return _sting.DamagePerSecond * (dealtTo - _sting.ArriveSeconds);
+                }
+
+                dealtTo = Mathf.Min(_sting.ArriveSeconds + ((squeeze + 1) * _sting.SqueezeSeconds), _sting.Seconds);
+            }
         }
 
         private void Collapse()

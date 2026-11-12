@@ -46,6 +46,16 @@ namespace DigitalStory.Logic
         public int WaspCost => _waspCost;
 
         /// <summary>
+        /// What one cast costs when <paramref name="livingWasps"/> are alive as its notes complete: its
+        /// <see cref="WaspCost"/>. Only the Sting reads the count, by the owner's decision (plan section O): it sends one
+        /// sting for every 400 living wasps and costs its price for each.
+        /// </summary>
+        public virtual int WaspCostFor(int livingWasps)
+        {
+            return WaspCost;
+        }
+
+        /// <summary>
         /// True for a tower, a song whose wasps stay on the map: it costs its price in a farm phase too, where other songs are
         /// free. False unless a song says otherwise.
         /// </summary>

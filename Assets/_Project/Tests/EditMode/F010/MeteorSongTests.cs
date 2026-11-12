@@ -93,8 +93,9 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_song.Form, Is.EqualTo(SwarmForm.Meteor));
             Assert.That(_song.Share, Is.EqualTo(0.35f));
             Assert.That(_song.Height, Is.EqualTo(12f));
-            Assert.That(_song.RiseSeconds, Is.EqualTo(0.8f));
-            Assert.That(_song.DiveSeconds, Is.EqualTo(0.5f));
+            Assert.That(_song.RiseSeconds, Is.EqualTo(0.6f), "plan section O: it lands after 1.0 s, was 1.3 s");
+            Assert.That(_song.DiveSeconds, Is.EqualTo(0.4f));
+            Assert.That(_song.RiseSeconds + _song.DiveSeconds, Is.EqualTo(1f).Within(1e-5f));
             Assert.That(_song.MaxRange, Is.EqualTo(18f));
             Assert.That(_song.Radius, Is.EqualTo(3f));
             Assert.That(_song.Damage, Is.EqualTo(60f));
@@ -129,7 +130,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(strike.Low, Is.EqualTo(0.55f).Within(1e-5f));
             Assert.That(strike.High, Is.EqualTo(0.9f).Within(1e-5f), "35% of the swarm from the start of the Strike band");
             Assert.That(strike.ParamA, Is.EqualTo(new Vector4(6f, 0f, 2f, 12f)), "the impact point and the height");
-            Assert.That(strike.ParamB, Is.EqualTo(new Vector4(0.8f, 0.5f, 3f, 0f)), "the rise, the dive and the radius");
+            Assert.That(strike.ParamB, Is.EqualTo(new Vector4(0.6f, 0.4f, 3f, 0f)), "the rise, the dive and the radius");
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River), "the rest of the swarm stays the river");
         }
 
@@ -140,7 +141,7 @@ namespace DigitalStory.Tests.EditMode
             _enemies.Add(enemy);
             Cast();
 
-            _forms.Tick(1.29f, _hives);
+            _forms.Tick(_song.RiseSeconds + _song.DiveSeconds - 0.01f, _hives);
 
             Assert.That(Strike().ReleasedSeconds, Is.EqualTo(-1f), "still falling");
             Assert.That(enemy.DamageTaken, Is.EqualTo(0f));
@@ -254,13 +255,14 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(Strike().IsActive, Is.False);
         }
 
+        // Changed with plan section O: it lands after 1.0 s (was 1.3 s), so it lasts 1.6 s in all (was 1.9 s).
         [Test]
         public void Tick_AfterTheWholeDuration_ReturnsToRiverAndClearsTheMeteor()
         {
             Cast();
 
-            _forms.Tick(1.89f, _hives);
-            Assert.That(Strike().IsActive, Is.True, "1.9 s in all: rise, dive, then the burst and flow back, which is the slot's return beat");
+            _forms.Tick(1.59f, _hives);
+            Assert.That(Strike().IsActive, Is.True, "1.6 s in all: rise, dive, then the burst and flow back, which is the slot's return beat");
             Assert.That(Strike().ReleasedSeconds, Is.GreaterThan(0f), "it let go when it landed");
 
             _forms.Tick(0.02f, _hives);
@@ -343,12 +345,13 @@ namespace DigitalStory.Tests.EditMode
         {
             FakeSwarmTarget walker = AimAtWalker(new Vector3(5f, 0f, 0f));
 
-            _forms.Tick(0.4f, _hives);
+            // Changed with plan section O: the climb is 0.6 s (was 0.8 s), so the steps follow the song's own times.
+            _forms.Tick(_song.RiseSeconds * 0.5f, _hives);
             walker.Position = new Vector3(7f, 0f, 0f);
-            _forms.Tick(0.39f, _hives);
+            _forms.Tick((_song.RiseSeconds * 0.5f) - 0.01f, _hives);
             walker.Position = new Vector3(8.4f, 0f, 0f);
             _forms.Tick(0.02f, _hives);
-            _forms.Tick(0.51f, _hives);
+            _forms.Tick(_song.DiveSeconds, _hives);
 
             Assert.That(walker.DamageTaken, Is.EqualTo(60f));
             Assert.That(_landings, Is.EqualTo(new[] { new Vector3(8.4f, 0f, 0f) }));
@@ -482,7 +485,7 @@ namespace DigitalStory.Tests.EditMode
             var enemy = new FakeSwarmTarget { Position = new Vector3(1f, 0f, 0f) };
             _enemies.Add(enemy);
             Cast();
-            _forms.Tick(1f, _hives);
+            _forms.Tick(_song.RiseSeconds + _song.DiveSeconds - 0.2f, _hives);
 
             _body.Lose(_body.Count);
             _forms.Tick(1f, _hives);

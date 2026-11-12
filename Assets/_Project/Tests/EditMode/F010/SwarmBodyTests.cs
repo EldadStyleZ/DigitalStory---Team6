@@ -910,6 +910,38 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(body.Count, Is.EqualTo(Respawn));
         }
 
+        // Plan section O: the HUD says the swarm is returning and counts the seconds.
+        [Test]
+        public void SecondsToRespawn_FromTheCollapse_CountsTheBlockDownToTheRespawn()
+        {
+            var config = NewConfig();
+            SwarmBody body = NewBody();
+            HiveSet hives = RichHives();
+            Assert.That(body.SecondsToRespawn, Is.EqualTo(0f), "a living swarm is not returning");
+
+            body.Lose(config.StartingWasps);
+            Assert.That(body.SecondsToRespawn, Is.EqualTo(config.CollapseBlockSeconds));
+
+            body.Tick(1.25f, hives);
+            Assert.That(body.SecondsToRespawn, Is.EqualTo(config.CollapseBlockSeconds - 1.25f).Within(1e-5f));
+
+            body.Tick(config.CollapseBlockSeconds, hives);
+            Assert.That(body.IsCollapsed, Is.False);
+            Assert.That(body.SecondsToRespawn, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void SecondsToRespawn_BlockEndedButNoHiveStands_IsZeroWhileItWaits()
+        {
+            var config = NewConfig();
+            SwarmBody body = CollapsedBody(config);
+
+            body.Tick(config.CollapseBlockSeconds + 1f, NoStandingHives());
+
+            Assert.That(body.IsCollapsed, Is.True);
+            Assert.That(body.SecondsToRespawn, Is.EqualTo(0f));
+        }
+
         [Test]
         public void Tick_Respawn_RaisesRespawnedOnceAndCountChangedWithTheNewCount()
         {

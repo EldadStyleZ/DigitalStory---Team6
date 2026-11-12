@@ -16,11 +16,12 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Metres above the core the meteors climb to.")]
         public float Height { get; private set; } = 12f;
 
+        // Plan section O: it lands after 1.0 s (was 1.3 s), the climb and the dive shortened alike, so the cast answers sooner.
         [field: SerializeField, Min(0f), Tooltip("Seconds the meteors climb. The impact point follows the aimed beekeeper until the climb ends.")]
-        public float RiseSeconds { get; private set; } = 0.8f;
+        public float RiseSeconds { get; private set; } = 0.6f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the meteors dive. They land when the dive ends; the burst after it is the slot's return beat.")]
-        public float DiveSeconds { get; private set; } = 0.5f;
+        public float DiveSeconds { get; private set; } = 0.4f;
 
         [field: SerializeField, Min(0f), Tooltip("Furthest metres from the core that the impact can be.")]
         public float MaxRange { get; private set; } = 18f;
@@ -48,6 +49,9 @@ namespace DigitalStory.Logic
 
         /// <summary>The meteor's picture.</summary>
         public override SwarmForm Form => SwarmForm.Meteor;
+
+        /// <summary>One of the big hits (plan section O): the swarm's motion freezes for a moment on each.</summary>
+        public override bool HitsHard => true;
 
         protected internal override SongRule CreateRule()
         {

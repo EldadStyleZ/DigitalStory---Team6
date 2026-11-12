@@ -124,7 +124,7 @@ namespace DigitalStory.Logic
             Vector3 away = GroundMath.Direction(_hivePosition, attacker.Position);
             _hitAngle = Mathf.Atan2(away.z, away.x);
             _hitSeconds = seconds;
-            attacker.TakeDamage(_thornDamage);
+            Hit(attacker, _thornDamage);
             _fury.AddDamage(_thornDamage);
         }
     }

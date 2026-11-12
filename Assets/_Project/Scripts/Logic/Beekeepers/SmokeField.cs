@@ -7,7 +7,8 @@ namespace DigitalStory.Logic
     /// <summary>
     /// Smoke grenades in flight and the clouds they leave. Clouds hurt hives and drain the swarm
     /// while the core stands in one. Grenades and clouds are pooled (capacity 16), so nothing allocates per tick.
-    /// A hive, or the swarm at the core, is hurt once per tick however many clouds overlap it.
+    /// A hive, or the swarm at the core, is hurt once per tick however many clouds overlap it. A collapsed swarm cannot be
+    /// smoked (plan section O): it is in no cloud until it respawns.
     /// </summary>
     public sealed class SmokeField : ISmokeClearer
     {
@@ -40,7 +41,7 @@ namespace DigitalStory.Logic
         /// <summary>Raised when a cloud expires or is cleared.</summary>
         public event Action<SmokeCloud> CloudEnded;
 
-        /// <summary>True when the core stood in a cloud as of the last <see cref="Tick"/>.</summary>
+        /// <summary>True when the core stood in a cloud as of the last <see cref="Tick"/>. Never while the swarm is collapsed.</summary>
         public bool IsCoreInSmoke { get; private set; }
 
         /// <summary>How many clouds are on the ground.</summary>
@@ -200,6 +201,13 @@ namespace DigitalStory.Logic
 
         private void HurtSwarm(SwarmBody swarm, Vector3 corePosition, IDamageShield shield)
         {
+            // A collapsed swarm is not there, so no cloud slows it or drains it.
+            if (swarm.IsCollapsed)
+            {
+                IsCoreInSmoke = false;
+                return;
+            }
+
             float seconds = LongestEffectAt(corePosition, out bool inside);
             IsCoreInSmoke = inside;
             if (seconds > 0f)

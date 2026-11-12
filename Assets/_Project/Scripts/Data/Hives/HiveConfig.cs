@@ -41,7 +41,9 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Wasps a second that flow from the swarm into the hive's health while Give is held within CollectRadius.")]
         public float HealWaspsPerSecond { get; private set; } = 60f;
 
+        // 3 (was 2.5), set by the playtest bot once the Sting's damage came in pulses from its arrival: kills came sooner, so
+        // the hives took fewer hits and a win healed with less than 15% of its wasps.
         [field: SerializeField, Min(0.01f), Tooltip("Wasps given for each point of health healed.")]
-        public float WaspsPerHealthPoint { get; private set; } = 2.5f;
+        public float WaspsPerHealthPoint { get; private set; } = 3f;
     }
 }

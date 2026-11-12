@@ -5,9 +5,10 @@ using UnityEngine;
 namespace DigitalStory.Logic
 {
     /// <summary>
-    /// The tornado: a column around the core that, once it stands at full height, hurts and throws back every beekeeper in
-    /// reach of where the core stands then, once. Its reach, height, wall and damage grow with the swarm's level, as it
-    /// stood at the cast, and the picture gets the grown sizes.
+    /// The tornado: a column around the core that, once it stands at full height, hurts and throws every beekeeper in reach
+    /// of where the core stands then, once, and each one it throws and does not kill cannot act for
+    /// <see cref="TornadoSong.StunSeconds"/> (plan section O). Its reach, height, wall and damage grow with the swarm's
+    /// level, as it stood at the cast, and the picture gets the grown sizes; the throw does not grow.
     /// </summary>
     internal sealed class TornadoRule : SongRule
     {
@@ -75,9 +76,14 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                enemy.TakeDamage(_damage);
+                Hit(enemy, _damage);
                 enemy.Knockback(GroundMath.Direction(core, enemy.Position) * _song.KnockbackSpeed);
                 totalDamage += _damage;
+
+                if (enemy.IsAlive)
+                {
+                    enemy.Stun(_song.StunSeconds);
+                }
             }
 
             if (totalDamage > 0f)

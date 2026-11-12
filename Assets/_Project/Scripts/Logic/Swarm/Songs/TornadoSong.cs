@@ -3,7 +3,10 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>A spinning column of wasps hurts and throws back every beekeeper near the core once it stands at full height.</summary>
+    /// <summary>
+    /// A spinning column of wasps hurts and throws every beekeeper near the core once it stands at full height; a thrown
+    /// beekeeper cannot act for a moment (plan section O).
+    /// </summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Tornado", fileName = "TornadoSong")]
     public sealed class TornadoSong : SlotSongEffect
     {
@@ -34,14 +37,21 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Damage to every beekeeper in reach.")]
         public float Damage { get; private set; } = 30f;
 
+        // Plan section O: "the tornado feels like nothing happens", so it throws: 12 m/s (was 6) and 1 s that the beekeeper cannot act.
         [field: SerializeField, Min(0f), Tooltip("Metres per second a beekeeper is thrown away from the core.")]
-        public float KnockbackSpeed { get; private set; } = 6f;
+        public float KnockbackSpeed { get; private set; } = 12f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds every thrown beekeeper cannot act.")]
+        public float StunSeconds { get; private set; } = 1f;
 
         /// <summary>The Strike slot.</summary>
         public override SongSlot Slot => SongSlot.Strike;
 
         /// <summary>The tornado's picture.</summary>
         public override SwarmForm Form => SwarmForm.Tornado;
+
+        /// <summary>One of the big hits (plan section O): the swarm's motion freezes for a moment on each.</summary>
+        public override bool HitsHard => true;
 
         protected internal override SongRule CreateRule()
         {

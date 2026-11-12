@@ -112,9 +112,9 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_song.Form, Is.EqualTo(SwarmForm.Hydra));
             Assert.That(_song.Share, Is.EqualTo(0.37f));
             Assert.That(_song.Reach, Is.EqualTo(9f));
-            Assert.That(_song.BiteSeconds, Is.EqualTo(0.7f));
+            Assert.That(_song.BiteSeconds, Is.EqualTo(0.5f), "plan section O: was 0.7");
             Assert.That(_song.Damage, Is.EqualTo(40f));
-            Assert.That(_song.Seconds, Is.EqualTo(1.6f));
+            Assert.That(_song.Seconds, Is.EqualTo(1.4f), "the 0.9 s after the bite kept, so it was 1.6");
             Assert.That(_song.Heads, Is.EqualTo(3));
             Assert.That(_song.ExtraHeadFromLevel, Is.EqualTo(4));
             Assert.That(_song.SecondExtraHeadFromLevel, Is.EqualTo(7));
@@ -239,7 +239,7 @@ namespace DigitalStory.Tests.EditMode
             FakeSwarmTarget[] keepers = ChooserWith(new Vector3(2f, 0f, 0f), new Vector3(0f, 0f, 3f), new Vector3(-4f, 0f, 0f));
             Cast();
 
-            _forms.Tick(0.69f, _hives);
+            _forms.Tick(_song.BiteSeconds - 0.01f, _hives);
 
             foreach (FakeSwarmTarget keeper in keepers)
             {
@@ -257,7 +257,7 @@ namespace DigitalStory.Tests.EditMode
             FakeSwarmTarget[] keepers = ChooserWith(new Vector3(2f, 0f, 0f), new Vector3(0f, 0f, 3f), new Vector3(-4f, 0f, 0f));
             Cast();
 
-            _forms.Tick(0.69f, _hives);
+            _forms.Tick(_song.BiteSeconds - 0.01f, _hives);
             _forms.Tick(0.02f, _hives);
             _forms.Tick(0.5f, _hives);
 
@@ -392,7 +392,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(Head(3), Is.EqualTo(0f), "a fourth head's place is empty with three heads");
             Assert.That(Head(4), Is.EqualTo(0f));
             Assert.That(PictureHeadCount(), Is.EqualTo(3));
-            Assert.That(ParamB().y, Is.EqualTo(0.7f), "the bite's seconds");
+            Assert.That(ParamB().y, Is.EqualTo(0.5f), "the bite's seconds");
             Assert.That(ParamB().z, Is.EqualTo(1f), "the picture's size at the first level");
             Assert.That(ParamB().w, Is.EqualTo(0f), "w is the view's");
         }
@@ -502,16 +502,17 @@ namespace DigitalStory.Tests.EditMode
 
         // ---- How long it lasts, and what ends it ----
 
+        // Changed with plan section O: it bites at 0.5 s and lasts 1.4 s (was 0.7 s and 1.6 s); what it proves stays.
         [Test]
-        public void Tick_ItLastsOnePointSixSeconds_ThenItsReturnBeat()
+        public void Tick_ItLastsOnePointFourSeconds_ThenItsReturnBeat()
         {
             Cast();
 
-            _forms.Tick(1.59f, _hives);
+            _forms.Tick(1.39f, _hives);
             Assert.That(Strike().ReleasedSeconds, Is.EqualTo(-1f), "still running");
 
             _forms.Tick(0.02f, _hives);
-            Assert.That(Strike().ReleasedSeconds, Is.GreaterThanOrEqualTo(0f), "let go at 1.6 s");
+            Assert.That(Strike().ReleasedSeconds, Is.GreaterThanOrEqualTo(0f), "let go at 1.4 s");
             Assert.That(Strike().IsActive, Is.True, "the return beat");
 
             _forms.Tick(_squads.ReturnSeconds, _hives);
@@ -530,7 +531,7 @@ namespace DigitalStory.Tests.EditMode
             _songs[StingIndex].Cast(in atStung);
 
             Cast();
-            _forms.Tick(2f, _hives);
+            _forms.Tick(1f, _hives);
 
             Assert.That(Strike().Form, Is.EqualTo(SwarmForm.Hydra));
             Assert.That(stung.DamageTaken, Is.EqualTo(0f), "the Sting ended before it arrived");
@@ -543,7 +544,7 @@ namespace DigitalStory.Tests.EditMode
         {
             FakeSwarmTarget[] keepers = ChooserWith(new Vector3(2f, 0f, 0f));
             Cast();
-            _forms.Tick(0.5f, _hives);
+            _forms.Tick(_song.BiteSeconds - 0.1f, _hives);
 
             _body.Lose(_body.Count);
             _forms.Tick(1f, _hives);

@@ -67,6 +67,20 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Sting_TheArrivalThePictureReadsFor0_IsTheSongsDefault()
+        {
+            Assert.That(Constant("StingFlightSeconds"), Is.EqualTo(Make<StingSong>().ArriveSeconds).Within(Tolerance));
+        }
+
+        // Each sting reports its damage as one hit on every squeeze (plan section O), so the squeeze the picture draws must
+        // fall on the same beat.
+        [Test]
+        public void Sting_ThePicturesSqueeze_IsTheSongsSqueeze_SoEachHitFallsOnOne()
+        {
+            Assert.That(Constant("StingTickSeconds"), Is.EqualTo(Make<StingSong>().SqueezeSeconds).Within(Tolerance));
+        }
+
+        [Test]
         public void Nest_TheFuseThePictureReadsFor0_IsTheSongsDefault()
         {
             Assert.That(Constant("NestFuseSeconds"), Is.EqualTo(Make<NestSong>().FuseSeconds).Within(Tolerance));

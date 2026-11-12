@@ -4,13 +4,17 @@ using UnityEngine;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// Plays as a careful player who never fetches a nest. In a wave it guards the weaker of the hives under attack, flying
-    /// at the beekeeper nearest it (or at the aimed beekeeper while no hive is threatened), and attacks: the giant when Fury
-    /// is full, then the Strike song that fits (<see cref="StrikeChoice"/>: the Meteor at a crowd, the Scythe at a pack in
-    /// front, the Tornado when it is surrounded, the Lance at a file or a far smoker, the Hydra at several spread out) and the
-    /// Sting otherwise, keeping a reserve of wasps; with plenty to spare above it, it spends the Meteor and the Tornado on a
-    /// lone beekeeper too. It raises the Dome when sticks are on the core and runs from them while the Dome cannot rise, blows
-    /// smoke off the core with the Gust, and calls the stores home with Hive Call when the swarm runs low and nobody is near.
+    /// Plays as a careful player who never fetches a nest. Sticks go for the hives and turn on the core only when a song hurt
+    /// them (plan section O), so in a wave it guards where they hit: it stands beside the weaker of the hives under threat
+    /// and fights from there, and while no hive is threatened it flies at the aimed beekeeper on its way in. It raises the
+    /// Dome at the hive it guards while that hive is being hit, since the Dome shields what is inside it, and on the core when
+    /// a stick it provoked swings at it; without the Dome it runs from such a stick, which follows it off the hive. It throws
+    /// a pack off the hive it guards with the Tornado, or with the cheaper Gust while the Tornado cannot be played, and blows
+    /// smoke off the core with the Gust. It attacks with the giant when Fury is full, then the Strike song that would deal
+    /// the most (<see cref="StrikeChoice"/>: several stings, one for every 400 wasps, the Meteor at a crowd, the Scythe at a
+    /// pack in front, the Tornado when it is surrounded, the Lance at a file or a far smoker, the Hydra at several spread out)
+    /// and the Sting otherwise, keeping a reserve of wasps; with plenty to spare above it, it spends the Meteor and the
+    /// Tornado on a lone beekeeper too. It calls the stores home with Hive Call when the swarm runs low and nobody is near.
     /// It keeps the one Post slot busy: before each wave it leaves a Nest on the lane the wave's first beekeeper walks, and
     /// in the wave, once that nest has gone off, it shells the hive it leaves with the Honeycomb (the threatened hive it is
     /// not guarding, once auto-aim would shell it), or lobs a Nest onto a pack. Between waves it heals a hive that has
@@ -44,6 +48,11 @@ namespace DigitalStory.Tests.EditMode
 
         // A stick this close and on the core is the moment for the Dome, or, while the Dome cannot rise, to run.
         private const float DomeMetres = 3f;
+
+        // Beekeepers within this many metres of a hive's middle are on it, swinging at it (a stick swings from 1.8 m). This
+        // many on the hive it guards make a pack worth throwing off.
+        private const float OnHiveMetres = 2.5f;
+        private const int HivePack = 2;
 
         // The nest left before a wave lies this many metres out from the hive along the first beekeeper's lane, where the
         // beekeeper walks through it on its way in. In a wave, a nest is lobbed onto this many beekeepers or more.
@@ -167,7 +176,9 @@ namespace DigitalStory.Tests.EditMode
         {
             HiveDefenseSession session = bot.Session;
             SwarmBody swarm = session.Swarm;
-            if (bot.IsCoreUnderAttack(DomeMetres) && !bot.IsRunning(SongSlot.Guard) && bot.TryPlay(PlaytestMatch.DomeIndex))
+            int guarded = WeakestHiveUnderThreat(bot);
+            bool isDomeTime = IsDomeOnHiveUnderAttack(bot, guarded) || bot.IsCoreUnderAttack(DomeMetres);
+            if (isDomeTime && !bot.IsRunning(SongSlot.Guard) && bot.TryPlay(PlaytestMatch.DomeIndex))
             {
                 return;
             }
@@ -182,7 +193,13 @@ namespace DigitalStory.Tests.EditMode
                 return;
             }
 
-            // Under the Dome it stands and fights; without it, it runs from the sticks and stings as it goes.
+            if (guarded != NoHive && ThrowPackOffHive(bot, guarded))
+            {
+                return;
+            }
+
+            // Under the Dome it stands and fights; without it, it runs from a stick it provoked, which follows it off the
+            // hive, and stings as it goes.
             if (!session.Forms.IsDomed && bot.Evade(DomeMetres))
             {
                 Attack(bot);
@@ -201,11 +218,15 @@ namespace DigitalStory.Tests.EditMode
                 return;
             }
 
-            // It guards the weaker of the hives under attack: it flies at the beekeeper nearest that hive.
-            int guarded = WeakestHiveUnderThreat(bot);
-            ISwarmTarget target = guarded != NoHive
-                ? bot.NearestBeekeeper(session.Hives[guarded].Position)
-                : session.AimTarget ?? bot.NearestBeekeeper(bot.Core);
+            // It guards where the sticks hit: beside the weaker of the hives under threat, fighting from there.
+            if (guarded != NoHive)
+            {
+                bot.FlyTo(bot.BesideHive(guarded));
+                Attack(bot);
+                return;
+            }
+
+            ISwarmTarget target = session.AimTarget ?? bot.NearestBeekeeper(bot.Core);
             if (target == null)
             {
                 return;
@@ -213,6 +234,46 @@ namespace DigitalStory.Tests.EditMode
 
             bot.Approach(target.Position, StrikeChoice.StandOff(bot, target, Reserve(bot)));
             Attack(bot);
+        }
+
+        // The Dome shields what is inside it, hives included: the moment is a hive being hit whose middle the Dome would cover.
+        private static bool IsDomeOnHiveUnderAttack(PlaytestBot bot, int hive)
+        {
+            if (hive == NoHive || !bot.Session.Hives[hive].IsUnderAttack)
+            {
+                return false;
+            }
+
+            float radius = bot.Match.Dome.Radius * bot.Session.SizeScale;
+            Vector3 offset = bot.Session.Hives[hive].Position - bot.Core;
+            offset.y = 0f;
+            return offset.sqrMagnitude <= radius * radius;
+        }
+
+        // A pack swinging at the hive it guards is thrown off: by the Tornado, which hurts and throws every beekeeper in its
+        // reach, or by the Gust, which only shoves and stuns but costs a third, while the Tornado cannot be played. Only from
+        // beside the hive, where the throw carries them away from it.
+        private static bool ThrowPackOffHive(PlaytestBot bot, int hive)
+        {
+            HiveDefenseSession session = bot.Session;
+            Vector3 hivePosition = session.Hives[hive].Position;
+            if (session.NearHive != hive || bot.CountWithin(hivePosition, OnHiveMetres) < HivePack)
+            {
+                return false;
+            }
+
+            int reserve = Reserve(bot);
+            float size = session.SizeScale;
+            bool isTornadoReach = !StrikeChoice.IsBigStrikeRunning(bot)
+                && bot.CountWithin(bot.Core, bot.Match.Tornado.Radius * size) >= HivePack;
+            if (isTornadoReach && bot.IsReady(PlaytestMatch.TornadoIndex) && StrikeChoice.CanSpare(bot, PlaytestMatch.TornadoIndex, reserve)
+                && bot.TryPlay(PlaytestMatch.TornadoIndex))
+            {
+                return true;
+            }
+
+            bool isGustReach = bot.CountWithin(bot.Core, bot.Match.Gust.PushRadius * size) >= HivePack;
+            return isGustReach && StrikeChoice.CanSpare(bot, PlaytestMatch.GustIndex, reserve) && bot.TryPlay(PlaytestMatch.GustIndex);
         }
 
         private static void Attack(PlaytestBot bot)

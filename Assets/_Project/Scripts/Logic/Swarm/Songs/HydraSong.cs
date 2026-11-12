@@ -16,11 +16,12 @@ namespace DigitalStory.Logic
         {
         }
 
+        // Plan section O: the heads bite at 0.5 s (was 0.7 s), and the 0.9 s after the bite stays, so it lasts 1.4 s (was 1.6 s).
         [field: SerializeField, Min(0f), Tooltip("Seconds the Hydra lasts. Its necks recoil into the river after it, in the slot's return beat.")]
-        public float Seconds { get; private set; } = 1.6f;
+        public float Seconds { get; private set; } = 1.4f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds after the cast at which every head bites, the moment the picture's heads snap onto their targets.")]
-        public float BiteSeconds { get; private set; } = 0.7f;
+        public float BiteSeconds { get; private set; } = 0.5f;
 
         [field: SerializeField, Min(0f), Tooltip("Furthest metres from the core of a beekeeper a head may choose. A spare head strikes the ground no further out than this.")]
         public float Reach { get; private set; } = 9f;
@@ -54,6 +55,9 @@ namespace DigitalStory.Logic
 
         /// <summary>The Hydra's picture.</summary>
         public override SwarmForm Form => SwarmForm.Hydra;
+
+        /// <summary>One of the big hits (plan section O): the swarm's motion freezes for a moment on each.</summary>
+        public override bool HitsHard => true;
 
         /// <summary>
         /// How many heads the Hydra has at swarm level <paramref name="level"/>: <see cref="Heads"/>, one more from

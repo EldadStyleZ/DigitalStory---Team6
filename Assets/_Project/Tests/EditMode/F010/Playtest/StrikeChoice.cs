@@ -7,13 +7,15 @@ namespace DigitalStory.Tests.EditMode
     /// How the attacking plans choose a big Strike song, each for the map problem plan section A gives it: the Meteor for a
     /// crowd further off, the Scythe for a pack in front, the Tornado when surrounded, the Lance for a file or a far smoker,
     /// and the Hydra for several spread out. Every shape is measured at the swarm's level, as the song would strike, and
-    /// needs two beekeepers or more, except the far smoker. Of the songs whose shape is there, that are ready and that the
-    /// plan can pay for while keeping <c>reserve</c> wasps, it plays the one that would deal the most damage (each beekeeper
-    /// it reaches, times its damage; the Hydra reaches one a head), the first in that order on a tie. A plan rich enough
-    /// (<c>richInCasts</c> more casts above its reserve) also spends the Meteor on one beekeeper in its reach and the
-    /// Tornado on one close by, once no shape is there. The Sting, the cheap move for everything else, is the plan's own
-    /// call. With the Scythe ready, a plan steps in on a pack (<see cref="StandOff"/>), since the blade reaches less far than
-    /// a player stands.
+    /// needs two beekeepers or more, except the far smoker. The plans count on several stings too (plan section O): one
+    /// Sting sends one sting for every <see cref="StingSong.WaspsPerSting"/> living wasps, so two beekeepers or more in its
+    /// reach are a shape for it, each with its own sting, as long as it lasts. Of the songs whose shape is there, that are
+    /// ready and that the plan can pay for while keeping <c>reserve</c> wasps, it plays the one that would deal the most
+    /// damage (each beekeeper it reaches, times its damage; the Hydra reaches one a head, the Sting one a sting), the first in
+    /// that order on a tie, the Sting last. A plan rich enough (<c>richInCasts</c> more casts above its reserve) also spends
+    /// the Meteor on one beekeeper in its reach and the Tornado on one close by, once no shape is there. The Sting on a lone
+    /// beekeeper, the cheap move for everything else, is the plan's own call. With the Scythe ready, a plan steps in on a
+    /// pack (<see cref="StandOff"/>), since the blade reaches less far than a player stands.
     /// </summary>
     internal static class StrikeChoice
     {
@@ -35,13 +37,13 @@ namespace DigitalStory.Tests.EditMode
         public static bool TryBigStrike(PlaytestBot bot, int reserve, int richInCasts)
         {
             HiveDefenseSession session = bot.Session;
-            bool isBigStrikeRunning = bot.IsRunning(SongSlot.Strike) && session.Forms.Slot(SongSlot.Strike).Form != SwarmForm.Sting;
-            if (isBigStrikeRunning)
+            if (IsBigStrikeRunning(bot))
             {
                 return false;
             }
 
             PlaytestMatch match = bot.Match;
+            StingSong sting = match.Sting;
             float size = session.SizeScale;
             MeteorSong meteor = match.Meteor;
             ScytheSong scythe = match.Scythe;
@@ -66,6 +68,12 @@ namespace DigitalStory.Tests.EditMode
             bool isLanceShape = line >= File || isFarSmoker;
             Consider(bot, PlaytestMatch.LanceIndex, isLanceShape ? Mathf.Max(line, 1) * lance.Damage : 0f, reserve, ref best, ref most);
             Consider(bot, PlaytestMatch.HydraIndex, inReach >= Several ? inReach * hydra.Damage : 0f, reserve, ref best, ref most);
+
+            // A running Sting is not cut for another, and a lone beekeeper is the plan's own call.
+            int stung = Mathf.Min(sting.StingCount(session.Swarm.Count), bot.CountWithin(bot.Core, sting.MaxRange * size));
+            float perSting = sting.DamagePerSecond * Mathf.Max(0f, sting.Seconds - sting.ArriveSeconds);
+            bool isStingShape = stung >= Several && !bot.IsRunning(SongSlot.Strike);
+            Consider(bot, PlaytestMatch.StingIndex, isStingShape ? stung * perSting : 0f, reserve, ref best, ref most);
             if (best >= 0)
             {
                 return bot.TryPlay(best);
@@ -89,6 +97,12 @@ namespace DigitalStory.Tests.EditMode
             bool isPack = bot.CountWithin(target.Position, reach) >= Pack;
             bool isScytheReady = bot.IsReady(PlaytestMatch.ScytheIndex) && CanSpare(bot, PlaytestMatch.ScytheIndex, reserve);
             return isPack && isScytheReady ? Mathf.Min(bot.StandOffMetres, reach - StepInsideMetres) : bot.StandOffMetres;
+        }
+
+        /// <summary>True while a Strike song other than the Sting is on its way to land: a new cast would cut it.</summary>
+        public static bool IsBigStrikeRunning(PlaytestBot bot)
+        {
+            return bot.IsRunning(SongSlot.Strike) && bot.Session.Forms.Slot(SongSlot.Strike).Form != SwarmForm.Sting;
         }
 
         /// <summary>True when the swarm keeps <paramref name="reserve"/> wasps after paying what the song costs now.</summary>

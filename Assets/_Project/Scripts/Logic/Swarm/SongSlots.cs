@@ -55,6 +55,12 @@ namespace DigitalStory.Logic
             return IsRunning(slot) ? _rules[(int)slot].Song.Form : SwarmForm.River;
         }
 
+        /// <summary>The rule that holds the slot, running or playing its return beat, or null when the slot is empty.</summary>
+        public SongRule RuleIn(SongSlot slot)
+        {
+            return _rules[Index(slot)];
+        }
+
         /// <summary>Puts a freshly started rule in the slot in place of whatever held it. A rule is never in two slots.</summary>
         public void Replace(SongSlot slot, SongRule rule)
         {
@@ -218,6 +224,43 @@ namespace DigitalStory.Logic
             }
 
             return fraction;
+        }
+
+        /// <summary>
+        /// The form of the running song that lets the least damage through to hive number <paramref name="hive"/>, the shield
+        /// that blocks a blow on it, or River when no running song shields it.
+        /// </summary>
+        public SwarmForm HiveShieldForm(int hive)
+        {
+            SwarmForm form = SwarmForm.River;
+            float least = 1f;
+            for (int index = 0; index < SlotCount; index++)
+            {
+                if (TryGetRunning(index, out SongRule rule) && rule.HiveDamageFraction(hive) < least)
+                {
+                    least = rule.HiveDamageFraction(hive);
+                    form = rule.Song.Form;
+                }
+            }
+
+            return form;
+        }
+
+        /// <summary>The form of the running song that lets the least of a wasp loss through, the shield that blocks a blow on the core, or River with none.</summary>
+        public SwarmForm CoreShieldForm()
+        {
+            SwarmForm form = SwarmForm.River;
+            float least = 1f;
+            for (int index = 0; index < SlotCount; index++)
+            {
+                if (TryGetRunning(index, out SongRule rule) && rule.WaspLossFraction < least)
+                {
+                    least = rule.WaspLossFraction;
+                    form = rule.Song.Form;
+                }
+            }
+
+            return form;
         }
 
         /// <summary>What the view needs to draw the slot.</summary>

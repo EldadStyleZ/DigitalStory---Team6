@@ -88,6 +88,15 @@ namespace DigitalStory.Logic
         /// <summary>Metres the last Gust reaches, grown by the swarm's level when it was cast.</summary>
         public float GustRadius => _gustRadius;
 
+        /// <summary>
+        /// How many stings the Sting that holds the Strike slot sent (plan section O), while it runs and through its return
+        /// beat, so the picture shares the squad between them and pops each where it was; 0 when no Sting holds the slot.
+        /// </summary>
+        public int StingCount => _slots.RuleIn(SongSlot.Strike) is StingRule sting ? sting.Count : 0;
+
+        /// <summary>The shield that blocks a blow on the core: the running song that lets the least of a loss through, or River with none.</summary>
+        internal SwarmForm CoreShieldForm => _slots.CoreShieldForm();
+
         private bool IsBlocked => _current == SwarmForm.Collapsed || _current == SwarmForm.Colossus;
 
         /// <summary>Raised with the new form every time the whole swarm's form changes.</summary>
@@ -96,10 +105,37 @@ namespace DigitalStory.Logic
         /// <summary>Raised with the song's form and the point when a slot song's strike visibly lands.</summary>
         public event Action<SwarmForm, Vector3> Landed;
 
+        /// <summary>
+        /// Raised once for every hit a running slot song lands on a beekeeper (plan section O), for the feel of it. The session
+        /// passes it on (<see cref="HiveDefenseSession.SongLanded"/>), with the blows that shields block and the giant's.
+        /// </summary>
+        public event Action<SongHit> SongLanded;
+
         /// <summary>What the view needs to draw a slot.</summary>
         public SlotState Slot(SongSlot slot)
         {
             return _slots.State(slot);
+        }
+
+        /// <summary>
+        /// Where sting number <paramref name="index"/> of the Sting that holds the Strike slot wraps now: its living target,
+        /// followed as it walks, or the air it wraps. Zero past <see cref="StingCount"/>, and when no Sting holds the slot.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The index is below 0 or not below <see cref="StingSong.MostStings"/>.</exception>
+        public Vector3 StingTarget(int index)
+        {
+            if (index < 0 || index >= StingSong.MostStings)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index), index, "A Sting sends from 1 to " + StingSong.MostStings + " stings.");
+            }
+
+            return _slots.RuleIn(SongSlot.Strike) is StingRule sting ? sting.Target(index) : Vector3.zero;
+        }
+
+        /// <summary>The shield that blocks a blow on hive number <paramref name="hive"/>: the running song that lets the least through to it, or River with none.</summary>
+        internal SwarmForm HiveShieldForm(int hive)
+        {
+            return _slots.HiveShieldForm(hive);
         }
 
         /// <summary>The share, from 0 to 1, of the damage from sticks and smoke that reaches hive number <paramref name="hive"/>: what every running song lets through, multiplied. 1 with none.</summary>
@@ -379,6 +415,7 @@ namespace DigitalStory.Logic
             }
 
             rule.Landed += OnRuleLanded;
+            rule.HitLanded += OnRuleHitLanded;
             _rules.Add(rule);
             return rule;
         }
@@ -398,6 +435,11 @@ namespace DigitalStory.Logic
         private void OnRuleLanded(SongRule rule, Vector3 point)
         {
             Landed?.Invoke(rule.Song.Form, point);
+        }
+
+        private void OnRuleHitLanded(SongRule rule, SongHit hit)
+        {
+            SongLanded?.Invoke(hit);
         }
 
         private void OnCollapsed()

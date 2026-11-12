@@ -5,6 +5,14 @@ using UnityEngine;
 namespace DigitalStory.Logic
 {
     /// <summary>One beekeeper's decisions, for both the stick and the smoker kind. It moves itself and raises events; the session applies them.</summary>
+    /// <remarks>
+    /// Plan section O: beekeepers go for the hives. A stick never turns on the core because the core is near; it chases the
+    /// core only for <see cref="BeekeeperConfig.ProvokedSeconds"/> after a song of the swarm hurt it, wherever the core is,
+    /// and then goes back to its hive. A smoker hunts the swarm: it notices the core within its notice range, or when hurt,
+    /// gives up beyond its give-up range, and throws at the core when it hunts it, otherwise at a hive. While the swarm is
+    /// collapsed (<see cref="BeekeeperSenses.CanSeeCore"/> false) no beekeeper sees the core: a hunt or a provocation ends, a
+    /// swing or a throw at the core is dropped, and every beekeeper goes for the hives until the swarm respawns.
+    /// </remarks>
     public sealed class BeekeeperBrain : ISwarmTarget
     {
         // How fast a shove fades, per second. It is a feel value of the physics, not a game rule.
@@ -24,6 +32,7 @@ namespace DigitalStory.Logic
         private float _stunLeft;
         private float _cooldownLeft;
         private float _windUpElapsed;
+        private float _provokedLeft;
         private int _windUpHive = NoHive;
         private bool _isTargetingHive;
         private bool _hasAggro;
@@ -61,6 +70,12 @@ namespace DigitalStory.Logic
 
         /// <summary>True when it walked during the last tick.</summary>
         public bool IsMoving => _isMoving;
+
+        /// <summary>
+        /// True while a stick chases the core because a song of the swarm hurt it less than
+        /// <see cref="BeekeeperConfig.ProvokedSeconds"/> ago. Always false for a smoker, which hunts by its ranges.
+        /// </summary>
+        public bool IsProvoked => _provokedLeft > 0f;
 
         /// <summary>0 to 1 while winding up, otherwise 0.</summary>
         public float WindUpProgress
@@ -100,6 +115,7 @@ namespace DigitalStory.Logic
             _cooldownLeft = 0f;
             _windUpElapsed = 0f;
             _windUpHive = NoHive;
+            _provokedLeft = 0f;
             _hasAggro = false;
             _isMoving = false;
         }
@@ -128,6 +144,18 @@ namespace DigitalStory.Logic
                 _cooldownLeft -= deltaTime;
             }
 
+            if (_provokedLeft > 0f)
+            {
+                _provokedLeft = Mathf.Max(0f, _provokedLeft - deltaTime);
+            }
+
+            // A collapsed swarm is not there: whatever hunt or provocation there was ends, and starts afresh once it respawns.
+            if (!senses.CanSeeCore)
+            {
+                _hasAggro = false;
+                _provokedLeft = 0f;
+            }
+
             ApplyKnockback(deltaTime);
 
             if (_state == BeekeeperState.Stunned)
@@ -146,7 +174,10 @@ namespace DigitalStory.Logic
             ApplySeparation(senses.Separation, deltaTime);
         }
 
-        /// <summary>Takes away health. Any damage makes it chase the core.</summary>
+        /// <summary>
+        /// Takes away health. Only the swarm's songs hurt a beekeeper, so any damage provokes a stick for
+        /// <see cref="BeekeeperConfig.ProvokedSeconds"/>, starting the time again, and sets a smoker hunting the core.
+        /// </summary>
         public void TakeDamage(float amount)
         {
             if (_state == BeekeeperState.Dead || amount <= 0f)
@@ -154,7 +185,15 @@ namespace DigitalStory.Logic
                 return;
             }
 
-            _hasAggro = true;
+            if (_config.Kind == BeekeeperKind.Stick)
+            {
+                _provokedLeft = _config.ProvokedSeconds;
+            }
+            else
+            {
+                _hasAggro = true;
+            }
+
             _health = Mathf.Max(0f, _health - amount);
             if (_health > 0f)
             {
@@ -216,10 +255,13 @@ namespace DigitalStory.Logic
         }
 
         // Returns true when the wind-up is still the whole story of this tick (running or just landed).
-        // Returns false when it was cancelled and the beekeeper must choose again.
+        // Returns false when it was cancelled and the beekeeper must choose again: its hive fell, or it no longer goes for
+        // the core it swung at (the swarm collapsed, or a stick's provocation ran out).
         private bool TickWindUp(in BeekeeperSenses senses, float deltaTime)
         {
-            if (_windUpHive != NoHive && senses.Hives[_windUpHive].IsDestroyed)
+            bool isHiveGone = _windUpHive != NoHive && senses.Hives[_windUpHive].IsDestroyed;
+            bool isCoreDropped = _windUpHive == NoHive && !WantsCore(in senses);
+            if (isHiveGone || isCoreDropped)
             {
                 _state = BeekeeperState.GoToHive;
                 _windUpElapsed = 0f;
@@ -275,17 +317,20 @@ namespace DigitalStory.Logic
         private void Decide(in BeekeeperSenses senses, float deltaTime)
         {
             float coreSqr = FlatSqrDistance(_position, senses.CorePosition);
-            if (coreSqr > _config.GiveUpRange * _config.GiveUpRange)
+            if (_config.Kind == BeekeeperKind.Smoker && senses.CanSeeCore)
             {
-                _hasAggro = false;
-            }
-            else if (coreSqr <= _config.NoticeRange * _config.NoticeRange)
-            {
-                _hasAggro = true;
+                if (coreSqr > _config.GiveUpRange * _config.GiveUpRange)
+                {
+                    _hasAggro = false;
+                }
+                else if (coreSqr <= _config.NoticeRange * _config.NoticeRange)
+                {
+                    _hasAggro = true;
+                }
             }
 
             float attackSqr = _config.AttackRange * _config.AttackRange;
-            if (_hasAggro)
+            if (WantsCore(in senses))
             {
                 _state = BeekeeperState.ChaseCore;
                 if (coreSqr <= attackSqr)
@@ -315,6 +360,17 @@ namespace DigitalStory.Logic
             {
                 WalkToward(hivePosition, deltaTime);
             }
+        }
+
+        // A stick goes for the core only while provoked, a smoker while it hunts, and neither while the swarm is collapsed.
+        private bool WantsCore(in BeekeeperSenses senses)
+        {
+            if (!senses.CanSeeCore)
+            {
+                return false;
+            }
+
+            return _config.Kind == BeekeeperKind.Stick ? _provokedLeft > 0f : _hasAggro;
         }
 
         private void StartWindUp(Vector3 target, int hive)

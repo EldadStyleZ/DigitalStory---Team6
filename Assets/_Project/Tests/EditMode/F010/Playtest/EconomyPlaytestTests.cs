@@ -6,15 +6,15 @@ using UnityEngine;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// The lecturer's "balanced economy with real trade-offs" (plan sections H, L and M), checked by the playtest bot. Once
-    /// for the class it plays whole matches with each plan on five seeds at the code defaults, prints the results table to
-    /// the log (lines starting "[F010] bot:"), and each test asserts one target on those results. The owner's two are
+    /// The lecturer's "balanced economy with real trade-offs" (plan sections H, L, M and O), checked by the playtest bot.
+    /// Once for the class it plays whole matches with each plan on five seeds at the code defaults, prints the results table
+    /// to the log (lines starting "[F010] bot:"), and each test asserts one target on those results. The owner's two are
     /// section H's "lost without nests, winnable with them" and section M's "none of the three always wins and doing
     /// nothing always loses": no plan without nests wins more than two matches in five, and the player who fetches the
     /// nests wins at least four and ends clearly better off. The bot also checks that every sink of wasps matters (healing
-    /// and the towers), that a won match lasts six to nine minutes, and that no one song deals most of the damage in the
-    /// wins. <see cref="WideSweep_ThirtySeeds_HoldsTheRates"/> plays thirty seeds; it is explicit, so only a person asks
-    /// for it.
+    /// and the towers), that a won match lasts six to nine minutes, that no one song deals most of the damage in the wins,
+    /// and that the giant stays under 45% of it. <see cref="WideSweep_ThirtySeeds_HoldsTheRates"/> plays thirty seeds; it
+    /// is explicit, so only a person asks for it.
     /// </summary>
     public sealed class EconomyPlaytestTests
     {
@@ -31,6 +31,9 @@ namespace DigitalStory.Tests.EditMode
         private const float MostHealingShare = 0.45f;
         private const float FewestTowerShare = 0.08f;
         private const float MostDamageShare = 0.5f;
+
+        // Plan section O: the giant was near half the damage, so it must stay clearly below it.
+        private const float MostColossusShare = 0.45f;
         private const float ShortestWinSeconds = 6f * 60f;
         private const float LongestWinSeconds = 9f * 60f;
 
@@ -67,14 +70,10 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        [Test]
-        public void StingOnly_WinsAtMostOneMatchInFive()
-        {
-            Assert.LessOrEqual(PlaytestReport.Wins(_runs[StingOnly]), 1, Wins(StingOnly));
-        }
-
-        // No pure plan is enough: attacking without healing lets the hives fall, and healing, with or without the towers,
-        // never ends a wave in time.
+        // No pure plan is enough: one Sting, however many stings it sends, and attacking without healing let the hives fall,
+        // and healing, with or without the towers, never ends a wave; since plan section O the sticks walk past the core to
+        // the hives, so the healer cannot hold them off either.
+        [TestCase(StingOnly)]
         [TestCase(AttackOnly)]
         [TestCase(HealOnly)]
         [TestCase(TowersOnly)]
@@ -137,9 +136,9 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // The songs differ, so none carries the wins: across every match won, no one song (the giant included) deals more
-        // than half the damage.
+        // than half the damage, and the giant less than 45%.
         [Test]
-        public void Wins_NoSongDealsMoreThanHalfTheDamage()
+        public void Wins_NoSongDealsMoreThanHalfTheDamage_AndTheGiantUnderFortyFivePercent()
         {
             AssertNoSongCarriesTheWins(_runs);
         }
@@ -169,7 +168,7 @@ namespace DigitalStory.Tests.EditMode
             Dictionary<string, IReadOnlyList<PlaytestRun>> runs = PlayAll(WideSeedCount);
 
             Assert.AreEqual(0, PlaytestReport.Wins(runs[Idle]), "Idle");
-            Assert.LessOrEqual(PlaytestReport.Wins(runs[StingOnly]), WideSeedCount / 5, "StingOnly");
+            Assert.LessOrEqual(PlaytestReport.Wins(runs[StingOnly]), WideSeedCount * 2 / 5, "StingOnly");
             Assert.LessOrEqual(PlaytestReport.Wins(runs[AttackOnly]), WideSeedCount * 2 / 5, "AttackOnly");
             Assert.LessOrEqual(PlaytestReport.Wins(runs[HealOnly]), WideSeedCount * 2 / 5, "HealOnly");
             Assert.LessOrEqual(PlaytestReport.Wins(runs[TowersOnly]), WideSeedCount * 2 / 5, "TowersOnly");
@@ -219,6 +218,9 @@ namespace DigitalStory.Tests.EditMode
             {
                 Assert.LessOrEqual(shares[song], MostDamageShare, $"{wins[0].SongNames[song]} dealt {shares[song]:P1} of the damage in the wins");
             }
+
+            float giant = shares[PlaytestMatch.ColossusIndex];
+            Assert.Less(giant, MostColossusShare, $"the giant dealt {giant:P1} of the damage in the wins");
         }
 
         private static float AverageHiveShare(IReadOnlyList<PlaytestRun> runs)

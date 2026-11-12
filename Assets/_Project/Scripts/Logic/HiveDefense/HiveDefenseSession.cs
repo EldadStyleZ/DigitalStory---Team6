@@ -33,6 +33,11 @@ namespace DigitalStory.Logic
     /// Each tick runs in this order: the core, the song caster and the aim, the notes pressed, the swarm's respawn, its form
     /// (Hive Call), the giant, the nests the core stands at, the hive the core stands at, the lesson's catch-up steps, smoke,
     /// the hives' stores, the beekeepers, the wave timeline, a wave called early, and last the state.
+    /// What changed after the owner played (plan section O): a collapsed swarm cannot be seen, chased, hit or smoked, so the
+    /// beekeepers' senses say so until it respawns; the session raises <see cref="SongCastNow"/> on the tick a song is cast,
+    /// and <see cref="SongLanded"/> for every hit a song or the giant lands on a beekeeper and every blow a shield blocks,
+    /// for the feel of each; the Sting asks it for one target a sting (<see cref="ISongAim.ChooseThreats"/>); and
+    /// <see cref="ShowsDomeHint"/> says when the HUD names the Dome's use.
     /// </remarks>
     public sealed class HiveDefenseSession : ISongAim
     {
@@ -56,6 +61,7 @@ namespace DigitalStory.Logic
         private readonly AutoAim _autoAim;
         private readonly SlotSongEffect _markerSong;
         private readonly HiveExchange _exchange;
+        private readonly int _domeSong;
 
         private HiveDefenseState _state = HiveDefenseState.Playing;
         private Vector3 _corePosition;
@@ -112,6 +118,7 @@ namespace DigitalStory.Logic
             }
 
             _markerSong = FindMarkerSong(rules.Songs);
+            _domeSong = FindDomeSong(rules.Songs);
             _corePosition = KeepInPlayArea(coreStart);
             _lastHitPoint = _corePosition;
 
@@ -139,6 +146,7 @@ namespace DigitalStory.Logic
             Caster.SongCast += Discovery.NoteCast;
             Caster.SongCast += OnSongCast;
             Caster.NotePlayed += OnNotePlayed;
+            Forms.SongLanded += OnFormsSongLanded;
             Fury.Changed += OnFuryChanged;
             Waves.PhaseChanged += OnPhaseChanged;
             Waves.WaveCleared += Nests.OpenAfterWave;
@@ -233,11 +241,12 @@ namespace DigitalStory.Logic
 
         /// <summary>
         /// The wasps casting song number <paramref name="song"/> would cost now, for the HUD's chips: nothing for its first
-        /// cast in the match, nothing in a farm phase unless it is a tower, and its price otherwise.
+        /// cast in the match, nothing in a farm phase unless it is a tower, and its price otherwise. The Sting's price is for
+        /// each sting the living wasps would send now (plan section O), so its chip changes with the count.
         /// </summary>
         public int SongPrice(int song)
         {
-            return Caster.Price(song, AreSongsFree);
+            return Caster.Price(song, AreSongsFree, Swarm.Count);
         }
 
         /// <summary>
@@ -263,6 +272,24 @@ namespace DigitalStory.Logic
 
         /// <summary>Raised with the wasps given for calling a wave early, when any were (the swarm may be full).</summary>
         public event Action<int> WaspsGranted;
+
+        /// <summary>
+        /// Raised with the song's index on the tick a song is cast, the tick its last note lands and before any wasp has moved
+        /// (plan section O), so the squad can flash, a cast sound play and the camera kick at once. Not raised for a refused cast.
+        /// </summary>
+        public event Action<int> SongCastNow;
+
+        /// <summary>
+        /// Raised once for every hit a song or the giant lands on a beekeeper, and every beekeeper's blow a shield blocks, on the
+        /// core or on a hive (plan section O), for the feel of each hit. See <see cref="SongHit"/>.
+        /// </summary>
+        public event Action<SongHit> SongLanded;
+
+        /// <summary>
+        /// True while a standing hive is under attack and the player knows the Dome (plan section O), so the HUD can say in
+        /// one short line that the Dome shields what is inside it, hives included. False when the songs have no Dome.
+        /// </summary>
+        public bool ShowsDomeHint => _domeSong >= 0 && Discovery.IsKnown(_domeSong) && Hives.HasHiveUnderAttack;
 
         /// <summary>
         /// Where the core is as of the last tick: where the View moved it, or, while the giant stands, the giant's place on
@@ -444,6 +471,13 @@ namespace DigitalStory.Logic
             {
                 Tutorial.Complete(TutorialStep.PlaySting);
             }
+
+            SongCastNow?.Invoke(song);
+        }
+
+        private void OnFormsSongLanded(SongHit hit)
+        {
+            SongLanded?.Invoke(hit);
         }
 
         // Plan section H: the nest is gone, and the swarm can hold more, has more, and is one level stronger. It hums a song
@@ -538,6 +572,20 @@ namespace DigitalStory.Logic
                 "rules");
         }
 
+        // The Dome's index, for the hint that names its use, or -1 when the songs have none.
+        private static int FindDomeSong(IReadOnlyList<SwarmSongEffect> songs)
+        {
+            for (int index = 0; index < songs.Count; index++)
+            {
+                if (songs[index] is SlotSongEffect song && song.Form == SwarmForm.Dome)
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
         // While the giant stands the core rides inside it, so the View's core is ignored and TickColossus moves it. Otherwise
         // the core is where the View moved it, held inside the play area, and faces the way it moved; only the step on the
         // ground counts, and a step too short to turn it keeps the last facing. The core is held in place while it is rooted,
@@ -621,6 +669,44 @@ namespace DigitalStory.Logic
             }
 
             return Mathf.Max(0, chosen);
+        }
+
+        /// <summary>
+        /// Chooses the Sting's targets, one a sting, as it is cast or as a sting's target dies: first the beekeeper the Threat
+        /// rule picks now, as for any cast, so it agrees with the marker and the mouse, then the rest of the living beekeepers
+        /// within reach, most threatening first (<see cref="AutoAim.FillThreats"/>), as many as asked for and auto-aim lists
+        /// (<see cref="AimConfig.ThreatCount"/>). Its single pick becomes <see cref="AimTarget"/>, as for any cast.
+        /// </summary>
+        int ISongAim.ChooseThreats(float range, int count, ISwarmTarget[] targets, out Vector3 point)
+        {
+            if (targets == null)
+            {
+                throw new ArgumentNullException(nameof(targets));
+            }
+
+            Choose(AimRule.Threat, range);
+            point = _aimPoint;
+            int most = Mathf.Min(count, targets.Length);
+            int written = 0;
+            ISwarmTarget first = AimTarget;
+            if (first != null && written < most)
+            {
+                targets[written] = first;
+                written++;
+            }
+
+            _autoAim.FillThreats(_corePosition, range);
+            for (int slot = 0; slot < _autoAim.ThreatCount && written < most; slot++)
+            {
+                ISwarmTarget next = _enemies[_autoAim.GetThreat(slot)];
+                if (!ReferenceEquals(next, first))
+                {
+                    targets[written] = next;
+                    written++;
+                }
+            }
+
+            return written;
         }
 
         private void Choose(AimRule rule, float range)
@@ -721,7 +807,8 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                var senses = new BeekeeperSenses(_corePosition, Hives, SeparationFor(slot));
+                // Read for each beekeeper, so a hit that collapses the swarm blinds the ones that think after it at once.
+                var senses = new BeekeeperSenses(_corePosition, Hives, SeparationFor(slot), !Swarm.IsCollapsed);
                 _pool[slot].Tick(in senses, dt);
             }
         }
@@ -809,16 +896,39 @@ namespace DigitalStory.Logic
 
         private void OnHiveHit(BeekeeperBrain brain, int hiveIndex)
         {
-            Hives[hiveIndex].Damage(brain.Config.HiveDamage * Forms.HiveDamageFraction(hiveIndex));
+            Hive hive = Hives[hiveIndex];
+            float harm = brain.Config.HiveDamage;
+            float fraction = Forms.HiveDamageFraction(hiveIndex);
+            SwarmForm shield = Forms.HiveShieldForm(hiveIndex);
+            hive.Damage(harm * fraction);
+            ReportBlocked(hive.Position, harm, fraction, shield);
             Forms.NotifyHiveHit(hiveIndex, brain);
         }
 
+        // The shield is read before the loss, which may collapse the swarm and end every song.
         private void OnCoreHit(BeekeeperBrain brain)
         {
-            Swarm.Lose(brain.Config.WaspsKnockedOff, Forms.WaspLossFraction);
+            int harm = brain.Config.WaspsKnockedOff;
+            float fraction = Forms.WaspLossFraction;
+            SwarmForm shield = Forms.CoreShieldForm;
+            Vector3 core = _corePosition;
+            Swarm.Lose(harm, fraction);
+            ReportBlocked(core, harm, fraction, shield);
             Forms.NotifyHit(brain.Position);
             Nests.NotifyCoreHit();
             _lastHitPoint = _corePosition;
+        }
+
+        // A blow a running song cut is a blocked hit (plan section O), so the shield flashes where it guards. It carries the
+        // harm the shield stopped. Smoke's slow harm is not a blow, so it is never reported.
+        private void ReportBlocked(Vector3 guarded, float harm, float fraction, SwarmForm shield)
+        {
+            if (!(harm > 0f) || !(fraction < 1f))
+            {
+                return;
+            }
+
+            SongLanded?.Invoke(new SongHit(guarded, harm * (1f - fraction), false, true, shield, false));
         }
 
         private void OnGrenadeThrown(BeekeeperBrain brain, Vector3 landing)
@@ -894,6 +1004,7 @@ namespace DigitalStory.Logic
 
                 dealt += Mathf.Min(damage, brain.Health);
                 brain.TakeDamage(damage);
+                SongLanded?.Invoke(new SongHit(brain.Position, damage, !brain.IsAlive, false, SwarmForm.Colossus, true));
                 if (brain.IsAlive)
                 {
                     brain.Stun(config.StunSeconds);

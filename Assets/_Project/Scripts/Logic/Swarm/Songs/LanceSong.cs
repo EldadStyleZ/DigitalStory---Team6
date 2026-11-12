@@ -19,11 +19,12 @@ namespace DigitalStory.Logic
         {
         }
 
+        // Plan section O: it fires at 0.35 s (was 0.5 s), and the 0.8 s after the hit stays, so it lasts 1.15 s (was 1.3 s).
         [field: SerializeField, Min(0f), Tooltip("Seconds the Lance lasts. The streak breaks into sparks and flies home after it, in the slot's return beat.")]
-        public float Seconds { get; private set; } = 1.3f;
+        public float Seconds { get; private set; } = 1.15f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the spear is drawn back. Until then it follows the core and the aimed beekeeper; then its line is locked and the spear is thrown, hitting 0.1 s later.")]
-        public float DrawSeconds { get; private set; } = 0.4f;
+        public float DrawSeconds { get; private set; } = 0.25f;
 
         [field: SerializeField, Min(0f), Tooltip("Metres the line runs from the core toward the aim.")]
         public float Length { get; private set; } = 14f;
@@ -60,6 +61,9 @@ namespace DigitalStory.Logic
 
         /// <summary>The Lance's picture.</summary>
         public override SwarmForm Form => SwarmForm.Lance;
+
+        /// <summary>One of the big hits (plan section O): the swarm's motion freezes for a moment on each.</summary>
+        public override bool HitsHard => true;
 
         protected internal override SongRule CreateRule()
         {

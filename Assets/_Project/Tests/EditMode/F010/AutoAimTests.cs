@@ -3,6 +3,8 @@ using DigitalStory.Data;
 using DigitalStory.Logic;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools.Constraints;
+using Is = UnityEngine.TestTools.Constraints.Is;
 
 namespace DigitalStory.Tests.EditMode
 {
@@ -192,6 +194,73 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(Select(AimRule.Threat, 6f), Is.False);
             Assert.That(Select(AimRule.Threat, 9f), Is.True);
+        }
+
+        // ---- The Threat list, for the Sting's many stings (plan section O) ----
+
+        [Test]
+        public void FillThreats_ListsTheLivingBeekeepersInReach_MostThreateningFirst()
+        {
+            Add(0f, 4f);
+            Add(0f, 8.5f);
+            Add(0f, 2f);
+            Add(0f, 20f);
+            FakeTarget dead = Add(0f, 1f);
+            dead.IsAlive = false;
+            AddHive(0f, 10f);
+            Build();
+
+            _aim.FillThreats(Vector3.zero, StingRange);
+
+            // Scores: 4, 8.5 - 6 = 2.5 beside the hive, and 2. The one 20 m out is beyond reach.
+            Assert.That(_aim.ThreatCount, Is.EqualTo(3));
+            Assert.That(_aim.GetThreat(0), Is.EqualTo(2));
+            Assert.That(_aim.GetThreat(1), Is.EqualTo(1));
+            Assert.That(_aim.GetThreat(2), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void FillThreats_HoldsAsManyAsTheConfigSays()
+        {
+            for (int index = 1; index <= 11; index++)
+            {
+                Add(0f, index);
+            }
+
+            Build();
+
+            _aim.FillThreats(Vector3.zero, StingRange);
+
+            Assert.That(_aim.ThreatCount, Is.EqualTo(10), "one for each of the Sting's most stings");
+            Assert.That(_aim.GetThreat(9), Is.EqualTo(9));
+        }
+
+        [Test]
+        public void FillThreats_Tie_GoesToTheLowerIndex_AndPastTheCountThrows()
+        {
+            Add(3f, 0f);
+            Add(0f, 3f);
+            Build();
+
+            _aim.FillThreats(Vector3.zero, StingRange);
+
+            Assert.That(_aim.GetThreat(0), Is.EqualTo(0));
+            Assert.That(_aim.GetThreat(1), Is.EqualTo(1));
+            Assert.That(() => _aim.GetThreat(2), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+        }
+
+        [Test]
+        public void FillThreats_MeasuresFromTheCoreItIsGiven_AndAllocatesNothing()
+        {
+            Add(20f, 0f);
+            Add(0f, 0f);
+            Build();
+
+            _aim.FillThreats(new Vector3(20f, 0f, 1f), 5f);
+
+            Assert.That(_aim.ThreatCount, Is.EqualTo(1));
+            Assert.That(_aim.GetThreat(0), Is.EqualTo(0));
+            Assert.That(() => _aim.FillThreats(Vector3.zero, StingRange), Is.Not.AllocatingGCMemory());
         }
 
         [Test]

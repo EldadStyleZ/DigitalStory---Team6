@@ -20,12 +20,17 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Distance at which beekeepers push each other apart.")]
         public float SeparationRadius { get; private set; } = 1.2f;
 
+        // Plan section O: sticks go for the hives, and only a smoker hunts the swarm by these ranges. A stick turns on the core
+        // only when a song of the swarm hurt it.
         [field: Header("Senses")]
-        [field: SerializeField, Min(0f), Tooltip("Distance at which the beekeeper notices the core and chases.")]
+        [field: SerializeField, Min(0f), Tooltip("A smoker's: distance at which it notices the core and hunts it. A stick never turns on the core because it is near.")]
         public float NoticeRange { get; private set; } = 7f;
 
-        [field: SerializeField, Min(0f), Tooltip("Distance at which the beekeeper stops chasing and returns to the hive.")]
+        [field: SerializeField, Min(0f), Tooltip("A smoker's: distance at which it stops hunting the core and returns to the hive.")]
         public float GiveUpRange { get; private set; } = 14f;
+
+        [field: SerializeField, Min(0f), Tooltip("A stick's: seconds it chases the core after a song of the swarm hurt it, wherever the core is, before it goes back to its hive. Each hurt starts the time again.")]
+        public float ProvokedSeconds { get; private set; } = 4f;
 
         [field: Header("Attack")]
         [field: SerializeField, Min(0f), Tooltip("Distance from which the beekeeper attacks. For a smoker, the throw range.")]

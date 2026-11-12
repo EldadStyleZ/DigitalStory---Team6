@@ -75,6 +75,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.AreEqual(72, beekeeper.WaspsKnockedOff);
             Assert.AreEqual(90f, beekeeper.Health);
             Assert.AreEqual(6f, beekeeper.HiveDamage);
+            Assert.AreEqual(4f, beekeeper.ProvokedSeconds, "plan section O: a stick a song hurt chases the core for 4 s");
             Assert.AreEqual(48f, smoke.WaspLossPerSecond);
 
             Object.DestroyImmediate(beekeeper);
@@ -82,19 +83,19 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // The playtest bot's waves: later ones bigger, because the swarm grows, and waves 4 and 5 most, so a player without
-        // nests loses (plan section H), even with the towers; a beekeeper every 3 s, so a wave comes in over time instead of
-        // all at once.
+        // nests loses (plan section H), even with the towers and the rules of plan section O; a beekeeper every 2.5 s, so a
+        // wave comes in over time instead of all at once.
         [Test]
         public void WaveConfig_HoldsTheFarmPhasesAndWavesOfPlanSectionL()
         {
             var config = ScriptableObject.CreateInstance<WaveConfig>();
-            int[] sticks = { 4, 5, 5, 16, 18 };
-            int[] smokers = { 0, 1, 3, 11, 12 };
+            int[] sticks = { 4, 5, 5, 18, 20 };
+            int[] smokers = { 0, 1, 3, 13, 13 };
 
             Assert.AreEqual(45f, config.FirstFarmSeconds);
             Assert.AreEqual(40f, config.FarmSeconds);
             Assert.AreEqual(5f, config.EarlyBonusPerSecond);
-            Assert.AreEqual(3f, config.SpawnIntervalSeconds);
+            Assert.AreEqual(2.5f, config.SpawnIntervalSeconds);
             Assert.AreEqual(5, config.Waves.Count);
             for (int wave = 0; wave < sticks.Length; wave++)
             {
@@ -130,13 +131,15 @@ namespace DigitalStory.Tests.EditMode
             Assert.AreEqual(3f, config.CollectRadius);
             Assert.AreEqual(150f, config.CollectPerSecond);
             Assert.AreEqual(60f, config.HealWaspsPerSecond);
-            Assert.AreEqual(2.5f, config.WaspsPerHealthPoint);
+            Assert.AreEqual(3f, config.WaspsPerHealthPoint, "the playtest bot raised it from 2.5 once the Sting hit from its arrival");
             Assert.AreEqual(0.8f, config.DamagedStartFraction, 0.0001f);
 
             Object.DestroyImmediate(config);
         }
 
-        [TestCase(typeof(StingSong), 10)]
+        // The Sting's is for each sting a cast sends (plan section O), and the playtest bot halved it and doubled the Nest's
+        // after that section, so a cast at the starting 800 wasps still costs 10.
+        [TestCase(typeof(StingSong), 5)]
         [TestCase(typeof(GustSong), 20)]
         [TestCase(typeof(DomeSong), 40)]
         [TestCase(typeof(TornadoSong), 60)]
@@ -144,7 +147,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(typeof(HydraSong), 60)]
         [TestCase(typeof(ScytheSong), 30)]
         [TestCase(typeof(LanceSong), 70)]
-        [TestCase(typeof(NestSong), 100)]
+        [TestCase(typeof(NestSong), 200)]
         [TestCase(typeof(HoneycombSong), 150)]
         [TestCase(typeof(ColossusSong), 0)]
         [TestCase(typeof(HiveCallSong), 0)]
@@ -184,6 +187,20 @@ namespace DigitalStory.Tests.EditMode
 
             Object.DestroyImmediate(config);
             Object.DestroyImmediate(hydra);
+        }
+
+        // Plan section O: the Threat rule lists as many beekeepers as the Sting's most stings, so each can take its own.
+        [Test]
+        public void AimConfig_HoldsAThreatForEachOfTheStingsMostStings()
+        {
+            var config = ScriptableObject.CreateInstance<AimConfig>();
+            var sting = ScriptableObject.CreateInstance<StingSong>();
+
+            Assert.AreEqual(10, config.ThreatCount);
+            Assert.That(config.ThreatCount, Is.GreaterThanOrEqualTo(sting.MaxStings));
+
+            Object.DestroyImmediate(config);
+            Object.DestroyImmediate(sting);
         }
     }
 }

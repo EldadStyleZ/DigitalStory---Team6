@@ -463,10 +463,11 @@ namespace DigitalStory.Tests.EditMode
 
         // ---- Costs (plan section M) ----
 
-        // The song at each index costs the plan's price: Dome 40, Sting 10, Tornado 60, Gust 20, Hive Call 0, Colossus 0 (Fury
-        // is its price), Meteor 90, Hydra 60, Scythe 30, Lance 70, Nest 100 and Honeycomb 150.
+        // The song at each index costs the plan's price: Dome 40, Sting 5 for each sting, Tornado 60, Gust 20, Hive Call 0,
+        // Colossus 0 (Fury is its price), Meteor 90, Hydra 60, Scythe 30, Lance 70, Nest 200 and Honeycomb 150. The playtest bot
+        // set the Sting's (was 10) and the Nest's (was 100) after plan section O.
         [TestCase(0, 40)]
-        [TestCase(1, 10)]
+        [TestCase(1, 5)]
         [TestCase(2, 60)]
         [TestCase(3, 20)]
         [TestCase(4, 0)]
@@ -475,7 +476,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(7, 60)]
         [TestCase(8, 30)]
         [TestCase(9, 70)]
-        [TestCase(10, 100)]
+        [TestCase(10, 200)]
         [TestCase(11, 150)]
         public void WaspCost_IsThePlansPrice(int song, int cost)
         {
@@ -483,22 +484,25 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // Changed with the first-cast rule: a song's first cast in a match is free, so finding a song is never punished. The
-        // price is paid from the second cast on.
-        [TestCase(0, 40)]
-        [TestCase(1, 10)]
-        [TestCase(2, 60)]
-        [TestCase(3, 20)]
-        [TestCase(4, 0)]
-        [TestCase(6, 90)]
-        [TestCase(7, 60)]
-        [TestCase(8, 30)]
-        [TestCase(9, 70)]
-        [TestCase(10, 100)]
-        [TestCase(11, 150)]
-        public void Press_ASecondCastInASurvivePhase_LowersTheCountByTheSongsCostAtTheCast(int song, int cost)
+        // price is paid from the second cast on. Changed with the many stings (plan section O): the swarm's 800 wasps send two
+        // stings, and the Sting's price is paid for each sting sent. The prices are read from the songs, which
+        // WaspCost_IsThePlansPrice holds to the plan.
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        [TestCase(4)]
+        [TestCase(6)]
+        [TestCase(7)]
+        [TestCase(8)]
+        [TestCase(9)]
+        [TestCase(10)]
+        [TestCase(11)]
+        public void Press_ASecondCastInASurvivePhase_LowersTheCountByTheSongsCostAtTheCast(int song)
         {
             UseUpTheFreeCast(song);
             int before = _body.Count;
+            int cost = _songs[song].WaspCostFor(before);
             int countAtTheCast = -1;
             _caster.SongCast += _ => countAtTheCast = _body.Count;
 
@@ -548,17 +552,18 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // Plan section M: a tower's wasps stay on the map, so from its second cast on it costs its price in a farm phase too.
-        [TestCase(0, 0)]
-        [TestCase(1, 0)]
-        [TestCase(6, 0)]
-        [TestCase(7, 0)]
-        [TestCase(NestIndex, 100)]
-        [TestCase(HoneycombIndex, 150)]
-        public void Press_ASecondCastInAFarmPhase_CostsNothing_UnlessItIsATower(int song, int cost)
+        [TestCase(0, false)]
+        [TestCase(1, false)]
+        [TestCase(6, false)]
+        [TestCase(7, false)]
+        [TestCase(NestIndex, true)]
+        [TestCase(HoneycombIndex, true)]
+        public void Press_ASecondCastInAFarmPhase_CostsNothing_UnlessItIsATower(int song, bool paysItsPrice)
         {
             _areSongsFree = true;
             UseUpTheFreeCast(song);
             int before = _body.Count;
+            int cost = paysItsPrice ? _songs[song].WaspCost : 0;
 
             PlayAll(SongKeys[song]);
 
@@ -635,20 +640,20 @@ namespace DigitalStory.Tests.EditMode
 
             PlayAll(SongKeys[1]);
 
-            Assert.That(_body.Count, Is.EqualTo(before - 10), "the second cast that happened pays the Sting's 10");
+            Assert.That(_body.Count, Is.EqualTo(before - (2 * _songs[1].WaspCost)), "the second cast that happened pays the Sting's price for each of its two stings");
         }
 
         [Test]
         public void Price_IsNothingBeforeTheFirstCast_ThenTheSongsCostInASurvivePhase()
         {
-            Assert.That(_caster.Price(0, false), Is.EqualTo(0));
-            Assert.That(_caster.Price(0, true), Is.EqualTo(0));
+            Assert.That(_caster.Price(0, false, _body.Count), Is.EqualTo(0));
+            Assert.That(_caster.Price(0, true, _body.Count), Is.EqualTo(0));
 
             PlayAll(SongKeys[0]);
 
-            Assert.That(_caster.Price(0, false), Is.EqualTo(40));
-            Assert.That(_caster.Price(0, true), Is.EqualTo(0), "free in a farm phase");
-            Assert.That(_caster.Price(1, false), Is.EqualTo(0), "other songs keep their free cast");
+            Assert.That(_caster.Price(0, false, _body.Count), Is.EqualTo(40));
+            Assert.That(_caster.Price(0, true, _body.Count), Is.EqualTo(0), "free in a farm phase");
+            Assert.That(_caster.Price(1, false, _body.Count), Is.EqualTo(0), "other songs keep their free cast");
         }
 
         [Test]
@@ -657,8 +662,50 @@ namespace DigitalStory.Tests.EditMode
             _areSongsFree = true;
             PlayAll(SongKeys[HoneycombIndex]);
 
-            Assert.That(_caster.Price(HoneycombIndex, true), Is.EqualTo(150));
-            Assert.That(_caster.Price(HoneycombIndex, false), Is.EqualTo(150));
+            Assert.That(_caster.Price(HoneycombIndex, true, _body.Count), Is.EqualTo(_songs[HoneycombIndex].WaspCost));
+            Assert.That(_caster.Price(HoneycombIndex, false, _body.Count), Is.EqualTo(_songs[HoneycombIndex].WaspCost));
+        }
+
+        // Plan section O: one sting for every 400 living wasps, and the Sting's price for each sting sent.
+        [TestCase(400, 1)]
+        [TestCase(800, 2)]
+        [TestCase(1999, 4)]
+        [TestCase(4000, 10)]
+        public void Price_OfTheSting_IsItsCostForEachStingTheLivingWaspsSend(int livingWasps, int stings)
+        {
+            UseUpTheFreeCast(1);
+
+            Assert.That(_caster.Price(1, false, livingWasps), Is.EqualTo(stings * _songs[1].WaspCost));
+            Assert.That(_caster.Price(1, true, livingWasps), Is.EqualTo(0), "free in a farm phase");
+            Assert.That(_caster.Price(0, false, livingWasps), Is.EqualTo(0), "no other song reads the count");
+        }
+
+        // The count is taken as the notes complete, before the price is paid, so paying for the second sting cannot take it away.
+        [Test]
+        public void Press_TheSting_SendsAndPaysForTheStingsTheCountSentBeforePaying()
+        {
+            UseUpTheFreeCast(1);
+            Assert.That(_body.Count, Is.EqualTo(800));
+
+            PlayAll(SongKeys[1]);
+
+            Assert.That(_body.Count, Is.EqualTo(800 - (2 * _songs[1].WaspCost)));
+            Assert.That(_forms.StingCount, Is.EqualTo(2), "what is left would send one; the 800 at the cast send two");
+        }
+
+        [Test]
+        public void Press_TheStingWhoseStingsWouldTakeTheSwarmBelowItsCollapseLine_IsRefused()
+        {
+            UseUpTheFreeCast(1);
+            JsonUtility.FromJsonOverwrite("{\"<WaspsPerSting>k__BackingField\":10}", _songs[1]);
+            int spendable = (StingSong.MostStings * _songs[1].WaspCost) - 1;
+            LeaveAboveTheCollapseLine(spendable);
+
+            int result = PlayAll(SongKeys[1]);
+
+            Assert.That(result, Is.EqualTo(SongBook.NoSong), "the swarm sends ten stings, and one wasp too few can be spent for them");
+            Assert.That(_reasons, Is.EqualTo(new[] { SongRefusal.NotEnoughWasps }));
+            Assert.That(_body.Spendable, Is.EqualTo(spendable), "nothing is paid");
         }
 
         // Changed with the first-cast rule: the Dome's first cast is free, so it is cast once and rested first.

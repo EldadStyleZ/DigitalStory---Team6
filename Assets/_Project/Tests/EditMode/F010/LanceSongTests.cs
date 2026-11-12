@@ -111,11 +111,11 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_song.Share, Is.EqualTo(0.37f));
             Assert.That(_song.Length, Is.EqualTo(14f));
             Assert.That(_song.Width, Is.EqualTo(1.2f));
-            Assert.That(_song.DrawSeconds, Is.EqualTo(0.4f));
-            Assert.That(_song.HitSeconds, Is.EqualTo(0.5f));
+            Assert.That(_song.DrawSeconds, Is.EqualTo(0.25f), "plan section O: it fires at 0.35 s, was 0.5 s");
+            Assert.That(_song.HitSeconds, Is.EqualTo(0.35f).Within(1e-5f));
             Assert.That(_song.Damage, Is.EqualTo(60f));
             Assert.That(_song.PushSpeed, Is.EqualTo(5f));
-            Assert.That(_song.Seconds, Is.EqualTo(1.3f));
+            Assert.That(_song.Seconds, Is.EqualTo(1.15f), "the 0.8 s after the hit kept, so it was 1.3");
             Assert.That(_song.TailLagSeconds, Is.EqualTo(0.08f));
             Assert.That(_song.IsAimed, Is.True);
             Assert.That(_song.AimRule, Is.EqualTo(AimRule.Line));
@@ -158,7 +158,7 @@ namespace DigitalStory.Tests.EditMode
             FakeSwarmTarget onIt = Add(0f, 5f);
             Cast();
 
-            _forms.Tick(0.49f, _hives);
+            _forms.Tick(_song.HitSeconds - 0.01f, _hives);
 
             Assert.That(onIt.DamageTaken, Is.EqualTo(0f));
             Assert.That(onIt.KnockbackCount, Is.EqualTo(0));
@@ -252,6 +252,8 @@ namespace DigitalStory.Tests.EditMode
 
         // ---- The draw: it follows, then locks ----
 
+        // Changed with plan section O: the draw ends at 0.25 s and the hit lands at 0.35 s (was 0.4 s and 0.5 s), so the steps
+        // follow the song's own times; what it proves stays.
         [Test]
         public void Draw_FollowsTheAimedBeekeeperUntilTheRelease_ThenTheLineIsLocked()
         {
@@ -266,13 +268,14 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(drawing.z, Is.EqualTo(2f / Mathf.Sqrt(68f)).Within(1e-4f));
             Assert.That(drawing.w, Is.EqualTo(8f / Mathf.Sqrt(68f)).Within(1e-4f));
 
-            _forms.Tick(0.21f, _hives);
+            _forms.Tick(_song.DrawSeconds - 0.2f + 0.01f, _hives);
             FakeSwarmTarget leftBehind = Add(2f, 8f);
             aimed.Position = new Vector3(-3f, 0f, 8f);
-            _forms.Tick(0.05f, _hives);
+            _forms.Tick(0.04f, _hives);
             Assert.That(Strike().ParamA, Is.EqualTo(drawing), "locked at the release");
+            Assert.That(leftBehind.DamageTaken, Is.EqualTo(0f), "not yet thrown home");
 
-            _forms.Tick(0.05f, _hives);
+            _forms.Tick(0.06f, _hives);
 
             Assert.That(leftBehind.DamageTaken, Is.EqualTo(60f), "on the locked line");
             Assert.That(aimed.DamageTaken, Is.EqualTo(0f), "it stepped off the line after the release");
@@ -327,7 +330,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(Strike().ParamA.y, Is.EqualTo(-2f));
             Assert.That(Strike().ParamA.z, Is.EqualTo(0.6f).Within(1e-5f));
             Assert.That(Strike().ParamA.w, Is.EqualTo(0.8f).Within(1e-5f));
-            Assert.That(Strike().ParamB, Is.EqualTo(new Vector4(14f, 0.4f, 0.08f, 0f)));
+            Assert.That(Strike().ParamB, Is.EqualTo(new Vector4(14f, 0.25f, 0.08f, 0f)));
         }
 
         // The picture throws the spear at the draw it is sent and flies its tip for LanceSong.FlightSeconds, so a tuned
@@ -395,12 +398,13 @@ namespace DigitalStory.Tests.EditMode
 
         // ---- How long it lasts, and what ends it ----
 
+        // Changed with plan section O: it lasts 1.15 s (was 1.3 s), the 0.8 s after the hit kept; what it proves stays.
         [Test]
-        public void Tick_ItLastsOnePointThreeSeconds_ThenItsReturnBeat()
+        public void Tick_ItLastsOnePointOneFiveSeconds_ThenItsReturnBeat()
         {
             Cast();
 
-            _forms.Tick(1.29f, _hives);
+            _forms.Tick(1.14f, _hives);
             Assert.That(Strike().ReleasedSeconds, Is.EqualTo(-1f));
 
             _forms.Tick(0.02f, _hives);

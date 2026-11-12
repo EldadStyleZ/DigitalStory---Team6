@@ -123,6 +123,12 @@ namespace DigitalStory.Tests.EditMode
         /// <summary>The Lance's asset.</summary>
         public LanceSong Lance => (LanceSong)_songs[LanceIndex];
 
+        /// <summary>The Dome's asset: the shell around the core, and every hive inside it.</summary>
+        public DomeSong Dome => (DomeSong)_songs[DomeIndex];
+
+        /// <summary>The Gust's asset: the pulse that clears smoke and shoves beekeepers out.</summary>
+        public GustSong Gust => (GustSong)_songs[GustIndex];
+
         /// <summary>The Nest's asset: the trap left on a lane.</summary>
         public NestSong Nest => (NestSong)_songs[NestIndex];
 

@@ -35,5 +35,8 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Min(1), Tooltip("The most beekeepers ThreeNearest picks, nearest first: one for each of the Hydra's most heads (5 from level 7). A Hydra with fewer heads takes the nearest of them.")]
         public int NearestCount { get; private set; } = 5;
+
+        [field: SerializeField, Min(1), Tooltip("The most beekeepers the Threat rule lists, most threatening first, for a song that strikes several: one for each of the Sting's most stings (10). A Sting with fewer stings takes the most threatening of them.")]
+        public int ThreatCount { get; private set; } = 10;
     }
 }

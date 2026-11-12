@@ -3,6 +3,8 @@ namespace DigitalStory.Tests.EditMode
     /// <summary>
     /// Keeps the hives healed and never attacks: it flies to the most hurt hive and holds Give while the swarm has wasps to
     /// spare, and otherwise waits beside the hive with the fullest store, taking it. It plays no song and never calls a wave.
+    /// Since plan section O a stick never turns on a core that has not hurt it, so standing beside a hive no longer draws the
+    /// sticks off it: the healer cannot stall a wave, only pay into the hives while they fall.
     /// </summary>
     internal sealed class HealOnlyPlan : IPlaytestPlan
     {

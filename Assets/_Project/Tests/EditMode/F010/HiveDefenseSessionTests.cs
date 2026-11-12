@@ -9,8 +9,9 @@ using Is = UnityEngine.TestTools.Constraints.Is;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// Uses the default configs, except that the first wave comes after 1 s. The hives stand far from the core
-    /// unless a test moves them, so a beekeeper that spawns beside the core goes for the core.
+    /// Uses the default configs, except that the first wave comes after 1 s. The hives stand far from the core unless a test
+    /// moves them. Sticks go for the hives and turn on the core only when a song hurt them (plan section O), so a test of a
+    /// stick that hits the core provokes it as it spawns.
     /// </summary>
     public sealed class HiveDefenseSessionTests
     {
@@ -77,11 +78,18 @@ namespace DigitalStory.Tests.EditMode
             return swarm.Count;
         }
 
-        // A stick that spawns 1 m from the core, which stands at the origin.
+        // A stick that spawns 1 m from the core, which stands at the origin, provoked as it spawns, as a song's hurt would.
         private HiveDefenseWorld StickBesideCore(WaveEntry[] waves = null, bool withSongs = false)
         {
             _world = new HiveDefenseWorld(waves ?? OneStick(), spawns: new[] { new Vector3(1f, 0f, 0f) }, withSongs: withSongs);
+            ProvokeAsTheySpawn();
             return _world;
+        }
+
+        // Each beekeeper takes 1 damage the moment it spawns, as from a song, so a stick chases the core for ProvokedSeconds.
+        private void ProvokeAsTheySpawn()
+        {
+            _world.Session.BeekeeperSpawned += keeper => keeper.TakeDamage(1f);
         }
 
         [Test]
@@ -645,7 +653,8 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // Plan section K: beekeepers chase and hit the core, which rides in the giant, so a hit on the giant costs wasps as a
-        // hit on the core does. The stick spawns 12 m from where the core stood, too far to notice it there.
+        // hit on the core does. The stick spawns 12 m from where the core stood. Changed with plan section O: a stick turns
+        // on the core only when a song hurt it, so it is provoked once the giant has walked and stands still.
         [Test]
         public void StickHitOnCore_WhileTheColossusStands_HitsTheGiantAndCostsWasps()
         {
@@ -654,6 +663,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
             _world.RunWith(2.8f, _world.Frame(move: new Vector2(1f, 0f)));
             Assert.That(session.ActiveBeekeeperCount, Is.EqualTo(1));
+            session.ActiveBeekeeper(0).TakeDamage(1f);
 
             bool hit = _world.RunUntil(() => session.Swarm.Count < _world.Swarm.StartingWasps, 8f);
 
@@ -1130,7 +1140,8 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Phase, Is.EqualTo(MatchPhase.Survive));
             _world.Play(_world.Sting.Song.Keys);
 
-            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps - _world.Sting.WaspCost));
+            // Changed with plan section O: the 800 wasps send two stings, and the Sting's price is paid for each.
+            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps - (2 * _world.Sting.WaspCost)));
         }
 
         // Changed with the first-cast rule: a song's first cast in a match is free in any phase, so a song the player has not
@@ -1176,7 +1187,8 @@ namespace DigitalStory.Tests.EditMode
             _world.Run(1.6f);
             _world.Play(_world.Sting.Song.Keys);
 
-            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps - _world.Sting.WaspCost));
+            // Changed with plan section O: the 800 wasps send two stings, and the Sting's price is paid for each.
+            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps - (2 * _world.Sting.WaspCost)));
         }
 
         [Test]
@@ -1191,8 +1203,12 @@ namespace DigitalStory.Tests.EditMode
 
             _world.Run(1.6f);
             Assert.That(session.Phase, Is.EqualTo(MatchPhase.Survive));
-            Assert.That(session.SongPrice(HiveDefenseWorld.StingIndex), Is.EqualTo(_world.Sting.WaspCost));
             Assert.That(session.SongPrice(HiveDefenseWorld.DomeIndex), Is.EqualTo(0), "the Dome was never cast");
+
+            // Changed with plan section O: the Sting's price is paid for each sting the living wasps would send now.
+            Assert.That(session.SongPrice(HiveDefenseWorld.StingIndex), Is.EqualTo(2 * _world.Sting.WaspCost), "800 wasps send two");
+            session.Swarm.Lose(400);
+            Assert.That(session.SongPrice(HiveDefenseWorld.StingIndex), Is.EqualTo(_world.Sting.WaspCost), "400 send one");
         }
 
         // ---- The new attacks, aimed by their own rules (plan section E) ----
@@ -1804,11 +1820,13 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Level, Is.EqualTo(1));
         }
 
+        // Changed with plan section O: a stick turns on the core only when a song hurt it, so it is provoked as it spawns.
         [Test]
         public void CollectingANest_AHitOnTheCore_StartsTheStayAgain()
         {
             Vector3 nest = HiveDefenseWorld.DefaultNests[0];
             _world = new HiveDefenseWorld(OneStick(), spawns: new[] { nest + new Vector3(1f, 0f, 0f) });
+            ProvokeAsTheySpawn();
             HiveDefenseSession session = _world.Session;
             _world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f);
             int hits = 0;
@@ -2028,6 +2046,316 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(() => { session.Tick(stay, HiveDefenseWorld.Step); }, Is.Not.AllocatingGCMemory());
             Assert.That(session.Nests[0].Progress01, Is.GreaterThan(0f));
+        }
+
+        // ---- What changed after the owner played (plan section O) ----
+
+        // A smoker spawns 6 m from the core, inside its notice range, as the swarm collapses.
+        [Test]
+        public void Smoker_WhileTheSwarmIsCollapsed_ThrowsNothingAtTheCore_AndSeesItAgainOnceItRespawns()
+        {
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(0, 1) }, spawns: new[] { new Vector3(6f, 0f, 0f) });
+            HiveDefenseSession session = _world.Session;
+            session.BeekeeperSpawned += keeper => session.Swarm.Lose(session.Swarm.Count);
+            var landings = new List<Vector3>();
+            session.Smoke.GrenadeThrown += (from, to, seconds) => landings.Add(to);
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f), Is.True);
+            Assert.That(session.Swarm.IsCollapsed, Is.True);
+
+            bool respawned = _world.RunUntil(() => !session.Swarm.IsCollapsed, _world.Swarm.CollapseBlockSeconds + 1f);
+
+            Assert.That(respawned, Is.True);
+            Assert.That(landings, Is.Empty, "a collapsed swarm cannot be seen or smoked");
+            BeekeeperBrain smoker = session.ActiveBeekeeper(0);
+            _world.MoveCoreTo(smoker.Position + new Vector3(3f, 0f, 0f));
+            Assert.That(_world.RunUntil(() => landings.Count > 0, 2f), Is.True, "seen again on the respawn");
+            Assert.That((landings[0] - _world.Core).magnitude, Is.LessThan(0.5f));
+        }
+
+        [Test]
+        public void ProvokedStick_WhileTheSwarmIsCollapsed_NeverSwingsAtTheCore()
+        {
+            StickBesideCore();
+            HiveDefenseSession session = _world.Session;
+            int coreHits = 0;
+            session.BeekeeperSpawned += keeper =>
+            {
+                keeper.CoreHit += brain => coreHits++;
+                session.Swarm.Lose(session.Swarm.Count);
+            };
+
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f), Is.True);
+            _world.Run(_world.Swarm.CollapseBlockSeconds + 2f);
+
+            Assert.That(coreHits, Is.EqualTo(0));
+            Assert.That(session.Swarm.IsCollapsed, Is.False, "it came back");
+            Assert.That(session.ActiveBeekeeper(0).IsProvoked, Is.False, "the collapse ended the chase");
+        }
+
+        // The owner: "if I camp the hive they try to hit me instead of the hive".
+        [Test]
+        public void Stick_TheCoreCampsItsHive_HitsTheHiveAndNeverTheCore()
+        {
+            _world = new HiveDefenseWorld(
+                OneStick(),
+                hives: new[] { new Vector3(0f, 0f, 0f), new Vector3(60f, 0f, 0f) },
+                spawns: new[] { new Vector3(1f, 0f, 0f) },
+                core: new Vector3(0.5f, 0f, -0.5f));
+            HiveDefenseSession session = _world.Session;
+            int hiveHits = 0;
+            int coreHits = 0;
+            session.BeekeeperSpawned += keeper =>
+            {
+                keeper.HiveHit += (brain, hive) => hiveHits++;
+                keeper.CoreHit += brain => coreHits++;
+            };
+
+            _world.Run(6f);
+
+            Assert.That(hiveHits, Is.GreaterThanOrEqualTo(2));
+            Assert.That(coreHits, Is.EqualTo(0));
+            Assert.That(session.Swarm.Count, Is.EqualTo(_world.Swarm.StartingWasps));
+        }
+
+        [Test]
+        public void Stick_HurtByASong_TurnsOnTheCore()
+        {
+            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(5f, 0f, 0f) });
+            HiveDefenseSession session = _world.Session;
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f), Is.True);
+            BeekeeperBrain stick = session.ActiveBeekeeper(0);
+            _world.Run(0.3f);
+            Assert.That(stick.State, Is.EqualTo(BeekeeperState.GoToHive), "inside the old notice range, it walks on to its hive");
+
+            _world.Play(_world.Sting.Song.Keys);
+            bool provoked = _world.RunUntil(() => stick.IsProvoked, 1f);
+            _world.Run(HiveDefenseWorld.Step * 2f);
+
+            Assert.That(provoked, Is.True);
+            Assert.That(stick.State, Is.EqualTo(BeekeeperState.ChaseCore).Or.EqualTo(BeekeeperState.WindUp));
+        }
+
+        // The Dome shields everything inside it, hives included: fly to the hive under attack and raise the Dome.
+        [Test]
+        public void Dome_RaisedBesideAHive_CutsEachStickHitOnIt_AndReportsTheBlock()
+        {
+            _world = DomeBesideAHive(new Vector3(1f, 0f, 0f));
+            HiveDefenseSession session = _world.Session;
+            var hits = new List<SongHit>();
+            session.SongLanded += hits.Add;
+            _world.Play(DomeHoles);
+            Assert.That(session.Forms.IsDomed, Is.True);
+
+            bool hit = _world.RunUntil(() => session.Hives[0].Health < _world.Hive.Health, 4f);
+
+            var dome = (DomeSong)_world.Songs[HiveDefenseWorld.DomeIndex];
+            Assert.That(hit, Is.True);
+            Assert.That(session.Hives[0].Health, Is.EqualTo(_world.Hive.Health - (_world.Stick.HiveDamage * dome.LossFraction)).Within(1e-3f));
+            Assert.That(hits.Count, Is.EqualTo(1));
+            Assert.That(hits[0].IsBlocked, Is.True);
+            Assert.That(hits[0].Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(hits[0].Position, Is.EqualTo(session.Hives[0].Position));
+            Assert.That(hits[0].Damage, Is.EqualTo(_world.Stick.HiveDamage * (1f - dome.LossFraction)).Within(1e-3f), "the harm the Dome stopped");
+            Assert.That(hits[0].IsKill, Is.False);
+            Assert.That(hits[0].IsHeavy, Is.False);
+        }
+
+        [Test]
+        public void Dome_RaisedFarFromTheHive_LeavesItsHitsWhole()
+        {
+            _world = DomeBesideAHive(new Vector3(5f, 0f, 0f));
+            HiveDefenseSession session = _world.Session;
+            var hits = new List<SongHit>();
+            session.SongLanded += hits.Add;
+            _world.Play(DomeHoles);
+
+            bool hit = _world.RunUntil(() => session.Hives[0].Health < _world.Hive.Health, 4f);
+
+            Assert.That(hit, Is.True);
+            Assert.That(session.Hives[0].Health, Is.EqualTo(_world.Hive.Health - _world.Stick.HiveDamage).Within(1e-3f));
+            Assert.That(hits, Is.Empty);
+        }
+
+        [Test]
+        public void SongLanded_AStickBlowOnTheDomedCore_IsReportedBlockedWithTheWaspsTheDomeSaved()
+        {
+            StickBesideCore(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            var hits = new List<SongHit>();
+            session.SongLanded += hits.Add;
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 10f), Is.True);
+            _world.Play(DomeHoles);
+            int afterCast = session.Swarm.Count;
+
+            bool hit = _world.RunUntil(() => session.Swarm.Count < afterCast, 10f);
+
+            var dome = (DomeSong)_world.Songs[HiveDefenseWorld.DomeIndex];
+            Assert.That(hit, Is.True);
+            Assert.That(hits.Count, Is.EqualTo(1));
+            Assert.That(hits[0].IsBlocked, Is.True);
+            Assert.That(hits[0].Form, Is.EqualTo(SwarmForm.Dome));
+            Assert.That(hits[0].Position, Is.EqualTo(session.CorePosition));
+            Assert.That(hits[0].Damage, Is.EqualTo(_world.Stick.WaspsKnockedOff * (1f - dome.LossFraction)).Within(1e-3f));
+        }
+
+        [Test]
+        public void SongLanded_AStickHitOnAHoneycombedHive_IsReportedBlocked_AndTheThornAsAHit()
+        {
+            _world = new HiveDefenseWorld(
+                OneStick(),
+                hives: new[] { new Vector3(0f, 0f, 0f), new Vector3(60f, 0f, 0f) },
+                spawns: new[] { new Vector3(1f, 0f, 0f) },
+                core: new Vector3(0f, 0f, 20f));
+            HiveDefenseSession session = _world.Session;
+            var honeycomb = ScriptableObject.CreateInstance<HoneycombSong>();
+            try
+            {
+                var hits = new List<SongHit>();
+                session.SongLanded += hits.Add;
+                var context = new SwarmSongContext(
+                    _world.Core, null, session.Hives[0].Position, session.Swarm, session.Forms, session.Fury, session.Hives,
+                    new List<ISwarmTarget>(), session.Smoke);
+                honeycomb.Cast(in context);
+
+                bool hit = _world.RunUntil(() => session.Hives[0].Health < _world.Hive.Health, 15f);
+
+                Assert.That(hit, Is.True);
+                Assert.That(hits.Count, Is.EqualTo(2));
+                Assert.That(hits[0].IsBlocked, Is.True);
+                Assert.That(hits[0].Form, Is.EqualTo(SwarmForm.Honeycomb));
+                Assert.That(hits[0].Position, Is.EqualTo(session.Hives[0].Position));
+                Assert.That(hits[0].Damage, Is.EqualTo(_world.Stick.HiveDamage * (1f - honeycomb.DamageFraction)).Within(1e-3f));
+                Assert.That(hits[1].IsBlocked, Is.False);
+                Assert.That(hits[1].Form, Is.EqualTo(SwarmForm.Honeycomb));
+                Assert.That(hits[1].Damage, Is.EqualTo(honeycomb.ThornDamage).Within(1e-3f));
+                Assert.That(hits[1].Position, Is.EqualTo(session.ActiveBeekeeper(0).Position));
+            }
+            finally
+            {
+                Object.DestroyImmediate(honeycomb);
+            }
+        }
+
+        [Test]
+        public void SongLanded_TheGiantsBlows_AreHeavyHitsOfTheColossus()
+        {
+            // The giant faces +z by default, and the stick spawns 2.5 m ahead of it.
+            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(0f, 0f, 2.5f) });
+            StandStillAsTheySpawn();
+            HiveDefenseSession session = _world.Session;
+            session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
+            session.Fury.TryUse();
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 10f), Is.True);
+            session.Forms.StartColossus(ColossusSeconds);
+            _world.Run(HiveDefenseWorld.Step);
+            BeekeeperBrain keeper = session.ActiveBeekeeper(0);
+            var hits = new List<SongHit>();
+            session.SongLanded += hits.Add;
+
+            session.Tick(_world.Frame(punch: true), HiveDefenseWorld.Step);
+            _world.Run(_world.Colossus.PunchHitDelay + 0.1f);
+
+            Assert.That(hits.Count, Is.EqualTo(1));
+            Assert.That(hits[0].Form, Is.EqualTo(SwarmForm.Colossus));
+            Assert.That(hits[0].IsHeavy, Is.True);
+            Assert.That(hits[0].IsBlocked, Is.False);
+            Assert.That(hits[0].IsKill, Is.False);
+            Assert.That(hits[0].Damage, Is.EqualTo(_world.Colossus.PunchDamage).Within(0.01f));
+            Assert.That(hits[0].Position, Is.EqualTo(keeper.Position));
+        }
+
+        [Test]
+        public void SongLanded_ASongsHitOnABeekeeper_IsPassedOnFromTheForms()
+        {
+            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(3f, 0f, 0f) }, withAllSongs: true);
+            StandStillAsTheySpawn();
+            HiveDefenseSession session = _world.Session;
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f), Is.True);
+            var hits = new List<SongHit>();
+            session.SongLanded += hits.Add;
+
+            _world.Play(session.Caster[HiveDefenseWorld.TornadoIndex].Song.Keys);
+            _world.Run(0.5f);
+
+            Assert.That(hits.Count, Is.EqualTo(1));
+            Assert.That(hits[0].Form, Is.EqualTo(SwarmForm.Tornado));
+            Assert.That(hits[0].IsHeavy, Is.True);
+            Assert.That(hits[0].Position.x, Is.EqualTo(3f).Within(0.01f));
+        }
+
+        [Test]
+        public void SongCastNow_IsRaisedWithTheSongsIndexOnTheTickItIsCast_AndNotForARefusedCast()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            var cast = new List<int>();
+            bool isHeldAtTheCast = false;
+            float secondsAtTheCast = -1f;
+            session.SongCastNow += song =>
+            {
+                cast.Add(song);
+                isHeldAtTheCast = session.Forms.Slot(SongSlot.Strike).IsActive;
+                secondsAtTheCast = session.Forms.Slot(SongSlot.Strike).Seconds;
+            };
+            IReadOnlyList<int> keys = _world.Sting.Song.Keys;
+
+            _world.Play(new[] { keys[0], keys[1] });
+            Assert.That(cast, Is.Empty);
+            _world.Play(new[] { keys[2] });
+
+            Assert.That(cast, Is.EqualTo(new[] { HiveDefenseWorld.StingIndex }));
+            Assert.That(isHeldAtTheCast, Is.True);
+            Assert.That(secondsAtTheCast, Is.EqualTo(0f), "raised as the song starts, before any wasp has moved");
+            _world.Play(keys);
+            Assert.That(cast.Count, Is.EqualTo(1), "a cast refused while it cools down raises nothing");
+        }
+
+        [Test]
+        public void Cast_Sting_SendsOneStingPerFourHundredWaspsAtTheMostThreateningBeekeepers()
+        {
+            _world = new HiveDefenseWorld(
+                new[] { new WaveEntry(3, 0) },
+                spawns: new[] { new Vector3(0f, 0f, 5f), new Vector3(3f, 0f, 0f), new Vector3(-8f, 0f, 0f) },
+                firstFarmSeconds: 3f);
+            List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
+            HiveDefenseSession session = _world.Session;
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 3, 12f), Is.True);
+            Assert.That(session.Swarm.Count, Is.EqualTo(800));
+
+            _world.Play(_world.Sting.Song.Keys);
+
+            Assert.That(session.Forms.StingCount, Is.EqualTo(2));
+            Assert.That(session.Forms.StingTarget(0), Is.EqualTo(keepers[1].Position), "3 m, the most threatening");
+            Assert.That(session.Forms.StingTarget(1), Is.EqualTo(keepers[0].Position), "5 m");
+            Assert.That(session.AimTarget, Is.SameAs(keepers[1]), "the first sting is the marker's pick");
+        }
+
+        [Test]
+        public void ShowsDomeHint_WhileAHiveIsUnderAttack_OnceTheDomeIsKnown()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            session.Hives[0].Damage(1f);
+            _world.Run(HiveDefenseWorld.Step);
+            Assert.That(session.ShowsDomeHint, Is.False, "the Dome is not known yet");
+
+            _world.Play(DomeHoles);
+            Assert.That(session.Discovery.IsKnown(HiveDefenseWorld.DomeIndex), Is.True);
+            Assert.That(session.ShowsDomeHint, Is.True);
+
+            _world.Run(_world.Hive.UnderAttackSeconds + 0.1f);
+            Assert.That(session.ShowsDomeHint, Is.False, "no hive is under attack");
+        }
+
+        // A stick 1.5 m from hive 0, which stands at the origin, and the core at the given place, with the Dome to play.
+        private HiveDefenseWorld DomeBesideAHive(Vector3 core)
+        {
+            return new HiveDefenseWorld(
+                OneStick(),
+                hives: new[] { new Vector3(0f, 0f, 0f), new Vector3(60f, 0f, 0f) },
+                spawns: new[] { new Vector3(-1.5f, 0f, 0f) },
+                core: core,
+                withSongs: true);
         }
     }
 }

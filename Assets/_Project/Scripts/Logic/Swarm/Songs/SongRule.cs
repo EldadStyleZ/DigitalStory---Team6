@@ -15,6 +15,8 @@ namespace DigitalStory.Logic
     /// <see cref="CoreSpeedMultiplier"/>, <see cref="SmokeSlowsCore"/>, <see cref="HiveDamageFraction"/>) and hear of
     /// hits (<see cref="NotifyCoreHit"/>, <see cref="NotifyHiveHit"/>). The machine reads them only from running rules, so
     /// a rule that ends or lets go stops changing anything at once.
+    /// A rule hurts a beekeeper through <see cref="Hit"/>, which reports the hit (plan section O), so every hit a song lands
+    /// is felt once; a rule that hurts a little each step reports its own hits (<see cref="ReportHit"/>).
     /// </remarks>
     public abstract class SongRule
     {
@@ -52,6 +54,9 @@ namespace DigitalStory.Logic
 
         /// <summary>Raised with the rule and the point when its strike visibly lands.</summary>
         internal event Action<SongRule, Vector3> Landed;
+
+        /// <summary>Raised with the rule and the hit for every hit the rule lands on a beekeeper.</summary>
+        internal event Action<SongRule, SongHit> HitLanded;
 
         /// <summary>Starts the rule afresh for a cast, dropping whatever it was doing.</summary>
         internal void Start(in SwarmSongContext context)
@@ -113,6 +118,28 @@ namespace DigitalStory.Logic
         protected void Land(Vector3 point)
         {
             Landed?.Invoke(this, point);
+        }
+
+        /// <summary>
+        /// Hurts <paramref name="target"/> by <paramref name="damage"/> and reports the hit where it stands, as a kill when it
+        /// dies of it and as heavy when the song is one of the big hits (<see cref="SlotSongEffect.HitsHard"/>). Nothing is
+        /// reported for no damage. The rule fills Fury itself, as it always has.
+        /// </summary>
+        protected void Hit(ISwarmTarget target, float damage)
+        {
+            if (!(damage > 0f))
+            {
+                return;
+            }
+
+            target.TakeDamage(damage);
+            ReportHit(target.Position, damage, !target.IsAlive);
+        }
+
+        /// <summary>Reports a hit the rule dealt by itself, such as a sting's squeeze, for the feel of it (plan section O).</summary>
+        protected void ReportHit(Vector3 position, float damage, bool isKill)
+        {
+            HitLanded?.Invoke(this, new SongHit(position, damage, isKill, false, Song.Form, Song.HitsHard));
         }
     }
 }

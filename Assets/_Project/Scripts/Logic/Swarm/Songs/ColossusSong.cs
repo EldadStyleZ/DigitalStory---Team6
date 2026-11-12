@@ -13,8 +13,10 @@ namespace DigitalStory.Logic
         {
         }
 
+        // 11 s (was 12), set by the playtest bot after plan section O: the giant was still the main source of damage, so it
+        // stands a second less, and waves 4 and 5 grew by a beekeeper each so a player without nests still loses.
         [field: SerializeField, Min(0f), Tooltip("Seconds the giant stands.")]
-        public float Seconds { get; private set; } = 12f;
+        public float Seconds { get; private set; } = 11f;
 
         public override bool CanCast(in SwarmSongContext context)
         {
