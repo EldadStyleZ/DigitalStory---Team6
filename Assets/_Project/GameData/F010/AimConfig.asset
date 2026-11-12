@@ -21,3 +21,4 @@ MonoBehaviour:
   <EmptyAimDistance>k__BackingField: 6
   <MouseRadius>k__BackingField: 3
   <NearestCount>k__BackingField: 5
+  <ThreatCount>k__BackingField: 10

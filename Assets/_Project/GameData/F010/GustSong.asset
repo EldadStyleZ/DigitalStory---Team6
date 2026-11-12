@@ -23,8 +23,9 @@ MonoBehaviour:
   _revealedWhenFuryFills: 0
   <Seconds>k__BackingField: 0.8
   <ClearRadius>k__BackingField: 6
-  <PushRadius>k__BackingField: 3
-  <PushSpeed>k__BackingField: 4
+  <PushRadius>k__BackingField: 6
+  <PushSpeed>k__BackingField: 9
+  <StunSeconds>k__BackingField: 0.5
   <InhaleSeconds>k__BackingField: 0.12
   <RingStartRadius>k__BackingField: 0.6
   <RingSeconds>k__BackingField: 0.5

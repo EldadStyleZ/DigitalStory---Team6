@@ -18,6 +18,7 @@ MonoBehaviour:
   <SeparationRadius>k__BackingField: 1.2
   <NoticeRange>k__BackingField: 7
   <GiveUpRange>k__BackingField: 14
+  <ProvokedSeconds>k__BackingField: 4
   <AttackRange>k__BackingField: 1.8
   <WindUpSeconds>k__BackingField: 0.6
   <CooldownSeconds>k__BackingField: 1.4

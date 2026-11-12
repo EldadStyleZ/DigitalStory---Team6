@@ -54,6 +54,16 @@ MonoBehaviour:
   _deathSeconds: 0.8
   _flashSeconds: 0.12
   _flashColor: {r: 1, g: 0.25, b: 0.2, a: 1}
+  _hitFlashColor: {r: 1, g: 1, b: 1, a: 1}
+  _hitFlashSeconds: 0.09
+  _recoilMetres: 0.35
+  _recoilSettlePerSecond: 14
+  _hitGlowColor: {r: 1.4, g: 1.4, b: 1.4, a: 1}
+  _thrownSpeed: 5
+  _teleportSpeed: 40
+  _liftPerSpeed: 0.5
+  _tumbleDegreesPerMetre: 35
+  _mostTumbleDegrees: 60
 --- !u!1 &4151190414012207499
 GameObject:
   m_ObjectHideFlags: 0

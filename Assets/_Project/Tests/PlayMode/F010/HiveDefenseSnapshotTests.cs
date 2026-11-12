@@ -148,6 +148,55 @@ namespace DigitalStory.Tests.PlayMode
         private const float AllSlotsClosePitch = 35f;
         private const int KnownInHudTwelve = 7;
 
+        // Snapshot 16, after the owner played (plan section O): the figure-eight round the standing core at 800 and 4,000
+        // wasps, its winding in and out as the core stops and starts, several stings, a blow the Dome blocks on a hive, the
+        // Tornado's throw and a hit's number.
+        private const float EightWalkSeconds = 2f;
+        private const float EightStandSeconds = 3f;
+        private const float EightGrowSeconds = 4f;
+        private const float EightTopDistance = 11f;
+        private const float EightTopHeight = 1f;
+        private const float StraightDown = 90f;
+        private const int SequenceColumns = 3;
+        private const string TopSuffix = "-top";
+        private const int ThreeStingWasps = 1200;
+        private const int ThreeStings = 3;
+        private const float StingFlightShotSeconds = 0.22f;
+        private const float StingRopesShotSeconds = 0.8f;
+        private const float StingsCloseDistance = 13f;
+        private const float StingsClosePitch = 40f;
+        private const float DomeHiveCoreMetres = 2f;
+        private const float DomeHiveCloseDistance = 9f;
+        private const float DomeHiveClosePitch = 30f;
+        private const float MaxBlockedSeconds = 4f;
+        private const float ThrowEarlyShotSeconds = 0.2f;
+        private const float ThrowLateShotSeconds = 0.45f;
+        private const float ThrowCloseDistance = 15f;
+        private const float ThrowClosePitch = 15f;
+        private const float HitNumberShotSeconds = 0.05f;
+
+        // When the pictures of the stop and of the start are taken, in seconds after the core stops or starts.
+        private static readonly float[] WindShotSeconds = { 0.2f, 0.5f, 0.8f, 1.1f, 1.4f, 2f };
+        private static readonly float[] UnwindShotSeconds = { 0.1f, 0.25f, 0.4f, 0.6f, 0.8f, 1.2f };
+
+        // Three sticks in front of a core 6 m south of the middle, each in the Sting's reach and well apart.
+        private static readonly Vector3 StingsCore = new Vector3(0f, 0f, -6f);
+
+        private static readonly Vector3[] StingsBeekeepers =
+        {
+            new Vector3(-4.5f, 0f, -1.5f), new Vector3(0.5f, 0f, 0f), new Vector3(4.5f, 0f, -2f),
+        };
+
+        // Four sticks round a core, inside the Tornado's 5 m reach.
+        private static readonly Vector3 ThrowCore = new Vector3(0f, 0f, -4f);
+
+        private static readonly Vector3[] ThrowBeekeepers =
+        {
+            new Vector3(-3f, 0f, -4f), new Vector3(3f, 0f, -4f), new Vector3(0f, 0f, -1f), new Vector3(0f, 0f, -7f),
+        };
+
+        private static readonly Vector3 HitNumberBeekeeper = new Vector3(0f, 0f, -1f);
+
         // Where the core stands for each picture, and where its beekeepers stand. The game camera looks north (+z).
         private static readonly Vector3 HydraCore = new Vector3(0f, 0f, -4f);
 
@@ -423,7 +472,7 @@ namespace DigitalStory.Tests.PlayMode
             yield return CaptureMeteor("snap-10-meteor-impact", core, impact);
         }
 
-        // Spec 9.3: once the core stops, the river curls back into the ring around it.
+        // Plan section O: once the core stops, the river winds back into the figure-eight round it.
         [UnityTest]
         public IEnumerator Snapshot11_StopAfterWalk()
         {
@@ -801,6 +850,266 @@ namespace DigitalStory.Tests.PlayMode
             yield return Wait(HintPauseSeconds);
             Assert.That(session.Discovery.KnownCount, Is.EqualTo(KnownInHudTwelve));
             yield return CaptureHud("snap-15-hud-twelve");
+        }
+
+        // ---- Snapshot 16: after the owner played (plan section O) ----
+
+        // The young swarm of 800 stands round its core after a walk: the figure-eight from the game camera, from close by and
+        // from straight above.
+        [UnityTest]
+        public IEnumerator Snapshot16_EightYoung()
+        {
+            return EightShots(false);
+        }
+
+        // The same with the full swarm of 4,000 at level 1: the same eight, thicker.
+        [UnityTest]
+        public IEnumerator Snapshot16_EightFull()
+        {
+            return EightShots(true);
+        }
+
+        // The core stops after a walk, and the river winds into the eight: six moments, from the game camera and from above.
+        [UnityTest]
+        public IEnumerator Snapshot16_EightWind()
+        {
+            yield return Walk(Vector3.forward, EightWalkSeconds);
+            var names = new string[WindShotSeconds.Length];
+            var tops = new string[WindShotSeconds.Length];
+            float stopped = Time.time;
+            for (int shot = 0; shot < WindShotSeconds.Length; shot++)
+            {
+                yield return WaitSince(stopped, WindShotSeconds[shot]);
+                names[shot] = "snap-16-eight-wind-" + shot;
+                tops[shot] = names[shot] + TopSuffix;
+                yield return Capture(names[shot]);
+                yield return CapturePosed(tops[shot], TopFocus(), EightTopDistance, StraightDown, 0f);
+            }
+
+            CombineGrid(names, SequenceColumns, "snap-16-eight-wind");
+            CombineGrid(tops, SequenceColumns, "snap-16-eight-wind" + TopSuffix);
+        }
+
+        // The core walks off sideways from the standing eight, which unwinds into the river: six moments, as above. The core
+        // keeps walking while each picture is taken.
+        [UnityTest]
+        public IEnumerator Snapshot16_EightUnwind()
+        {
+            yield return Walk(Vector3.forward, EightWalkSeconds);
+            yield return Wait(EightStandSeconds);
+            var names = new string[UnwindShotSeconds.Length];
+            var tops = new string[UnwindShotSeconds.Length];
+            float started = Time.time;
+            for (int shot = 0; shot < UnwindShotSeconds.Length; shot++)
+            {
+                while (Time.time - started < UnwindShotSeconds[shot])
+                {
+                    _core.Move(Vector3.right, 1f, false, Time.deltaTime);
+                    yield return null;
+                }
+
+                names[shot] = "snap-16-eight-unwind-" + shot;
+                tops[shot] = names[shot] + TopSuffix;
+                yield return CaptureWalking(names[shot], false, Vector3.right);
+                yield return CaptureWalking(tops[shot], true, Vector3.right);
+            }
+
+            CombineGrid(names, SequenceColumns, "snap-16-eight-unwind");
+            CombineGrid(tops, SequenceColumns, "snap-16-eight-unwind" + TopSuffix);
+        }
+
+        // A Sting with 1,200 wasps sends three stings, each a rope of its own to its own beekeeper: in flight, then wrapped.
+        [UnityTest]
+        public IEnumerator Snapshot16_Stings()
+        {
+            SwarmBody swarm = _root.Session.Swarm;
+            swarm.GrowCapacity(ThreeStingWasps - swarm.Capacity);
+            swarm.Gain(ThreeStingWasps - swarm.Count);
+            Assert.That(swarm.Count, Is.EqualTo(ThreeStingWasps));
+            yield return Stage(StingsCore, StingsBeekeepers);
+            yield return Play(KeysOf<StingSong>());
+            SwarmFormMachine forms = _root.Session.Forms;
+            Assert.That(forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Sting));
+            Assert.That(forms.StingCount, Is.EqualTo(ThreeStings));
+
+            Vector3 middle = StingsCore;
+            for (int index = 0; index < StingsBeekeepers.Length; index++)
+            {
+                middle += StingsBeekeepers[index];
+            }
+
+            Vector3 focus = (middle / (StingsBeekeepers.Length + 1)) + (Vector3.up * CloseFocusHeight);
+            yield return WaitForSlot(SongSlot.Strike, StingFlightShotSeconds);
+            yield return CaptureBoth("snap-16-stings-flight", focus, StingsCloseDistance, StingsClosePitch, 0f);
+            yield return WaitForSlot(SongSlot.Strike, StingRopesShotSeconds);
+            yield return CaptureBoth("snap-16-stings", focus, StingsCloseDistance, StingsClosePitch, 0f);
+        }
+
+        // The core beside the east hive raises the Dome, and a stick strikes the hive inside it: the blocked blow flashes blue
+        // on the frame it lands, with its "blocked" number and the HUD's line about the Dome.
+        [UnityTest]
+        public IEnumerator Snapshot16_DomeOnHive()
+        {
+            Vector3 hive = EastHivePosition();
+            yield return Stage(hive + (Vector3.back * DomeHiveCoreMetres), NestParked);
+            HiveDefenseSession session = _root.Session;
+            yield return Play(KeysOf<DomeSong>());
+            Assert.That(session.Forms.Slot(SongSlot.Guard).Form, Is.EqualTo(SwarmForm.Dome));
+            yield return Wait(DomeWovenSeconds);
+
+            bool isBlocked = false;
+            Action<SongHit> onLanded = hit => isBlocked |= hit.IsBlocked;
+            session.SongLanded += onLanded;
+            try
+            {
+                session.ActiveBeekeeper(0).Spawn(hive + HiveStickOffset);
+                float waited = 0f;
+                while (!isBlocked && waited < MaxBlockedSeconds)
+                {
+                    waited += Time.deltaTime;
+                    yield return null;
+                }
+            }
+            finally
+            {
+                session.SongLanded -= onLanded;
+            }
+
+            Assert.That(isBlocked, Is.True, "the stick's blow on the hive inside the Dome was not blocked");
+            Vector3 focus = ((hive + _core.Position) * 0.5f) + (Vector3.up * CloseFocusHeight);
+            yield return CaptureBoth("snap-16-dome-on-hive", focus, DomeHiveCloseDistance, DomeHiveClosePitch, 0f);
+            yield return CaptureHud("snap-16-dome-on-hive-hud");
+        }
+
+        // The Tornado's hit throws the four beekeepers round it outward and up: just after the hit, and at the top of the arc.
+        [UnityTest]
+        public IEnumerator Snapshot16_TornadoThrow()
+        {
+            yield return Stage(ThrowCore, ThrowBeekeepers);
+            yield return Play(KeysOf<TornadoSong>());
+            Assert.That(_root.Session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Tornado));
+            TornadoSong tornado = (TornadoSong)_root.Session.Caster[SongIndex<TornadoSong>()];
+            Vector3 focus = ThrowCore + (Vector3.up * TornadoFocusHeight);
+            yield return WaitForSlot(SongSlot.Strike, tornado.HitSeconds + ThrowEarlyShotSeconds);
+            yield return CaptureBoth("snap-16-tornado-throw", focus, ThrowCloseDistance, ThrowClosePitch, 0f);
+            yield return WaitForSlot(SongSlot.Strike, tornado.HitSeconds + ThrowLateShotSeconds);
+            yield return CaptureBoth("snap-16-tornado-throw-late", focus, ThrowCloseDistance, ThrowClosePitch, 0f);
+        }
+
+        // A Tornado hit on one beekeeper, with the HUD: the number rises from it.
+        [UnityTest]
+        public IEnumerator Snapshot16_HitNumber()
+        {
+            yield return Stage(ThrowCore, ThrowCore + HitNumberBeekeeper);
+            yield return Play(KeysOf<TornadoSong>());
+            TornadoSong tornado = (TornadoSong)_root.Session.Caster[SongIndex<TornadoSong>()];
+            yield return WaitForSlot(SongSlot.Strike, tornado.HitSeconds + HitNumberShotSeconds);
+            var numbers = UnityEngine.Object.FindAnyObjectByType<DamageNumbersView>();
+            Assert.That(numbers, Is.Not.Null, "the HUD made no DamageNumbersView");
+            Assert.That(numbers.ActiveCount, Is.GreaterThan(0), "the Tornado's hit showed no number");
+            yield return CaptureHud("snap-16-hit-number");
+        }
+
+        // The swarm has collapsed: nothing of it shows, and the HUD says it is returning and counts the seconds.
+        [UnityTest]
+        public IEnumerator Snapshot16_ReturningHud()
+        {
+            yield return Wait(SongSeconds);
+            SwarmBody swarm = _root.Session.Swarm;
+            swarm.Lose(swarm.Count);
+            Assert.That(swarm.IsCollapsed, Is.True);
+            yield return Wait(HintPauseSeconds);
+            Assert.That(swarm.SecondsToRespawn, Is.GreaterThan(0f), "the swarm came back before the picture");
+            yield return CaptureHud("snap-16-returning-hud");
+        }
+
+        private IEnumerator EightShots(bool isFull)
+        {
+            SwarmBody swarm = _root.Session.Swarm;
+            if (isFull)
+            {
+                swarm.GrowCapacity(swarm.Max - swarm.Capacity);
+                swarm.Gain(swarm.Max - swarm.Count);
+                yield return Wait(EightGrowSeconds);
+            }
+
+            string suffix = "-" + swarm.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            yield return Walk(Vector3.forward, EightWalkSeconds);
+            yield return Wait(EightStandSeconds);
+            Assert.That(UnityEngine.Object.FindAnyObjectByType<SwarmGpuView>().EightShare, Is.EqualTo(1f), "the swarm is not wound into the eight");
+            yield return Capture("snap-16-eight-game" + suffix);
+            yield return CapturePosed("snap-16-eight-close" + suffix, CoreFocus(), CloseDistance, ClosePitch, _camera.transform.eulerAngles.y);
+            yield return CapturePosed("snap-16-eight-top" + suffix, TopFocus(), EightTopDistance, StraightDown, 0f);
+        }
+
+        private Vector3 TopFocus() => _core.Position + (Vector3.up * EightTopHeight);
+
+        // A picture taken while the core keeps walking, from the game camera or from straight above the core.
+        private IEnumerator CaptureWalking(string name, bool isTop, Vector3 direction)
+        {
+            string path = Path.Combine(_directory, name + ".png");
+            if (isTop)
+            {
+                Quaternion down = Quaternion.Euler(StraightDown, 0f, 0f);
+                _capturer.RequestCapture(path, TopFocus() - (down * Vector3.forward * EightTopDistance), down);
+            }
+            else
+            {
+                _capturer.RequestCapture(path);
+            }
+
+            while (_capturer.IsBusy)
+            {
+                _core.Move(direction, 1f, false, Time.deltaTime);
+                yield return null;
+            }
+
+            yield return WaitForCapture(name);
+        }
+
+        // Writes pictures of the same size in rows of this many columns, in one file, the first at the top left.
+        private void CombineGrid(string[] names, int columns, string name)
+        {
+            var images = new Texture2D[names.Length];
+            Texture2D grid = null;
+            try
+            {
+                for (int index = 0; index < names.Length; index++)
+                {
+                    images[index] = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                    Assert.That(images[index].LoadImage(File.ReadAllBytes(Path.Combine(_directory, names[index] + ".png"))), Is.True, names[index]);
+                }
+
+                int width = images[0].width;
+                int height = images[0].height;
+                int rows = (names.Length + columns - 1) / columns;
+                grid = new Texture2D(width * columns, height * rows, TextureFormat.RGB24, false);
+                for (int index = 0; index < images.Length; index++)
+                {
+                    Assert.That(images[index].width == width && images[index].height == height, Is.True, "the pictures differ in size");
+                    int column = index % columns;
+                    int row = rows - 1 - (index / columns);
+                    grid.SetPixels(column * width, row * height, width, height, images[index].GetPixels());
+                }
+
+                grid.Apply();
+                File.WriteAllBytes(Path.Combine(_directory, name + ".png"), grid.EncodeToPNG());
+            }
+            finally
+            {
+                for (int index = 0; index < images.Length; index++)
+                {
+                    if (images[index] != null)
+                    {
+                        UnityEngine.Object.Destroy(images[index]);
+                    }
+                }
+
+                if (grid != null)
+                {
+                    UnityEngine.Object.Destroy(grid);
+                }
+            }
         }
 
         private IEnumerator HydraShots(string suffix, int nests)

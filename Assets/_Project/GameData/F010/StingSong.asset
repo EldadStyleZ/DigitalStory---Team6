@@ -14,16 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: DigitalStory.Logic::DigitalStory.Logic.StingSong
   _song:
     _title: Sting
-    _description: Wasps wrap around the aimed beekeeper
+    _description: Wasps wrap around the most threatening beekeepers
     _cooldownSeconds: 1.5
     _keys: 010000000200000000000000i
   _category: 0
-  _waspCost: 10
+  _waspCost: 5
   _knownFromStart: 1
   _revealedWhenFuryFills: 0
   _share: 0.3
   <Seconds>k__BackingField: 4
-  <ArriveSeconds>k__BackingField: 0.6
-  <DamagePerSecond>k__BackingField: 25
+  <ArriveSeconds>k__BackingField: 0.35
+  <DamagePerSecond>k__BackingField: 20
   <MaxRange>k__BackingField: 12
   <AirSeconds>k__BackingField: 1
+  <WaspsPerSting>k__BackingField: 400
+  <MaxStings>k__BackingField: 10
+  <ReaimSeconds>k__BackingField: 0.2
+  <SqueezeSeconds>k__BackingField: 0.25

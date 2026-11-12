@@ -400,9 +400,14 @@ namespace DigitalStory.Tests.PlayMode
 
             Assert.That(session.Caster.CooldownFraction(sting), Is.EqualTo(0f), "the Sting never rested");
             int beforePaid = session.Swarm.Count;
+
+            // Plan section O: the Sting's price is its wasp cost for each sting the living wasps send, one per 400.
+            int price = ((StingSong)session.Caster[sting]).WaspCostFor(beforePaid);
+            Assert.That(price, Is.EqualTo(session.Caster[sting].WaspCost * (beforePaid / 400)), "the price is not one cost for each 400 wasps");
+            Assert.That(session.SongPrice(sting), Is.EqualTo(price), "the song chip's price is not the price paid");
             yield return Play(KeysOf<StingSong>());
             Assert.That(session.Forms.Slot(SongSlot.Strike).Form, Is.EqualTo(SwarmForm.Sting), "the Sting did not cast");
-            Assert.That(session.Swarm.Count, Is.EqualTo(beforePaid - session.Caster[sting].WaspCost));
+            Assert.That(session.Swarm.Count, Is.EqualTo(beforePaid - price));
         }
 
         // Plan section M: beside a hive the core takes the hive's store into the swarm.

@@ -22,8 +22,8 @@ MonoBehaviour:
   _knownFromStart: 0
   _revealedWhenFuryFills: 0
   _share: 0.37
-  <Seconds>k__BackingField: 1.6
-  <BiteSeconds>k__BackingField: 0.7
+  <Seconds>k__BackingField: 1.4
+  <BiteSeconds>k__BackingField: 0.5
   <Reach>k__BackingField: 9
   <Damage>k__BackingField: 40
   <Heads>k__BackingField: 3

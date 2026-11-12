@@ -23,8 +23,8 @@ MonoBehaviour:
   _revealedWhenFuryFills: 0
   _share: 0.35
   <Height>k__BackingField: 12
-  <RiseSeconds>k__BackingField: 0.8
-  <DiveSeconds>k__BackingField: 0.5
+  <RiseSeconds>k__BackingField: 0.6
+  <DiveSeconds>k__BackingField: 0.4
   <MaxRange>k__BackingField: 18
   <Radius>k__BackingField: 3
   <Damage>k__BackingField: 60

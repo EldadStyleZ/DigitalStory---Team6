@@ -29,4 +29,5 @@ MonoBehaviour:
   <HitSeconds>k__BackingField: 0.3
   <WallRadius>k__BackingField: 1.5
   <Damage>k__BackingField: 30
-  <KnockbackSpeed>k__BackingField: 6
+  <KnockbackSpeed>k__BackingField: 12
+  <StunSeconds>k__BackingField: 1

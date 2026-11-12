@@ -32,17 +32,14 @@ MonoBehaviour:
   <RiverRadius>k__BackingField: 1.2
   <MeanderAmplitude>k__BackingField: 0.25
   <StandingTrailMeters>k__BackingField: 2
-  <TorusRadius>k__BackingField: 2.4
   <StandStillMeters>k__BackingField: 0.05
   <StandDelaySeconds>k__BackingField: 0.5
   <StandBlendSeconds>k__BackingField: 0.75
-  <CoreRingShare>k__BackingField: 0.05
-  <CoreRingLeastWasps>k__BackingField: 100
-  <CoreRingMostShare>k__BackingField: 0.25
-  <CoreRingRadius>k__BackingField: 0.6
-  <CoreRingGlow>k__BackingField: 0.75
-  <CoreClearRadius>k__BackingField: 1.2
-  <CoreClearSpeed>k__BackingField: 8
+  <EightRadius>k__BackingField: 2.6
+  <EightHeight>k__BackingField: 1.4
+  <EightTilt>k__BackingField: 0.5
+  <EightThickness>k__BackingField: 0.45
+  <EightLapSeconds>k__BackingField: 5
   <BuzzAmplitude>k__BackingField: 0.04
   <BuzzFrequency>k__BackingField: 9
   <DyingSeconds>k__BackingField: 1.5
