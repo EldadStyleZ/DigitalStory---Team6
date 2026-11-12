@@ -78,6 +78,12 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Lesson step 5: calling the wave.")]
         private string _callWaveText = "Enemies come when the timer ends. Press Enter when ready.";
 
+        [SerializeField, Tooltip("The line while the swarm is gone and returning. {0} is the whole seconds left.")]
+        private string _swarmReturnsText = "The swarm returns in {0}";
+
+        [SerializeField, Tooltip("The line while a hive is under attack and the Dome is known.")]
+        private string _hiveUnderAttackText = "Hive under attack: the Dome shields what is inside it";
+
         [SerializeField, Min(0.05f), Tooltip("Seconds between the alarm colour and normal while a hive is under attack.")]
         private float _flashSeconds = 0.25f;
 
@@ -104,6 +110,12 @@ namespace DigitalStory.View
         private HivePanelsView _hives;
         private Label _furyKeys;
         private Label _messageLine;
+        private Label _swarmLine;
+        private Label _domeLine;
+        private DamageNumbersView _damageNumbers;
+        private HitSoundView _hitSound;
+        private int _shownReturnSeconds = -1;
+        private bool _isDomeLineShown;
         private int _colossusSong = -1;
         private bool _isFuryRevealed;
         private float _messageLeft;
@@ -157,6 +169,13 @@ namespace DigitalStory.View
             VisualElement offscreen = Require<VisualElement>(root, "offscreen-layer");
             VisualElement endScreen = Require<VisualElement>(root, "end-screen");
 
+            _swarmLine = Require<Label>(root, "swarm-line");
+            _domeLine = Require<Label>(root, "dome-line");
+            _domeLine.text = _hiveUnderAttackText;
+            _swarmLine.RemoveFromClassList(LineShownClass);
+            _domeLine.RemoveFromClassList(LineShownClass);
+            _shownReturnSeconds = -1;
+            _isDomeLineShown = false;
             _colossusSong = ColossusSongIndex();
             _isFuryRevealed = false;
             _furyKeys.text = string.Empty;
@@ -186,6 +205,10 @@ namespace DigitalStory.View
             _indicator.Initialize(session.Hives, camera, offscreen, keepOut);
             _nestIndicator = GetOrAdd<NestOffscreenIndicatorView>();
             _nestIndicator.Initialize(session.Nests, camera, offscreen, keepOut);
+            _damageNumbers = GetOrAdd<DamageNumbersView>();
+            _damageNumbers.Initialize(session, camera, root);
+            _hitSound = GetOrAdd<HitSoundView>();
+            _hitSound.Initialize(session);
             _endScreen = GetOrAdd<EndScreenView>();
             _endScreen.Initialize(session, endScreen);
             _isReady = true; // Last, so Update never runs on a half-built HUD.
@@ -206,6 +229,8 @@ namespace DigitalStory.View
             _nestHud.Tick(Time.deltaTime);
             ShowNotes();
             ShowLines(Time.deltaTime);
+            ShowSwarmLine();
+            ShowDomeLine();
             _hives.Tick(Time.deltaTime);
         }
 
@@ -253,12 +278,14 @@ namespace DigitalStory.View
         }
 
         // The Colossus song is found by its type, once, so the HUD never repeats the keys by hand.
-        private int ColossusSongIndex()
+        private int ColossusSongIndex() => SongIndexOf<ColossusSong>();
+
+        private int SongIndexOf<T>() where T : SwarmSongEffect
         {
             SwarmSongCaster caster = _session.Caster;
             for (int song = 0; song < caster.Count; song++)
             {
-                if (caster[song] is ColossusSong)
+                if (caster[song] is T)
                 {
                     return song;
                 }
@@ -405,6 +432,50 @@ namespace DigitalStory.View
                 _noteHints[slot] = isHint;
                 _noteCells[slot].EnableInClassList(NoteHintClass, isHint);
             }
+        }
+
+        // While the swarm is gone: "The swarm returns in 3". The text is rebuilt only when the whole second changes.
+        private void ShowSwarmLine()
+        {
+            SwarmBody swarm = _session.Swarm;
+            if (!swarm.IsCollapsed)
+            {
+                if (_shownReturnSeconds != -1)
+                {
+                    _shownReturnSeconds = -1;
+                    _swarmLine.RemoveFromClassList(LineShownClass);
+                }
+
+                return;
+            }
+
+            int seconds = Mathf.Max(0, Mathf.CeilToInt(swarm.SecondsToRespawn));
+            if (seconds == _shownReturnSeconds)
+            {
+                return;
+            }
+
+            if (_shownReturnSeconds == -1)
+            {
+                _swarmLine.AddToClassList(LineShownClass);
+            }
+
+            _shownReturnSeconds = seconds;
+            _swarmLine.text = string.Format(CultureInfo.InvariantCulture, _swarmReturnsText, seconds);
+        }
+
+        // While a hive is under attack and the player knows the Dome (HiveDefenseSession.ShowsDomeHint): one short line that
+        // says what the Dome is for.
+        private void ShowDomeLine()
+        {
+            bool isShown = _session.ShowsDomeHint;
+            if (isShown == _isDomeLineShown)
+            {
+                return;
+            }
+
+            _isDomeLineShown = isShown;
+            _domeLine.EnableInClassList(LineShownClass, isShown);
         }
 
         private void ShowLines(float deltaTime)

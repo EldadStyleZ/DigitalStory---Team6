@@ -1,17 +1,25 @@
 using System;
+using System.Collections.Generic;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
 
 namespace DigitalStory.View
 {
-    /// <summary>Shows one beekeeper: follows its brain, walks, leans forward as a warning while it winds up, swings, flashes when hit and falls over when it dies.</summary>
+    /// <summary>
+    /// Shows one beekeeper: follows its brain, walks, leans forward as a warning while it winds up, swings, flashes when hit,
+    /// flies up in an arc when a song throws it, and falls over when it dies.
+    /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("DigitalStory/Beekeeper View")]
     public sealed class BeekeeperView : MonoBehaviour
     {
         private static readonly int SpeedId = Animator.StringToHash("Speed");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+
+        // Metres per second squared that pull a thrown beekeeper back down: the picture's gravity, not a game rule.
+        private const float Gravity = 9.81f;
 
         [SerializeField, Tooltip("The model's Animator. It needs a float parameter named Speed. Optional.")]
         private Animator _animator;
@@ -41,6 +49,46 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The colour the renderers flash when health drops.")]
         private Color _flashColor = new Color(1f, 0.25f, 0.2f, 1f);
 
+        [Header("Felt hit")]
+        [SerializeField, Tooltip("The colour the renderers flash when a song lands on this beekeeper.")]
+        private Color _hitFlashColor = Color.white;
+
+        [SerializeField, Min(0.01f), Tooltip("Seconds the white hit flash lasts.")]
+        private float _hitFlashSeconds = 0.09f;
+
+        [SerializeField, Min(0f), Tooltip("Metres a hit pushes the model back, before it settles.")]
+        private float _recoilMetres = 0.35f;
+
+        [SerializeField, Min(1f), Tooltip("How fast the recoil settles, per second.")]
+        private float _recoilSettlePerSecond = 14f;
+
+        [SerializeField, ColorUsage(false, true), Tooltip("The glow a felt hit adds, so the white suit flashes white even at night. The suit's materials need emission on, which the scene builder sets.")]
+        private Color _hitGlowColor = new Color(1.4f, 1.4f, 1.4f, 1f);
+
+        [Header("Thrown")]
+        [SerializeField, Min(0.1f), Tooltip("Metres per second on the ground above which the beekeeper counts as thrown: faster than any beekeeper walks.")]
+        private float _thrownSpeed = 5f;
+
+        [SerializeField, Min(1f), Tooltip("Metres per second on the ground above which a move is a jump to a new place (a spawn), never a throw.")]
+        private float _teleportSpeed = 40f;
+
+        [SerializeField, Min(0f), Tooltip("Metres per second upward the model is thrown for each metre per second over the thrown speed. The Tornado's 12 m/s throw rises about a metre, the Gust's 9 m/s shove a hop.")]
+        private float _liftPerSpeed = 0.5f;
+
+        [SerializeField, Range(0f, 90f), Tooltip("Degrees the model tips back for each metre it is off the ground, as it flies away from the blow.")]
+        private float _tumbleDegreesPerMetre = 35f;
+
+        [SerializeField, Range(0f, 90f), Tooltip("The most the model tips back in flight, in degrees, so it reads as flying rather than lying.")]
+        private float _mostTumbleDegrees = 60f;
+
+        private static readonly List<BeekeeperView> LiveViews = new List<BeekeeperView>(64);
+
+        private Vector3 _recoil;
+        private Vector3 _lastBrainPosition;
+        private Vector3 _flightDirection;
+        private Quaternion _facing = Quaternion.identity;
+        private float _liftHeight;
+        private float _liftSpeed;
         private Renderer[] _renderers;
         private MaterialPropertyBlock _block;
         private BeekeeperBrain _brain;
@@ -49,6 +97,7 @@ namespace DigitalStory.View
         private float _lastProgress;
         private float _swingLeft;
         private float _flashLeft;
+        private float _hitFlashLeft;
         private float _deathElapsed;
         private float _lastSpeed = -1f;
         private bool _isDying;
@@ -65,6 +114,52 @@ namespace DigitalStory.View
 
         /// <summary>True while the death animation runs.</summary>
         public bool IsDying => _isDying;
+
+        /// <summary>Every enabled beekeeper view. Read only, so a hit can find the one nearest to it without a search or an allocation.</summary>
+        public static IReadOnlyList<BeekeeperView> Live => LiveViews;
+
+        /// <summary>The model's position as drawn, with any recoil and lift. For tests.</summary>
+        public Vector3 ShownPosition => transform.position;
+
+        /// <summary>True while the white flash of a felt hit shows. For tests.</summary>
+        public bool IsHitFlashing => _hitFlashLeft > 0f;
+
+        /// <summary>
+        /// The felt hit: flashes the model white and pushes it back, away from where the hit came from. The recoil is scaled by
+        /// <paramref name="strength01"/>, 0 to 1. The killing blow lands as the death begins, so a dying model flashes too, but
+        /// is not pushed: its fall holds it where it died. Allocates nothing.
+        /// </summary>
+        public void Hit(Vector3 hitPoint, float strength01)
+        {
+            if (_brain == null)
+            {
+                return;
+            }
+
+            _flashLeft = Mathf.Max(_flashLeft, _hitFlashSeconds);
+            _hitFlashLeft = _hitFlashSeconds;
+            _block.SetColor(ColorId, _hitFlashColor);
+            _block.SetColor(EmissionColorId, _hitGlowColor);
+            SetBlock(_block);
+            _isFlashing = true;
+
+            if (_isDying)
+            {
+                return;
+            }
+
+            Vector3 away = _brain.Position - hitPoint;
+            away.y = 0f;
+            if (away.sqrMagnitude > 1e-6f)
+            {
+                _recoil = away.normalized * (_recoilMetres * Mathf.Clamp01(strength01));
+            }
+        }
+
+        private void OnEnable()
+        {
+            LiveViews.Add(this);
+        }
 
         private void Awake()
         {
@@ -90,9 +185,14 @@ namespace DigitalStory.View
             _isDying = false;
             _lastSpeed = -1f;
             ClearFlash();
+            _recoil = Vector3.zero;
+            _lastBrainPosition = brain.Position;
+            _liftHeight = 0f;
+            _liftSpeed = 0f;
+            _facing = FacingRotation(brain.Facing);
 
             transform.localScale = _startScale;
-            transform.SetPositionAndRotation(brain.Position, FacingRotation(brain.Facing));
+            transform.SetPositionAndRotation(brain.Position, _facing);
             SetLean(0f);
             SetSpeed(0f);
         }
@@ -145,14 +245,60 @@ namespace DigitalStory.View
                 return;
             }
 
-            transform.position = _brain.Position;
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, FacingRotation(_brain.Facing), _turnDegreesPerSecond * deltaTime);
+            _recoil = Vector3.Lerp(_recoil, Vector3.zero, 1f - Mathf.Exp(-_recoilSettlePerSecond * deltaTime));
+            ShowFlight(deltaTime);
+            transform.position = _brain.Position + _recoil + (Vector3.up * _liftHeight);
+            _facing = Quaternion.RotateTowards(_facing, FacingRotation(_brain.Facing), _turnDegreesPerSecond * deltaTime);
+            transform.rotation = Tumble() * _facing;
             SetSpeed(_brain.IsMoving ? 1f : 0f);
             ShowLean(deltaTime);
         }
 
+        // The brain only slides a thrown beekeeper along the ground, so the picture reads its speed and, when it is faster
+        // than any walk, throws the model up in an arc that falls back under gravity: the Tornado's throw and the Gust's shove
+        // become impossible to miss.
+        private void ShowFlight(float deltaTime)
+        {
+            Vector3 step = _brain.Position - _lastBrainPosition;
+            step.y = 0f;
+            _lastBrainPosition = _brain.Position;
+            float speed = deltaTime > 0f ? step.magnitude / deltaTime : 0f;
+            if (_liftHeight <= 0f && speed > _thrownSpeed && speed < _teleportSpeed)
+            {
+                _liftSpeed = (speed - _thrownSpeed) * _liftPerSpeed;
+                _flightDirection = step / (speed * deltaTime);
+            }
+
+            if (_liftHeight <= 0f && _liftSpeed <= 0f)
+            {
+                return;
+            }
+
+            _liftHeight += _liftSpeed * deltaTime;
+            _liftSpeed -= Gravity * deltaTime;
+            if (_liftHeight <= 0f)
+            {
+                _liftHeight = 0f;
+                _liftSpeed = 0f;
+            }
+        }
+
+        // Tips the flying model back, away from the way it flies.
+        private Quaternion Tumble()
+        {
+            if (_liftHeight <= 0f)
+            {
+                return Quaternion.identity;
+            }
+
+            Vector3 axis = Vector3.Cross(_flightDirection, Vector3.up);
+            return Quaternion.AngleAxis(Mathf.Min(_mostTumbleDegrees, _tumbleDegreesPerMetre * _liftHeight), axis);
+        }
+
         private void OnDisable()
         {
+            LiveViews.Remove(this);
+            _recoil = Vector3.zero;
             if (_block != null && _renderers != null)
             {
                 ClearFlash();
@@ -188,6 +334,13 @@ namespace DigitalStory.View
         {
             _deathElapsed += deltaTime;
             float t = Mathf.Clamp01(_deathElapsed / _deathSeconds);
+            if (_liftHeight > 0f)
+            {
+                // One killed in the air falls back to the ground as it dies.
+                ShowFlight(deltaTime);
+                transform.position = _brain.Position + (Vector3.up * _liftHeight);
+            }
+
             Quaternion fall = Quaternion.Euler(0f, 0f, 90f * t);
             transform.rotation = FacingRotation(_brain.Facing) * fall;
             transform.localScale = _startScale * (1f - t * t);
@@ -207,8 +360,7 @@ namespace DigitalStory.View
                 if (!_isFlashing)
                 {
                     _isFlashing = true;
-                    _block.SetColor(ColorId, _flashColor);
-                    SetBlock(_block);
+                    PaintDamageFlash();
                 }
             }
 
@@ -218,6 +370,16 @@ namespace DigitalStory.View
                 return;
             }
 
+            // The white of a felt hit is a blink: while the health still drops, as under a sting, the red flash comes back.
+            if (_hitFlashLeft > 0f)
+            {
+                _hitFlashLeft -= deltaTime;
+                if (_hitFlashLeft <= 0f)
+                {
+                    PaintDamageFlash();
+                }
+            }
+
             _flashLeft -= deltaTime;
             if (_flashLeft <= 0f)
             {
@@ -225,9 +387,17 @@ namespace DigitalStory.View
             }
         }
 
+        private void PaintDamageFlash()
+        {
+            _block.SetColor(ColorId, _flashColor);
+            _block.SetColor(EmissionColorId, Color.black);
+            SetBlock(_block);
+        }
+
         private void ClearFlash()
         {
             _flashLeft = 0f;
+            _hitFlashLeft = 0f;
             if (!_isFlashing)
             {
                 return;

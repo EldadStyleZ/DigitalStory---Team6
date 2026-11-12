@@ -16,10 +16,14 @@ namespace DigitalStory.View
     public sealed class HiveDefenseRoot : MonoBehaviour
     {
         private const int RequiredHiveCount = 2;
-        private const float MinimumTrailMeters = 0.001f;
+
+        // A sting's target as the swarm view reads it: w is 1 while the sting wraps a living beekeeper. The rules give each
+        // sting a new target when its own dies, and end them all at once, letting the song go, when none is left; so every
+        // sting the running Sting sent is alive until the slot lets go and the whole squad flies home.
+        private const float LivingSting = 1f;
 
         // Share of the river's length behind the core where its light hangs: nearer the head than the middle, so the
-        // inner ring at the core is in the light too.
+        // core, at the river's head, is in the light too.
         private const float RiverLightShare = 0.35f;
 
         // Share of the way per second the attack light covers toward its target, slower than the light's own follow,
@@ -143,6 +147,16 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The HUD.")]
         private HiveDefenseHudView _hud;
 
+        [SerializeField, Tooltip("The felt hit: the camera's shake and kick, the beekeeper's flash and recoil, the swarm's freeze and the shield's blue flash.")]
+        private HitFeedbackView _hitFeedback;
+
+        [Header("Shadows")]
+        [SerializeField, Min(1f), Tooltip("Metres the moon's shadows reach while this scene is loaded. Set at runtime for this scene only, and the quality level's own value is put back when the scene unloads.")]
+        private float _shadowDistance = 45f;
+
+        [SerializeField, Range(1, 4), Tooltip("Shadow cascades while this scene is loaded: 1, 2 or 4. Put back when the scene unloads, like the distance.")]
+        private int _shadowCascades = 2;
+
         [Header("Sound")]
         [SerializeField, Tooltip("Sounds each note the player plays. May stay empty, and the flute is then silent.")]
         private SwarmFluteVoice _fluteVoice;
@@ -150,8 +164,15 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("How the flute sounds. Needed when the flute voice is set; it must have a pitch for every hole.")]
         private SoundConfig _sound;
 
+        // The quality level's shadow values from before the first root of this scene set its own (see SetSceneShadows).
+        private static int s_rootsHoldingShadows;
+        private static float s_savedShadowDistance;
+        private static int s_savedShadowCascades;
+
+        private readonly Vector4[] _stingTargets = new Vector4[StingSong.MostStings];
         private PathTrail _trail;
         private Vector3 _lastAimPoint;
+        private bool _hasSetShadows;
         private Vector3 _attackSpot;
         private bool _isAttackSpotSet;
         private int _holeMask;
@@ -258,6 +279,8 @@ namespace DigitalStory.View
             _beekeeperPool.Initialize(Session, _stickPrefab, _smokerPrefab);
             _smokePool.Initialize(Session.Smoke, _grenadePrefab, _cloudPrefab);
             _colossusMotor.Initialize(Session, _swarmView, _colossusSamples, _colossus);
+            _hitFeedback.Initialize(Session, _followCamera, _swarmView);
+            SetSceneShadows();
 
             if (_fluteVoice != null)
             {
@@ -316,6 +339,42 @@ namespace DigitalStory.View
             {
                 Session.Forms.FormChanged -= HandleFormChanged;
                 Session.Caster.SongCast -= HandleSongCast;
+            }
+
+            RestoreShadows();
+        }
+
+        // The moon's shadows reach only as far as this scene's camera sees, in fewer cascades, which cuts their cost here.
+        // The quality level's own values are kept and put back when the scene unloads, so no other scene and no shared
+        // setting changes. A restart loads the scene again, and the old root may go after the new one has woken, so the
+        // values are kept once for every root alive (a static count) rather than by each root.
+        private void SetSceneShadows()
+        {
+            if (s_rootsHoldingShadows == 0)
+            {
+                s_savedShadowDistance = QualitySettings.shadowDistance;
+                s_savedShadowCascades = QualitySettings.shadowCascades;
+            }
+
+            s_rootsHoldingShadows++;
+            _hasSetShadows = true;
+            QualitySettings.shadowDistance = _shadowDistance;
+            QualitySettings.shadowCascades = _shadowCascades;
+        }
+
+        private void RestoreShadows()
+        {
+            if (!_hasSetShadows)
+            {
+                return;
+            }
+
+            _hasSetShadows = false;
+            s_rootsHoldingShadows--;
+            if (s_rootsHoldingShadows == 0)
+            {
+                QualitySettings.shadowDistance = s_savedShadowDistance;
+                QualitySettings.shadowCascades = s_savedShadowCascades;
             }
         }
 
@@ -430,7 +489,7 @@ namespace DigitalStory.View
         }
 
         // One light stands in for the glow of the wasps that stay with the core, and a second one for the Strike squad,
-        // the wasps that attack. The first hangs over the middle of the river or the ring in the river's colour, over the
+        // the wasps that attack. The first hangs over the middle of the river or the eight in the river's colour, over the
         // core in the Guard song's colour while one shields it, or over the giant; it is as strong as the swarm is full
         // and the share that stays. The second travels with the striking squad in its colour, and fades as the squad flies
         // home. Both sit a little toward the camera, so the sides it sees are lit.
@@ -464,7 +523,9 @@ namespace DigitalStory.View
             if (strike.IsActive)
             {
                 attackShare = (strike.High - strike.Low) * StrikeLightLeft(strike);
-                attackAt = StrikeLightPoint(core, strike);
+                attackAt = strike.Form == SwarmForm.Sting && forms.StingCount > 0
+                    ? StingsMiddle(forms)
+                    : StrikeLightPoint(core, strike);
             }
 
             Vector3 towardCamera = -_camera.transform.forward;
@@ -512,6 +573,19 @@ namespace DigitalStory.View
             return beat > 0f ? 1f - Mathf.Clamp01(strike.ReleasedSeconds / beat) : 0f;
         }
 
+        // The middle of the stings' targets: one light stands for every rope of a Sting that sent several.
+        private static Vector3 StingsMiddle(SwarmFormMachine forms)
+        {
+            int count = forms.StingCount;
+            Vector3 sum = Vector3.zero;
+            for (int sting = 0; sting < count; sting++)
+            {
+                sum += forms.StingTarget(sting);
+            }
+
+            return sum / count;
+        }
+
         // Where the striking squad is: on the sting's target, or on the meteor's ball (over the core while it climbs and
         // hangs, then along the line down to the impact point, as MeteorSteer in WaspSwarm.compute flies it), or halfway down
         // the lance's line once it fires (LanceRule's ParamA and ParamB), or around the core for a song that strikes there,
@@ -548,8 +622,8 @@ namespace DigitalStory.View
             return Vector3.Lerp(top, target, dive);
         }
 
-        // About a third of the way along the river behind the core, or the core while the river curls into the ring around
-        // it. It follows the swarm's own blend in WaspSwarm.compute (RiverTarget): a short path, or standing, makes the ring.
+        // About a third of the way along the river behind the core, or the core, the eight's crossing, while the swarm is
+        // wound into the figure-eight round it. It follows the swarm's own blend (SwarmGpuView.EightShare).
         private Vector3 RiverMiddle(Vector3 core)
         {
             float length = _trail.Length;
@@ -561,9 +635,7 @@ namespace DigitalStory.View
             float back = Mathf.Min(_swarm.RiverLengthMeters, length) * RiverLightShare;
             Vector3 river = _trail.PointAt(back / length);
             river.y = core.y;
-            float trailShare = Mathf.Clamp01(length / Mathf.Max(_swarm.StandingTrailMeters, MinimumTrailMeters));
-            float riverShare = trailShare * (1f - _swarmView.StandingShare);
-            return Vector3.Lerp(core, river, riverShare);
+            return Vector3.Lerp(core, river, 1f - _swarmView.EightShare);
         }
 
         private void FeedSwarm(Vector3 core)
@@ -580,10 +652,26 @@ namespace DigitalStory.View
             }
 
             _swarmView.SetGust(forms.GustCenter, forms.GustRadius, forms.GustSeconds);
+            FeedStingTargets(forms);
+            _swarmView.SetSizeScale(Session.SizeScale);
 
             HiveSet hives = Session.Hives;
             _swarmView.SetHives(hives[0].Position, hives[1].Position, !hives[0].IsDestroyed, !hives[1].IsDestroyed);
             _swarmView.SetLastHit(Session.LastHitPoint);
+        }
+
+        // One target for each sting the running Sting sent, followed live, so the squad is shared between them and each rope
+        // wraps its own beekeeper; none while no Sting holds the Strike slot.
+        private void FeedStingTargets(SwarmFormMachine forms)
+        {
+            int count = forms.StingCount;
+            for (int sting = 0; sting < count; sting++)
+            {
+                Vector3 target = forms.StingTarget(sting);
+                _stingTargets[sting] = new Vector4(target.x, target.y, target.z, LivingSting);
+            }
+
+            _swarmView.SetStingTargets(_stingTargets, count);
         }
 
         // The camera always follows the core, which rides inside the giant while it stands; it only steps back for the giant.
@@ -638,6 +726,7 @@ namespace DigitalStory.View
             Require(_cloudPrefab, nameof(_cloudPrefab));
             Require(_colossusMotor, nameof(_colossusMotor));
             Require(_hud, nameof(_hud));
+            Require(_hitFeedback, nameof(_hitFeedback));
 
             if (_songs == null || _songs.Length == 0)
             {

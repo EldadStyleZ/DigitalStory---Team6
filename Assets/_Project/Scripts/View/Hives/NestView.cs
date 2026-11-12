@@ -245,7 +245,12 @@ namespace DigitalStory.View
             _state = state;
             bool isOpen = state == ShownState.Open || state == ShownState.Collecting;
 
-            _lightObject.SetActive(isOpen);
+            // The light is never switched on or off: it stays enabled and goes to zero, so no frame pays for its first use.
+            if (!isOpen)
+            {
+                _light.intensity = 0f;
+            }
+
             _groundRenderer.enabled = isOpen;
             if (!isOpen || state == ShownState.Open)
             {
@@ -374,7 +379,7 @@ namespace DigitalStory.View
             _isGone = true;
             _state = ShownState.Collected;
             _nestObject.SetActive(false);
-            _lightObject.SetActive(false);
+            _light.intensity = 0f;
             _groundRenderer.enabled = false;
             _fillRenderer.enabled = false;
             SetMotesEnabled(0);
@@ -433,9 +438,9 @@ namespace DigitalStory.View
             _light.type = LightType.Point;
             _light.range = _lightRange;
             _light.color = _lightColor;
-            _light.intensity = _lightIntensityLow;
             _light.shadows = LightShadows.None;
-            _lightObject.SetActive(false);
+            _light.renderMode = LightRenderMode.ForceVertex; // 'Not Important': the nest light never takes a pixel-light slot.
+            _light.intensity = 0f;
         }
 
         private void BuildRings(Material material)

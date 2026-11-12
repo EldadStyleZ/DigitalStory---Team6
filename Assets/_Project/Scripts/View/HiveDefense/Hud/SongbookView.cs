@@ -234,11 +234,14 @@ namespace DigitalStory.View
         }
 
         // Free while the song's next cast costs nothing (its first cast, or a farm phase unless it is a tower), the wasp price
-        // otherwise (HiveDefenseSession.SongPrice). A song that never costs anything shows nothing.
+        // otherwise (HiveDefenseSession.SongPrice). A song that never costs anything shows nothing. The Sting's price is for
+        // each sting the living wasps would send now (plan section O), so its chip follows the count; its text is made only
+        // when that price changes.
         private void ShowCost(int song)
         {
             int price = _session.Caster[song].WaspCost;
-            int cost = price == 0 ? 0 : (_session.SongPrice(song) == 0 ? CostFree : price);
+            int now = price == 0 ? 0 : _session.SongPrice(song);
+            int cost = price == 0 ? 0 : (now == 0 ? CostFree : now);
             if (cost == _costShown[song])
             {
                 return;
@@ -246,9 +249,14 @@ namespace DigitalStory.View
 
             _costShown[song] = cost;
             Label label = _costs[song];
-            label.text = cost == CostFree ? FreeText : (cost == 0 ? string.Empty : _costTexts[song]);
+            label.text = cost == CostFree ? FreeText : (cost == 0 ? string.Empty : CostText(song, cost));
             label.EnableInClassList("chip-cost--free", cost == CostFree);
             label.EnableInClassList("chip-cost--none", cost == 0);
+        }
+
+        private string CostText(int song, int cost)
+        {
+            return cost == _session.Caster[song].WaspCost ? _costTexts[song] : cost.ToString(CultureInfo.InvariantCulture);
         }
 
         private void ShowCooldown(int song)

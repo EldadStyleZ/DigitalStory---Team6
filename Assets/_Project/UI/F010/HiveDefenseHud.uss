@@ -624,3 +624,48 @@
 .nest-arrow--shown {
     display: flex;
 }
+
+/* The swarm is gone and on its way back, and a hive is under attack. */
+.swarm-line {
+    -unity-font-style: bold;
+    font-size: 16px;
+    color: rgb(255, 214, 120);
+}
+
+.dome-line {
+    -unity-font-style: bold;
+    color: rgb(150, 200, 255);
+}
+
+/* Numbers that rise from each hit. Placed by script from world to panel coordinates; never block the pointer. */
+.damage-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.dmg {
+    position: absolute;
+    translate: -50% -100%;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+    white-space: nowrap;
+}
+
+.dmg--hit {
+    font-size: 16px;
+    color: rgb(255, 255, 255);
+}
+
+.dmg--kill {
+    font-size: 26px;
+    color: rgb(255, 176, 60);
+}
+
+.dmg--blocked {
+    font-size: 15px;
+    color: rgb(110, 175, 255);
+}

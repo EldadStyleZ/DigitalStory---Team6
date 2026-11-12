@@ -34,7 +34,10 @@ namespace DigitalStory.Editor
         private const string HiveSourcePath = RazPrefabFolder + "/Beehive_LowPoly 1.prefab";
         private const string NestTreeSourcePath = RazPrefabFolder + "/WaspNestTree_LowPoly 1.prefab";
         private const string NestObjectName = "WaspNest"; // The nest in Raz's tree, which NestView lights and hides.
-        private const string NestEmissionProperty = "_EmissionColor"; // What NestView pulses on the nest.
+        private const string NestEmissionProperty = "_EmissionColor"; // What NestView pulses on the nest, and BeekeeperView flashes.
+        private const string EmissionKeyword = "_EMISSION";
+        private const string ShieldFlashShaderName = "Sprites/Default";
+        private const string ShieldFlashMaterialName = "ShieldFlash";
         private const string BeekeeperFbxPath = Root + "/Art/model/Beekeeper_LowPoly.fbx";
         private const string MixamoFolder = Root + "/Art/Mixamo";
         private const string ControllerPath = ArtFolder + "/Beekeeper.controller";
@@ -1151,6 +1154,7 @@ namespace DigitalStory.Editor
                     if (!made.TryGetValue(original, out Material suit))
                     {
                         suit = LoadOrCreateMaterial("Suit_" + Sanitize(original.name), SuitWhite, original);
+                        AllowHitGlow(suit);
                         made[original] = suit;
                     }
 
@@ -1159,6 +1163,39 @@ namespace DigitalStory.Editor
 
                 renderers[index].sharedMaterials = suits;
             }
+        }
+
+        // BeekeeperView flashes a felt hit by the emission colour, which a material only shows with its emission on. It starts
+        // black, so the suit looks as before, and is marked as changed at runtime so nothing turns the emission off again.
+        private static void AllowHitGlow(Material material)
+        {
+            if (!material.HasProperty(NestEmissionProperty))
+            {
+                return;
+            }
+
+            material.EnableKeyword(EmissionKeyword);
+            material.SetColor(NestEmissionProperty, Color.black);
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            EditorUtility.SetDirty(material);
+        }
+
+        // An unlit, see-through material for the blue flash on a shield that blocks a hit. HitFeedbackView tints it by _Color.
+        private static Material LoadOrCreateShieldFlashMaterial()
+        {
+            var shader = Require(Shader.Find(ShieldFlashShaderName), ShieldFlashShaderName);
+            string path = $"{ArtFolder}/{ShieldFlashMaterialName}.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(shader);
+                AssetDatabase.CreateAsset(material, path);
+            }
+
+            material.shader = shader;
+            material.SetColor("_Color", Color.white);
+            EditorUtility.SetDirty(material);
+            return material;
         }
 
         private static void AddProp(Transform hand, Transform model, string name, Material material, Vector3 worldSize, Quaternion tilt, float reach)
@@ -1324,8 +1361,8 @@ namespace DigitalStory.Editor
 
         // ---------------------------------------------------------------- Scene
 
-        // The swarm's core: a CharacterController and its motor at the middle of the map, and nothing to see. The swarm's
-        // inner ring marks it.
+        // The swarm's core: a CharacterController and its motor at the middle of the map, and nothing to see. Nothing marks
+        // it: the standing swarm's figure-eight crosses itself over it.
         private static GameObject BuildCore()
         {
             var core = new GameObject("Swarm Core", typeof(CharacterController), typeof(SwarmCoreMotor));
@@ -1383,18 +1420,28 @@ namespace DigitalStory.Editor
             swarmSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             // The light that follows the swarm. SwarmGlowLight sets its range, brightness and colour from the SwarmConfig.
+            // Every light the scene uses exists from the first frame and stays enabled, dark while unused, so no frame of play
+            // pays for a light's first use.
             var glowLight = new GameObject("Swarm Glow Light", typeof(Light), typeof(SwarmGlowLight));
             Light glow = glowLight.GetComponent<Light>();
             glow.type = LightType.Point;
             glow.shadows = LightShadows.None;
-            glow.enabled = false;
+            glow.intensity = 0f;
+            glow.enabled = true;
 
             // The second light follows the wasps that attack, in a sting or a meteor.
             var attackLight = new GameObject("Swarm Attack Light", typeof(Light), typeof(SwarmGlowLight));
             Light attackGlow = attackLight.GetComponent<Light>();
             attackGlow.type = LightType.Point;
             attackGlow.shadows = LightShadows.None;
-            attackGlow.enabled = false;
+            attackGlow.intensity = 0f;
+            attackGlow.enabled = true;
+
+            // The felt hit: its shield flashes are made from this material when the match starts.
+            var hitFeedback = new GameObject("Hit Feedback", typeof(HitFeedbackView));
+            var hitFeedbackSerialized = new SerializedObject(hitFeedback.GetComponent<HitFeedbackView>());
+            SetObject(hitFeedbackSerialized, "_shieldFlashMaterial", LoadOrCreateShieldFlashMaterial());
+            hitFeedbackSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             var beekeeperPool = new GameObject("Beekeeper Pool", typeof(BeekeeperViewPool));
             var smokePool = new GameObject("Smoke Pool", typeof(SmokeViewPool));
@@ -1446,6 +1493,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_cloudPrefab", assets.Cloud);
             SetObject(serialized, "_colossusMotor", colossus.GetComponent<ColossusMotor>());
             SetObject(serialized, "_hud", hud.GetComponent<HiveDefenseHudView>());
+            SetObject(serialized, "_hitFeedback", hitFeedback.GetComponent<HitFeedbackView>());
             SetObject(serialized, "_fluteVoice", fluteVoice.GetComponent<SwarmFluteVoice>());
             SetObject(serialized, "_sound", Require(AssetDatabase.LoadAssetAtPath<SoundConfig>(SoundConfigPath), SoundConfigPath));
             serialized.ApplyModifiedPropertiesWithoutUndo();

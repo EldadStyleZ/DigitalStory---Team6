@@ -29,6 +29,8 @@
             <ui:Label name="phase-hint" text="" class="phase-hint line" picking-mode="Ignore" />
             <ui:Label name="banner-line" text="" class="banner-line line" picking-mode="Ignore" />
             <ui:Label name="granted-line" text="" class="granted-line line" picking-mode="Ignore" />
+            <ui:Label name="swarm-line" text="" class="swarm-line line" picking-mode="Ignore" />
+            <ui:Label name="dome-line" text="" class="dome-line line" picking-mode="Ignore" />
             <ui:Label name="level-line" text="" class="level-line line" picking-mode="Ignore" />
         </ui:VisualElement>
         <ui:VisualElement name="bottom" class="bottom" picking-mode="Ignore">
