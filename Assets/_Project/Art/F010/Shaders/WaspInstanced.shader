@@ -110,7 +110,8 @@ Shader "DigitalStory/WaspInstanced"
             static const float CoreWhiten = 0.45;
 
             // An impact (ImpactHeat, 1, in WaspSwarm.compute) whitens the light bands for its few frames, so a hit reads
-            // on the frame it lands. A sting's tick (0.9) and every lower heat stay in their colour.
+            // on the frame it lands; so does a squad's cast flash (SwarmGpuView.FlashSlot), so a cast reads on the frame
+            // its last note lands. A sting's tick (0.9) and every lower heat stay in their colour.
             static const float FlashStart = 0.95;
             static const float FlashWhiten = 0.7;
             static const float ShapeLight = 0.2;        // share of the moonlight and ambient light added, so the facets show

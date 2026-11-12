@@ -4,7 +4,8 @@
 // The CPU never reads this data back. Gameplay only feeds in counts, the forms, the slots and a few positions.
 //
 // Two layers decide where a wasp flies:
-// - The whole-swarm form (_Form): River, Hive Call, Colossus or Collapsed. It sweeps through the swarm as a wave.
+// - The whole-swarm form (_Form): River, Hive Call, Colossus or Collapsed. It sweeps through the swarm as a wave. The
+//   River trails behind the walking core and winds into a figure-eight round the standing one.
 // - Three song slots (Post, Guard, Strike). A live slot's squad, the wasps whose squad value lies in its [low, high),
 //   flies that slot's song; every other wasp flies the whole-swarm form. A Gust pulse is then added on top of both.
 // Adding a song: a form id below, one target function that returns a Steer from a SlotContext, and one case in
@@ -20,6 +21,9 @@
 // SwarmGpuView.VectorsPerSlot.
 #define SLOT_COUNT 3
 #define SLOT_VECTORS 3
+
+// Matches SwarmGpuView.MostStings: the most stings one Sting cast sends.
+#define STING_MOST 10
 
 // 48 bytes, the same layout as SwarmGpuView.WaspStatic and the struct in WaspInstanced.shader. Written once by the CPU.
 struct WaspStatic
@@ -58,14 +62,13 @@ int _BoneCount;                           // 0 until the Colossus has bones and 
 int _Form;                                // the whole-swarm DigitalStory.Logic.SwarmForm: River, HiveCall, Colossus or Collapsed
 int _PreviousForm;
 
-float _SimTime;
-float _DeltaTime;                         // already capped at SwarmConfig.MaxDeltaTime
+float _SimTime;                           // holds still while SwarmGpuView.Freeze holds the swarm
+float _DeltaTime;                         // already capped at SwarmConfig.MaxDeltaTime; 0 while the swarm is frozen
 float _FormStartTime;
 float _PreviousFormStartTime;
 
 float4 _CorePosition;
 float4 _CoreForward;                     // flat and unit length
-float _StandingShare;                     // 0 while the core moves, easing to 1 once it has stood still a moment
 float4 _HiveA;                            // xyz position, w 1 while it stands
 float4 _HiveB;
 float4 _LastHit;
@@ -78,6 +81,14 @@ float4 _Slots[SLOT_COUNT * SLOT_VECTORS];
 
 // Each slot's colour, in the colour space the draw expects: the category colour of the song it holds.
 float4 _SlotColors[SLOT_COUNT];
+
+// The cast flash (SwarmGpuView.FlashSlot): x Post, y Guard, z Strike, 1 on the frames the slot's squad flashes, else 0.
+float4 _SlotFlash;
+
+// The running Sting's targets, one per sting (SwarmGpuView.SetStingTargets): xyz the target's feet, live; w -1 while the
+// target lives, or the moment it fell, in _SimTime. Only the first _StingTargetCount are set.
+float4 _StingTargets[STING_MOST];
+int _StingTargetCount;
 
 // The Gust pulse: xy the centre on the ground (world x and z), z its start in _SimTime, w its radius (0: no gust yet).
 float4 _Pulse;
@@ -101,14 +112,18 @@ float _FlowSpeed;
 float _RiverLength;
 float _RiverRadius;
 float _MeanderAmplitude;
-float _StandingTrailMeters;
-float _TorusRadius;
-float _CoreRingShare;                     // the wasps whose seed is below this circle the core in the inner ring
-float _CoreRingRadius;
-float _CoreRingGlow;                      // the inner ring's heat while no slot holds a song
-float _CoreClearRadius;                   // metres on the ground around the core that the river keeps clear of
-float _CoreClearSpeed;                    // metres per second a river wasp inside that circle is eased back out
 float _DyingSeconds;
+
+// The figure-eight the free swarm flies while the core stands. The sizes are SwarmConfig's, already times the level's
+// size scale; SwarmGpuView keeps the rest.
+float _EightShare;                        // 0 while the swarm is a river, 1 once it is wound into the eight
+float _EightRadius;                       // metres from the crossing to each lobe's tip, on the ground
+float _EightHeight;                       // metres above the core the crossing flies
+float _EightTilt;                         // radians the eight's plane tilts, so one lobe rises as the other dips
+float _EightThickness;                    // metres the ribbon spreads to each side of its line
+float _EightLapSeconds;                   // seconds a wasp takes round the whole loop
+float _EightYaw;                          // radians on the ground (as RingOffset) the first lobe points, turning slowly
+float _EightSeconds;                      // seconds the eight has shown since the swarm was last a river
 
 static const float FullTurn = 6.28318530718;
 static const float HalfTurn = 3.14159265359;
@@ -152,19 +167,42 @@ static const int TrailSearchSteps = 12;
 // The look of each form, from spec 9.3 and songs-v2 section B. SwarmConfig does not hold these; move one there if it
 // needs tuning. The shapes are sized for at most 4,000 wasps of 0.24 m: wide and thick enough that the wasps keep apart.
 static const float FlyHeight = 1.0;              // metres above the ground the river flows
-static const float CrossSectionHeight = 0.45;    // the river's and the ring's height as a share of their width. Flat, so
+static const float CrossSectionHeight = 0.45;    // the river's height as a share of its width (the eight's is EightSectionHeight). Flat, so
                                                  // the wasps spread out where the camera above sees them one by one
                                                  // instead of stacking into one glowing band
-static const float RiverSwirl = 0.6;             // radians per second the river's cross-section turns
+static const float RiverSwirl = 0.6;             // radians per second the river's and the eight's cross-section turns
 static const float MeanderWaveNumber = 1.4;      // radians per metre along the river, a wave about 4.5 m long
 static const float MeanderSpeed = 0.9;           // radians per second
-static const float RiverHeadGap = 1.2;           // metres behind the core where the river starts, so the inner ring stays clear
+static const float RiverHeadGap = 0.5;           // metres behind the core where the river starts, so its head shows where
+                                                 // the core leads it
 static const float HaloRadius = 0.9;
 static const float HaloHeight = 2.2;             // metres over the core
 static const float HaloThickness = 0.25;
 static const float HaloSpin = 2.5;               // radians per second
-static const float CoreRingSpin = 1.8;           // radians per second the inner ring around the core turns
-static const float CoreRingThickness = 0.25;     // metres the inner ring's band spreads, so its wasps keep apart
+
+// The figure-eight (EightTarget). The river winds into it head first: a wasp's own share of the eight runs
+// EightWindStagger of the whole blend later the further back along the river it is, so a stop draws the eight along its
+// loop from the crossing instead of pulling the whole river across the core at once. The lowest wasp of the low lobe
+// keeps EightLowest metres over the ground.
+static const float EightWindStagger = 1.0;
+static const float EightLowest = 0.35;
+
+// The wasps linger where the eight crosses itself and hurry round the lobes' tips: their place round the loop runs
+// 1 - EightCrossingDwell as fast over the crossing as on average, and 1 + EightCrossingDwell as fast at the tips. So the
+// crossing over the core, the one thing the player reads the core by, is the densest part of the ribbon, and a big
+// swarm's lobes stay airy instead of a solid band. Below 1, so the wasps never stop or turn back.
+static const float EightCrossingDwell = 0.35;
+
+// The wasps passing over the core glow a little warmer, up to EightCrossingGlow more than the river's RiverGlow within
+// EightCrossingGlowRadius metres of it on the ground, fading out from there, so the knot where the eight crosses itself
+// catches the eye like the brightest part of the ribbon. Half that while a slot holds a song, as the river quiets.
+static const float EightCrossingGlow = 0.3;
+
+// The eight's ribbon is taller than the river's flat band, a rope in the air, so a big swarm's wasps spread through its
+// depth instead of packing into one sheet, and the loop reads as a shape in 3D. Still wider than tall, so a young swarm's
+// wasps keep apart where the camera above sees them.
+static const float EightSectionHeight = 0.7;
+static const float EightCrossingGlowRadius = 0.9;
 
 // Every slot song launches and returns with the same two blends (songs-v2 B). Peel: a wasp leaves the base form over
 // PeelSeconds, starting PeelStagger later the further back along the river it was at the cast, so the river's head
@@ -172,9 +210,10 @@ static const float CoreRingThickness = 0.25;     // metres the inner ring's band
 // PeelBy, so its whole squad is in the shape on the hit's frame. Home: after the release it eases back over
 // HomeSeconds, starting HomeStagger later the higher its order. The plan's Home is 0.5 s plus 0.25 s; it is shortened
 // so the last wasp is home when the slot's 0.6 s return beat ends and the slot empties, instead of springing the last
-// fifth of the way.
-static const float PeelSeconds = 0.3;
-static const float PeelStagger = 0.25;
+// fifth of the way. The owner felt the songs answer late, so the launch is half the plan's: the head leaves the river
+// in 0.15 s, and the tail 0.15 s after it.
+static const float PeelSeconds = 0.15;
+static const float PeelStagger = 0.15;
 static const float HomeSeconds = 0.4;
 static const float HomeStagger = 0.2;
 
@@ -214,9 +253,10 @@ static const float GustGlow = 0.4;
 static const float HiveCallGlow = 0.6;
 static const float ColossusGlow = 0.4;
 
-// Sting (Strike slot). p0.xyz: the target's feet, live. p0.w: the seconds the head takes to arrive, when the damage
-// starts (StingSong.ArriveSeconds). p1.xyz: a second target, read by the Twin Sting duet later.
-static const float StingFlightSeconds = 0.6;     // the arrival while p0.w is 0
+// Sting (Strike slot). See StingSteer for what it reads.
+static const float StingFlightSeconds = 0.35;    // StingSong.ArriveSeconds's default, the arrival while p0.w is 0
+static const float StingFanMeters = 1.2;         // metres the arcs of several stings bow apart sideways at their top, so
+                                                 // two stings on one beekeeper read as two
 static const float StingArcHeight = 1.2;         // metres the arc rises, plus StingArcRise per metre of distance
 static const float StingArcRise = 0.25;
 static const float StingChestHeight = 1.0;       // metres above the target's feet
@@ -305,19 +345,18 @@ static const float DomeWeaveTurn = 1.5;          // radians a wasp turns about t
 // Hydra (Strike slot). See HydraSteer for what it reads. Its necks, rear and splashes grow with the level's size scale;
 // the bite's height, a beekeeper's chest, does not.
 static const int HydraMostHeads = 5;
-static const float HydraBiteSeconds = 0.7;       // HydraSong.BiteSeconds's default, while p1.y is 0: the heads land, and
+static const float HydraBiteSeconds = 0.5;       // HydraSong.BiteSeconds's default, while p1.y is 0: the heads land, and
                                                  // the damage with them
 static const float HydraSnapSeconds = 0.25;      // the heads rear back until this long before the bite, at most half of
-                                                 // it, then snap onto their targets: 0.45 s with the 0.7 s bite
+                                                 // it, then snap onto their targets: 0.25 s with the 0.5 s bite
 static const float HydraNeckPacking = 0.6;       // a wasp's place on its neck is frac(heads x u) to this power, packing the head
 static const float HydraHeadStart = 0.8;         // from this place on the neck a wasp is part of the head
 static const float HydraFanRadians = 1.0;        // the heads rear back on a fan behind the core, its outer heads this far
                                                  // either side of straight back, so they stand clear of each other from
                                                  // any side the camera sees them, for any head count
-static const float HydraRootOut = 1.5;           // metres from the core toward the head's target its neck rises from: outside
-                                                 // the core's clear circle (SwarmConfig.CoreClearRadius 1.2), so the reared
-                                                 // neck arches back over the inner ring and the struck one reaches out from
-                                                 // it, and no neck ever crosses the ring. Not grown: the ring does not grow
+static const float HydraRootOut = 1.5;           // metres from the core toward the head's target its neck rises from, so the
+                                                 // reared neck arches back over the core and the struck one reaches out from
+                                                 // the swarm's edge. Not grown
 static const float HydraRearBack = 2.4;          // metres behind the core the head rears back to
 static const float HydraRearHeight = 3.8;        // about the plan's 4 m
 static const float HydraArchForward = 1.4;       // metres the reared neck bows toward the target, like a cobra's
@@ -357,7 +396,7 @@ static const float ScytheHitSeconds = 0.3;       // ScytheSong's hit, while p1.x
 static const float ScytheLeastSweepSeconds = 0.15; // while p1.y is 0, the ease-out sweep is timed so its edge crosses the
 static const float ScytheMostSweepSeconds = 0.5;   // aim, the sweep's middle, on the hit's frame, within these. ScytheSong's
                                                    // 0.25 s puts it there 0.01 s after the hit, within a frame
-static const float ScytheInnerRadius = 1.4;      // the blade's root. The plan's 1 m would cross the core's clear circle
+static const float ScytheInnerRadius = 1.4;      // the blade's root, a little wider than the plan's 1 m
 static const float ScytheHeight = 0.9;
 static const float ScytheCurve = 0.35;           // radians the blade's tip trails its root, by rank squared
 static const float ScytheCock = 0.52359877560;   // 30 degrees the blade winds back while it forms, before it sweeps
@@ -373,16 +412,16 @@ static const float ScytheEmberHeat = 0.3;
 // Lance (Strike slot). See LanceSteer for what it reads. Its spear, crown and wake grow with its length, which the
 // rule grows with the level.
 static const float DefaultLanceLength = 14.0;    // LanceSong's length, while p1.x is 0
-static const float LanceDrawSeconds = 0.4;       // the draw while p1.y is 0
+static const float LanceDrawSeconds = 0.25;      // the draw while p1.y is 0: LanceSong's hit at 0.35 s, less the flight
 static const float LanceFlightSeconds = 0.1;     // LanceSong.FlightSeconds: from the fire to the tip at full length, so
                                                  // the tip lands on LanceSong's hit, its draw plus this
-static const float LanceSpearFront = 1.3;        // metres behind the core the spear's tip gathers. The plan's 0.5 m would
-                                                 // sit on the core's marker
+static const float LanceSpearFront = 1.3;        // metres behind the core the spear's tip gathers, clear of the swarm's
+                                                 // middle. The plan says 0.5 m
 static const float LanceSpearLength = 5.0;
 static const float LancePullMeters = 0.8;        // the spear draws back this far through the draw
 static const float LanceHeight = 1.2;            // metres up the line runs where it hits: a beekeeper's chest
-static const float LanceHighHeight = 2.4;        // metres up the spear is held and thrown from, so it flies over the inner
-                                                 // ring and the river round the core instead of through them
+static const float LanceHighHeight = 2.4;        // metres up the spear is held and thrown from, so it flies over the swarm
+                                                 // round the core instead of through it
 static const float LanceDropMeters = 3.0;        // metres past the core over which the thrown line drops to LanceHeight
 static const float LanceLooseWidth = 0.35;       // metres the spear spreads as it gathers, tightening to LanceTightWidth.
 static const float LanceTightWidth = 0.1;        // The plan's 0.05 m is thinner than a wasp
@@ -409,10 +448,10 @@ static const float DefaultNestTrigger = 2.5;     // NestSong's radii, while p1.x
 static const float DefaultNestBlast = 3.5;
 static const float NestLobSeconds = 0.5;         // the last wasp has landed by then; NestSong arms at 0.6 s
 static const float NestLobStagger = 0.12;        // seconds from the river's head leaving to its tail
-static const float NestPeelSeconds = 0.1;        // a wasp joins the lob this fast. The lob starts over the core, inside the
-                                                 // ring around it, and the usual 0.3 s blend would cut the arc flat
+static const float NestPeelSeconds = 0.1;        // a wasp joins the lob this fast. The lob starts over the core, and a
+                                                 // slower blend would cut the arc flat
 static const float NestLobLift = 1.5;            // metres over the river's height the lob starts, so the comet leaves over
-                                                 // the core's inner ring instead of through it
+                                                 // the swarm round the core instead of through it
 static const float NestArcHeight = 2.5;          // metres the lob rises, plus NestArcRise per metre of distance
 static const float NestArcRise = 0.3;
 static const float NestHeadWidth = 0.1;          // metres the comet's head spreads; the tail adds up to NestTailWidth
@@ -597,6 +636,22 @@ int SlotOf(WaspStatic wasp)
     return found;
 }
 
+// 1 on the frames the slot's squad flashes for its cast, else 0.
+float SlotFlashOf(int slot)
+{
+    float flash = _SlotFlash.z;
+    if (slot == 0)
+    {
+        flash = _SlotFlash.x;
+    }
+    else if (slot == 1)
+    {
+        flash = _SlotFlash.y;
+    }
+
+    return flash;
+}
+
 // One exit with the result set first, so the compiler sees it initialised on every path.
 float GlowOf(int look)
 {
@@ -738,10 +793,11 @@ float FlatReach(float3 position)
     return length(position.xz - _CorePosition.xz);
 }
 
-// The river and the ring around the core blend in a straight line, and for about half the swarm that line runs across
-// the core, where the inner ring marks it: hundreds of wasps flew over the marker at every stop and start. This keeps a
-// blended goal at least leastReach from the core, the nearer of its two ends, so it swings round the core at that
-// distance instead. Both ends of the blend are unchanged. KeepClearOfCore stops the wasps that still cut the corner.
+// The river and the eight blend in a straight line. SwarmGpuView lays the eight across the way the core last walked, so
+// the river behind it winds out to the lobes at its sides; but the core may then walk off any way, and a straight line
+// from a lobe ahead of it to the river behind it runs across the core. This keeps a blended goal at least leastReach
+// from the core, the nearer of its two ends, so it swings round the core at that distance instead of piling through
+// it. Both ends of the blend are unchanged, and a goal bound for the crossing, at the core, still gets there.
 float3 AroundCore(float3 goal, float leastReach)
 {
     float2 away = goal.xz - _CorePosition.xz;
@@ -754,17 +810,71 @@ float3 AroundCore(float3 goal, float leastReach)
     return goal;
 }
 
-// While the core stands, the river curls into a lazy ring around it.
-float3 TorusTarget(WaspStatic wasp, float flowLane)
+// The wasp's place round the eight's loop: 0 and 0.5 at the crossing, 0.25 and 0.75 at the lobes' tips. Each time the
+// river turns into the eight, the loop starts with the river's order, so the river's head is at the crossing, by the
+// core; from then on the eight runs round once every _EightLapSeconds, faster than the river flows.
+float EightLaneAt(float flowLane)
 {
-    float around = flowLane * FullTurn;
-    float angle = wasp.ringAngle + _SimTime * RiverSwirl;
-    float radius = wasp.ringRadius * _RiverRadius;
-    float reach = _TorusRadius + cos(angle) * radius;
-    float3 lift = Up * (FlyHeight + sin(angle) * radius * CrossSectionHeight);
-    return _CorePosition.xyz + RingOffset(around, reach) + lift;
+    float lapsPerSecond = 1.0 / max(_EightLapSeconds, Tiny);
+    return frac(flowLane + _EightSeconds * (lapsPerSecond - _FlowSpeed));
 }
 
+// While the core stands, the free swarm flows round a figure-eight in the air: a lemniscate of Gerono on the ground
+// (along = r sin t, across = r sin t cos t), whose plane tilts _EightTilt about the line across it, so one lobe rises
+// as the other dips. It crosses itself _EightHeight over the core, so the core reads without any marker. Each wasp keeps
+// its place in the ribbon's flat cross-section, as in the river, so the ribbon has thickness.
+float3 EightTarget(WaspStatic wasp, float eightLane)
+{
+    // The loop crosses itself twice a lap, so the lingering repeats twice a lap.
+    float loop = eightLane - EightCrossingDwell * sin(eightLane * 2.0 * FullTurn) / (2.0 * FullTurn);
+    float loopSin;
+    float loopCos;
+    sincos(loop * FullTurn, loopSin, loopCos);
+    float along = _EightRadius * loopSin;
+    float across = _EightRadius * loopSin * loopCos;
+    float alongSlope = _EightRadius * loopCos;
+    float acrossSlope = _EightRadius * (loopCos * loopCos - loopSin * loopSin);
+
+    float tiltSin;
+    float tiltCos;
+    sincos(_EightTilt, tiltSin, tiltCos);
+    float3 axis = RingOffset(_EightYaw, 1.0);
+    float3 aside = cross(Up, axis);
+    float3 center = _CorePosition.xyz + axis * (along * tiltCos) + aside * across + Up * (_EightHeight + along * tiltSin);
+    float3 tangent = axis * (alongSlope * tiltCos) + aside * acrossSlope + Up * (alongSlope * tiltSin);
+
+    // The ribbon's cross-section: wide across the loop and less tall (EightSectionHeight).
+    float3 side = cross(Up, tangent);
+    float sideLength = length(side);
+    side = sideLength > Tiny ? side / sideLength : aside;
+    float3 lift = cross(tangent, side);
+    float liftLength = length(lift);
+    lift = liftLength > Tiny ? lift / liftLength : Up;
+
+    float angle = wasp.ringAngle + _SimTime * RiverSwirl;
+    float radius = wasp.ringRadius * _EightThickness;
+    float3 goal = center + side * (cos(angle) * radius) + lift * (sin(angle) * radius * EightSectionHeight);
+    goal.y = max(goal.y, _CorePosition.y + EightLowest);
+    return goal;
+}
+
+// The extra heat of a free wasp heading for a goal over the core while the swarm is wound into the eight (EightCrossingGlow).
+float EightCrossingHeat(float3 goal)
+{
+    float nearness = 1.0 - smoothstep(0.0, EightCrossingGlowRadius, FlatReach(goal));
+    float quiet = IsAnySlotLive() ? 0.5 : 1.0;
+    return EightCrossingGlow * _EightShare * nearness * quiet;
+}
+
+// How far this wasp is wound into the eight: the whole swarm's _EightShare, the river's head first and its tail last.
+float WoundShare(float flowLane)
+{
+    return smoothstep(0.0, 1.0, _EightShare * (1.0 + EightWindStagger) - flowLane * EightWindStagger);
+}
+
+// The free swarm's goal: the river behind the walking core, the eight round the standing one, or a blend while it
+// winds from one into the other. The eight also shows while the trail is still too short to hold a river, at the start
+// of a run; SwarmGpuView works that into _EightShare.
 float3 RiverTarget(WaspStatic wasp)
 {
     float flowLane = FlowLaneAt(wasp, _SimTime);
@@ -781,12 +891,8 @@ float3 RiverTarget(WaspStatic wasp)
     float meander = _MeanderAmplitude * sin(along * MeanderWaveNumber - _SimTime * MeanderSpeed);
     float3 river = center + Up * (FlyHeight + sin(angle) * radius * CrossSectionHeight) + side * (cos(angle) * radius + meander);
 
-    // The torus shows while the trail is still too short to hold a river (the start of a run) and while the core
-    // stands. The trail alone cannot say the second: it keeps its full length after the core stops.
-    float trailShare = saturate(trailLength / max(_StandingTrailMeters, Tiny));
-    float riverShare = trailShare * (1.0 - saturate(_StandingShare));
-    float3 torus = TorusTarget(wasp, flowLane);
-    return AroundCore(lerp(torus, river, riverShare), min(FlatReach(torus), FlatReach(river)));
+    float3 eight = EightTarget(wasp, EightLaneAt(flowLane));
+    return AroundCore(lerp(river, eight, WoundShare(flowLane)), min(FlatReach(eight), FlatReach(river)));
 }
 
 // A tight halo over the core.
@@ -797,46 +903,6 @@ float3 HaloTarget(WaspStatic wasp)
     float reach = HaloRadius + cos(wasp.ringAngle) * wobble;
     float lift = HaloHeight + sin(wasp.ringAngle) * wobble;
     return _CorePosition.xyz + RingOffset(around, reach) + Up * lift;
-}
-
-// The core is an invisible point, so a share of the wasps marks it: a tight, brighter ring that stays on it while the
-// river curls around it or trails behind it.
-bool IsCoreRingWasp(WaspStatic wasp)
-{
-    return wasp.seed < _CoreRingShare;
-}
-
-// Seeds below the share spread evenly around the ring.
-float3 CoreRingTarget(WaspStatic wasp)
-{
-    float around = (wasp.seed / max(_CoreRingShare, Tiny)) * FullTurn + _SimTime * CoreRingSpin;
-    float wobble = wasp.ringRadius * CoreRingThickness;
-    float reach = _CoreRingRadius + cos(wasp.ringAngle) * wobble;
-    float lift = FlyHeight + sin(wasp.ringAngle) * wobble * CrossSectionHeight;
-    return _CorePosition.xyz + RingOffset(around, reach) + Up * lift;
-}
-
-// The inner ring burns a little hotter than the river, and quiets with it while a slot holds a song.
-float CoreRingGlow()
-{
-    return IsAnySlotLive() ? _CoreRingGlow * (RiverQuietGlow / RiverGlow) : _CoreRingGlow;
-}
-
-// The river keeps clear of the inner ring. AroundCore swings the river's goals round the core, but a goal that passes
-// right by the core flips to its far side, and the soft river spring would carry the wasp straight across. So a river
-// wasp inside the clear circle loses the part of its speed that points at the core and eases back out to the circle's
-// edge, and the river flows around the inner ring like water round a stone.
-void KeepClearOfCore(WaspStatic wasp, inout WaspDynamic body)
-{
-    float2 away = body.position.xz - _CorePosition.xz;
-    float reach = length(away);
-    if (reach < _CoreClearRadius)
-    {
-        float2 outward = reach > Tiny ? away / reach : float2(cos(wasp.seed * FullTurn), sin(wasp.seed * FullTurn));
-        float inward = min(dot(body.velocity.xz, outward), 0.0);
-        body.velocity.xz -= outward * inward;
-        body.position.xz += outward * min(_CoreClearRadius - reach, _CoreClearSpeed * _DeltaTime);
-    }
 }
 
 int BoneOf(WaspStatic wasp)
@@ -856,13 +922,12 @@ float3 ColossusTarget(WaspStatic wasp)
 }
 
 // Where a wasp wants to be in a whole-swarm form, which look it shows and whether the stiff shape spring holds it.
-// A Colossus without bones, Collapsed and the River itself are the river, and in them the inner ring's wasps circle the
-// core on the stiff spring, so the ring keeps up with it.
-float3 GoalOf(int form, WaspStatic wasp, out int look, out bool isShape, out bool isCoreRing)
+// A Colossus without bones, Collapsed and the River itself are the river, which winds into the eight while the core
+// stands.
+float3 GoalOf(int form, WaspStatic wasp, out int look, out bool isShape)
 {
     look = form;
     isShape = true;
-    isCoreRing = false;
     float3 goal = _CorePosition.xyz;
 
     if (form == FormHiveCall)
@@ -872,12 +937,6 @@ float3 GoalOf(int form, WaspStatic wasp, out int look, out bool isShape, out boo
     else if (form == FormColossus && HasColossusPlace(wasp))
     {
         goal = ColossusTarget(wasp);
-    }
-    else if (IsCoreRingWasp(wasp))
-    {
-        look = FormRiver;
-        isCoreRing = true;
-        goal = CoreRingTarget(wasp);
     }
     else
     {
@@ -962,15 +1021,16 @@ float3 FibonacciDirection(float index, float count, float lowest, float highest)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Sting: a comet along an arc to the target, two gyroscope rings that wrap it, then a pop and the arc home.
+// Sting: one or more stings, each a comet along an arc to its target, two gyroscope rings that wrap it, then a pop and
+// the arc home.
 
-// A point on one of the two rings round the target's chest. The first half of the squad makes one ring, level along the
-// line to the target and tilted up across it, turning one way; the second half the other ring, level across the line and
-// tilted along it, turning the other way. Seen from any side the two cross like a gyroscope's. Each ring is a band
-// StingRingTube thick, so the wasps keep apart.
-float3 StingRingPoint(SlotContext context, float3 center, float3 toward, float radius)
+// A point on one of the two rings round the target's chest. The first half of the sting's wasps (rank below 0.5) makes
+// one ring, level along the line to the target and tilted up across it, turning one way; the second half the other
+// ring, level across the line and tilted along it, turning the other way. Seen from any side the two cross like a
+// gyroscope's. Each ring is a band StingRingTube thick, so the wasps keep apart.
+float3 StingRingPoint(SlotContext context, float rank, float3 center, float3 toward, float radius)
 {
-    bool isFirstRing = context.u < 0.5;
+    bool isFirstRing = rank < 0.5;
     float spin = isFirstRing ? StingRingSpin : -StingRingSpin;
     float3 side = cross(Up, toward);
     float3 level = isFirstRing ? toward : side;
@@ -984,7 +1044,7 @@ float3 StingRingPoint(SlotContext context, float3 center, float3 toward, float r
 
     float aroundSin;
     float aroundCos;
-    sincos(frac(context.u * 2.0) * FullTurn + context.seconds * spin, aroundSin, aroundCos);
+    sincos(frac(rank * 2.0) * FullTurn + context.seconds * spin, aroundSin, aroundCos);
     float3 radial = level * aroundCos + lifted * aroundSin;
 
     float tubeSin;
@@ -994,13 +1054,50 @@ float3 StingRingPoint(SlotContext context, float3 center, float3 toward, float r
     return center + radial * (radius + tubeCos * tube) + normal * (tubeSin * tube);
 }
 
+// How many stings the cast sent: p1.x, as StingRule sends it, or, while p1.x is 0, how many targets SwarmGpuView holds.
+// 1 to STING_MOST.
+int StingCountOf(SlotContext context)
+{
+    int count = context.p1.x >= 0.5 ? (int)(context.p1.x + 0.5) : _StingTargetCount;
+    return clamp(count, 1, STING_MOST);
+}
+
+// One sting's target: xyz its feet and w when it fell (-1 while it lives), from _StingTargets, or p0's target, alive,
+// for a sting SwarmGpuView holds no target for.
+float4 StingTargetOf(SlotContext context, int sting)
+{
+    float4 target = float4(context.p0.xyz, -1.0);
+    if (sting < _StingTargetCount)
+    {
+        target = _StingTargets[sting];
+    }
+
+    return target;
+}
+
+// Reads (StingRule's remarks): p0.xyz the first target's feet, live; p0.w the seconds the head takes to arrive, when the
+// damage starts (StingSong.ArriveSeconds; 0 reads as 0.35); p1.x how many stings the cast sent (0 reads as one per
+// target SwarmGpuView holds). Each sting's own target comes from _StingTargets. The squad is shared evenly between the
+// stings: the rank picks the sting (floor(stings x u)) and the place in it (frac(stings x u)), as the Hydra's heads do.
+// A sting whose target falls pops and flies home on its own; the slot's release sends every sting home.
 Steer StingSteer(SlotContext context)
 {
     WaspStatic wasp = context.wasp;
+    int stings = StingCountOf(context);
+    float ranked = context.u * stings;
+    int sting = min((int)ranked, stings - 1);
+    float rank = saturate(ranked - sting);
+    float4 target = StingTargetOf(context, sting);
+
+    // Several stings fan out: each arc bows sideways at its top by its place in the fan, and each pair of rings is
+    // turned by its own angle, so two stings on one beekeeper arrive from two sides and wrap it in two cocoons.
+    float fanShare = stings > 1 ? 2.0 * sting / (stings - 1) - 1.0 : 0.0;
     float3 start = _CorePosition.xyz + Up * FlyHeight;
-    float3 center = context.p0.xyz + Up * StingChestHeight;
-    float3 control = (start + center) * 0.5 + Up * (StingArcHeight + StingArcRise * distance(start, center));
-    float3 toward = FlatDirection(_CorePosition.xyz, context.p0.xyz);
+    float3 center = target.xyz + Up * StingChestHeight;
+    float3 toward = FlatDirection(_CorePosition.xyz, target.xyz);
+    float3 bow = cross(Up, toward) * (fanShare * StingFanMeters);
+    float3 control = (start + center) * 0.5 + Up * (StingArcHeight + StingArcRise * distance(start, center)) + bow;
+    float3 ringToward = TurnFlat(toward, (float)sting * GoldenAngle);
 
     // Launch: the comet. Its rank is the wasp's place in the river at the cast, so the river's head is the comet's tight,
     // bright head and the tail widens behind it. The goal leads the arc by the strike spring's lag, so the head lands
@@ -1018,7 +1115,7 @@ Steer StingSteer(SlotContext context)
     float sinceHead = context.seconds - flight;
     float tick = frac(max(sinceHead, 0.0) / StingTickSeconds) * StingTickSeconds;
     float squeeze = sinceHead >= 0.0 ? 1.0 - smoothstep(0.0, StingSqueezeSeconds, tick) : 0.0;
-    float3 ring = StingRingPoint(context, center, toward, lerp(StingRingRadius, StingSqueezeRadius, squeeze));
+    float3 ring = StingRingPoint(context, rank, center, ringToward, lerp(StingRingRadius, StingSqueezeRadius, squeeze));
     float3 shape = lerp(comet, ring, smoothstep(StingWrapStart, 1.0, progress));
 
     float sinceArrival = context.seconds - leave - flight;
@@ -1034,16 +1131,23 @@ Steer StingSteer(SlotContext context)
     float share = peel;
     bool isFast = rate > 0.0;
 
-    // Return: the cocoon pops to a sphere, then streams home on the reversed arc and into the base form.
-    if (context.released >= 0.0)
+    // Return: the cocoon pops to a sphere, then streams home on the reversed arc and into the base form. A sting whose
+    // target fell goes from then, or from the slot's release if that came first.
+    float released = context.released;
+    if (target.w >= 0.0)
     {
-        float pop = smoothstep(0.0, StingPopSeconds, context.released);
+        released = max(released, max(_SimTime - target.w, 0.0));
+    }
+
+    if (released >= 0.0)
+    {
+        float pop = smoothstep(0.0, StingPopSeconds, released);
         float3 burst = lerp(goal, center + SphereDirection(wasp) * StingPopRadius, pop);
-        float back = smoothstep(0.0, StingHomeSeconds, context.released - StingPopSeconds - context.u * StingHomeStagger);
+        float back = smoothstep(0.0, StingHomeSeconds, released - StingPopSeconds - rank * StingHomeStagger);
         float home = smoothstep(0.5, 1.0, back);
         goal = lerp(Bezier(burst, control, start, back), context.baseGoal, home);
         share = peel * (1.0 - home);
-        heat = context.released < StingPopSeconds ? ImpactHeat : HoldHeat;
+        heat = released < StingPopSeconds ? ImpactHeat : HoldHeat;
         isFast = back > 0.0 && back < 1.0;
     }
 
@@ -1906,12 +2010,11 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
 
     int look;
     bool isShape;
-    bool isCoreRing;
-    float3 goal = GoalOf(form, wasp, look, isShape, isCoreRing);
+    float3 goal = GoalOf(form, wasp, look, isShape);
     float4 tint = TintOf(look, hasSwitched);
-    if (isCoreRing)
+    if (look == FormRiver)
     {
-        tint.a = max(tint.a, CoreRingGlow());
+        tint.w += EightCrossingHeat(goal);
     }
     float stiffness = isShape ? _ShapeSpring : _RiverSpring;
     float damping = isShape ? _ShapeDamping : _RiverDamping;
@@ -1921,6 +2024,7 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     float floorY = NoFloor;
     float tintSharpness = TintSharpness;
     float pin = 0.0;
+    bool isFlashing = false;
 
     int slot = SlotOf(wasp);
     if (slot != NoSlot)
@@ -1945,6 +2049,13 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
             maxSpeed = StrikeMaxSpeed;
             isWobbling = false;
         }
+
+        // The cast flash: on the cast's frame, before any wasp has moved, the whole squad burns white in its colour.
+        if (SlotFlashOf(slot) > 0.5)
+        {
+            tint = float4(_SlotColors[slot].rgb, ImpactHeat);
+            isFlashing = true;
+        }
     }
 
     float gustHeat;
@@ -1952,8 +2063,9 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     tint.a = max(tint.a, gustHeat);
 
     // A wasp that leaves the river's tail starts again at its head. Flying there would draw a straight, sparse
-    // second river across every curve of the path, so it jumps instead; in the crowd at the head nobody sees it.
-    if (isFlowing && HasLaneWrapped(wasp))
+    // second river across every curve of the path, so it jumps instead; in the crowd at the head nobody sees it. Round
+    // the whole eight its place runs on without a break, so there it flies on.
+    if (isFlowing && HasLaneWrapped(wasp) && _EightShare < 1.0)
     {
         body.position = goal;
         body.velocity = Still;
@@ -1987,22 +2099,17 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
 
     Skim(floorY, body);
 
-    // Only the plain river: a song's squad, the inner ring and the shapes (the halo, the giant) may fly at the core.
-    if (isFlowing)
-    {
-        KeepClearOfCore(wasp, body);
-    }
-
     body.stateTime += _DeltaTime;
 
-    // A song's heat rises at once and cools at the tint's pace, so an impact flashes on the frame it lands.
+    // A song's heat rises at once and cools at the tint's pace, so an impact flashes on the frame it lands. The cast
+    // flash takes its colour at once too, so it shows on its frame even while the swarm is frozen.
     float4 blended = lerp(body.tint, tint, saturate(_DeltaTime * tintSharpness));
     if (slot != NoSlot)
     {
         blended.a = max(blended.a, tint.a);
     }
 
-    body.tint = blended;
+    body.tint = isFlashing ? tint : blended;
 }
 
 float DistanceOnGround(float3 from, float3 to)

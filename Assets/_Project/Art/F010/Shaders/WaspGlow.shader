@@ -81,8 +81,8 @@ Shader "DigitalStory/WaspGlow"
             static const float GlowBase = 0.7;
             static const float GlowHeat = 0.6;
 
-            // An impact (ImpactHeat, 1, in WaspSwarm.compute) whitens the glow for its few frames, as WaspInstanced.shader
-            // whitens the wasp, so the flash shows around it too. Lower heats keep the wasp's colour.
+            // An impact (ImpactHeat, 1, in WaspSwarm.compute) or a cast flash whitens the glow for its few frames, as
+            // WaspInstanced.shader whitens the wasp, so the flash shows around it too. Lower heats keep the wasp's colour.
             static const float FlashStart = 0.95;
             static const float FlashWhiten = 0.6;
 

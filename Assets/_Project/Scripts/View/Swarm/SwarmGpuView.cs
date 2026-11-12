@@ -10,7 +10,8 @@ namespace DigitalStory.View
     /// <summary>
     /// Moves and draws every wasp of the swarm on the GPU, with one compute dispatch and two indirect draws a frame:
     /// the wasps, then the soft glow around each. Gameplay never touches a wasp. It feeds this view the live count, the
-    /// whole-swarm form and its colour, the three song slots, the Gust and a few positions.
+    /// whole-swarm form and its colour, the three song slots, the Sting's targets, the Gust, the level's size scale, a
+    /// few positions, and the moments a hit freezes the swarm or a cast flashes a squad.
     /// </summary>
     /// <remarks>
     /// Why the GPU and not Jobs: docs/CODING_STANDARDS.md says "profile first, then Jobs and Burst". We go to the GPU
@@ -49,9 +50,27 @@ namespace DigitalStory.View
         private const int ParamAOffset = 1;
         private const int ParamBOffset = 2;
 
-        // The compute shader reads these as "no song in the slot" and "the song has not been released".
+        // The compute shader reads these as "no song in the slot" and "the song has not been released" (or, for a sting's
+        // target, "it still lives").
         private const float EmptySlotForm = -1f;
         private const float NotReleased = -1f;
+
+        // The most stings one Sting cast sends. Matches STING_MOST in WaspSwarm.compute. A target whose w is above
+        // LivingLeast lives.
+        private const int MostStings = 10;
+        private const float LivingLeast = 0.5f;
+
+        // LateUpdates a cast flash lasts: one bright frame or two, then the squad cools back to its song's heat.
+        private const int FlashFrames = 2;
+
+        // The figure-eight round the standing core turns this fast about it, so it never looks frozen. Once the core walks
+        // on, it swings back across the walk at up to EightAlignSpeed, so the river forming behind the core unwinds from
+        // its sides instead of through the core.
+        private const float EightPrecessionSpeed = 0.25f;
+        private const float EightAlignSpeed = 3f;
+        private const float HalfTurn = Mathf.PI;
+        private const float QuarterTurn = Mathf.PI * 0.5f;
+        private const float MinimumTrailMeters = 0.0001f;
 
         // Bytes per element. Each matches a struct in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.
         private const int StaticStride = sizeof(float) * 12;
@@ -80,6 +99,9 @@ namespace DigitalStory.View
         private static readonly int LastHitId = Shader.PropertyToID("_LastHit");
         private static readonly int SlotsId = Shader.PropertyToID("_Slots");
         private static readonly int SlotColorsId = Shader.PropertyToID("_SlotColors");
+        private static readonly int SlotFlashId = Shader.PropertyToID("_SlotFlash");
+        private static readonly int StingTargetsId = Shader.PropertyToID("_StingTargets");
+        private static readonly int StingTargetCountId = Shader.PropertyToID("_StingTargetCount");
         private static readonly int PulseId = Shader.PropertyToID("_Pulse");
         private static readonly int RiverColorId = Shader.PropertyToID("_RiverColor");
         private static readonly int CastColorId = Shader.PropertyToID("_CastColor");
@@ -95,14 +117,14 @@ namespace DigitalStory.View
         private static readonly int RiverLengthId = Shader.PropertyToID("_RiverLength");
         private static readonly int RiverRadiusId = Shader.PropertyToID("_RiverRadius");
         private static readonly int MeanderAmplitudeId = Shader.PropertyToID("_MeanderAmplitude");
-        private static readonly int StandingTrailMetersId = Shader.PropertyToID("_StandingTrailMeters");
-        private static readonly int StandingShareId = Shader.PropertyToID("_StandingShare");
-        private static readonly int TorusRadiusId = Shader.PropertyToID("_TorusRadius");
-        private static readonly int CoreRingShareId = Shader.PropertyToID("_CoreRingShare");
-        private static readonly int CoreRingRadiusId = Shader.PropertyToID("_CoreRingRadius");
-        private static readonly int CoreRingGlowId = Shader.PropertyToID("_CoreRingGlow");
-        private static readonly int CoreClearRadiusId = Shader.PropertyToID("_CoreClearRadius");
-        private static readonly int CoreClearSpeedId = Shader.PropertyToID("_CoreClearSpeed");
+        private static readonly int EightShareId = Shader.PropertyToID("_EightShare");
+        private static readonly int EightRadiusId = Shader.PropertyToID("_EightRadius");
+        private static readonly int EightHeightId = Shader.PropertyToID("_EightHeight");
+        private static readonly int EightTiltId = Shader.PropertyToID("_EightTilt");
+        private static readonly int EightThicknessId = Shader.PropertyToID("_EightThickness");
+        private static readonly int EightLapSecondsId = Shader.PropertyToID("_EightLapSeconds");
+        private static readonly int EightYawId = Shader.PropertyToID("_EightYaw");
+        private static readonly int EightSecondsId = Shader.PropertyToID("_EightSeconds");
         private static readonly int DyingSecondsId = Shader.PropertyToID("_DyingSeconds");
         private static readonly int WaspLengthId = Shader.PropertyToID("_WaspLength");
         private static readonly int BuzzAmplitudeId = Shader.PropertyToID("_BuzzAmplitude");
@@ -162,6 +184,14 @@ namespace DigitalStory.View
         private Vector3 _standingAnchor;
         private float _standingSeconds;
         private float _standingShare;
+        private float _sizeScale = 1f;
+        private float _freezeSeconds;
+
+        // The figure-eight: how far the swarm is wound into it, the way its first lobe points on the ground (radians, from
+        // +x toward +z), and the seconds it has shown since the swarm was last all river.
+        private float _eightShare = 1f;
+        private float _eightYaw;
+        private float _eightSeconds;
         private Vector4 _firstHive;
         private Vector4 _secondHive;
         private Vector3 _lastHit;
@@ -177,6 +207,12 @@ namespace DigitalStory.View
         private readonly float[] _slotSeconds = new float[SlotCount];
         private readonly float[] _slotReleasedSeconds = new float[SlotCount];
         private readonly bool[] _isSlotFresh = new bool[SlotCount];
+        private readonly int[] _slotFlashFrames = new int[SlotCount];
+
+        // The running Sting's targets as WaspSwarm.compute reads them (_StingTargets): w is NotReleased while the target
+        // lives, or the moment it fell on this view's clock.
+        private readonly Vector4[] _stingTargetVectors = new Vector4[MostStings];
+        private int _stingTargetCount;
 
         // The Gust pulse, kept the same way: the rules' seconds since the Gust until LateUpdate turns them into a start.
         private Vector3 _gustCenter;
@@ -191,8 +227,21 @@ namespace DigitalStory.View
         /// <summary>The colour last given to <see cref="SetCastColor"/>, which Hive Call and the Colossus show, for tests and debugging.</summary>
         public Color CastColor => _castColor;
 
-        /// <summary>How far the river has curled into the ring around the standing core: 0 while it flows behind it, 1 once it is a ring.</summary>
+        /// <summary>How far the core counts as standing: 0 while it walks, easing to 1 once it has stood still a moment.</summary>
         public float StandingShare => _standingShare;
+
+        /// <summary>
+        /// How far the free swarm is wound into the figure-eight round the core: 0 while it flows behind the walking core
+        /// as a river, 1 once it is all eight. Also 1 at the start of a run, before the core has walked far enough to
+        /// trail a river. For tests and debugging.
+        /// </summary>
+        public float EightShare => _eightShare;
+
+        /// <summary>True while <see cref="Freeze"/> holds the swarm still, for tests and debugging.</summary>
+        public bool IsFrozen => _freezeSeconds > 0f;
+
+        /// <summary>How many sting targets the last <see cref="SetStingTargets"/> gave, for tests and debugging.</summary>
+        public int StingTargetCount => _stingTargetCount;
 
         /// <summary>True while a song holds the slot (SongSlot as an int) as of the last <see cref="SetSlot"/>, for tests and debugging.</summary>
         public bool IsSlotLive(int slot) => _slotVectors[SlotHeaderIndex(slot)].x >= 0f;
@@ -219,8 +268,10 @@ namespace DigitalStory.View
                 return;
             }
 
+            // While a freeze holds the swarm, its clock and its step stand still; the core it follows does not.
             float deltaTime = Mathf.Min(Time.deltaTime, _config.MaxDeltaTime);
-            _simTime += deltaTime;
+            float stepSeconds = StepSeconds(deltaTime);
+            _simTime += stepSeconds;
             TrackStanding(deltaTime);
             TimeSlots();
             TimeGust();
@@ -231,11 +282,13 @@ namespace DigitalStory.View
                 _trailBuffer.SetData(_trailPoints, 0, 0, trailCount);
             }
 
+            TrackEight(stepSeconds, trailCount);
             LatchFormColors();
             BindComputeBuffers();
-            PushFrame(deltaTime, trailCount);
+            PushFrame(stepSeconds, trailCount);
             PushConfig();
             PushColors();
+            CountDownFlashes();
 
             if (_needsReset)
             {
@@ -430,6 +483,97 @@ namespace DigitalStory.View
             _gustRadius = Mathf.Max(0f, radius);
             _gustSeconds = seconds;
             _isGustFresh = true;
+        }
+
+        /// <summary>
+        /// The running Sting's targets, one per sting the cast sent (SwarmFormMachine.StingCount and StingTarget). Call it
+        /// every frame, with a count of 0 while no Sting runs. The Strike squad is shared evenly between the stings, and
+        /// each flies to, wraps and follows its own target. xyz is the target's feet; w is 1 while it lives and 0 once it
+        /// has fallen, and a sting whose target falls pops and flies home on its own. With a count of 0 every sting flies
+        /// to the slot's ParamA.
+        /// </summary>
+        /// <exception cref="ArgumentNullException"><paramref name="targets"/> is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="count"/> is below 0, above 10, or more than <paramref name="targets"/> holds.
+        /// </exception>
+        public void SetStingTargets(Vector4[] targets, int count)
+        {
+            if (targets == null)
+            {
+                throw new ArgumentNullException(nameof(targets));
+            }
+
+            if (count < 0 || count > MostStings || count > targets.Length)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(count), count, $"A Sting sends 0 to {MostStings} stings, and the array must hold that many targets.");
+            }
+
+            for (int sting = 0; sting < MostStings; sting++)
+            {
+                Vector4 before = _stingTargetVectors[sting];
+                bool hadFallen = sting < _stingTargetCount && before.w >= 0f;
+                if (sting >= count)
+                {
+                    _stingTargetVectors[sting] = new Vector4(0f, 0f, 0f, NotReleased);
+                    continue;
+                }
+
+                // A target that has just fallen keeps the moment it fell, on this view's clock, so its sting's pop plays
+                // out from there.
+                Vector4 target = targets[sting];
+                float fell = NotReleased;
+                if (target.w <= LivingLeast)
+                {
+                    fell = hadFallen ? before.w : _simTime;
+                }
+
+                _stingTargetVectors[sting] = new Vector4(target.x, target.y, target.z, fell);
+            }
+
+            _stingTargetCount = count;
+        }
+
+        /// <summary>
+        /// What the swarm's sizes are multiplied by at its level (HiveDefenseSession.SizeScale): the figure-eight round the
+        /// standing core grows with it, as the songs do. Call it every frame or whenever the level changes; it starts at 1.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The scale is not above 0, or is infinite.</exception>
+        public void SetSizeScale(float sizeScale)
+        {
+            if (!(sizeScale > 0f) || float.IsInfinity(sizeScale))
+            {
+                throw new ArgumentOutOfRangeException(nameof(sizeScale), sizeScale, "The swarm's size scale must be above 0.");
+            }
+
+            _sizeScale = sizeScale;
+        }
+
+        /// <summary>
+        /// Holds the swarm's motion still for <paramref name="seconds"/> of game time, from this frame: the hit-stop of a
+        /// big hit. The wasps are still drawn, and a song's flash still shows. A shorter freeze never cuts a longer one.
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">The seconds are below 0, not a number, or infinite.</exception>
+        public void Freeze(float seconds)
+        {
+            if (!(seconds >= 0f) || float.IsInfinity(seconds))
+            {
+                throw new ArgumentOutOfRangeException(nameof(seconds), seconds, "A freeze lasts 0 seconds or more.");
+            }
+
+            _freezeSeconds = Mathf.Max(_freezeSeconds, seconds);
+        }
+
+        /// <summary>
+        /// The cast flash: the slot's squad burns white in its colour for a frame or two from this frame, before any of
+        /// its wasps has moved. Call it on the frame the song is cast, with its slot fed to <see cref="SetSlot"/> that frame.
+        /// </summary>
+        /// <param name="slot">The slot: (int)SongSlot.Post, Guard or Strike.</param>
+        /// <exception cref="ArgumentOutOfRangeException">The slot is not a SongSlot.</exception>
+        public void FlashSlot(int slot)
+        {
+            SlotHeaderIndex(slot);
+            _slotFlashFrames[slot] = FlashFrames;
         }
 
         /// <summary>Where the core is and the way it faces. Only the facing on the ground is used.</summary>
@@ -705,11 +849,16 @@ namespace DigitalStory.View
             _previousFormStartTime = 0f;
             _standingSeconds = 0f;
             _standingShare = 0f;
+            _sizeScale = 1f;
+            _freezeSeconds = 0f;
+            _eightShare = 1f;
+            _eightYaw = 0f;
+            _eightSeconds = 0f;
             _hasFormChanged = false;
             ClearSongs();
         }
 
-        // Empties every slot and forgets the Gust, as at the start of a run.
+        // Empties every slot and forgets the Sting's targets, the cast flashes and the Gust, as at the start of a run.
         private void ClearSongs()
         {
             for (int slot = 0; slot < SlotCount; slot++)
@@ -720,12 +869,45 @@ namespace DigitalStory.View
                 _slotVectors[header + ParamBOffset] = new Vector4(0f, 0f, 0f, NotReleased);
                 _slotColors[slot] = Color.clear;
                 _isSlotFresh[slot] = false;
+                _slotFlashFrames[slot] = 0;
             }
 
+            for (int sting = 0; sting < MostStings; sting++)
+            {
+                _stingTargetVectors[sting] = new Vector4(0f, 0f, 0f, NotReleased);
+            }
+
+            _stingTargetCount = 0;
             _gustRadius = 0f;
             _gustStartTime = 0f;
             _isGustFresh = false;
         }
+
+        // The seconds the swarm moves this frame: none while a freeze holds it. The freeze counts down in game time.
+        private float StepSeconds(float deltaTime)
+        {
+            if (_freezeSeconds <= 0f)
+            {
+                return deltaTime;
+            }
+
+            _freezeSeconds = Mathf.Max(0f, _freezeSeconds - Time.deltaTime);
+            return 0f;
+        }
+
+        // A flash lasts FlashFrames LateUpdates, this one included.
+        private void CountDownFlashes()
+        {
+            for (int slot = 0; slot < SlotCount; slot++)
+            {
+                if (_slotFlashFrames[slot] > 0)
+                {
+                    _slotFlashFrames[slot]--;
+                }
+            }
+        }
+
+        private float FlashOf(int slot) => _slotFlashFrames[slot] > 0 ? 1f : 0f;
 
         // Turns the rules' clocks from this frame's SetSlot calls into this view's times, now that _simTime holds this
         // frame. A slot not fed this frame keeps its times, so its song plays on with this view's clock.
@@ -760,11 +942,11 @@ namespace DigitalStory.View
             }
         }
 
-        // Spec 9.3: while the core stands, the river curls into a torus around it. The PathTrail never shrinks while
-        // the core stands (it only stores points as it moves), so its length cannot tell standing from walking. This
-        // measures standing directly instead: the core stands while it stays within StandStillMeters (on the ground)
-        // of where it stopped, so settling never counts as a step. After StandDelaySeconds the river eases into the
-        // torus over StandBlendSeconds, and eases back as soon as it moves.
+        // While the core stands, the river winds into the figure-eight around it (the owner's change to spec 9.3's torus).
+        // The PathTrail never shrinks while the core stands (it only stores points as it moves), so its length cannot
+        // tell standing from walking. This measures standing directly instead: the core stands while it stays within
+        // StandStillMeters (on the ground) of where it stopped, so settling never counts as a step. After
+        // StandDelaySeconds the river eases into the eight over StandBlendSeconds, and eases back as soon as it moves.
         private void TrackStanding(float deltaTime)
         {
             float stillMeters = _config.StandStillMeters;
@@ -784,6 +966,48 @@ namespace DigitalStory.View
             float blendSeconds = _config.StandBlendSeconds;
             float blendStep = blendSeconds > 0f ? deltaTime / blendSeconds : 1f;
             _standingShare = Mathf.MoveTowards(_standingShare, goal, blendStep);
+        }
+
+        // The eight shows while the core stands, and while the trail is still too short to hold a river (the start of a
+        // run). It lies across the way the core last walked, so the river behind it winds out to the lobes at its sides
+        // rather than across the core; it turns slowly while the core stands, and swings back across the walk the shorter
+        // way once the core moves on. Its clock and its turn start over each time the swarm is all river again, where
+        // neither shows. The trail's length is read as WaspSwarm.compute reads it, from the points just copied.
+        private void TrackEight(float stepSeconds, int trailCount)
+        {
+            float trailLength = trailCount > 0 ? _trailPoints[trailCount - 1].w : 0f;
+            float trailShare = Mathf.Clamp01(trailLength / Mathf.Max(_config.StandingTrailMeters, MinimumTrailMeters));
+            _eightShare = 1f - (trailShare * (1f - _standingShare));
+
+            // Across the walk: the core's facing turned a quarter turn, cross(up, forward), as an angle on the ground.
+            float acrossYaw = Mathf.Atan2(-_coreForward.x, _coreForward.z);
+            if (_eightShare <= 0f)
+            {
+                _eightYaw = acrossYaw;
+                _eightSeconds = 0f;
+                return;
+            }
+
+            _eightSeconds += stepSeconds;
+            if (_standingSeconds >= _config.StandDelaySeconds)
+            {
+                _eightYaw = Mathf.Repeat(_eightYaw + (EightPrecessionSpeed * stepSeconds), FullTurn);
+                return;
+            }
+
+            // Either way across the walk will do, so it swings at most a quarter turn.
+            float toAcross = Mathf.DeltaAngle(_eightYaw * Mathf.Rad2Deg, acrossYaw * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+            if (toAcross > QuarterTurn)
+            {
+                toAcross -= HalfTurn;
+            }
+            else if (toAcross < -QuarterTurn)
+            {
+                toAcross += HalfTurn;
+            }
+
+            float most = EightAlignSpeed * stepSeconds;
+            _eightYaw = Mathf.Repeat(_eightYaw + Mathf.Clamp(toAcross, -most, most), FullTurn);
         }
 
         private void DestroyOwnedAssets()
@@ -849,11 +1073,16 @@ namespace DigitalStory.View
             compute.SetFloat(PreviousFormStartTimeId, _previousFormStartTime);
             compute.SetVector(CorePositionId, _corePosition);
             compute.SetVector(CoreForwardId, _coreForward);
-            compute.SetFloat(StandingShareId, _standingShare);
+            compute.SetFloat(EightShareId, _eightShare);
+            compute.SetFloat(EightYawId, _eightYaw);
+            compute.SetFloat(EightSecondsId, _eightSeconds);
             compute.SetVector(HiveAId, _firstHive);
             compute.SetVector(HiveBId, _secondHive);
             compute.SetVector(LastHitId, _lastHit);
             compute.SetVectorArray(SlotsId, _slotVectors);
+            compute.SetVector(SlotFlashId, new Vector4(FlashOf((int)SongSlot.Post), FlashOf((int)SongSlot.Guard), FlashOf((int)SongSlot.Strike), 0f));
+            compute.SetVectorArray(StingTargetsId, _stingTargetVectors);
+            compute.SetInt(StingTargetCountId, _stingTargetCount);
             compute.SetVector(PulseId, new Vector4(_gustCenter.x, _gustCenter.z, _gustStartTime, _gustRadius));
         }
 
@@ -872,13 +1101,11 @@ namespace DigitalStory.View
             compute.SetFloat(RiverLengthId, _config.RiverLengthMeters);
             compute.SetFloat(RiverRadiusId, _config.RiverRadius);
             compute.SetFloat(MeanderAmplitudeId, _config.MeanderAmplitude);
-            compute.SetFloat(StandingTrailMetersId, _config.StandingTrailMeters);
-            compute.SetFloat(TorusRadiusId, _config.TorusRadius);
-            compute.SetFloat(CoreRingShareId, _config.CoreRingShareFor(_activeCount));
-            compute.SetFloat(CoreRingRadiusId, _config.CoreRingRadius);
-            compute.SetFloat(CoreRingGlowId, _config.CoreRingGlow);
-            compute.SetFloat(CoreClearRadiusId, _config.CoreClearRadius);
-            compute.SetFloat(CoreClearSpeedId, _config.CoreClearSpeed);
+            compute.SetFloat(EightRadiusId, _config.EightRadius * _sizeScale);
+            compute.SetFloat(EightHeightId, _config.EightHeight * _sizeScale);
+            compute.SetFloat(EightTiltId, _config.EightTilt);
+            compute.SetFloat(EightThicknessId, _config.EightThickness * _sizeScale);
+            compute.SetFloat(EightLapSecondsId, _config.EightLapSeconds);
             compute.SetFloat(DyingSecondsId, _config.DyingSeconds);
 
             _material.SetFloat(WaspLengthId, _config.WaspLength);

@@ -23,9 +23,6 @@ namespace DigitalStory.View
         // A weak swarm still lights a small pool around itself, rather than shrinking to a point.
         private const float LeastRangeShare = 0.4f;
 
-        // Below this intensity the light is switched off, so a spent swarm costs no light pass.
-        private const float OffIntensity = 0.001f;
-
         private Light _light;
         private SwarmConfig _config;
         private bool _hasShown;
@@ -55,7 +52,7 @@ namespace DigitalStory.View
         /// <summary>
         /// Supplies the light's range and brightness at full strength (SwarmConfig.LightRange and LightIntensity), and
         /// makes this object's Light a point light without shadows, lit per pixel so it shows on the large ground.
-        /// The light stays dark until the first Show. Calling again (a restart) starts it over.
+        /// The light stays enabled at zero intensity until the first Show. Calling again (a restart) starts it over.
         /// </summary>
         public void Initialize(SwarmConfig config)
         {
@@ -74,7 +71,7 @@ namespace DigitalStory.View
             _light.shadows = LightShadows.None;
             _light.renderMode = LightRenderMode.ForcePixel;
             _light.intensity = 0f;
-            _light.enabled = false;
+            _light.enabled = true; // Never switched off: a spent swarm sits at zero, so no frame pays for the first use.
             _hasShown = false;
         }
 
@@ -108,12 +105,6 @@ namespace DigitalStory.View
         private void Apply()
         {
             float intensity = _config.LightIntensity * _strength;
-            bool isLit = intensity > OffIntensity;
-            if (_light.enabled != isLit)
-            {
-                _light.enabled = isLit;
-            }
-
             transform.position = _position;
             _light.color = _color;
             _light.intensity = intensity;
