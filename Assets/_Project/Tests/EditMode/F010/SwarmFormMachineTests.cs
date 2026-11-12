@@ -253,6 +253,172 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_changes, Is.EqualTo(new[] { SwarmForm.Colossus, SwarmForm.Collapsed }));
         }
 
+        // The giant's time (plan section I): its song's seconds, more for each kill, never past its most.
+
+        [Test]
+        public void ColossusSeconds_OutsideTheGiant_AreZero()
+        {
+            Assert.That(_forms.ColossusSecondsLeft, Is.EqualTo(0f));
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(0f));
+
+            _forms.StartColossus(4f);
+            _forms.Tick(4.5f, _hives);
+
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+            Assert.That(_forms.ColossusSecondsLeft, Is.EqualTo(0f));
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void ColossusSeconds_CountDownFromTheStart()
+        {
+            _forms.StartColossus(20f, 2f, 30f);
+            Assert.That(_forms.ColossusSecondsLeft, Is.EqualTo(20f).Within(1e-4f));
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(20f).Within(1e-4f));
+
+            _forms.Tick(5f, _hives);
+
+            Assert.That(_forms.ColossusSecondsLeft, Is.EqualTo(15f).Within(1e-4f));
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(20f).Within(1e-4f));
+        }
+
+        [TestCase(1, 22f)]
+        [TestCase(4, 28f)]
+        [TestCase(5, 30f)]
+        [TestCase(9, 30f)]
+        public void AddColossusKills_EachAddsItsSecondsNeverPastTheMost(int kills, float total)
+        {
+            _forms.StartColossus(20f, 2f, 30f);
+            _forms.Tick(5f, _hives);
+
+            _forms.AddColossusKills(kills);
+
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(total).Within(1e-4f));
+            Assert.That(_forms.ColossusSecondsLeft, Is.EqualTo(total - 5f).Within(1e-4f));
+            _forms.Tick(total - 5f - 0.01f, _hives);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus), "still standing just before its new end");
+            _forms.Tick(0.02f, _hives);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+        }
+
+        [Test]
+        public void AddColossusKills_OneAtATime_StopsAtTheMost()
+        {
+            _forms.StartColossus(20f, 2f, 30f);
+
+            for (int kill = 0; kill < 8; kill++)
+            {
+                _forms.AddColossusKills(1);
+            }
+
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(30f).Within(1e-4f));
+        }
+
+        [Test]
+        public void AddColossusKills_OutsideTheGiant_IsIgnored()
+        {
+            _forms.AddColossusKills(3);
+            _forms.StartColossus(20f, 2f, 30f);
+
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(20f).Within(1e-4f), "kills before it stood count for nothing");
+
+            _forms.AddColossusKills(0);
+            _forms.AddColossusKills(-2);
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(20f).Within(1e-4f));
+        }
+
+        // The single-number start is a giant that kills cannot lengthen, as the old song was.
+        [Test]
+        public void StartColossus_WithSecondsOnly_KillsAddNothing()
+        {
+            _forms.StartColossus(12f);
+
+            _forms.AddColossusKills(3);
+
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(12f).Within(1e-4f));
+        }
+
+        [Test]
+        public void StartColossus_AgainAfterAGiantThatGrew_StartsFromItsOwnSeconds()
+        {
+            _forms.StartColossus(20f, 2f, 30f);
+            _forms.AddColossusKills(4);
+            _body.Lose(_body.Count);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
+            _forms.Tick(_config.CollapseBlockSeconds + 0.1f, _hives);
+            _body.Tick(_config.CollapseBlockSeconds + 0.1f, _hives);
+
+            _forms.StartColossus(20f, 2f, 30f);
+
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(20f).Within(1e-4f));
+        }
+
+        [TestCase(-1f, 2f, 30f)]
+        [TestCase(20f, -2f, 30f)]
+        [TestCase(20f, 2f, 19f)]
+        public void StartColossus_ImpossibleTimes_Throw(float seconds, float secondsPerKill, float mostSeconds)
+        {
+            Assert.That(
+                () => _forms.StartColossus(seconds, secondsPerKill, mostSeconds), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+        }
+
+        // Plan section I: the leap slam's giant lands before its time can end it.
+        [Test]
+        public void SetColossusAirborne_TimeRunsOutInTheAir_EndsOnlyAfterItLands()
+        {
+            _forms.StartColossus(1f);
+            _forms.SetColossusAirborne(true);
+
+            _forms.Tick(1.5f, _hives);
+
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus), "still in the air");
+            Assert.That(_forms.ColossusSecondsLeft, Is.EqualTo(0f));
+
+            _forms.SetColossusAirborne(false);
+            _forms.Tick(0.01f, _hives);
+
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+        }
+
+        [Test]
+        public void SetColossusAirborne_ACollapseInTheAir_StillEndsIt()
+        {
+            _forms.StartColossus(12f);
+            _forms.SetColossusAirborne(true);
+
+            _body.Lose(_body.Count);
+
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Collapsed));
+        }
+
+        [Test]
+        public void StartColossus_AfterAGiantThatCollapsedInTheAir_IsNotHeldUp()
+        {
+            _forms.StartColossus(12f);
+            _forms.SetColossusAirborne(true);
+            _body.Lose(_body.Count);
+            _forms.Tick(_config.CollapseBlockSeconds + 0.1f, _hives);
+            _body.Tick(_config.CollapseBlockSeconds + 0.1f, _hives);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River), "the swarm came back");
+
+            _forms.StartColossus(1f);
+            _forms.Tick(1.1f, _hives);
+
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River), "the new giant is on the ground");
+        }
+
+        [Test]
+        public void SetColossusAirborne_OutsideTheGiant_HoldsUpNoLaterGiant()
+        {
+            _forms.SetColossusAirborne(true);
+            _forms.StartColossus(1f);
+
+            _forms.Tick(1.1f, _hives);
+
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+        }
+
         // Hive Call
 
         [Test]

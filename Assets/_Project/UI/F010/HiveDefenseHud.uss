@@ -669,3 +669,107 @@
     font-size: 15px;
     color: rgb(110, 175, 255);
 }
+
+/* The giant's hint: one line of its moves and, the first times, a smaller line of its phrases. Near the top, in the night sky
+   above the chase camera's giant, so it never covers the body. It fades out on its own after a few seconds. */
+.giant-hint {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 19%;
+    align-items: center;
+}
+
+.giant-line {
+    opacity: 0;
+    -unity-font-style: bold;
+    font-size: 20px;
+    padding: 3px 14px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    background-color: var(--panel);
+    color: var(--fury-glow);
+    transition-property: opacity;
+    transition-duration: 0.8s;
+}
+
+.giant-line--small {
+    font-size: 14px;
+    color: var(--text);
+}
+
+.giant-line--shown {
+    opacity: 1;
+}
+
+/* The giant strip, bottom middle and below the giant's feet: a ring of the seconds left and the two cooldown marks. Shown
+   only while the giant stands. */
+.giant-strip {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 64px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+.giant-strip--shown {
+    display: flex;
+}
+
+.giant-ring {
+    width: 58px;
+    height: 58px;
+    justify-content: center;
+    align-items: center;
+}
+
+.giant-seconds {
+    font-size: 19px;
+    -unity-font-style: bold;
+    color: var(--fury-glow);
+    -unity-text-align: middle-center;
+    padding: 0;
+    margin: 0;
+}
+
+.giant-marks {
+    margin-left: 10px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background-color: var(--panel);
+}
+
+.giant-mark-row {
+    flex-direction: row;
+    align-items: center;
+    margin: 2px 0;
+}
+
+.giant-mark-label {
+    width: 46px;
+    font-size: 12px;
+    color: var(--caption);
+    margin: 0 4px 0 0;
+    padding: 0;
+}
+
+.giant-mark {
+    width: 40px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: var(--track);
+    overflow: hidden;
+}
+
+.giant-mark-fill {
+    width: 0;
+    height: 100%;
+    background-color: var(--caption);
+}
+
+.giant-mark--ready {
+    background-color: var(--fury-glow);
+}

@@ -887,6 +887,558 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.Forms.IsDomed, Is.False);
         }
 
+        // ---- The giant, version 2 (plan section I): its time, its four moves and two phrases, and the camera's way ----
+
+        // Holes count from 0 as H J K L.
+        private const int RoarHole = 0;
+        private const int PunchHole = 1;
+        private const int KickHole = 2;
+        private const int SlamHole = 3;
+
+        // Sticks that stand still where they spawn, in spawn order, and then the giant for the given seconds, standing at the
+        // origin and facing +z. A second wave waits, so the match goes on when the giant kills them all.
+        private List<BeekeeperBrain> GiantAmong(float seconds, params Vector3[] spawns)
+        {
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(spawns.Length, 0), new WaveEntry(1, 0) }, spawns: spawns, firstFarmSeconds: 3f);
+            List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
+            Assert.That(_world.RunUntil(() => _world.Session.ActiveBeekeeperCount == spawns.Length, 3f + (spawns.Length * 3f)), Is.True);
+            Assert.That(_world.Session.Forms.StartColossus(seconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+            return keepers;
+        }
+
+        private void Press(int hole)
+        {
+            _world.RunWith(HiveDefenseWorld.Step, _world.Frame(holes: HiveDefenseFrame.HoleBit(hole)));
+        }
+
+        private void FillFury()
+        {
+            _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
+        }
+
+        [Test]
+        public void Giant_CastFromItsSong_StandsItsSecondsAndSaysHowManyAreLeft()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            var song = (ColossusSong)_world.Songs[HiveDefenseWorld.ColossusIndex];
+            Assert.That(session.ColossusSecondsTotal, Is.EqualTo(0f));
+            Assert.That(session.ColossusSecondsLeft, Is.EqualTo(0f));
+            FillFury();
+
+            _world.Play(song.Song.Keys);
+
+            Assert.That(session.IsColossusActive, Is.True);
+            Assert.That(session.ColossusSecondsTotal, Is.EqualTo(song.Seconds).Within(1e-4f));
+            Assert.That(session.ColossusSecondsLeft, Is.EqualTo(song.Seconds).Within(0.05f));
+            _world.Run(10f);
+            Assert.That(session.ColossusSecondsLeft, Is.EqualTo(song.Seconds - 10f).Within(0.05f));
+            _world.Run(song.Seconds - 10.2f);
+            Assert.That(session.IsColossusActive, Is.True, "still standing just before its seconds");
+            _world.Run(0.4f);
+            Assert.That(session.IsColossusActive, Is.False);
+            Assert.That(session.ColossusSecondsLeft, Is.EqualTo(0f));
+            Assert.That(session.ColossusSecondsTotal, Is.EqualTo(0f));
+        }
+
+        // Sticks at 1 health round the giant, within its slam's reach, so one slam kills them all.
+        [TestCase(3, 26f)]
+        [TestCase(6, 30f)]
+        public void Giant_EachKill_AddsTwoSecondsNeverPastThirty(int sticks, float total)
+        {
+            var spawns = new Vector3[sticks];
+            for (int index = 0; index < sticks; index++)
+            {
+                float angle = index * (2f * Mathf.PI / sticks);
+                spawns[index] = new Vector3(Mathf.Cos(angle) * 3f, 0f, Mathf.Sin(angle) * 3f);
+            }
+
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(sticks, 0), new WaveEntry(1, 0) }, spawns: spawns, firstFarmSeconds: 3f, withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            session.BeekeeperSpawned += keeper =>
+            {
+                keeper.Stun(1000f);
+                keeper.TakeDamage(_world.Stick.Health - 1f);
+            };
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == sticks, 3f + (sticks * 3f)), Is.True);
+            var song = (ColossusSong)_world.Songs[HiveDefenseWorld.ColossusIndex];
+            FillFury();
+            _world.Play(song.Song.Keys);
+            Assert.That(session.ColossusSecondsTotal, Is.EqualTo(song.Seconds).Within(1e-4f));
+
+            Press(SlamHole);
+            _world.Run(_world.Colossus.SlamHitDelay + 0.1f);
+
+            Assert.That(session.ActiveBeekeeperCount, Is.EqualTo(0), "the slam killed them all");
+            Assert.That(session.ColossusSecondsTotal, Is.EqualTo(total).Within(1e-4f));
+            Assert.That(session.IsColossusActive, Is.True);
+        }
+
+        [Test]
+        public void Giant_TheNoteThatCastsIt_IsNoMove()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            var started = new List<ColossusAttack>();
+            session.ColossusAttackStarted += started.Add;
+            FillFury();
+
+            _world.Play(_world.Songs[HiveDefenseWorld.ColossusIndex].Song.Keys);
+            _world.Run(1f);
+
+            Assert.That(session.IsColossusActive, Is.True);
+            Assert.That(started, Is.Empty, "the last L cast the giant, so it is no slam");
+            Assert.That(session.SlamCooldown01, Is.EqualTo(0f));
+            Assert.That(session.RoarCooldown01, Is.EqualTo(0f));
+        }
+
+        [TestCase(RoarHole, ColossusAttack.Roar)]
+        [TestCase(PunchHole, ColossusAttack.Punch)]
+        [TestCase(KickHole, ColossusAttack.Kick)]
+        [TestCase(SlamHole, ColossusAttack.Slam)]
+        public void Giant_WhileItStands_EachHoleIsAMoveAndNoNote(int hole, ColossusAttack move)
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            var notes = new List<int>();
+            var started = new List<ColossusAttack>();
+            session.Caster.NotePlayed += notes.Add;
+            session.ColossusAttackStarted += started.Add;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+
+            Press(hole);
+
+            Assert.That(started, Is.EqualTo(new[] { move }));
+            Assert.That(notes, Is.Empty);
+            Assert.That(session.Caster.RecentNoteCount, Is.EqualTo(0));
+        }
+
+        // Space or the left mouse button still punches, and Left Shift or the right button still kicks.
+        [TestCase(true, false, ColossusAttack.Punch)]
+        [TestCase(false, true, ColossusAttack.Kick)]
+        public void Giant_PunchAndKickButtons_StillPunchAndKick(bool punch, bool kick, ColossusAttack move)
+        {
+            _world = new HiveDefenseWorld();
+            HiveDefenseSession session = _world.Session;
+            var started = new List<ColossusAttack>();
+            session.ColossusAttackStarted += started.Add;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+
+            _world.RunWith(HiveDefenseWorld.Step, _world.Frame(punch: punch, kick: kick));
+
+            Assert.That(started, Is.EqualTo(new[] { move }));
+        }
+
+        // K and Left Shift pressed on one tick are one kick, not a K K phrase.
+        [Test]
+        public void Giant_KAndTheKickButtonOnOneTick_AreOneKick()
+        {
+            _world = new HiveDefenseWorld();
+            HiveDefenseSession session = _world.Session;
+            var started = new List<ColossusAttack>();
+            session.ColossusAttackStarted += started.Add;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+
+            _world.RunWith(HiveDefenseWorld.Step, _world.Frame(holes: HiveDefenseFrame.HoleBit(KickHole), kick: true));
+            _world.Run(1f);
+
+            Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Kick }));
+        }
+
+        [Test]
+        public void Giant_AfterItEnds_NotesCastSongsAgainAndNoMoveIsLeftOver()
+        {
+            _world = new HiveDefenseWorld(withSongs: true);
+            HiveDefenseSession session = _world.Session;
+            var started = new List<ColossusAttack>();
+            session.ColossusAttackStarted += started.Add;
+            Assert.That(session.Forms.StartColossus(0.5f), Is.True);
+            _world.Run(0.4f);
+
+            // The second K waits for the first kick to land, which is after the giant has gone.
+            Press(KickHole);
+            Press(KickHole);
+            Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Kick }));
+            Assert.That(_world.RunUntil(() => !session.IsColossusActive, 1f), Is.True);
+            _world.Run(1f);
+
+            Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Kick }), "the waiting spin kick never starts");
+            Assert.That(session.Caster.RecentNoteCount, Is.EqualTo(0));
+
+            PlayDome();
+
+            Assert.That(session.Forms.IsDomed, Is.True, "H K J casts the Dome again");
+        }
+
+        // Sticks 4 m and 6 m from the giant: the slam's 5 m reaches the first only.
+        [Test]
+        public void Giant_Slam_HurtsThrowsAndStunsEveryBeekeeperWithinItsRadius_AsAHeavyHit()
+        {
+            List<BeekeeperBrain> keepers = GiantAmong(ColossusSeconds, new Vector3(4f, 0f, 0f), new Vector3(-6f, 0f, 0f));
+            HiveDefenseSession session = _world.Session;
+            var hits = new List<SongHit>();
+            session.SongLanded += hits.Add;
+            Vector3 before = keepers[0].Position;
+
+            Press(SlamHole);
+            _world.Run(_world.Colossus.SlamHitDelay + 0.1f);
+
+            Assert.That(keepers[0].Health, Is.EqualTo(_world.Stick.Health - _world.Colossus.SlamDamage).Within(0.01f));
+            Assert.That(keepers[0].State, Is.EqualTo(BeekeeperState.Stunned));
+            Assert.That(keepers[0].Position.x, Is.GreaterThan(before.x + 0.1f), "thrown away from the giant");
+            Assert.That(keepers[1].Health, Is.EqualTo(_world.Stick.Health), "6 m is beyond 5 m");
+            Assert.That(hits.Count, Is.EqualTo(1));
+            Assert.That(hits[0].Form, Is.EqualTo(SwarmForm.Colossus));
+            Assert.That(hits[0].IsHeavy, Is.True);
+            Assert.That(hits[0].Damage, Is.EqualTo(_world.Colossus.SlamDamage).Within(0.01f));
+            Assert.That(session.Fury.Value, Is.GreaterThan(0f), "the giant's damage fills Fury, as a punch's does");
+        }
+
+        [Test]
+        public void Giant_Slam_CoolsDownForItsSeconds()
+        {
+            GiantAmong(ColossusSeconds, new Vector3(4f, 0f, 0f));
+            HiveDefenseSession session = _world.Session;
+            var started = new List<ColossusAttack>();
+            session.ColossusAttackStarted += started.Add;
+
+            Press(SlamHole);
+            Assert.That(session.SlamCooldown01, Is.EqualTo(1f).Within(0.01f));
+            _world.Run(1f);
+            Press(SlamHole);
+
+            Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Slam }), "refused while it cools down");
+            Assert.That(session.SlamCooldown01, Is.EqualTo(1f - (1f / _world.Colossus.SlamCooldownSeconds)).Within(0.02f));
+
+            _world.Run(_world.Colossus.SlamCooldownSeconds - 1f);
+            Press(SlamHole);
+
+            Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Slam, ColossusAttack.Slam }));
+        }
+
+        // Two sticks stand at hives 5 m and 7 m from the giant, swinging at them: the roar's 6 m stuns the first only.
+        [Test]
+        public void Giant_Roar_StunsEveryBeekeeperWithinItsRadiusForLongerThanABlowWithoutHurting()
+        {
+            _world = new HiveDefenseWorld(
+                new[] { new WaveEntry(2, 0), new WaveEntry(1, 0) },
+                hives: new[] { new Vector3(0f, 0f, 5f), new Vector3(0f, 0f, -7f) },
+                spawns: new[] { new Vector3(0f, 0f, 5f), new Vector3(0f, 0f, -7f) },
+                firstFarmSeconds: 3f);
+            HiveDefenseSession session = _world.Session;
+            var keepers = new List<BeekeeperBrain>();
+            session.BeekeeperSpawned += keepers.Add;
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 2, 8f), Is.True);
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+            var hits = new List<SongHit>();
+            session.SongLanded += hits.Add;
+            Assert.That(keepers[0].State, Is.Not.EqualTo(BeekeeperState.Stunned));
+
+            Press(RoarHole);
+            _world.Run(_world.Colossus.RoarHitDelay + 0.05f);
+
+            Assert.That(keepers[0].State, Is.EqualTo(BeekeeperState.Stunned), "5 m is within 6 m");
+            Assert.That(keepers[1].State, Is.Not.EqualTo(BeekeeperState.Stunned), "7 m is beyond it");
+            Assert.That(keepers[0].Health, Is.EqualTo(_world.Stick.Health), "a roar does no damage");
+            Assert.That(hits, Is.Empty, "with no damage there is no hit to report");
+            Assert.That(session.RoarCooldown01, Is.GreaterThan(0.9f));
+
+            _world.Run(_world.Colossus.RoarStunSeconds - 0.2f);
+            Assert.That(keepers[0].State, Is.EqualTo(BeekeeperState.Stunned), "longer than a blow's stun");
+            _world.Run(0.3f);
+            Assert.That(keepers[0].State, Is.Not.EqualTo(BeekeeperState.Stunned));
+        }
+
+        // Sticks beside and behind the giant, out of a kick's reach ahead, and one beyond the spin's 3.5 m.
+        [Test]
+        public void Giant_KickThenKickWithinTheWindow_IsASpinKickThatHitsAllAround()
+        {
+            List<BeekeeperBrain> keepers = GiantAmong(
+                ColossusSeconds, new Vector3(3f, 0f, 0f), new Vector3(0f, 0f, -3f), new Vector3(-4f, 0f, 0f));
+            HiveDefenseSession session = _world.Session;
+            var started = new List<ColossusAttack>();
+            var hits = new List<SongHit>();
+            session.ColossusAttackStarted += started.Add;
+            session.SongLanded += hits.Add;
+
+            Press(KickHole);
+            _world.Run(0.3f);
+            Press(KickHole);
+            _world.Run(_world.Colossus.KickHitDelay + _world.Colossus.SpinKickHitDelay + 0.1f);
+
+            Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Kick, ColossusAttack.SpinKick }));
+            float spun = _world.Stick.Health - _world.Colossus.SpinKickDamage;
+            Assert.That(keepers[0].Health, Is.EqualTo(spun).Within(0.01f), "beside it");
+            Assert.That(keepers[1].Health, Is.EqualTo(spun).Within(0.01f), "behind it");
+            Assert.That(keepers[2].Health, Is.EqualTo(_world.Stick.Health), "4 m is beyond 3.5 m");
+            Assert.That(hits.Count, Is.EqualTo(2), "the kick ahead hit nobody");
+            Assert.That(hits[0].IsHeavy, Is.False);
+            Assert.That(hits[1].IsHeavy, Is.False);
+        }
+
+        [Test]
+        public void Giant_ASlowSecondKick_IsAPlainKick()
+        {
+            List<BeekeeperBrain> keepers = GiantAmong(ColossusSeconds, new Vector3(0f, 0f, -3f));
+            HiveDefenseSession session = _world.Session;
+            var started = new List<ColossusAttack>();
+            session.ColossusAttackStarted += started.Add;
+
+            Press(KickHole);
+            _world.Run(_world.Colossus.KickCooldownSeconds + 0.1f);
+            Press(KickHole);
+            _world.Run(_world.Colossus.KickHitDelay + 0.1f);
+
+            Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Kick, ColossusAttack.Kick }));
+            Assert.That(keepers[0].Health, Is.EqualTo(_world.Stick.Health), "a kick lands ahead, not behind");
+        }
+
+        // The mouse aims 15 m ahead, and the leap is pulled in to its 10 m. One stick stands 2 m past the landing, and one 3 m
+        // behind the take-off, which the first slam reaches and the landing does not.
+        [Test]
+        public void Giant_SlamThenSlamWithinTheWindow_LeapsToTheAimPulledInAndHitsAroundTheLanding()
+        {
+            List<BeekeeperBrain> keepers = GiantAmong(ColossusSeconds, new Vector3(0f, 0f, 12f), new Vector3(0f, 0f, -3f));
+            HiveDefenseSession session = _world.Session;
+            ColossusConfig giant = _world.Colossus;
+            var started = new List<ColossusAttack>();
+            var hits = new List<SongHit>();
+            session.ColossusAttackStarted += started.Add;
+            session.SongLanded += hits.Add;
+            var aim = new Vector3(0f, 0f, 15f);
+            HiveDefenseFrame aiming = _world.Frame(aim: aim, isMouseLive: true);
+            HiveDefenseFrame slam = _world.Frame(holes: HiveDefenseFrame.HoleBit(SlamHole), aim: aim, isMouseLive: true);
+
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+            _world.RunWith(giant.SlamHitDelay + 0.05f, aiming);
+            Assert.That(session.IsColossusLeaping, Is.False, "a slam is no leap");
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+
+            Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Slam, ColossusAttack.LeapSlam }));
+            Assert.That(session.IsColossusLeaping, Is.True);
+            Assert.That(session.ColossusLeapTarget.x, Is.EqualTo(0f).Within(1e-4f));
+            Assert.That(session.ColossusLeapTarget.z, Is.EqualTo(giant.LeapRange).Within(1e-4f), "pulled in to its range");
+            Assert.That(session.ColossusFacing.z, Is.EqualTo(1f).Within(1e-4f), "it faces the way it leaps");
+
+            // In the air it can neither be steered nor attack.
+            _world.RunWith(giant.LeapSeconds * 0.5f, _world.Frame(move: new Vector2(1f, 0f), punch: true, aim: aim, isMouseLive: true));
+
+            Assert.That(session.IsColossusLeaping, Is.True);
+            Assert.That(session.ColossusPosition.x, Is.EqualTo(0f).Within(1e-4f), "not steered");
+            Assert.That(session.ColossusPosition.z, Is.GreaterThan(2f).And.LessThan(8f), "on its way");
+            Assert.That(session.CorePosition.z, Is.EqualTo(session.ColossusPosition.z).Within(1e-4f), "the core rides along");
+            Assert.That(started.Count, Is.EqualTo(2), "no punch in the air");
+
+            _world.Run((giant.LeapSeconds * 0.5f) + 0.1f);
+
+            Assert.That(session.IsColossusLeaping, Is.False);
+            Assert.That(session.ColossusPosition.z, Is.EqualTo(giant.LeapRange).Within(1e-4f), "landed on the spot");
+            Assert.That(keepers[0].Health, Is.EqualTo(_world.Stick.Health - giant.LeapDamage).Within(0.01f), "2 m from the landing");
+            Assert.That(keepers[1].Health, Is.EqualTo(_world.Stick.Health - giant.SlamDamage).Within(0.01f), "only the first slam reached it");
+            Assert.That(hits.Count, Is.EqualTo(2));
+            Assert.That(hits[0].IsHeavy, Is.True, "the slam");
+            Assert.That(hits[1].IsHeavy, Is.True, "the landing");
+        }
+
+        // A giant of 1 s that leaps near its end: the second L comes while the slam winds up, so the leap follows the slam
+        // and is still in the air when the time runs out.
+        [Test]
+        public void Giant_TimeRunningOutInTheAir_LandsFirstThenEnds()
+        {
+            List<BeekeeperBrain> keepers = GiantAmong(1f, new Vector3(0f, 0f, 7f));
+            HiveDefenseSession session = _world.Session;
+            var landed = new List<ColossusAttack>();
+            session.ColossusAttackLanded += landed.Add;
+            var aim = new Vector3(0f, 0f, 6f);
+            HiveDefenseFrame aiming = _world.Frame(aim: aim, isMouseLive: true);
+            HiveDefenseFrame slam = _world.Frame(holes: HiveDefenseFrame.HoleBit(SlamHole), aim: aim, isMouseLive: true);
+
+            _world.RunWith(0.5f, aiming);
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+            _world.RunWith(0.1f, aiming);
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+            _world.RunWith(0.5f, aiming);
+
+            Assert.That(session.ColossusSecondsLeft, Is.EqualTo(0f), "its time is up");
+            Assert.That(session.IsColossusActive, Is.True, "but it is in the air");
+            Assert.That(session.IsColossusLeaping, Is.True);
+
+            Assert.That(_world.RunUntil(() => !session.IsColossusActive, 1f), Is.True);
+
+            Assert.That(landed, Is.EqualTo(new[] { ColossusAttack.Slam, ColossusAttack.LeapSlam }), "it landed before it ended");
+            Assert.That(keepers[0].Health, Is.EqualTo(_world.Stick.Health - _world.Colossus.LeapDamage).Within(0.01f));
+            Assert.That(session.CorePosition.z, Is.EqualTo(aim.z).Within(1e-4f), "the swarm is where the giant landed");
+        }
+
+        // Plan section K: a collapse ends the giant, in the air too, and the leap with it.
+        [Test]
+        public void Giant_ACollapseInTheAir_EndsTheGiantAndItsLeap()
+        {
+            GiantAmong(ColossusSeconds, new Vector3(20f, 0f, 20f));
+            HiveDefenseSession session = _world.Session;
+            var landed = new List<ColossusAttack>();
+            session.ColossusAttackLanded += landed.Add;
+            var aim = new Vector3(0f, 0f, 8f);
+            HiveDefenseFrame aiming = _world.Frame(aim: aim, isMouseLive: true);
+            HiveDefenseFrame slam = _world.Frame(holes: HiveDefenseFrame.HoleBit(SlamHole), aim: aim, isMouseLive: true);
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+            _world.RunWith(_world.Colossus.SlamHitDelay + 0.05f, aiming);
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+            _world.RunWith(_world.Colossus.LeapSeconds * 0.5f, aiming);
+            Assert.That(session.IsColossusLeaping, Is.True);
+            Vector3 inTheAir = session.ColossusPosition;
+
+            session.Swarm.Lose(session.Swarm.Count - (session.Swarm.CollapseLine / 2));
+            _world.Run(1f);
+
+            Assert.That(session.IsColossusActive, Is.False);
+            Assert.That(session.IsColossusLeaping, Is.False);
+            Assert.That(landed, Is.EqualTo(new[] { ColossusAttack.Slam }), "the leap never lands");
+            Assert.That(session.CorePosition.z, Is.EqualTo(inTheAir.z).Within(0.2f), "the swarm drops where the giant was");
+        }
+
+        // A stick 5.3 m from the giant: beyond a slam's 5 m at level 1, within its 5.6 m at level 2, where it hits 1.12 times
+        // as hard.
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Giant_AfterANest_SlamsHarderAndFarther(bool afterANest)
+        {
+            _world = new HiveDefenseWorld(
+                new[] { new WaveEntry(1, 0), new WaveEntry(1, 0) },
+                spawns: new[] { new Vector3(5.3f, 0f, 0f) },
+                nests: afterANest ? NestUnderTheCore() : null,
+                firstFarmSeconds: 3f);
+            HiveDefenseSession session = _world.Session;
+            List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f), Is.True);
+            Assert.That(session.Level, Is.EqualTo(afterANest ? 2 : 1));
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+
+            Press(SlamHole);
+            _world.Run(_world.Colossus.SlamHitDelay + 0.1f);
+
+            float expected = afterANest ? _world.Stick.Health - (_world.Colossus.SlamDamage * 1.12f) : _world.Stick.Health;
+            Assert.That(keepers[0].Health, Is.EqualTo(expected).Within(0.01f));
+        }
+
+        [TestCase(false, 10f)]
+        [TestCase(true, 11.2f)]
+        public void Giant_AfterANest_LeapsFarther(bool afterANest, float range)
+        {
+            _world = new HiveDefenseWorld(nests: afterANest ? NestUnderTheCore() : null, firstFarmSeconds: 3f);
+            HiveDefenseSession session = _world.Session;
+            _world.Run(2.5f);
+            Assert.That(session.Level, Is.EqualTo(afterANest ? 2 : 1));
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+            var aim = new Vector3(0f, 0f, 20f);
+            HiveDefenseFrame aiming = _world.Frame(aim: aim, isMouseLive: true);
+            HiveDefenseFrame slam = _world.Frame(holes: HiveDefenseFrame.HoleBit(SlamHole), aim: aim, isMouseLive: true);
+
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+            _world.RunWith(_world.Colossus.SlamHitDelay + 0.05f, aiming);
+
+            Assert.That(session.IsColossusLeaping, Is.True, "the leap follows the slam");
+            Assert.That(session.ColossusLeapTarget.z, Is.EqualTo(range).Within(1e-3f));
+        }
+
+        [Test]
+        public void SongLanded_TheGiantsThirdPunchInAChain_IsHeavy()
+        {
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(1, 0), new WaveEntry(1, 0) }, spawns: new[] { new Vector3(0f, 0f, 2.5f) });
+            JsonUtility.FromJsonOverwrite("{\"<Health>k__BackingField\":1000}", _world.Stick);
+            StandStillAsTheySpawn();
+            HiveDefenseSession session = _world.Session;
+            Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 10f), Is.True);
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+            var hits = new List<SongHit>();
+            session.SongLanded += hits.Add;
+
+            for (int punch = 0; punch < 3; punch++)
+            {
+                Press(PunchHole);
+                _world.Run(_world.Colossus.HeavyPunchHitDelay + 0.05f);
+            }
+
+            Assert.That(hits.Count, Is.EqualTo(3));
+            Assert.That(hits[0].IsHeavy, Is.False);
+            Assert.That(hits[1].IsHeavy, Is.False);
+            Assert.That(hits[2].IsHeavy, Is.True, "the third punch");
+            Assert.That(hits[2].Damage, Is.EqualTo(_world.Colossus.HeavyPunchDamage).Within(0.01f));
+        }
+
+        // W walks along the camera's forward on the ground and D to its right. A forward that tilts or is not unit length
+        // counts by its way on the ground; with none, or one straight down, the move's x and y are the world's x and z.
+        [TestCase(0f, 1f, 1f, 0f, 0f, 1f, 0f)]
+        [TestCase(1f, 0f, 1f, 0f, 0f, 0f, -1f)]
+        [TestCase(0f, 1f, 0f, -3f, -2f, 0f, -1f)]
+        [TestCase(-1f, 0f, 0f, 0f, 1f, -1f, 0f)]
+        [TestCase(1f, 0f, 0f, 0f, 0f, 1f, 0f)]
+        [TestCase(0f, 1f, 0f, -1f, 0f, 0f, 1f)]
+        public void Giant_Steering_FollowsTheCamerasWayOnTheGround(
+            float moveX, float moveY, float cameraX, float cameraY, float cameraZ, float expectedX, float expectedZ)
+        {
+            _world = new HiveDefenseWorld(core: new Vector3(5f, 0f, 5f));
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+
+            _world.RunWith(1f, _world.Frame(move: new Vector2(moveX, moveY), cameraForward: new Vector3(cameraX, cameraY, cameraZ)));
+
+            Assert.That(session.ColossusPosition.x, Is.EqualTo(5f + (expectedX * _world.Colossus.Speed)).Within(0.2f));
+            Assert.That(session.ColossusPosition.z, Is.EqualTo(5f + (expectedZ * _world.Colossus.Speed)).Within(0.2f));
+            Assert.That(session.ColossusFacing.x, Is.EqualTo(expectedX).Within(1e-4f));
+            Assert.That(session.ColossusFacing.z, Is.EqualTo(expectedZ).Within(1e-4f));
+            Assert.That(session.CoreFacing.x, Is.EqualTo(expectedX).Within(1e-4f), "the core faces the way the giant walked");
+        }
+
+        [Test]
+        public void Tick_TheGiantsMovesLeapAndHits_AllocateNothing()
+        {
+            List<BeekeeperBrain> keepers = GiantAmong(ColossusSeconds, new Vector3(3f, 0f, 0f), new Vector3(0f, 0f, 7f));
+            HiveDefenseSession session = _world.Session;
+            var camera = new Vector3(0f, -1f, 1f);
+            var aim = new Vector3(0f, 0f, 6f);
+            HiveDefenseFrame idle = _world.Frame(aim: aim, isMouseLive: true, cameraForward: camera);
+            HiveDefenseFrame slam = _world.Frame(holes: HiveDefenseFrame.HoleBit(SlamHole), aim: aim, isMouseLive: true, cameraForward: camera);
+            HiveDefenseFrame walk = _world.Frame(move: new Vector2(0.5f, 0.5f), cameraForward: camera);
+            session.Tick(walk, HiveDefenseWorld.Step);
+
+            Assert.That(() => { session.Tick(slam, HiveDefenseWorld.Step); }, Is.Not.AllocatingGCMemory());
+            Assert.That(
+                () =>
+                {
+                    for (int tick = 0; tick < 20; tick++)
+                    {
+                        session.Tick(idle, HiveDefenseWorld.Step);
+                    }
+                },
+                Is.Not.AllocatingGCMemory());
+            Assert.That(() => { session.Tick(slam, HiveDefenseWorld.Step); }, Is.Not.AllocatingGCMemory());
+            Assert.That(session.IsColossusLeaping, Is.True);
+            Assert.That(
+                () =>
+                {
+                    for (int tick = 0; tick < 40; tick++)
+                    {
+                        session.Tick(idle, HiveDefenseWorld.Step);
+                    }
+                },
+                Is.Not.AllocatingGCMemory());
+            Assert.That(() => { session.Tick(walk, HiveDefenseWorld.Step); }, Is.Not.AllocatingGCMemory());
+
+            Assert.That(keepers[0].Health, Is.LessThan(_world.Stick.Health), "the slam hit");
+            Assert.That(keepers[1].Health, Is.LessThan(_world.Stick.Health), "the landing hit");
+        }
+
         // ---- Songs cast even with nothing to hit ----
 
         // Plan section K: with no Piper to face anywhere, "ahead" is the way the core last moved. It keeps that way while
@@ -2236,8 +2788,10 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
+        // Changed with plan section I: of the giant's blows only the slam, the leap and the third punch are heavy now, so a
+        // first punch is a light hit. It still proves that the giant's blow is reported once, as the Colossus's, where it lands.
         [Test]
-        public void SongLanded_TheGiantsBlows_AreHeavyHitsOfTheColossus()
+        public void SongLanded_TheGiantsFirstPunch_IsALightHitOfTheColossus()
         {
             // The giant faces +z by default, and the stick spawns 2.5 m ahead of it.
             _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(0f, 0f, 2.5f) });
@@ -2257,7 +2811,7 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(hits.Count, Is.EqualTo(1));
             Assert.That(hits[0].Form, Is.EqualTo(SwarmForm.Colossus));
-            Assert.That(hits[0].IsHeavy, Is.True);
+            Assert.That(hits[0].IsHeavy, Is.False);
             Assert.That(hits[0].IsBlocked, Is.False);
             Assert.That(hits[0].IsKill, Is.False);
             Assert.That(hits[0].Damage, Is.EqualTo(_world.Colossus.PunchDamage).Within(0.01f));

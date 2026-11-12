@@ -261,24 +261,29 @@ The swarm grows during a match. Strength comes from the **swarm level**, never f
 
 The owner played the Colossus and found it too short and too shallow.
 
-| Value | Start |
+| Value | Settled |
 |---|---|
-| Lasts | 20 s, plus 2 s for each beekeeper the giant kills, 30 s at most |
-| Fury | 1 point per 3 damage (was 2), so the giant stays a highlight |
-| Size and damage | Follow the swarm level |
+| Lasts | 20 s, plus 2 s for each beekeeper the giant kills, 30 s at most (was 11 s, the playtest bot's after section O) |
+| Fury | 1 point per 3 damage (was 2), so the giant stays a highlight. The playtest bot set 4 |
+| Size and damage | Follow the level the giant stood up at: every damage by the damage multiplier, every radius, reach and the leap's range by the size multiplier. Cooldowns, stuns and throws stay |
 
-While the giant stands, H J K L are its moves and do not reach the songs:
+While the giant stands, H J K L (and 1 to 4) are its moves and do not reach the songs:
 
 | Keys | Move | Rule |
 |---|---|---|
 | J | Punch | The existing three-hit chain; the third is heavy |
 | K | Kick | As today |
-| L | Ground slam | 40 damage and 4 m/s knockback within 5 m of the giant. 3 s cooldown |
-| H | Roar | Stuns every beekeeper within 6 m for 1.2 s. 6 s cooldown |
-| K K | Spin kick | The second K within 0.6 s: 55 damage all around within 3.5 m |
-| L L | Leap slam | The second L within 0.6 s: the giant leaps to the aimed spot, 10 m at most, lands after 0.6 s and deals 70 damage within 4 m |
+| L | Ground slam | 40 damage and a 4 m/s throw within 5 m of the giant, landing 0.3 s after the press. 3 s cooldown |
+| H | Roar | Stuns every beekeeper within 6 m for 1.2 s, 0.2 s after the press. No damage. 6 s cooldown |
+| K K | Spin kick | The second K within 0.6 s of the first: 55 damage all around within 3.5 m, 0.3 s after it starts |
+| L L | Leap slam | The second L within 0.6 s of the first: the giant leaps to the aimed spot, 10 m at most, lands after 0.6 s and deals 70 damage and a 6 m/s throw within 4 m |
 
-- Space or left mouse still punches, and Left Shift or right mouse still kicks.
+- Space or left mouse still punches, and Left Shift or right mouse still kicks. A key and its button on the same frame are one press.
+- A phrase does not wait for the cooldown of its first move. A second press while the first move is still in the air waits, and the phrase starts as that move lands, so a quick K K is not lost. Any other move in between breaks it, and a third press is no second phrase.
+- The note that casts the giant is not a move. When the giant ends, a move under way is dropped and nothing it waited for starts, so the next notes reach the songs as usual.
+- The leap goes to the aim as it takes off: the mouse's ground point while the mouse is live (the chase camera's look point), otherwise the most threatening beekeeper within the Sting's reach, otherwise 6 m ahead. In the air the giant cannot be steered or attack. If its time runs out in the air it lands, and hits, first. A collapse ends it at once, in the air too.
+- Every blow is reported for the hit feel (section O). The heavy ones are the slam, the leap's landing and the third punch; the roar hurts nobody, so it reports nothing. Each kill by any blow adds the 2 s.
+- While the giant stands it steers relative to the camera: W walks the way the camera looks on the ground, D to its right.
 - A strip on the HUD names the four moves while the giant stands, and a ring shows the time left.
 
 ### J. The core loop and its feedback

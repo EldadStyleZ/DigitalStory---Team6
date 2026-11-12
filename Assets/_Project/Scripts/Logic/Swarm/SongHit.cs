@@ -38,7 +38,7 @@ namespace DigitalStory.Logic
         /// <summary>The song that hit, or the shield that blocked. The giant's blows say <see cref="SwarmForm.Colossus"/>.</summary>
         public SwarmForm Form { get; }
 
-        /// <summary>True for the big hits (the Meteor, the Lance, the Hydra, the Nest, the Tornado's throw and the giant's blows), on which the swarm's motion freezes for a moment.</summary>
+        /// <summary>True for the big hits (the Meteor, the Lance, the Hydra, the Nest, the Tornado's throw, and the giant's ground slam, leap slam and third punch), on which the swarm's motion freezes for a moment.</summary>
         public bool IsHeavy { get; }
     }
 }

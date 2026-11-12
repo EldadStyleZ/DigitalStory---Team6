@@ -18,6 +18,8 @@ namespace DigitalStory.Logic
     /// Hive Call ends the Strike song and keeps the Guard and Post songs; an Attack or Power cast ends Hive Call, and a
     /// Defense cast keeps it. The Colossus ends the Strike and Guard songs and Hive Call, and keeps the Post song. A collapse
     /// ends every slot and the Gust at once.
+    /// The giant's time lives here (plan section I): it stands its song's seconds, each kill adds more up to its most, and a
+    /// giant in the air (the leap slam) lands before its time can end it. A collapse ends it at once, in the air or not.
     /// What a running song changes in the match (the Dome's cut of every loss and its slower core, say) comes from its rule
     /// and is read here, multiplied over the running rules, so a new song needs no change to this class or to the session.
     /// </remarks>
@@ -33,6 +35,9 @@ namespace DigitalStory.Logic
         private SwarmForm _current = SwarmForm.River;
         private float _secondsInForm;
         private float _colossusSeconds;
+        private float _colossusSecondsPerKill;
+        private float _colossusMostSeconds;
+        private bool _isColossusAirborne;
         private Vector3 _core;
         private float _gustSeconds = NoGust;
         private float _gustDuration;
@@ -57,6 +62,18 @@ namespace DigitalStory.Logic
 
         /// <summary>Seconds since the whole swarm's form began.</summary>
         public float SecondsInForm => _secondsInForm;
+
+        /// <summary>
+        /// Seconds the giant has left to stand, for the HUD's ring: 0 unless the Colossus stands, and 0 while it finishes a
+        /// leap after its time ran out.
+        /// </summary>
+        public float ColossusSecondsLeft => _current == SwarmForm.Colossus ? Math.Max(0f, _colossusSeconds - _secondsInForm) : 0f;
+
+        /// <summary>
+        /// Seconds the giant stands in all, as of now: its song's seconds and the time its kills have added, never past its
+        /// most (plan section I). 0 unless the Colossus stands.
+        /// </summary>
+        public float ColossusSecondsTotal => _current == SwarmForm.Colossus ? _colossusSeconds : 0f;
 
         /// <summary>
         /// True while the Dome runs in the Guard slot. Its return beat does not count. What the dome does (fewer wasps lost, a
@@ -236,12 +253,32 @@ namespace DigitalStory.Logic
         }
 
         /// <summary>
-        /// Starts the Colossus for the given seconds. It ends the Strike and Guard songs at once, so their wasps fly straight
-        /// into the build, ends Hive Call and keeps the Post song. False while the swarm is collapsed.
+        /// Starts the Colossus for the given seconds, with no time added for kills. It ends the Strike and Guard songs at once,
+        /// so their wasps fly straight into the build, ends Hive Call and keeps the Post song. False while the swarm is collapsed.
         /// </summary>
         public bool StartColossus(float seconds)
         {
+            return StartColossus(seconds, 0f, seconds);
+        }
+
+        /// <summary>
+        /// Starts the Colossus as <see cref="StartColossus(float)"/> does, for <paramref name="seconds"/>, and each beekeeper
+        /// it kills (<see cref="AddColossusKills"/>) adds <paramref name="secondsPerKill"/>, never past
+        /// <paramref name="mostSeconds"/> in all (plan section I).
+        /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">A time is negative, or the most is below the seconds it starts with.</exception>
+        public bool StartColossus(float seconds, float secondsPerKill, float mostSeconds)
+        {
             RequireSeconds(seconds);
+            if (secondsPerKill < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(secondsPerKill), secondsPerKill, "A kill cannot take time away from the giant.");
+            }
+
+            if (mostSeconds < seconds)
+            {
+                throw new ArgumentOutOfRangeException(nameof(mostSeconds), mostSeconds, "The giant's most seconds cannot be below the seconds it starts with.");
+            }
 
             if (_current == SwarmForm.Collapsed)
             {
@@ -251,8 +288,35 @@ namespace DigitalStory.Logic
             _slots.End(SongSlot.Strike);
             _slots.End(SongSlot.Guard);
             _colossusSeconds = seconds;
+            _colossusSecondsPerKill = secondsPerKill;
+            _colossusMostSeconds = mostSeconds;
+            _isColossusAirborne = false;
             SetForm(SwarmForm.Colossus);
             return true;
+        }
+
+        /// <summary>
+        /// The giant killed <paramref name="kills"/> beekeepers: each adds its seconds per kill to the time it stands, never
+        /// past its most. Ignored unless the Colossus stands.
+        /// </summary>
+        public void AddColossusKills(int kills)
+        {
+            if (_current != SwarmForm.Colossus || kills <= 0)
+            {
+                return;
+            }
+
+            _colossusSeconds = Math.Min(_colossusMostSeconds, _colossusSeconds + (kills * _colossusSecondsPerKill));
+        }
+
+        /// <summary>
+        /// Whether the giant is in the air (the leap slam). While it is, its time running out does not end it: it lands first,
+        /// and ends on the first tick after it lands. A collapse ends it in the air all the same. Ignored unless the Colossus
+        /// stands, and every new giant starts on the ground.
+        /// </summary>
+        public void SetColossusAirborne(bool isAirborne)
+        {
+            _isColossusAirborne = isAirborne && _current == SwarmForm.Colossus;
         }
 
         /// <summary>Damage the Colossus dealt. It fills Fury only while the Colossus stands.</summary>
@@ -368,7 +432,7 @@ namespace DigitalStory.Logic
                     SetForm(SwarmForm.River);
                 }
             }
-            else if (_current == SwarmForm.Colossus && _secondsInForm >= _colossusSeconds)
+            else if (_current == SwarmForm.Colossus && !_isColossusAirborne && _secondsInForm >= _colossusSeconds)
             {
                 SetForm(SwarmForm.River);
             }

@@ -47,7 +47,10 @@ namespace DigitalStory.Tests.PlayMode
         private const float PushSeconds = 0.5f;
         private const float SamePlaceMetres = 0.01f;
         private const float CameraBlendSeconds = 2.5f;
-        private const float StepBackMetres = 2f;
+        private const float ChaseLeastHeightMetres = 2.5f;
+        private const int MaxWarmupFrames = 20000;
+        private const int WarmupFailureShare = 10;
+        private const float SameViewDegrees = 1f;
         private const float PastEdgeMetres = 6f;
         private const float FallenMetres = 0.5f;
         private const float ShortWayOutMetres = 2f;
@@ -107,6 +110,26 @@ namespace DigitalStory.Tests.PlayMode
             }
 
             LogAssert.NoUnexpectedReceived();
+        }
+
+        // The Mono player compiles a method on its first call, which made the first Sting of a session a slow frame. The root
+        // compiles the game's code ahead, a little each frame from the start, and nearly every method compiles.
+        [UnityTest]
+        public IEnumerator Scene_OverItsFirstMoments_CompilesTheGameCodeAhead()
+        {
+            ScriptWarmup warmup = _root.ScriptWarmup;
+            Assert.That(warmup, Is.Not.Null, "the root made no warm-up");
+            Assert.That(warmup.MethodCount, Is.GreaterThan(0), "the warm-up found no method");
+
+            int frames = 0;
+            while (!warmup.IsDone && frames < MaxWarmupFrames)
+            {
+                frames++;
+                yield return null;
+            }
+
+            Assert.That(warmup.IsDone, Is.True, "the warm-up did not finish");
+            Assert.That(warmup.FailedCount, Is.LessThan(warmup.MethodCount / WarmupFailureShare), "most methods did not compile ahead");
         }
 
         [UnityTest]
@@ -582,41 +605,48 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(GroundDistance(motor.Position, session.ColossusPosition), Is.LessThan(SamePlaceMetres));
         }
 
-        // Plan section K: the camera always follows the core, which rides inside the giant. While the giant stands the
-        // camera only steps back to the giant's distance, and it comes forward again when the giant ends, here because the
-        // swarm collapsed.
+        // Plan section I: while the giant stands the camera chases it from behind and above, looking where it faces, and when
+        // the giant ends, here because the swarm collapsed, it swoops back to the top view over the core, which it never
+        // stopped following.
         [UnityTest]
-        public IEnumerator Camera_WhileTheColossusStands_FollowsTheCoreFromFurtherBack()
+        public IEnumerator Camera_WhileTheColossusStands_ChasesItFromBehindAndReturnsAfter()
         {
             var motor = Object.FindAnyObjectByType<SwarmCoreMotor>();
             var follow = Object.FindAnyObjectByType<FollowCamera>();
-            var colossus = AssetDatabase.LoadAssetAtPath<ColossusConfig>(ColossusConfigPath);
             Assert.That(follow, Is.Not.Null, "The scene has no FollowCamera.");
-            Assert.That(colossus, Is.Not.Null, "There is no ColossusConfig at " + ColossusConfigPath + ". Rebuild the scene.");
-            Assert.That(colossus.CameraDistance, Is.GreaterThan(follow.DefaultDistance + StepBackMetres), "the giant's view is not further back");
             HiveDefenseSession session = _root.Session;
-
-            Assert.That(follow.Target, Is.SameAs(motor.transform), "before the giant");
-            Assert.That(follow.WantedDistance, Is.EqualTo(follow.DefaultDistance).Within(1e-4f));
-            float before = GroundDistance(follow.transform.position, motor.Position);
+            Quaternion topView = follow.transform.rotation;
+            Assert.That(follow.IsChasing, Is.False, "before the giant");
 
             yield return FormTheColossus();
+            Assert.That(_root.IsChasingGiant, Is.True, "the root did not start the chase");
             Time.timeScale = FastTimeScale;
             yield return WaitGameSeconds(CameraBlendSeconds);
             Time.timeScale = _savedTimeScale;
 
             Assert.That(session.IsColossusActive, Is.True, "the giant ended before the camera was measured");
-            Assert.That(follow.Target, Is.SameAs(motor.transform), "the camera keeps the core, inside the giant");
-            Assert.That(follow.WantedDistance, Is.EqualTo(colossus.CameraDistance).Within(1e-4f));
-            Assert.That(GroundDistance(follow.transform.position, motor.Position), Is.GreaterThan(before + StepBackMetres), "the camera did not step back");
+            Assert.That(follow.IsChasing, Is.True);
+            Assert.That(follow.ChaseBlend, Is.EqualTo(1f).Within(1e-4f), "the swoop did not finish");
+            Assert.That(follow.Target, Is.SameAs(motor.transform), "the top view still keeps the core");
+            Vector3 toGiant = session.ColossusPosition - follow.transform.position;
+            toGiant.y = 0f;
+            Assert.That(Vector3.Dot(toGiant.normalized, session.ColossusFacing), Is.GreaterThan(SameWayDot), "the camera is not behind the giant");
+            Assert.That(Vector3.Dot(follow.GroundForward, session.ColossusFacing), Is.GreaterThan(SameWayDot), "the camera does not look where the giant faces");
+            Assert.That(follow.transform.position.y, Is.GreaterThan(ChaseLeastHeightMetres), "the chase camera is not above the giant's shoulders");
 
             session.Swarm.Lose(session.Swarm.Count - (session.Swarm.CollapseLine / 2));
             Assert.That(session.Forms.Current, Is.EqualTo(SwarmForm.Collapsed));
             yield return null;
+            yield return null;
 
             Assert.That(session.IsColossusActive, Is.False, "the collapse ended the giant");
-            Assert.That(follow.Target, Is.SameAs(motor.transform), "after the giant");
-            Assert.That(follow.WantedDistance, Is.EqualTo(follow.DefaultDistance).Within(1e-4f));
+            Assert.That(follow.IsChasing, Is.False, "the camera still chases the ended giant");
+            Time.timeScale = FastTimeScale;
+            yield return WaitGameSeconds(CameraBlendSeconds);
+            Time.timeScale = _savedTimeScale;
+
+            Assert.That(follow.ChaseBlend, Is.EqualTo(0f), "the camera did not swoop back");
+            Assert.That(Quaternion.Angle(follow.transform.rotation, topView), Is.LessThan(SameViewDegrees), "the top view is not the one before the giant");
         }
 
         // Plan section K: a giant can stand over a hive and carry the core inside the hive's collider. When the giant ends

@@ -49,6 +49,12 @@ namespace DigitalStory.View
         /// <summary>True only on the frame the call-wave key was pressed (Return or keypad Enter).</summary>
         public bool CallWavePressed { get; private set; }
 
+        /// <summary>
+        /// The mouse's movement this frame, in the Input Manager's Mouse X and Mouse Y units (x to the right, y up). The root scales it
+        /// by a sensitivity to orbit the chase camera.
+        /// </summary>
+        public Vector2 LookDelta { get; private set; }
+
         /// <summary>True for 1 s after the mouse moves 4 px, and while a mouse button is held. Then the mouse aims.</summary>
         public bool IsMouseLive { get; private set; }
 
@@ -102,6 +108,7 @@ namespace DigitalStory.View
             RestartPressed = Input.GetKeyDown(KeyCode.R);
             GiveHeld = Input.GetKey(KeyCode.E);
             CallWavePressed = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
+            LookDelta = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y"));
             UpdateMouseLive();
 
             for (int hole = 0; hole < LetterKeys.Length; hole++)

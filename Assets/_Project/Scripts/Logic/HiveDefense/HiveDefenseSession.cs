@@ -38,6 +38,12 @@ namespace DigitalStory.Logic
     /// and <see cref="SongLanded"/> for every hit a song or the giant lands on a beekeeper and every blow a shield blocks,
     /// for the feel of each; the Sting asks it for one target a sting (<see cref="ISongAim.ChooseThreats"/>); and
     /// <see cref="ShowsDomeHint"/> says when the HUD names the Dome's use.
+    /// The giant, version 2 (plan section I): while it stands the holes are its moves and no note reaches the songs (H roars,
+    /// J or the punch button punches, K or the kick button kicks, L slams, and K K and L L are the spin kick and the leap
+    /// slam), and the move steers it relative to the camera's way on the ground (<see cref="HiveDefenseFrame.CameraForward"/>).
+    /// Each kill adds to its time (<see cref="ColossusSecondsLeft"/>), and the leap slam flies to this tick's aim, pulled in
+    /// to its range, and lands before its time can end it. Every blow is reported through <see cref="SongLanded"/>; the slam,
+    /// the leap and the third punch are the heavy ones.
     /// </remarks>
     public sealed class HiveDefenseSession : ISongAim
     {
@@ -48,6 +54,13 @@ namespace DigitalStory.Logic
         private const float TurnSqrMetres = 0.000001f;
         private const float CoincidentSqrMetres = 0.00000001f;
         private const int MaxHoleBits = 31;
+
+        // Not game tuning: which hole is which of the giant's moves while it stands (plan section I). Holes count from 0 as
+        // H J K L: H roars, J punches, K kicks and L slams.
+        private const int RoarHole = 0;
+        private const int PunchHole = 1;
+        private const int KickHole = 2;
+        private const int SlamHole = 3;
 
         private readonly HiveDefenseRules _rules;
         private readonly IReadOnlyList<Vector3> _spawnPoints;
@@ -79,6 +92,10 @@ namespace DigitalStory.Logic
         private Vector3 _colossusFacing = Vector3.forward;
         private float _colossusSizeScale = 1f;
         private float _colossusDamageScale = 1f;
+        private bool _isLeaping;
+        private Vector3 _leapStart;
+        private Vector3 _leapTarget;
+        private float _leapSeconds;
 
         /// <summary>
         /// Builds the hives, the nests, the beekeeper pools and every other class from the rules. The nest positions come in
@@ -393,6 +410,36 @@ namespace DigitalStory.Logic
         /// giant stood up, kept while it stands. 1 before the first giant.
         /// </summary>
         public float ColossusSizeScale => _colossusSizeScale;
+
+        /// <summary>
+        /// Seconds the giant has left to stand as of the last tick, for the HUD's ring (plan section I); 0 when it does not
+        /// stand, and 0 while it finishes a leap after its time ran out.
+        /// </summary>
+        public float ColossusSecondsLeft => Forms.ColossusSecondsLeft;
+
+        /// <summary>
+        /// Seconds the giant stands in all as of the last tick: its song's seconds and the time its kills have added, never
+        /// past its most. 0 when it does not stand.
+        /// </summary>
+        public float ColossusSecondsTotal => Forms.ColossusSecondsTotal;
+
+        /// <summary>
+        /// True while the giant is in the air on a leap slam, from take-off until it lands. It cannot be steered or attack
+        /// then, and its time running out waits for the landing.
+        /// </summary>
+        public bool IsColossusLeaping => _isLeaping;
+
+        /// <summary>
+        /// Where the giant's last leap slam lands, on the ground: the aim as it took off, pulled in to the leap's range. Kept
+        /// after the landing, for the ring the View draws there.
+        /// </summary>
+        public Vector3 ColossusLeapTarget => _leapTarget;
+
+        /// <summary>How much of the giant's slam cooldown is left, for the HUD: 1 just used, 0 ready. 0 when a giant forms.</summary>
+        public float SlamCooldown01 => _chain.SlamCooldown01;
+
+        /// <summary>How much of the giant's roar cooldown is left, for the HUD: 1 just used, 0 ready. 0 when a giant forms.</summary>
+        public float RoarCooldown01 => _chain.RoarCooldown01;
 
         /// <summary>Raised when a giant attack starts, for the animation.</summary>
         public event Action<ColossusAttack> ColossusAttackStarted;
@@ -730,8 +777,8 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                // While the giant stands no note reaches the caster, so presses made out of habit cannot leak into the
-                // next song's window.
+                // While the giant stands the holes are its moves (plan section I) and no note reaches the caster, so the
+                // presses cannot leak into the next song's window.
                 if (Forms.Current == SwarmForm.Colossus)
                 {
                     return;
@@ -744,24 +791,28 @@ namespace DigitalStory.Logic
             }
         }
 
+        // Plan section I: while the giant stands the holes are its moves, and the move steers it relative to the camera. In
+        // the air on a leap it flies to the landing and can neither be steered nor attack. The tick it forms on, the holes
+        // are the song's last note, not a move.
         private void TickColossus(in HiveDefenseFrame frame, float dt)
         {
             bool formIsColossus = Forms.Current == SwarmForm.Colossus;
-            if (formIsColossus && !_isColossusActive)
+            bool isFormingNow = formIsColossus && !_isColossusActive;
+            if (isFormingNow)
             {
-                _isColossusActive = true;
-                _colossusPosition = new Vector3(_corePosition.x, 0f, _corePosition.z);
-                _colossusFacing = Vector3.forward;
-                _colossusSizeScale = SizeScale;
-                _colossusDamageScale = DamageScale;
+                StandUpColossus();
             }
             else if (!formIsColossus && _isColossusActive)
             {
-                _isColossusActive = false;
-                _isCoreSettling = true;
+                EndColossus();
             }
 
-            // The chain always ticks, so an attack that was started cannot linger into the next giant.
+            if (_isColossusActive && _isLeaping)
+            {
+                FlyLeap(dt);
+            }
+
+            // The chain lands what is under way, the leap included, before this tick's steering and presses.
             _chain.Tick(dt);
 
             if (!_isColossusActive)
@@ -769,33 +820,138 @@ namespace DigitalStory.Logic
                 return;
             }
 
-            Vector2 move = frame.Move;
-            if (move.sqrMagnitude > 1f)
+            if (!_isLeaping)
             {
-                move.Normalize();
-            }
-
-            if (move.sqrMagnitude > 0f)
-            {
-                // The giant walks through hives and scenery, but never past the play area, where the ground ends.
-                _colossusPosition = KeepInPlayArea(_colossusPosition + (new Vector3(move.x, 0f, move.y) * (_rules.Colossus.Speed * dt)));
-                _colossusFacing = new Vector3(move.x, 0f, move.y).normalized;
-                _coreFacing = _colossusFacing;
+                SteerColossus(frame.Move, frame.CameraForward, dt);
             }
 
             // The core rides inside the giant, so the beekeepers chase and hit the giant, and the core is left where the giant
             // stood when it ends.
             _corePosition = new Vector3(_colossusPosition.x, _corePosition.y, _colossusPosition.z);
 
-            if (frame.Punch)
+            if (!_isLeaping)
+            {
+                PressColossusMoves(in frame, isFormingNow ? 0 : frame.PressedHoleMask);
+            }
+        }
+
+        // A new giant starts afresh: where the core is, facing forward, at the level the swarm has now, and with every move
+        // ready.
+        private void StandUpColossus()
+        {
+            _isColossusActive = true;
+            _colossusPosition = new Vector3(_corePosition.x, 0f, _corePosition.z);
+            _colossusFacing = Vector3.forward;
+            _colossusSizeScale = SizeScale;
+            _colossusDamageScale = DamageScale;
+            _isLeaping = false;
+            _leapTarget = _colossusPosition;
+            _chain.Reset();
+        }
+
+        // The giant ends from its time or a collapse, in the air too. Nothing of it lingers: a move under way never lands
+        // and a waiting phrase never starts.
+        private void EndColossus()
+        {
+            _isColossusActive = false;
+            _isCoreSettling = true;
+            _isLeaping = false;
+            _chain.Reset();
+        }
+
+        // W walks along the camera's way on the ground and D to its right; with no camera way the move is the world's x and z.
+        // The giant walks through hives and scenery, but never past the play area, where the ground ends.
+        private void SteerColossus(Vector2 move, Vector3 cameraForward, float dt)
+        {
+            if (move.sqrMagnitude > 1f)
+            {
+                move.Normalize();
+            }
+
+            if (!(move.sqrMagnitude > 0f))
+            {
+                return;
+            }
+
+            Vector3 forward = GroundForward(cameraForward);
+            var right = new Vector3(forward.z, 0f, -forward.x);
+            Vector3 step = (right * move.x) + (forward * move.y);
+            _colossusPosition = KeepInPlayArea(_colossusPosition + (step * (_rules.Colossus.Speed * dt)));
+            _colossusFacing = step.normalized;
+            _coreFacing = _colossusFacing;
+        }
+
+        // Only the camera's way on the ground counts; with none, or one looking straight down, it is the world's forward.
+        private static Vector3 GroundForward(Vector3 direction)
+        {
+            direction.y = 0f;
+            float sqr = direction.sqrMagnitude;
+            return sqr > CoincidentSqrMetres ? direction / Mathf.Sqrt(sqr) : Vector3.forward;
+        }
+
+        // Plan section I: J or Space punches, K or Left Shift kicks, L slams and H roars. A hole and its button pressed on one
+        // tick are one press, so they cannot make a phrase by themselves.
+        private void PressColossusMoves(in HiveDefenseFrame frame, int holes)
+        {
+            if (frame.Punch || IsPressed(holes, PunchHole))
             {
                 _chain.TryPunch();
             }
 
-            if (frame.Kick)
+            if (frame.Kick || IsPressed(holes, KickHole))
             {
                 _chain.TryKick();
             }
+
+            if (IsPressed(holes, SlamHole))
+            {
+                _chain.TrySlam();
+            }
+
+            if (IsPressed(holes, RoarHole))
+            {
+                _chain.TryRoar();
+            }
+        }
+
+        private static bool IsPressed(int holes, int hole)
+        {
+            return (holes & HiveDefenseFrame.HoleBit(hole)) != 0;
+        }
+
+        // The leap slam takes off toward this tick's aim (the mouse's ground point while it is live, as for an aimed song),
+        // pulled in to the leap's range grown by the giant's level, and on the ground inside the play area. It faces the way
+        // it leaps, and its time cannot end it until it lands.
+        private void TakeOff()
+        {
+            float range = _rules.Colossus.LeapRange * _colossusSizeScale;
+            var aim = new Vector3(_aimPoint.x, 0f, _aimPoint.z);
+            _leapStart = _colossusPosition;
+            _leapTarget = KeepInPlayArea(GroundMath.PullIn(aim, _colossusPosition, range));
+            _leapSeconds = 0f;
+            _isLeaping = true;
+            Forms.SetColossusAirborne(true);
+            if (GroundMath.DistanceSquared(_leapTarget, _leapStart) > TurnSqrMetres)
+            {
+                _colossusFacing = GroundMath.Direction(_leapStart, _leapTarget);
+                _coreFacing = _colossusFacing;
+            }
+        }
+
+        // Straight along the ground; the View adds the arc in the air.
+        private void FlyLeap(float dt)
+        {
+            _leapSeconds += dt;
+            float seconds = _rules.Colossus.LeapSeconds;
+            float flown = seconds > 0f ? Mathf.Clamp01(_leapSeconds / seconds) : 1f;
+            _colossusPosition = Vector3.Lerp(_leapStart, _leapTarget, flown);
+        }
+
+        private void TouchDown()
+        {
+            _isLeaping = false;
+            _colossusPosition = _leapTarget;
+            Forms.SetColossusAirborne(false);
         }
 
         private void TickBeekeepers(float dt)
@@ -938,11 +1094,22 @@ namespace DigitalStory.Logic
 
         private void OnColossusStarted(ColossusAttack attack)
         {
+            if (attack == ColossusAttack.LeapSlam && _isColossusActive)
+            {
+                TakeOff();
+            }
+
             ColossusAttackStarted?.Invoke(attack);
         }
 
+        // The leap slam lands where it was aimed before it hits around that spot.
         private void OnColossusLanded(ColossusAttack attack)
         {
+            if (attack == ColossusAttack.LeapSlam && _isLeaping)
+            {
+                TouchDown();
+            }
+
             if (_isColossusActive)
             {
                 ApplyColossusHit(attack);
@@ -951,42 +1118,62 @@ namespace DigitalStory.Logic
             ColossusAttackLanded?.Invoke(attack);
         }
 
+        // Plan section I. The blows ahead land their reach in front of where the giant faces; the slam, the spin kick and the
+        // leap's landing hit all around a point. The slam, the leap and the third punch are the heavy hits. The roar only
+        // stuns, so it has no hit to report.
         private void ApplyColossusHit(ColossusAttack attack)
         {
             ColossusConfig config = _rules.Colossus;
-            float damage;
-            float radius;
-            float reach;
-            float knockback = 0f;
             switch (attack)
             {
                 case ColossusAttack.Punch:
-                    damage = config.PunchDamage;
-                    radius = config.PunchRadius;
-                    reach = config.PunchReach;
+                    HitAhead(config.PunchDamage, config.PunchRadius, config.PunchReach, 0f, false);
                     break;
                 case ColossusAttack.HeavyPunch:
-                    damage = config.HeavyPunchDamage;
-                    radius = config.PunchRadius;
-                    reach = config.PunchReach;
-                    knockback = config.HeavyPunchKnockback;
+                    HitAhead(config.HeavyPunchDamage, config.PunchRadius, config.PunchReach, config.HeavyPunchKnockback, true);
                     break;
                 case ColossusAttack.Kick:
-                    damage = config.KickDamage;
-                    radius = config.KickRadius;
-                    reach = config.KickReach;
+                    HitAhead(config.KickDamage, config.KickRadius, config.KickReach, 0f, false);
                     break;
-                default:
-                    return;
+                case ColossusAttack.SpinKick:
+                    HitAround(_colossusPosition, config.SpinKickDamage, config.SpinKickRadius, 0f, false);
+                    break;
+                case ColossusAttack.Slam:
+                    HitAround(_colossusPosition, config.SlamDamage, config.SlamRadius, config.SlamKnockback, true);
+                    break;
+                case ColossusAttack.LeapSlam:
+                    HitAround(_colossusPosition, config.LeapDamage, config.LeapRadius, config.LeapKnockback, true);
+                    break;
+                case ColossusAttack.Roar:
+                    Roar(config.RoarRadius * _colossusSizeScale, config.RoarStunSeconds);
+                    break;
             }
+        }
 
-            // The giant hits as hard, and as far, as the level it stood up at.
+        // The giant's reach grows with the level it stood up at, as its radius does.
+        private void HitAhead(float damage, float radius, float reach, float knockback, bool isHeavy)
+        {
+            Vector3 center = _colossusPosition + (_colossusFacing * (reach * _colossusSizeScale));
+            Hit(center, damage, radius, knockback, false, isHeavy);
+        }
+
+        private void HitAround(Vector3 center, float damage, float radius, float knockback, bool isHeavy)
+        {
+            Hit(center, damage, radius, knockback, true, isHeavy);
+        }
+
+        // Every living beekeeper on the ground within the radius of the centre takes the damage, as hard and as far as the
+        // level the giant stood up at, and each hit is reported once (plan section O). One that lives is stunned and, with a
+        // knockback, thrown: away from the centre for a hit all around, along the giant's facing for a blow ahead. The damage
+        // fills Fury, and each kill adds to the giant's time.
+        private void Hit(Vector3 center, float damage, float radius, float knockback, bool isAround, bool isHeavy)
+        {
             damage *= _colossusDamageScale;
             radius *= _colossusSizeScale;
-            reach *= _colossusSizeScale;
-            Vector3 center = _colossusPosition + _colossusFacing * reach;
             float radiusSqr = radius * radius;
+            float stunSeconds = _rules.Colossus.StunSeconds;
             float dealt = 0f;
+            int kills = 0;
             for (int slot = 0; slot < _pool.Length; slot++)
             {
                 if (!_isActive[slot] || !_pool[slot].IsAlive)
@@ -995,29 +1182,55 @@ namespace DigitalStory.Logic
                 }
 
                 BeekeeperBrain brain = _pool[slot];
-                Vector3 offset = brain.Position - center;
-                offset.y = 0f;
-                if (offset.sqrMagnitude > radiusSqr)
+                if (GroundMath.DistanceSquared(brain.Position, center) > radiusSqr)
                 {
                     continue;
                 }
 
                 dealt += Mathf.Min(damage, brain.Health);
                 brain.TakeDamage(damage);
-                SongLanded?.Invoke(new SongHit(brain.Position, damage, !brain.IsAlive, false, SwarmForm.Colossus, true));
-                if (brain.IsAlive)
+                bool isKill = !brain.IsAlive;
+                SongLanded?.Invoke(new SongHit(brain.Position, damage, isKill, false, SwarmForm.Colossus, isHeavy));
+                if (isKill)
                 {
-                    brain.Stun(config.StunSeconds);
-                    if (knockback > 0f)
-                    {
-                        brain.Knockback(_colossusFacing * knockback);
-                    }
+                    kills++;
+                    continue;
+                }
+
+                brain.Stun(stunSeconds);
+                if (knockback > 0f)
+                {
+                    Vector3 away = isAround ? GroundMath.Direction(center, brain.Position) : _colossusFacing;
+                    brain.Knockback(away * knockback);
                 }
             }
 
             if (dealt > 0f)
             {
                 Forms.AddColossusDamage(dealt);
+            }
+
+            if (kills > 0)
+            {
+                Forms.AddColossusKills(kills);
+            }
+        }
+
+        // The roar stuns every living beekeeper within its radius of the giant, and hurts none.
+        private void Roar(float radius, float stunSeconds)
+        {
+            float radiusSqr = radius * radius;
+            for (int slot = 0; slot < _pool.Length; slot++)
+            {
+                if (!_isActive[slot] || !_pool[slot].IsAlive)
+                {
+                    continue;
+                }
+
+                if (GroundMath.DistanceSquared(_pool[slot].Position, _colossusPosition) <= radiusSqr)
+                {
+                    _pool[slot].Stun(stunSeconds);
+                }
             }
         }
     }

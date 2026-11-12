@@ -17,6 +17,10 @@ namespace DigitalStory.View
     /// -f010BenchOverdraw           counts the glow quads per pixel at the end of every measured window with nothing switched off.
     /// -f010BenchOff &lt;switch&gt;      holds one switch through the whole baseline script, such as noshadows or noglow
     ///                              (the names are BenchmarkSwitch's, lower case: see HiveDefenseBenchmark).
+    /// -f010BenchFirstCast          runs only the first two Sting casts of the process (sting_1 and sting_2) and quits: with
+    ///                              -f010BenchOff and a first-cast switch (noattacklight, nocastflash, nocastsound,
+    ///                              nocamerakick, nodamagenumbers), one short run tells whether that thing makes the first
+    ///                              cast's slow frame.
     /// </remarks>
     internal sealed class BenchmarkOptions
     {
@@ -28,6 +32,7 @@ namespace DigitalStory.View
         private const string StationsFlag = "-f010BenchStations";
         private const string OverdrawFlag = "-f010BenchOverdraw";
         private const string OffFlag = "-f010BenchOff";
+        private const string FirstCastFlag = "-f010BenchFirstCast";
         private const string DefaultLabel = "run";
         private const string DefaultStations = "stand,domesting";
         private const int DefaultWasps = 2000;
@@ -43,6 +48,7 @@ namespace DigitalStory.View
             ProbesOverdraw = Has(arguments, OverdrawFlag);
             Stations = (Value(arguments, StationsFlag) ?? DefaultStations).Split(',');
             HeldSwitchName = Value(arguments, OffFlag);
+            IsFirstCastOnly = Has(arguments, FirstCastFlag);
             CommandLine = string.Join(" ", arguments);
         }
 
@@ -69,6 +75,9 @@ namespace DigitalStory.View
 
         /// <summary>The switch held off through the whole baseline script, or null for none.</summary>
         public string HeldSwitchName { get; }
+
+        /// <summary>True for the short script that measures only the first two Sting casts.</summary>
+        public bool IsFirstCastOnly { get; }
 
         /// <summary>The whole command line, for the run's notes.</summary>
         public string CommandLine { get; }

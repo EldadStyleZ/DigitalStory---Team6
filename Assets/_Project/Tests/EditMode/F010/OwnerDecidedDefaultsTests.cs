@@ -106,6 +106,47 @@ namespace DigitalStory.Tests.EditMode
             Object.DestroyImmediate(config);
         }
 
+        // Plan section I, the giant version 2: it stands 20 s, plus 2 s for each beekeeper it kills, 30 s at most.
+        [Test]
+        public void ColossusSong_StandsTheTimesOfPlanSectionI()
+        {
+            var song = ScriptableObject.CreateInstance<ColossusSong>();
+
+            Assert.AreEqual(20f, song.Seconds);
+            Assert.AreEqual(2f, song.SecondsPerKill);
+            Assert.AreEqual(30f, song.MostSeconds);
+
+            Object.DestroyImmediate(song);
+        }
+
+        // Plan section I: the slam, the roar and the two phrases, at level 1. The hit delays and the leap's throw are ours.
+        [Test]
+        public void ColossusConfig_HoldsTheMovesOfPlanSectionI()
+        {
+            var config = ScriptableObject.CreateInstance<ColossusConfig>();
+
+            Assert.AreEqual(0.6f, config.PhraseWindowSeconds, 0.0001f);
+            Assert.AreEqual(40f, config.SlamDamage);
+            Assert.AreEqual(5f, config.SlamRadius);
+            Assert.AreEqual(4f, config.SlamKnockback);
+            Assert.AreEqual(3f, config.SlamCooldownSeconds);
+            Assert.AreEqual(0.3f, config.SlamHitDelay, 0.0001f);
+            Assert.AreEqual(6f, config.RoarRadius);
+            Assert.AreEqual(1.2f, config.RoarStunSeconds, 0.0001f);
+            Assert.AreEqual(6f, config.RoarCooldownSeconds);
+            Assert.AreEqual(0.2f, config.RoarHitDelay, 0.0001f);
+            Assert.AreEqual(55f, config.SpinKickDamage);
+            Assert.AreEqual(3.5f, config.SpinKickRadius, 0.0001f);
+            Assert.AreEqual(0.3f, config.SpinKickHitDelay, 0.0001f);
+            Assert.AreEqual(10f, config.LeapRange);
+            Assert.AreEqual(0.6f, config.LeapSeconds, 0.0001f);
+            Assert.AreEqual(70f, config.LeapDamage);
+            Assert.AreEqual(4f, config.LeapRadius);
+            Assert.AreEqual(6f, config.LeapKnockback);
+
+            Object.DestroyImmediate(config);
+        }
+
         // The giant stays a highlight: 1 Fury point per 4 damage, 100 points to fill.
         [Test]
         public void FuryConfig_HoldsTheGiantsPriceThePlaytestBotSet()

@@ -38,5 +38,20 @@ namespace DigitalStory.View
 
         /// <summary>The HUD's UIDocument and its view are off. Not restored, so it runs last.</summary>
         NoHud = 11,
+
+        /// <summary>The attack light (the second swarm light, which follows a sting or a meteor) is off. A first-cast switch.</summary>
+        NoAttackLight = 12,
+
+        /// <summary>A cast's squad flash never reaches the swarm's shader. A first-cast switch.</summary>
+        NoCastFlash = 13,
+
+        /// <summary>A cast plays no sound. A first-cast switch.</summary>
+        NoCastSound = 14,
+
+        /// <summary>A cast does not kick the camera. A first-cast switch.</summary>
+        NoCameraKick = 15,
+
+        /// <summary>No hit raises a damage number. A first-cast switch.</summary>
+        NoDamageNumbers = 16,
     }
 }

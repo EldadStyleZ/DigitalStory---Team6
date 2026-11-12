@@ -21,4 +21,6 @@ MonoBehaviour:
   _waspCost: 0
   _knownFromStart: 0
   _revealedWhenFuryFills: 1
-  <Seconds>k__BackingField: 11
+  <Seconds>k__BackingField: 20
+  <SecondsPerKill>k__BackingField: 2
+  <MostSeconds>k__BackingField: 30

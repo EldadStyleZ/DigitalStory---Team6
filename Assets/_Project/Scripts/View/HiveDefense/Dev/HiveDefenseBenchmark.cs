@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using DigitalStory.Logic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Debug = UnityEngine.Debug;
 
 namespace DigitalStory.View
@@ -20,7 +21,11 @@ namespace DigitalStory.View
     /// Every frame advances the game by exactly 1/60 s (Time.captureDeltaTime), and the match's random source is seeded
     /// by the scene, so two runs play the same match whatever their frame rate. The wall clock between frames is measured
     /// separately. Spawning is compressed through the session's own wave director, so a wave of 28 does not take 81 s to
-    /// arrive, and the swarm is held at the run's size with the swarm's public Gain and Lose.
+    /// arrive, and the swarm is held at the run's size with the swarm's public Gain and Lose. So that every window measures
+    /// what its name says, nothing of one window may linger into the next: the Nest and the Honeycomb stand in the Post slot
+    /// long after their windows, so the script loads the scene afresh after each (a fresh match, round 1, nothing standing),
+    /// and it does the same when a farm phase is too short for what comes next and no round is left to clear. The hives are
+    /// healed whenever they are hurt. The giant's moves are measured in the chase camera, each in a window of its own.
     /// </remarks>
     [DisallowMultipleComponent]
     [DefaultExecutionOrder(ExecutionOrder)] // After every game script, so its notes and moves are read on the next tick.
@@ -54,7 +59,15 @@ namespace DigitalStory.View
         private const int WaveOfEightRound = 4;
         private const float SongPairSeconds = 11f;
         private const float CooldownInWindowSeconds = 5f;
-        private const float ColossusSeconds = 9f;
+        private const float ColossusSettleSeconds = 2f;
+        private const float GiantSwoopSeconds = 1.5f;
+        private const float GiantWindowSeconds = 3f;
+        private const float MostFormSeconds = 2f;
+        private const float GiantWalkLegSeconds = 0.75f;
+        private const float GiantPunchEverySeconds = 0.3f;
+        private const float GiantKickEverySeconds = 1f;
+        private const float GiantSpinEverySeconds = 1.5f;
+        private const float GiantOrbitDegreesPerFrame = 1.2f;
         private const float StationLoopSeconds = 16f;
         private const float DomeStingSeconds = 14f;
         private const float NestSeconds = 10f;
@@ -72,7 +85,15 @@ namespace DigitalStory.View
         private const string WaveEight = "wave8";
         private const string WaveLast = "wave28";
         private const string ClearingRound = "clear_round";
+        private const string Reloading = "fresh_match";
+        private const string GiantForming = "giant_form";
         private const string Ending = "end";
+
+        // The giant's keys while it stands (plan section I). Holes count from 0 as H J K L.
+        private const int RoarHole = 0;
+        private const int PunchHole = 1;
+        private const int KickHole = 2;
+        private const int SlamHole = 3;
 
         // Phases as written to the CSV, indexed by Phase.
         private static readonly string[] PhaseNames = { "boot", "prep", "setup", "settle", "measure", "wait", "probe" };
@@ -81,8 +102,31 @@ namespace DigitalStory.View
         private static readonly string[] SwitchNames =
         {
             "none", "noglow", "noswarmlights", "nohivenestlights", "noshadows", "nowaspdraw", "nocompute", "noground",
-            "noscenery", "noanimators", "halfwasps", "nohud",
+            "noscenery", "noanimators", "halfwasps", "nohud", "noattacklight", "nocastflash", "nocastsound", "nocamerakick",
+            "nodamagenumbers",
         };
+
+        // The giant's moves, each measured in a window of its own in the chase camera, over two giants: one cannot stand long
+        // enough for all nine.
+        private static readonly GiantMove[] FirstGiantMoves =
+        {
+            GiantMove.Stand, GiantMove.Walk, GiantMove.Orbit, GiantMove.Punch, GiantMove.Kick,
+        };
+
+        private static readonly GiantMove[] SecondGiantMoves =
+        {
+            GiantMove.Slam, GiantMove.Roar, GiantMove.Spin, GiantMove.Leap,
+        };
+
+        // Window names, indexed by GiantMove.
+        private static readonly string[] GiantWindowNames =
+        {
+            "giant_stand", "giant_walk", "giant_orbit", "giant_punch", "giant_kick", "giant_slam", "giant_roar", "giant_spin",
+            "giant_leap",
+        };
+
+        // A square walk relative to the chase camera (y is the camera's way), back to where it started.
+        private static readonly Vector2[] GiantWalkLegs = { Vector2.up, Vector2.right, Vector2.down, Vector2.left };
 
         // All twelve songs in the order the baseline casts them, with the names their windows carry. The first seven keep
         // the first baseline's order, so its windows compare one to one; the Colossus stays last, after full Fury.
@@ -154,6 +198,7 @@ namespace DigitalStory.View
         private BenchmarkOptions _options;
         private HiveDefenseRoot _root;
         private HiveDefenseSession _session;
+        private FollowCamera _follow;
         private SwarmCoreMotor _motor;
         private SwarmGpuView _swarmView;
         private Camera _camera;
@@ -169,7 +214,7 @@ namespace DigitalStory.View
         private int _hitsThisFrame;
         private int _target;
         private bool _isHoldingSwarm;
-        private bool _isHealingHives;
+        private bool _isHealingHives = true;
         private int _beekeeperCap = -1;
         private bool _isWalking;
         private Vector3 _walkDirection;
@@ -178,6 +223,19 @@ namespace DigitalStory.View
         private long _startTimestamp;
         private int _frame;
         private bool _isFinished;
+
+        private enum GiantMove
+        {
+            Stand = 0,
+            Walk = 1,
+            Orbit = 2,
+            Punch = 3,
+            Kick = 4,
+            Slam = 5,
+            Roar = 6,
+            Spin = 7,
+            Leap = 8,
+        }
 
         private enum Phase
         {
@@ -205,6 +263,9 @@ namespace DigitalStory.View
                 }
 
                 StepScript();
+
+                // After the root's Update, where a cast sets off its flash and sound, and before any LateUpdate shows them.
+                _switches?.ForceAfterUpdate();
                 if (Elapsed() > MostRunSeconds)
                 {
                     throw new TimeoutException($"The benchmark ran longer than {MostRunSeconds} s.");
@@ -306,17 +367,14 @@ namespace DigitalStory.View
             }
 
             Open();
-            _start = _motor.Position;
-            _isHoldingSwarm = true;
-            int grow = _target - _session.Swarm.Capacity;
-            if (grow > 0)
-            {
-                _session.Swarm.GrowCapacity(grow);
-            }
-
-            HoldSwitch();
+            Bind();
+            WriteNotes(_options.PathFor("notes-start.txt"));
             yield return Hold(Prep, Phase.Prep, PrepSeconds);
-            if (_options.IsSubtraction)
+            if (_options.IsFirstCastOnly)
+            {
+                yield return RunFirstCast();
+            }
+            else if (_options.IsSubtraction)
             {
                 yield return RunSubtraction();
             }
@@ -326,6 +384,105 @@ namespace DigitalStory.View
             }
 
             _scenario = Ending;
+        }
+
+        // Connects the run to the scene's match: the switches, the overdraw probe, the session's events, the swarm's size
+        // and the held switch. Called at the start and again after every fresh match.
+        private void Bind()
+        {
+            _switches = new BenchmarkSwitchBoard(_root, _swarmView);
+            if (_options.ProbesOverdraw)
+            {
+                _overdraw?.Dispose();
+                _overdraw = new GlowOverdrawProbe(_swarmView, _camera);
+            }
+
+            _session.SongCastNow += HandleSongCast;
+            _session.SongLanded += HandleSongLanded;
+            _session.Caster.SongNotReady += HandleSongNotReady;
+            _session.BeekeeperSpawned += HandleBeekeeperSpawned;
+            _session.BeekeeperDied += HandleBeekeeperDied;
+            _alive.Clear();
+            _start = _motor.Position;
+            _isHoldingSwarm = true;
+            int grow = _target - _session.Swarm.Capacity;
+            if (grow > 0)
+            {
+                _session.Swarm.GrowCapacity(grow);
+            }
+
+            HoldSwitch();
+        }
+
+        private void Unbind()
+        {
+            if (_session == null)
+            {
+                return;
+            }
+
+            _session.SongCastNow -= HandleSongCast;
+            _session.SongLanded -= HandleSongLanded;
+            _session.Caster.SongNotReady -= HandleSongNotReady;
+            _session.BeekeeperSpawned -= HandleBeekeeperSpawned;
+            _session.BeekeeperDied -= HandleBeekeeperDied;
+            _session = null;
+
+            // The board holds the old scene's lights and views; a new one is made for the next match.
+            _switches = null;
+        }
+
+        // Loads the scene again: a fresh match in round 1's farm phase, full hives, nothing standing in any slot. The frames
+        // of the load are not written; the next row's time includes them, in the setup phase.
+        private IEnumerator FreshMatch()
+        {
+            string scenario = _scenario;
+            _scenario = Reloading;
+            _phase = Phase.Setup;
+            _isWalking = false;
+            _beekeeperCap = -1;
+            _root.HoldMove(Vector2.zero);
+            HiveDefenseRoot old = _root;
+            Unbind();
+            Scene scene = SceneManager.GetActiveScene();
+            if (scene.buildIndex < 0)
+            {
+                throw new InvalidOperationException($"Scene '{scene.name}' is not in the build settings, so it cannot be loaded afresh.");
+            }
+
+            SceneManager.LoadScene(scene.buildIndex);
+            yield return null;
+            while (old != null || !TryFindScene())
+            {
+                yield return null;
+            }
+
+            for (int frame = 0; frame < BootFrames; frame++)
+            {
+                yield return null;
+            }
+
+            Bind();
+
+            // The old match is garbage now. Collected here, outside any window, it never lands in one as a long frame.
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            _events.Add($"{_frame}: fresh match for {scenario}");
+            yield return Hold(scenario, Phase.Setup, AfterClearSeconds);
+        }
+
+        // ------------------------------------------------------------------ first-cast script
+
+        // Only the process's first two Sting casts, for runs that hold one first-cast switch each, and then the process's
+        // first giant, whose swoop into the chase view is the first look at the horizon and the sky.
+        private IEnumerator RunFirstCast()
+        {
+            int sting = SongIndex(typeof(StingSong));
+            yield return CastPair(sting, FirstCastNames[0], SecondCastNames[0], false);
+            int giant = SongIndex(typeof(ColossusSong));
+            yield return WaitReady(giant, -1);
+            yield return Hold(FirstCastNames[SongOrder.Length - 1], Phase.Settle, SettleSeconds);
+            yield return CastAndMeasure(FirstCastNames[SongOrder.Length - 1], giant, -1, MeasureSeconds);
         }
 
         // Applies the switch named by -f010BenchOff for the whole baseline script, so a fix can be checked against it.
@@ -357,11 +514,20 @@ namespace DigitalStory.View
             for (int order = 0; order < SongOrder.Length; order++)
             {
                 int song = SongIndex(SongOrder[order]);
-                float needed = SongPairSeconds + Mathf.Max(0f, _session.Caster[song].Song.CooldownSeconds - CooldownInWindowSeconds) + (order == SongOrder.Length - 1 ? ColossusSeconds : 0f);
+                SwarmSongEffect effect = _session.Caster[song];
+                float needed = SongPairSeconds + Mathf.Max(0f, effect.Song.CooldownSeconds - CooldownInWindowSeconds);
+                if (effect is ColossusSong giant)
+                {
+                    // The second cast waits for the first giant to end.
+                    needed += giant.Seconds + ColossusSettleSeconds;
+                }
+
+                bool isTower = effect is NestSong || effect is HoneycombSong;
                 yield return EnsureFarm(needed, WaveOfEightRound - 1);
-                yield return CastPair(song, FirstCastNames[order], SecondCastNames[order]);
+                yield return CastPair(song, FirstCastNames[order], SecondCastNames[order], isTower);
             }
 
+            yield return GiantWindows();
             yield return CastDomeSting(DomeSting, MeasureSeconds);
             yield return CollectNest();
             yield return WaveOfEightBeekeepers();
@@ -394,14 +560,150 @@ namespace DigitalStory.View
             _beekeeperCap = -1;
         }
 
-        private IEnumerator CastPair(int song, string first, string second)
+        // A tower (the Nest, the Honeycomb) stands in the Post slot long after its window, so a fresh match follows each of
+        // its windows, and the next window starts with nothing standing.
+        private IEnumerator CastPair(int song, string first, string second, bool isTower)
         {
             yield return WaitReady(song, -1);
             yield return Hold(first, Phase.Settle, SettleSeconds);
             yield return CastAndMeasure(first, song, -1, MeasureSeconds);
+            if (isTower)
+            {
+                yield return FreshMatch();
+            }
+
             yield return WaitReady(song, -1);
             yield return Hold(second, Phase.Settle, SettleSeconds);
             yield return CastAndMeasure(second, song, -1, MeasureSeconds);
+            if (isTower)
+            {
+                yield return FreshMatch();
+            }
+        }
+
+        // ------------------------------------------------------------------ the giant's moves (plan section I)
+
+        private IEnumerator GiantWindows()
+        {
+            int giant = SongIndex(typeof(ColossusSong));
+            yield return GiantRun(giant, FirstGiantMoves);
+            yield return GiantRun(giant, SecondGiantMoves);
+        }
+
+        // A fresh match's first farm phase holds a whole giant. It forms through its keys at full Fury, the camera swoops
+        // into the chase view, and then each move gets its window.
+        private IEnumerator GiantRun(int song, GiantMove[] moves)
+        {
+            _scenario = GiantForming;
+            yield return FreshMatch();
+            yield return WaitReady(song, -1);
+            Prepare(song);
+            _scenario = GiantForming;
+            _phase = Phase.Setup;
+            foreach (int hole in _session.Caster[song].Song.Keys)
+            {
+                _root.PressHole(hole);
+                yield return null;
+            }
+
+            int frames = FramesFor(MostFormSeconds);
+            for (int frame = 0; frame < frames && !_session.IsColossusActive; frame++)
+            {
+                yield return null;
+            }
+
+            if (!_session.IsColossusActive)
+            {
+                _events.Add($"{_frame}: FAILED the giant did not form for {GiantWindowNames[(int)moves[0]]}");
+                yield break;
+            }
+
+            yield return Hold(GiantForming, Phase.Settle, GiantSwoopSeconds);
+            foreach (GiantMove move in moves)
+            {
+                yield return GiantWindow(move);
+            }
+        }
+
+        // One move of the giant, played through its keys and the root's held move as a player would, from the window's
+        // first frame.
+        private IEnumerator GiantWindow(GiantMove move)
+        {
+            string name = GiantWindowNames[(int)move];
+            if (!_session.IsColossusActive || !_follow.IsChasing)
+            {
+                _events.Add($"{_frame}: FAILED no giant in the chase view for {name}");
+                yield break;
+            }
+
+            _scenario = name;
+            _phase = Phase.Measure;
+            int frames = FramesFor(GiantWindowSeconds);
+            for (int frame = 0; frame < frames; frame++)
+            {
+                PlayGiant(move, frame);
+                yield return null;
+            }
+
+            _root.HoldMove(Vector2.zero);
+            if (!_session.IsColossusActive)
+            {
+                _events.Add($"{_frame}: the giant ended during {name}");
+            }
+
+            yield return EndWindow();
+        }
+
+        private void PlayGiant(GiantMove move, int frame)
+        {
+            switch (move)
+            {
+                case GiantMove.Walk:
+                    int leg = (frame / FramesFor(GiantWalkLegSeconds)) % GiantWalkLegs.Length;
+                    _root.HoldMove(GiantWalkLegs[leg]);
+                    break;
+                case GiantMove.Orbit:
+                    _follow.Orbit(GiantOrbitDegreesPerFrame, 0f);
+                    break;
+                case GiantMove.Punch:
+                    PressEvery(PunchHole, frame, GiantPunchEverySeconds);
+                    break;
+                case GiantMove.Kick:
+                    PressEvery(KickHole, frame, GiantKickEverySeconds);
+                    break;
+                case GiantMove.Slam:
+                    PressAt(SlamHole, frame, 0);
+                    break;
+                case GiantMove.Roar:
+                    PressAt(RoarHole, frame, 0);
+                    break;
+                case GiantMove.Spin:
+                    // K K, twice: the second K of each pair is the spin kick.
+                    int spinFrame = frame % FramesFor(GiantSpinEverySeconds);
+                    PressAt(KickHole, spinFrame, 0);
+                    PressAt(KickHole, spinFrame, 1);
+                    break;
+                case GiantMove.Leap:
+                    PressAt(SlamHole, frame, 0);
+                    PressAt(SlamHole, frame, 1);
+                    break;
+            }
+        }
+
+        private void PressEvery(int hole, int frame, float seconds)
+        {
+            if (frame % FramesFor(seconds) == 0)
+            {
+                _root.PressHole(hole);
+            }
+        }
+
+        private void PressAt(int hole, int frame, int at)
+        {
+            if (frame == at)
+            {
+                _root.PressHole(hole);
+            }
         }
 
         private IEnumerator CastDomeSting(string name, float seconds)
@@ -701,7 +1003,8 @@ namespace DigitalStory.View
 
             if (_session.Round > lastClearableRound)
             {
-                _events.Add($"{_frame}: farm time short in round {_session.Round} ({_session.FarmSecondsLeft:F1} s for {seconds} s)");
+                _events.Add($"{_frame}: farm time short in round {_session.Round} ({_session.FarmSecondsLeft:F1} s for {seconds} s), so a fresh match");
+                yield return FreshMatch();
                 yield break;
             }
 
@@ -843,11 +1146,12 @@ namespace DigitalStory.View
         {
             long now = Stopwatch.GetTimestamp();
             double frameMs = _lastTimestamp == 0 ? 0.0 : (now - _lastTimestamp) * 1000.0 / Stopwatch.Frequency;
-            _lastTimestamp = now;
-            if (_recorders == null)
+            if (_recorders == null || _session == null || _switches == null)
             {
-                return;
+                return; // Before the scene is found, or while a fresh match loads: the next row's time includes these frames.
             }
+
+            _lastTimestamp = now;
 
             _recorders.CaptureTiming();
             _frame++;
@@ -921,24 +1225,24 @@ namespace DigitalStory.View
             _session = _root.Session;
             _motor = FindAnyObjectByType<SwarmCoreMotor>();
             _swarmView = FindAnyObjectByType<SwarmGpuView>();
+            _follow = FindAnyObjectByType<FollowCamera>();
             _camera = Camera.main;
-            if (_motor == null || _swarmView == null || _camera == null)
+            if (_motor == null || _swarmView == null || _follow == null || _camera == null)
             {
-                throw new InvalidOperationException("The hive defense scene has no core motor, swarm view or main camera.");
+                throw new InvalidOperationException("The hive defense scene has no core motor, swarm view, follow camera or main camera.");
             }
 
             return true;
         }
 
+        // The run's files and recorders, once; Bind connects them to each match.
         private void Open()
         {
-            _switches = new BenchmarkSwitchBoard(_swarmView);
             _recorders = new BenchmarkRecorders(Debug.isDebugBuild, _options.PathFor("markers.txt"));
             _log = new BenchmarkFrameLog(_options.PathFor("frames.csv"));
             WriteHeader();
             if (_options.ProbesOverdraw)
             {
-                _overdraw = new GlowOverdrawProbe(_swarmView, _camera);
                 _overdrawLog = new BenchmarkFrameLog(_options.PathFor("overdraw.csv"));
                 foreach (string column in OverdrawColumns)
                 {
@@ -947,13 +1251,6 @@ namespace DigitalStory.View
 
                 _overdrawLog.EndRow();
             }
-
-            _session.SongCastNow += HandleSongCast;
-            _session.SongLanded += HandleSongLanded;
-            _session.Caster.SongNotReady += HandleSongNotReady;
-            _session.BeekeeperSpawned += HandleBeekeeperSpawned;
-            _session.BeekeeperDied += HandleBeekeeperDied;
-            WriteNotes(_options.PathFor("notes-start.txt"));
         }
 
         private void WriteHeader()
@@ -1006,10 +1303,19 @@ namespace DigitalStory.View
                 notes.WriteLine($"camera pixels {_camera.pixelWidth}x{_camera.pixelHeight}, fov {_camera.fieldOfView}, far {_camera.farClipPlane}, allowMSAA {_camera.allowMSAA}, renderingPath {_camera.actualRenderingPath}, depthTextureMode {_camera.depthTextureMode}");
                 notes.WriteLine($"quality {QualitySettings.names[QualitySettings.GetQualityLevel()]}, vSyncCount {QualitySettings.vSyncCount}, targetFrameRate {Application.targetFrameRate}, pixelLightCount {QualitySettings.pixelLightCount}, shadows {QualitySettings.shadows}, shadowResolution {QualitySettings.shadowResolution}, cascades {QualitySettings.shadowCascades}, shadowDistance {QualitySettings.shadowDistance}, msaa {QualitySettings.antiAliasing}");
                 notes.WriteLine($"FrameTimingManager enabled {FrameTimingManager.IsFeatureEnabled()}, vsyncs per second {FrameTimingManager.GetVSyncsPerSecond()}, captureDeltaTime {Time.captureDeltaTime}");
-                notes.WriteLine($"swarm target {_target}, count {_session.Swarm.Count}, capacity {_session.Swarm.Capacity}, max {_session.Swarm.Max}, round {_session.Round}/{_session.RoundCount}, nests open {_session.Nests.OpenCount}/{_session.Nests.Count}");
+                if (_session != null)
+                {
+                    notes.WriteLine($"swarm target {_target}, count {_session.Swarm.Count}, capacity {_session.Swarm.Capacity}, max {_session.Swarm.Max}, round {_session.Round}/{_session.RoundCount}, nests open {_session.Nests.OpenCount}/{_session.Nests.Count}");
+                }
+
                 _recorders?.Describe(notes);
                 foreach (Light light in _switches.Lights)
                 {
+                    if (light == null)
+                    {
+                        continue;
+                    }
+
                     notes.WriteLine($"light '{light.name}' under '{(light.transform.parent != null ? light.transform.parent.name : "-")}': {light.type}, {light.renderMode}, shadows {light.shadows}, range {light.range:F1}, intensity {light.intensity:F2}, enabled {light.enabled}, active {light.gameObject.activeInHierarchy}");
                 }
 
@@ -1058,11 +1364,6 @@ namespace DigitalStory.View
             {
                 if (_session != null)
                 {
-                    _session.SongCastNow -= HandleSongCast;
-                    _session.SongLanded -= HandleSongLanded;
-                    _session.Caster.SongNotReady -= HandleSongNotReady;
-                    _session.BeekeeperSpawned -= HandleBeekeeperSpawned;
-                    _session.BeekeeperDied -= HandleBeekeeperDied;
                     _events.Add($"{_frame}: finished at {Elapsed():F1} s, state {_session.State}, round {_session.Round}, wasps {_session.Swarm.Count}");
                 }
 
@@ -1074,6 +1375,7 @@ namespace DigitalStory.View
                     WriteNotes(_options.PathFor("notes.txt"));
                 }
 
+                Unbind();
                 _recorders?.Dispose();
             }
             finally

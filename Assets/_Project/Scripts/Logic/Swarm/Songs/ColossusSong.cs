@@ -3,7 +3,11 @@ using UnityEngine;
 
 namespace DigitalStory.Logic
 {
-    /// <summary>The swarm builds a giant human. It needs a full Fury meter, and uses all of it.</summary>
+    /// <summary>
+    /// The swarm builds a giant human. It needs a full Fury meter, and uses all of it. The giant stands its
+    /// <see cref="Seconds"/>, and each beekeeper it kills adds <see cref="SecondsPerKill"/>, never past
+    /// <see cref="MostSeconds"/> (plan section I).
+    /// </summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Colossus", fileName = "ColossusSong")]
     public sealed class ColossusSong : SwarmSongEffect
     {
@@ -13,10 +17,17 @@ namespace DigitalStory.Logic
         {
         }
 
-        // 11 s (was 12), set by the playtest bot after plan section O: the giant was still the main source of damage, so it
-        // stands a second less, and waves 4 and 5 grew by a beekeeper each so a player without nests still loses.
-        [field: SerializeField, Min(0f), Tooltip("Seconds the giant stands.")]
-        public float Seconds { get; private set; } = 11f;
+        // 20 s (was 11), plus 2 s a kill and 30 s at most: plan section I, after the owner found the giant too short. The
+        // playtest bot had set 11 s after plan section O, when the giant was still the main source of damage, so its
+        // balance targets need setting again with these.
+        [field: SerializeField, Min(0f), Tooltip("Seconds the giant stands, before the time its kills add.")]
+        public float Seconds { get; private set; } = 20f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds each beekeeper the giant kills adds to the time it stands.")]
+        public float SecondsPerKill { get; private set; } = 2f;
+
+        [field: SerializeField, Min(0f), Tooltip("The most seconds the giant stands, with the time its kills add. Not below Seconds.")]
+        public float MostSeconds { get; private set; } = 30f;
 
         public override bool CanCast(in SwarmSongContext context)
         {
@@ -30,7 +41,7 @@ namespace DigitalStory.Logic
                 return;
             }
 
-            context.Forms.StartColossus(Seconds);
+            context.Forms.StartColossus(Seconds, SecondsPerKill, MostSeconds);
         }
     }
 }

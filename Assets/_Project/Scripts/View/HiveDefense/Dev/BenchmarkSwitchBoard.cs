@@ -9,12 +9,14 @@ namespace DigitalStory.View
 {
     /// <summary>
     /// Development tool, not game code. Switches one part of the scene off at a time and puts it back, so the benchmark
-    /// can see what each part costs. It also counts which lights are on each frame.
+    /// can see what each part costs. It also counts which lights are on each frame. The first-cast switches (the attack
+    /// light, the cast flash, the cast sound, the camera kick and the damage numbers) take away one thing that first
+    /// happens on a song's first cast, so a run with one of them held shows whether it is the first cast's slow frame.
     /// </summary>
     /// <remarks>
-    /// The swarm view has no switches of its own, and this tool must not change the game, so the wasp draw, the glow draw
-    /// and the compute dispatch are reached through SwarmGpuView's private fields by reflection. A renamed field fails
-    /// loudly here rather than measuring nothing.
+    /// The swarm view and the feel views have no switches of their own, and this tool must not change the game, so what it
+    /// switches is reached through their private fields by reflection. A renamed field fails loudly here rather than
+    /// measuring nothing.
     /// </remarks>
     internal sealed class BenchmarkSwitchBoard
     {
@@ -25,6 +27,14 @@ namespace DigitalStory.View
         private const int AnimatorRescanFrames = 30;
 
         private readonly SwarmGpuView _swarmView;
+        private readonly HitFeedbackView _feedback;
+        private readonly HitSoundView _sound;
+        private readonly DamageNumbersView _numbers;
+        private readonly Light _attackLight;
+        private readonly int[] _slotFlashFrames;
+        private readonly FieldInfo _castKickField;
+        private readonly FieldInfo _lastPlayedField;
+        private readonly int _castSoundKind;
         private readonly FieldInfo _argsField;
         private readonly FieldInfo _glowArgsField;
         private readonly FieldInfo _groupCountField;
@@ -46,11 +56,28 @@ namespace DigitalStory.View
         private readonly List<bool> _savedEnabled = new List<bool>();
         private readonly List<Animator> _animators = new List<Animator>();
         private int _savedGroupCount;
+        private float _savedCastKick;
         private int _framesSinceAnimatorScan;
 
-        public BenchmarkSwitchBoard(SwarmGpuView swarmView)
+        public BenchmarkSwitchBoard(HiveDefenseRoot root, SwarmGpuView swarmView)
         {
+            if (root == null)
+            {
+                throw new ArgumentNullException(nameof(root));
+            }
+
             _swarmView = swarmView != null ? swarmView : throw new ArgumentNullException(nameof(swarmView));
+            _feedback = Found(UnityEngine.Object.FindAnyObjectByType<HitFeedbackView>(), nameof(HitFeedbackView));
+            _sound = Found(UnityEngine.Object.FindAnyObjectByType<HitSoundView>(), nameof(HitSoundView));
+            _numbers = Found(UnityEngine.Object.FindAnyObjectByType<DamageNumbersView>(), nameof(DamageNumbersView));
+            var attackGlow = (SwarmGlowLight)FieldOf(typeof(HiveDefenseRoot), "_attackGlowLight").GetValue(root);
+            _attackLight = Found(attackGlow, "the root's attack light").GetComponent<Light>();
+            _slotFlashFrames = (int[])PrivateField("_slotFlashFrames").GetValue(_swarmView);
+            _castKickField = FieldOf(typeof(HitFeedbackView), "_castKick");
+            _lastPlayedField = FieldOf(typeof(HitSoundView), "_lastPlayed");
+            _castSoundKind = (int)(typeof(HitSoundView).GetField("KindCast", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("HitSoundView has no constant 'KindCast' any more. Update BenchmarkSwitchBoard."))
+                .GetRawConstantValue();
             _argsField = PrivateField("_argsBuffer");
             _glowArgsField = PrivateField("_glowArgsBuffer");
             _groupCountField = PrivateField("_groupCount");
@@ -145,8 +172,20 @@ namespace DigitalStory.View
                 case BenchmarkSwitch.NoHud:
                     SwitchOffHud();
                     break;
+                case BenchmarkSwitch.NoAttackLight:
+                    _savedEnabled.Add(_attackLight.enabled);
+                    break;
+                case BenchmarkSwitch.NoCameraKick:
+                    _savedCastKick = (float)_castKickField.GetValue(_feedback);
+                    _castKickField.SetValue(_feedback, 0f);
+                    break;
+                case BenchmarkSwitch.NoDamageNumbers:
+                    // Its private Release stops it listening for hits. Not restored, as the run holds it to the end.
+                    MethodOf(typeof(DamageNumbersView), "Release").Invoke(_numbers, null);
+                    break;
             }
 
+            ForceAfterUpdate();
             ForceEachFrame();
         }
 
@@ -194,9 +233,36 @@ namespace DigitalStory.View
                     }
 
                     break;
+                case BenchmarkSwitch.NoAttackLight:
+                    _attackLight.enabled = _savedEnabled[0];
+                    break;
+                case BenchmarkSwitch.NoCastSound:
+                    ((float[])_lastPlayedField.GetValue(_sound))[_castSoundKind] = float.NegativeInfinity;
+                    break;
+                case BenchmarkSwitch.NoCameraKick:
+                    _castKickField.SetValue(_feedback, _savedCastKick);
+                    break;
             }
 
             Current = BenchmarkSwitch.None;
+        }
+
+        /// <summary>
+        /// Takes away what a cast set off during this frame's Update before any LateUpdate shows it: the squad flash the swarm
+        /// would draw, and the cast sound's next play. Call from an Update that runs after the root's.
+        /// </summary>
+        public void ForceAfterUpdate()
+        {
+            if (Current == BenchmarkSwitch.NoCastFlash)
+            {
+                Array.Clear(_slotFlashFrames, 0, _slotFlashFrames.Length);
+            }
+            else if (Current == BenchmarkSwitch.NoCastSound)
+            {
+                // The sound view never plays a kind sooner than its gap after the last play, so a last play at infinity
+                // silences the cast sound alone.
+                ((float[])_lastPlayedField.GetValue(_sound))[_castSoundKind] = float.PositiveInfinity;
+            }
         }
 
         /// <summary>
@@ -205,7 +271,11 @@ namespace DigitalStory.View
         /// </summary>
         public void ForceEachFrame()
         {
-            if (Current == BenchmarkSwitch.NoSwarmLights)
+            if (Current == BenchmarkSwitch.NoAttackLight)
+            {
+                _attackLight.enabled = false;
+            }
+            else if (Current == BenchmarkSwitch.NoSwarmLights)
             {
                 for (int index = 0; index < _swarmLights.Length; index++)
                 {
@@ -254,10 +324,23 @@ namespace DigitalStory.View
             }
         }
 
-        private static FieldInfo PrivateField(string name)
+        private static FieldInfo PrivateField(string name) => FieldOf(typeof(SwarmGpuView), name);
+
+        private static FieldInfo FieldOf(Type type, string name)
         {
-            return typeof(SwarmGpuView).GetField(name, Private)
-                ?? throw new InvalidOperationException($"SwarmGpuView has no field '{name}' any more. Update BenchmarkSwitchBoard.");
+            return type.GetField(name, Private)
+                ?? throw new InvalidOperationException($"{type.Name} has no field '{name}' any more. Update BenchmarkSwitchBoard.");
+        }
+
+        private static MethodInfo MethodOf(Type type, string name)
+        {
+            return type.GetMethod(name, Private)
+                ?? throw new InvalidOperationException($"{type.Name} has no method '{name}' any more. Update BenchmarkSwitchBoard.");
+        }
+
+        private static T Found<T>(T found, string what) where T : UnityEngine.Object
+        {
+            return found != null ? found : throw new InvalidOperationException($"The hive defense scene has no {what}.");
         }
 
         private static T[] SceneComponents<T>() where T : Component

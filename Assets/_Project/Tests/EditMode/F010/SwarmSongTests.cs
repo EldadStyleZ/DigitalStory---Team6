@@ -109,7 +109,9 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(gust.InhaleSeconds, Is.EqualTo(0.12f), "the inhale, 0 to .12 s");
             Assert.That(gust.RingStartRadius, Is.EqualTo(0.6f), "the ring grows from .6 m");
             Assert.That(gust.RingSeconds, Is.EqualTo(0.5f));
-            Assert.That(colossus.Seconds, Is.EqualTo(11f), "the playtest bot after plan section O: was 12");
+            Assert.That(colossus.Seconds, Is.EqualTo(20f), "plan section I, the giant version 2: was 11");
+            Assert.That(colossus.SecondsPerKill, Is.EqualTo(2f));
+            Assert.That(colossus.MostSeconds, Is.EqualTo(30f));
         }
 
         [Test]
@@ -857,6 +859,26 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_fury.Value, Is.EqualTo(0f));
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
             _forms.Tick(song.Seconds - 0.5f, _hives);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
+            _forms.Tick(0.5f, _hives);
+            Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));
+        }
+
+        // Plan section I: each beekeeper the giant kills adds the song's seconds per kill, never past its most.
+        [Test]
+        public void Colossus_Cast_EachKillAddsItsSecondsUpToItsMost()
+        {
+            var song = Make<ColossusSong>();
+            _fury.AddDamage(1000f);
+            SwarmSongContext context = Context();
+            song.Cast(in context);
+
+            _forms.AddColossusKills(1);
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(song.Seconds + song.SecondsPerKill).Within(1e-4f));
+
+            _forms.AddColossusKills(100);
+            Assert.That(_forms.ColossusSecondsTotal, Is.EqualTo(song.MostSeconds).Within(1e-4f));
+            _forms.Tick(song.MostSeconds - 0.5f, _hives);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.Colossus));
             _forms.Tick(0.5f, _hives);
             Assert.That(_forms.Current, Is.EqualTo(SwarmForm.River));

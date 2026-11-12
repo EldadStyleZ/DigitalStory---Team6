@@ -9,7 +9,8 @@ namespace DigitalStory.View
     /// The felt hit. A keyboard has no haptics, so a hit is felt on the screen: the beekeeper it lands on flashes white and recoils,
     /// the camera shakes in proportion to the damage, a heavy hit holds the swarm still for a moment, and a hit a shield blocks flashes
     /// blue on the shield. The frame a song is cast, the squad flashes and the camera kicks, before any wasp has moved. The
-    /// Tornado's hit also flashes a red ring on the ground at its reach, so where it throws is impossible to miss.
+    /// Tornado's hit also flashes a red ring on the ground at its reach, so where it throws is impossible to miss. A heavy song's
+    /// impact, and the giant's slam and leap, push the camera in for a moment.
     /// Several hits in one frame merge into one shake and one freeze.
     /// </summary>
     [DisallowMultipleComponent]
@@ -33,6 +34,12 @@ namespace DigitalStory.View
 
         [SerializeField, Range(0f, 1f), Tooltip("How much of a shake a blocked hit gives, as a share of the same damage unblocked.")]
         private float _blockedShakeShare = 0.4f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("How hard the camera pushes in on a heavy song's impact (the Meteor, the Lance, the Hydra, a Nest going off, the Tornado's throw), 0 to 1. The camera's Liveliness scales it.")]
+        private float _heavyPushIn = 0.8f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("How hard the camera pushes in when the giant's ground slam or leap slam lands, 0 to 1. The camera's Liveliness scales it.")]
+        private float _giantPushIn = 0.5f;
 
         [Header("Freeze")]
         [SerializeField, Min(0f), Tooltip("Seconds the swarm's motion holds still on a heavy hit.")]
@@ -128,6 +135,7 @@ namespace DigitalStory.View
             _session.SongLanded += OnSongLanded;
             _session.SongCastNow += OnSongCastNow;
             _session.Forms.Landed += OnFormLanded;
+            _session.ColossusAttackLanded += OnColossusLanded;
             _isReady = true;
         }
 
@@ -171,6 +179,7 @@ namespace DigitalStory.View
                 _session.SongLanded -= OnSongLanded;
                 _session.SongCastNow -= OnSongCastNow;
                 _session.Forms.Landed -= OnFormLanded;
+                _session.ColossusAttackLanded -= OnColossusLanded;
             }
         }
 
@@ -198,9 +207,15 @@ namespace DigitalStory.View
             }
         }
 
-        // The Tornado's hit: its slot's ParamA.x is the reach it hit everyone within, grown by the level.
+        // A heavy song's impact pushes the camera in, whether or not it hits anyone. The Tornado's hit also flashes its ring:
+        // its slot's ParamA.x is the reach it hit everyone within, grown by the level.
         private void OnFormLanded(SwarmForm form, Vector3 point)
         {
+            if (IsHeavyImpact(form))
+            {
+                _camera.PushIn(_heavyPushIn);
+            }
+
             if (form != SwarmForm.Tornado)
             {
                 return;
@@ -217,6 +232,22 @@ namespace DigitalStory.View
             _ringTransform.position = point + (Vector3.up * _throwRingHeight);
             _ringRenderer.enabled = true;
             PaintRing();
+        }
+
+        private static bool IsHeavyImpact(SwarmForm form)
+        {
+            return form == SwarmForm.Meteor || form == SwarmForm.Lance || form == SwarmForm.Hydra || form == SwarmForm.Nest
+                || form == SwarmForm.Tornado;
+        }
+
+        // The giant's ground slam and leap slam land with a push-in, whether or not they hit anyone; their hits are felt
+        // through SongLanded like any other.
+        private void OnColossusLanded(ColossusAttack attack)
+        {
+            if (attack == ColossusAttack.Slam || attack == ColossusAttack.LeapSlam)
+            {
+                _camera.PushIn(_giantPushIn);
+            }
         }
 
         private void OnSongCastNow(int song)

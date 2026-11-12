@@ -257,10 +257,13 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void TryKick_AfterLandingButStillCoolingDown_IsRefused()
+        public void TryKick_AfterThePhraseWindowButStillCoolingDown_IsRefused()
         {
+            // Changed with plan section I: a second kick inside the phrase window is now a spin kick, so this waits past
+            // the window. It still proves that the cooldown outlasts the kick's hit.
+            Assert.That(_config.PhraseWindowSeconds + JustOver, Is.LessThan(_config.KickCooldownSeconds), "the test needs a gap");
             _chain.TryKick();
-            LandCurrent(_config.KickHitDelay);
+            _chain.Tick(_config.PhraseWindowSeconds + JustOver);
 
             Assert.That(_chain.IsBusy, Is.False);
             Assert.That(_chain.TryKick(), Is.False);
@@ -276,6 +279,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_chain.TryKick(), Is.False);
         }
 
+        // A slow second kick, past the phrase window, is a plain kick (plan section I).
         [Test]
         public void TryKick_AfterTheCooldown_Works()
         {
@@ -317,6 +321,242 @@ namespace DigitalStory.Tests.EditMode
             LandCurrent(_config.KickHitDelay);
 
             Assert.That(order, Is.EqualTo(new[] { "started Kick", "landed Kick" }));
+        }
+
+        // ---- The giant, version 2 (plan section I): the slam, the roar and the two phrases ----
+
+        [Test]
+        public void New_TheSlamAndTheRoarAreReady()
+        {
+            Assert.That(_chain.SlamCooldown01, Is.EqualTo(0f));
+            Assert.That(_chain.RoarCooldown01, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void TrySlam_WhenIdle_StartsASlamThatLandsAfterItsDelay()
+        {
+            Assert.That(_chain.TrySlam(), Is.True);
+            Assert.That(_chain.IsBusy, Is.True);
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Slam }));
+
+            _chain.Tick(_config.SlamHitDelay - JustOver);
+            Assert.That(_landed, Is.Empty);
+            _chain.Tick(JustOver * 2f);
+
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Slam }));
+            Assert.That(_chain.IsBusy, Is.False);
+        }
+
+        [Test]
+        public void TrySlam_AfterThePhraseWindow_IsRefusedUntilItsCooldownEnds()
+        {
+            _chain.TrySlam();
+            _chain.Tick(_config.PhraseWindowSeconds + JustOver);
+
+            Assert.That(_chain.TrySlam(), Is.False, "still cooling down");
+
+            _chain.Tick(_config.SlamCooldownSeconds - _config.PhraseWindowSeconds);
+
+            Assert.That(_chain.TrySlam(), Is.True);
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Slam, ColossusAttack.Slam }), "a plain slam, not a leap");
+        }
+
+        [Test]
+        public void SlamCooldown01_IsOneWhenUsedAndFallsToZeroWhenReady()
+        {
+            _chain.TrySlam();
+            Assert.That(_chain.SlamCooldown01, Is.EqualTo(1f).Within(1e-4f));
+
+            _chain.Tick(_config.SlamCooldownSeconds * 0.5f);
+            Assert.That(_chain.SlamCooldown01, Is.EqualTo(0.5f).Within(1e-4f));
+
+            _chain.Tick(_config.SlamCooldownSeconds);
+            Assert.That(_chain.SlamCooldown01, Is.EqualTo(0f));
+            Assert.That(_chain.RoarCooldown01, Is.EqualTo(0f), "the roar has its own cooldown");
+        }
+
+        [Test]
+        public void TryRoar_WhenIdle_StartsARoarThatLandsAfterItsDelay()
+        {
+            Assert.That(_chain.TryRoar(), Is.True);
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Roar }));
+
+            _chain.Tick(_config.RoarHitDelay - JustOver);
+            Assert.That(_landed, Is.Empty);
+            _chain.Tick(JustOver * 2f);
+
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Roar }));
+        }
+
+        [Test]
+        public void TryRoar_CoolsDownForItsSecondsAndSaysHowFar()
+        {
+            _chain.TryRoar();
+            Assert.That(_chain.RoarCooldown01, Is.EqualTo(1f).Within(1e-4f));
+
+            _chain.Tick(_config.RoarCooldownSeconds - JustOver);
+            Assert.That(_chain.TryRoar(), Is.False);
+            Assert.That(_chain.RoarCooldown01, Is.GreaterThan(0f));
+
+            _chain.Tick(JustOver * 2f);
+            Assert.That(_chain.RoarCooldown01, Is.EqualTo(0f));
+            Assert.That(_chain.TryRoar(), Is.True);
+        }
+
+        [Test]
+        public void TryRoar_WhileBusy_IsRefused()
+        {
+            _chain.TryPunch();
+
+            Assert.That(_chain.TryRoar(), Is.False);
+            Assert.That(_chain.RoarCooldown01, Is.EqualTo(0f), "a refused roar starts no cooldown");
+        }
+
+        [Test]
+        public void TryRoar_BetweenPunches_RestartsThePunchChain()
+        {
+            _chain.TryPunch();
+            LandCurrent(_config.PunchHitDelay);
+            _chain.TryPunch();
+            LandCurrent(_config.PunchHitDelay);
+            _chain.TryRoar();
+            LandCurrent(_config.RoarHitDelay);
+            _chain.TryPunch();
+
+            Assert.That(_started[3], Is.EqualTo(ColossusAttack.Punch));
+        }
+
+        [Test]
+        public void TryKick_SecondWithinThePhraseWindowAfterTheFirstLanded_IsASpinKick()
+        {
+            _chain.TryKick();
+            LandCurrent(_config.KickHitDelay);
+
+            Assert.That(_chain.TryKick(), Is.True, "the kick still cools down, but the phrase wins");
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Kick, ColossusAttack.SpinKick }));
+
+            _chain.Tick(_config.SpinKickHitDelay - JustOver);
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Kick }));
+            _chain.Tick(JustOver * 2f);
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Kick, ColossusAttack.SpinKick }));
+        }
+
+        // A quick K K is not lost: the spin kick waits for the first kick to land, then starts.
+        [Test]
+        public void TryKick_SecondWhileTheFirstIsInTheAir_SpinsAsTheFirstLands()
+        {
+            const float Early = 0.1f;
+            _chain.TryKick();
+            _chain.Tick(Early);
+
+            Assert.That(_chain.TryKick(), Is.True);
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Kick }), "the first kick is still in the air");
+
+            _chain.Tick(_config.KickHitDelay - Early + JustOver);
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Kick }));
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Kick, ColossusAttack.SpinKick }));
+            Assert.That(_chain.IsBusy, Is.True);
+
+            _chain.Tick(_config.SpinKickHitDelay + JustOver);
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Kick, ColossusAttack.SpinKick }));
+        }
+
+        [Test]
+        public void TryKick_ThirdRightAfterASpinKick_IsNoSecondSpin()
+        {
+            _chain.TryKick();
+            LandCurrent(_config.KickHitDelay);
+            _chain.TryKick();
+            LandCurrent(_config.SpinKickHitDelay);
+
+            Assert.That(_chain.TryKick(), Is.False, "the phrase is used up and the kick still cools down");
+            Assert.That(_started.Count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void TrySlam_SecondWithinThePhraseWindow_IsALeapSlamThatLandsAfterTheLeap()
+        {
+            _chain.TrySlam();
+            LandCurrent(_config.SlamHitDelay);
+
+            Assert.That(_chain.TrySlam(), Is.True, "the slam still cools down, but the phrase wins");
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Slam, ColossusAttack.LeapSlam }));
+
+            _chain.Tick(_config.LeapSeconds - JustOver);
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Slam }), "still in the air");
+            Assert.That(_chain.IsBusy, Is.True);
+            _chain.Tick(JustOver * 2f);
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Slam, ColossusAttack.LeapSlam }));
+        }
+
+        [Test]
+        public void TrySlam_SecondWhileTheSlamWindsUp_LeapsAsItLands()
+        {
+            const float Early = 0.1f;
+            _chain.TrySlam();
+            _chain.Tick(Early);
+
+            Assert.That(_chain.TrySlam(), Is.True);
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Slam }));
+
+            _chain.Tick(_config.SlamHitDelay - Early + JustOver);
+
+            Assert.That(_landed, Is.EqualTo(new[] { ColossusAttack.Slam }));
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Slam, ColossusAttack.LeapSlam }));
+        }
+
+        [Test]
+        public void TrySlam_SecondAfterThePhraseWindow_IsNoLeap()
+        {
+            _chain.TrySlam();
+            _chain.Tick(_config.PhraseWindowSeconds + JustOver);
+
+            Assert.That(_chain.TrySlam(), Is.False);
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Slam }));
+        }
+
+        [Test]
+        public void Phrase_AnotherMoveInBetween_BreaksIt()
+        {
+            _chain.TryKick();
+            LandCurrent(_config.KickHitDelay);
+            _chain.TryPunch();
+            LandCurrent(_config.PunchHitDelay);
+
+            Assert.That(_chain.TryKick(), Is.False, "K J K is no spin kick, and the kick still cools down");
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Kick, ColossusAttack.Punch }));
+        }
+
+        [Test]
+        public void Phrase_KickThenSlam_IsAPlainSlam()
+        {
+            _chain.TryKick();
+            LandCurrent(_config.KickHitDelay);
+
+            Assert.That(_chain.TrySlam(), Is.True);
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Kick, ColossusAttack.Slam }));
+        }
+
+        [Test]
+        public void Reset_DropsTheAttackUnderWayTheWaitingPhraseAndEveryCooldown()
+        {
+            _chain.TryRoar();
+            LandCurrent(_config.RoarHitDelay);
+            _chain.TryKick();
+            _chain.Tick(0.1f);
+            _chain.TryKick();
+            _started.Clear();
+            _landed.Clear();
+
+            _chain.Reset();
+
+            Assert.That(_chain.IsBusy, Is.False);
+            Assert.That(_chain.RoarCooldown01, Is.EqualTo(0f));
+            _chain.Tick(2f);
+            Assert.That(_started, Is.Empty, "the waiting spin kick never starts");
+            Assert.That(_landed, Is.Empty, "the kick in the air never lands");
+            Assert.That(_chain.TryKick(), Is.True, "no cooldown is left");
+            Assert.That(_started, Is.EqualTo(new[] { ColossusAttack.Kick }), "and no phrase");
         }
     }
 }

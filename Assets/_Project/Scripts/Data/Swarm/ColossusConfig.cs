@@ -2,7 +2,11 @@ using UnityEngine;
 
 namespace DigitalStory.Data
 {
-    /// <summary>The Colossus, the human form of the swarm: its body, its attacks. How long it lasts is the Colossus song's Seconds.</summary>
+    /// <summary>
+    /// The Colossus, the human form of the swarm: its body and its moves (plan section I, version 2). Every damage here is
+    /// multiplied by the swarm level's damage scale, and every radius, reach and range by its size scale, as they were when
+    /// the giant stood up. How long it lasts, and the time its kills add, are on the Colossus song.
+    /// </summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Colossus Config", fileName = "ColossusConfig")]
     public sealed class ColossusConfig : ScriptableObject
     {
@@ -15,9 +19,6 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Min(0f), Tooltip("Seconds a beekeeper stays stunned after being hit by the Colossus.")]
         public float StunSeconds { get; private set; } = 0.5f;
-
-        [field: SerializeField, Min(1f), Tooltip("Camera distance while the Colossus stands.")]
-        public float CameraDistance { get; private set; } = 20f;
 
         [field: Header("Punch")]
         [field: SerializeField, Min(0f), Tooltip("Damage of a punch.")]
@@ -60,5 +61,64 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Min(0f), Tooltip("Seconds before the Colossus can kick again.")]
         public float KickCooldownSeconds { get; private set; } = 0.8f;
+
+        [field: Header("Phrases")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds after a kick or a slam to press it again for its phrase: K K a spin kick, L L a leap slam.")]
+        public float PhraseWindowSeconds { get; private set; } = 0.6f;
+
+        [field: Header("Ground slam")]
+        [field: SerializeField, Min(0f), Tooltip("Damage of the ground slam to every beekeeper within its radius.")]
+        public float SlamDamage { get; private set; } = 40f;
+
+        [field: SerializeField, Min(0f), Tooltip("Radius, in metres around the Colossus, of the ground slam.")]
+        public float SlamRadius { get; private set; } = 5f;
+
+        [field: SerializeField, Min(0f), Tooltip("Speed, in metres per second, that the ground slam throws a beekeeper away from the Colossus.")]
+        public float SlamKnockback { get; private set; } = 4f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds from the start of the ground slam until it lands.")]
+        public float SlamHitDelay { get; private set; } = 0.3f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds before the Colossus can slam again. The leap slam does not wait for it.")]
+        public float SlamCooldownSeconds { get; private set; } = 3f;
+
+        [field: Header("Roar")]
+        [field: SerializeField, Min(0f), Tooltip("Radius, in metres around the Colossus, of the roar. It does no damage.")]
+        public float RoarRadius { get; private set; } = 6f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds the roar stuns every beekeeper within its radius.")]
+        public float RoarStunSeconds { get; private set; } = 1.2f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds from the start of the roar until it lands.")]
+        public float RoarHitDelay { get; private set; } = 0.2f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds before the Colossus can roar again.")]
+        public float RoarCooldownSeconds { get; private set; } = 6f;
+
+        [field: Header("Spin kick (K K)")]
+        [field: SerializeField, Min(0f), Tooltip("Damage of the spin kick to every beekeeper within its radius.")]
+        public float SpinKickDamage { get; private set; } = 55f;
+
+        [field: SerializeField, Min(0f), Tooltip("Radius, in metres around the Colossus, of the spin kick.")]
+        public float SpinKickRadius { get; private set; } = 3.5f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds from the start of the spin kick until it lands.")]
+        public float SpinKickHitDelay { get; private set; } = 0.3f;
+
+        [field: Header("Leap slam (L L)")]
+        [field: SerializeField, Min(0f), Tooltip("The most metres the Colossus leaps toward the aimed spot.")]
+        public float LeapRange { get; private set; } = 10f;
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds the Colossus is in the air, from take-off until it lands and hits.")]
+        public float LeapSeconds { get; private set; } = 0.6f;
+
+        [field: SerializeField, Min(0f), Tooltip("Damage of the landing to every beekeeper within its radius.")]
+        public float LeapDamage { get; private set; } = 70f;
+
+        [field: SerializeField, Min(0f), Tooltip("Radius, in metres around the landing, of the leap slam.")]
+        public float LeapRadius { get; private set; } = 4f;
+
+        [field: SerializeField, Min(0f), Tooltip("Speed, in metres per second, that the landing throws a beekeeper away from it.")]
+        public float LeapKnockback { get; private set; } = 6f;
     }
 }

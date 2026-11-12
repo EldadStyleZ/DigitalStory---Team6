@@ -45,6 +45,29 @@
             <ui:Label name="prompt-line" text="" class="line prompt-line" picking-mode="Ignore" />
             <ui:VisualElement name="notes" class="notes" picking-mode="Ignore" />
         </ui:VisualElement>
+        <ui:VisualElement name="giant-hint" class="giant-hint" picking-mode="Ignore">
+            <ui:Label name="giant-moves-line" text="" class="giant-line" picking-mode="Ignore" />
+            <ui:Label name="giant-phrases-line" text="" class="giant-line giant-line--small" picking-mode="Ignore" />
+        </ui:VisualElement>
+        <ui:VisualElement name="giant-strip" class="giant-strip" picking-mode="Ignore">
+            <ui:VisualElement name="giant-ring" class="giant-ring" picking-mode="Ignore">
+                <ui:Label name="giant-seconds" text="0" class="giant-seconds" picking-mode="Ignore" />
+            </ui:VisualElement>
+            <ui:VisualElement class="giant-marks" picking-mode="Ignore">
+                <ui:VisualElement class="giant-mark-row" picking-mode="Ignore">
+                    <ui:Label text="L slam" class="giant-mark-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="giant-mark" picking-mode="Ignore">
+                        <ui:VisualElement name="giant-slam-fill" class="giant-mark-fill" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="giant-mark-row" picking-mode="Ignore">
+                    <ui:Label text="H roar" class="giant-mark-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="giant-mark" picking-mode="Ignore">
+                        <ui:VisualElement name="giant-roar-fill" class="giant-mark-fill" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
         <ui:VisualElement name="songbook" class="songbook" picking-mode="Ignore">
             <ui:Label name="songbook-title" text="Songs 0/0" class="songbook-title" picking-mode="Ignore" />
             <ui:VisualElement name="songbook-chips" class="songbook-chips" picking-mode="Ignore" />

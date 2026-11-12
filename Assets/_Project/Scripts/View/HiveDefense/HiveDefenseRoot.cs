@@ -99,8 +99,11 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Moves the swarm's core, the point the swarm gathers around.")]
         private SwarmCoreMotor _coreMotor;
 
-        [SerializeField, Tooltip("Follows the core, from further back while the giant stands.")]
+        [SerializeField, Tooltip("Follows the core from above, and chases the giant from behind while it stands.")]
         private FollowCamera _followCamera;
+
+        [SerializeField, Tooltip("An empty object the root puts where the rules say the giant stands, facing its way. The chase camera follows it rather than the puppet, so the spin kick's turn and the leap's arc never swing the view.")]
+        private Transform _chaseAnchor;
 
         [SerializeField, Tooltip("The camera that the mouse aim is relative to.")]
         private Camera _camera;
@@ -157,6 +160,33 @@ namespace DigitalStory.View
         [SerializeField, Range(1, 4), Tooltip("Shadow cascades while this scene is loaded: 1, 2 or 4. Put back when the scene unloads, like the distance.")]
         private int _shadowCascades = 2;
 
+        [Header("Giant camera")]
+        [SerializeField, Min(0f), Tooltip("Degrees the chase camera turns for each unit of the Input Manager's Mouse X and Mouse Y while the giant stands.")]
+        private float _lookDegreesPerUnit = 2.5f;
+
+        [SerializeField, Tooltip("Hides and locks the cursor while the giant stands, so the mouse turns the chase camera as far as it likes, as in a third-person game.")]
+        private bool _isCursorLockedInChase = true;
+
+        [SerializeField, Min(0f), Tooltip("The nearest, in metres ahead of the giant, that the chase view's aim may be. The aim is where the camera looks on the ground; the leap slam goes there.")]
+        private float _chaseAimLeastMetres = 2f;
+
+        [SerializeField, Min(0f), Tooltip("The furthest, in metres ahead of the giant, that the chase view's aim may be, for a camera that looks nearly level.")]
+        private float _chaseAimMostMetres = 20f;
+
+        [Header("Liveliness")]
+        [SerializeField, Range(0.05f, 1f), Tooltip("The time scale of the brief slow-down when the giant forms and when a wave's last beekeeper dies. The camera's Liveliness scales how deep it goes; 0 turns it off.")]
+        private float _slowMotionScale = 0.4f;
+
+        [SerializeField, Min(0f), Tooltip("Real seconds the slow-down lasts.")]
+        private float _slowMotionSeconds = 0.25f;
+
+        [SerializeField, Range(0f, 0.5f), Tooltip("How far from the middle of the screen, as a share of its size, a hive under attack must be before the camera leans toward it.")]
+        private float _leanStartShare = 0.2f;
+
+        [Header("Load")]
+        [SerializeField, Min(0f), Tooltip("Milliseconds of each frame, from the scene's start until it is done, spent compiling the game's code ahead of its first call (ScriptWarmup), so the first cast of a song is not a slow frame. 0 turns it off.")]
+        private float _warmupMillisecondsPerFrame = 2f;
+
         [Header("Sound")]
         [SerializeField, Tooltip("Sounds each note the player plays. May stay empty, and the flute is then silent.")]
         private SwarmFluteVoice _fluteVoice;
@@ -170,6 +200,7 @@ namespace DigitalStory.View
         private static int s_savedShadowCascades;
 
         private readonly Vector4[] _stingTargets = new Vector4[StingSong.MostStings];
+        private ScriptWarmup _scriptWarmup;
         private PathTrail _trail;
         private Vector3 _lastAimPoint;
         private bool _hasSetShadows;
@@ -177,17 +208,27 @@ namespace DigitalStory.View
         private bool _isAttackSpotSet;
         private int _holeMask;
         private bool _hasFormChangedThisTick;
-        private bool _isCameraBackForColossus;
+        private bool _isChasing;
+        private bool _hasLockedCursor;
+        private CursorLockMode _savedLockMode;
+        private bool _wasCursorVisible;
+        private bool _wasWaveRunning;
+        private bool _isSlowingTime;
+        private float _slowSecondsLeft;
+        private float _timeScaleBeforeSlow;
+        private float _slowTimeScale;
         private bool _isRestarting;
         private bool _isReady;
         private bool _isWaveCalled;
         private bool _isGiveHeld;
+        private Vector2 _heldMove;
 
         /// <summary>The running match, for the views, tests and debugging.</summary>
         public HiveDefenseSession Session { get; private set; }
 
         /// <summary>
         /// The one entry point for a played note. Collects the hole for the next tick and sounds it. The hole counts from 0.
+        /// While the giant stands the holes are its moves (plan section I), so they reach the session but the flute is silent.
         /// </summary>
         public void PressHole(int hole)
         {
@@ -198,7 +239,7 @@ namespace DigitalStory.View
 
             _holeMask |= HiveDefenseFrame.HoleBit(hole);
 
-            if (_fluteVoice != null)
+            if (_fluteVoice != null && !Session.IsColossusActive)
             {
                 _fluteVoice.PlayNote(hole);
             }
@@ -224,6 +265,25 @@ namespace DigitalStory.View
         {
             _isGiveHeld = isHeld;
         }
+
+        /// <summary>
+        /// Holds a move, as holding W A S D does, until it is set back to zero: y forward and x to the right, length 0 to 1.
+        /// While the giant stands it walks relative to the camera, so (0, 1) walks it away from the camera. For tests and the
+        /// benchmark; the keys work either way.
+        /// </summary>
+        public void HoldMove(Vector2 move)
+        {
+            _heldMove = Vector2.ClampMagnitude(move, 1f);
+        }
+
+        /// <summary>True while the root has the camera chasing the giant, from the tick it forms until the tick it ends.</summary>
+        public bool IsChasingGiant => _isChasing;
+
+        /// <summary>True while the brief slow-down of time runs, for tests and debugging.</summary>
+        public bool IsSlowingTime => _isSlowingTime;
+
+        /// <summary>The compiling of the game's code ahead of its first call, for tests and the benchmark.</summary>
+        public ScriptWarmup ScriptWarmup => _scriptWarmup;
 
         private void Awake()
         {
@@ -292,6 +352,9 @@ namespace DigitalStory.View
             _followCamera.SetTarget(_coreMotor.transform);
             _lastAimPoint = _coreMotor.Position;
             _input.HolePressed += PressHole;
+
+            // The Data, Logic and View assemblies: every rule a cast runs and every view that answers it.
+            _scriptWarmup = new ScriptWarmup(typeof(SwarmConfig).Assembly, typeof(HiveDefenseSession).Assembly, typeof(HiveDefenseRoot).Assembly);
             _isReady = true;
         }
 
@@ -341,6 +404,9 @@ namespace DigitalStory.View
                 Session.Caster.SongCast -= HandleSongCast;
             }
 
+            // A scene unloaded during the slow-down or the chase leaves time and the cursor as it found them.
+            EndSlowMotion();
+            UnlockCursor();
             RestoreShadows();
         }
 
@@ -385,12 +451,20 @@ namespace DigitalStory.View
                 return;
             }
 
+            StepSlowMotion();
+            if (_warmupMillisecondsPerFrame > 0f)
+            {
+                _scriptWarmup.Step(_warmupMillisecondsPerFrame);
+            }
+
             float dt = Mathf.Min(Time.deltaTime, _swarm.MaxDeltaTime);
 
             if (Session.State != HiveDefenseState.Playing)
             {
-                // The match is over, so nothing flows between the core and a hive any more.
+                // The match is over, so nothing flows between the core and a hive any more, and the camera comes back up.
                 StopHiveFlows();
+                FeedChase();
+                FeedWave();
                 if (_input.RestartPressed && !_isRestarting)
                 {
                     _isRestarting = true;
@@ -401,9 +475,14 @@ namespace DigitalStory.View
             }
 
             // While the giant stands the move steers the giant, which the session moves with the core inside it, so the
-            // motor only settles the core on the ground.
+            // motor only settles the core on the ground. The giant walks relative to the camera: y is the camera's way.
             bool isColossus = Session.IsColossusActive;
             Vector3 move = _input.Move;
+            if (_heldMove.sqrMagnitude > 0f)
+            {
+                move = new Vector3(_heldMove.x, 0f, _heldMove.y);
+            }
+
             _coreMotor.Move(
                 isColossus ? Vector3.zero : move, Session.CoreSpeedMultiplier, isColossus || Session.IsCoreRooted, dt);
 
@@ -417,17 +496,27 @@ namespace DigitalStory.View
                 CallWave();
             }
 
-            // The mouse aims only while it is live; otherwise auto-aim chooses.
+            // The mouse aims only while it is live; otherwise auto-aim chooses. In the chase view the mouse turns the camera,
+            // so the aim is where the camera looks on the ground, ahead of the giant (plan section I).
+            bool isMouseLive = _input.IsMouseLive;
+            Vector3 aimPoint = _lastAimPoint;
+            if (_isChasing)
+            {
+                aimPoint = ChaseAimPoint();
+                isMouseLive = true;
+            }
+
             var frame = new HiveDefenseFrame(
                 _coreMotor.Position,
-                _lastAimPoint,
+                aimPoint,
                 new Vector2(move.x, move.z),
                 _holeMask,
                 _input.PunchPressed,
                 _input.KickPressed,
-                _input.IsMouseLive,
+                isMouseLive,
                 _input.GiveHeld || _isGiveHeld,
-                _isWaveCalled);
+                _isWaveCalled,
+                _followCamera.GroundForward);
             _holeMask = 0;
             _isWaveCalled = false;
             _hasFormChangedThisTick = false;
@@ -443,7 +532,9 @@ namespace DigitalStory.View
             FeedSwarm(core);
             FeedHives(core);
             FeedGlow(core, dt);
-            FeedCamera();
+            FeedChase();
+            FeedWave();
+            FeedLean();
         }
 
         // Only the hive the core stands at shows the core near, and its store flowing in or the swarm's wasps flowing out.
@@ -674,24 +765,202 @@ namespace DigitalStory.View
             _swarmView.SetStingTargets(_stingTargets, count);
         }
 
-        // The camera always follows the core, which rides inside the giant while it stands; it only steps back for the giant.
-        private void FeedCamera()
+        // Plan section I: while the giant stands the camera chases it from behind and above, and the mouse turns the view; it
+        // swoops back to the top view over the core when the giant ends. The anchor carries the rules' place and facing, so
+        // the camera never follows the puppet's spin or leap. The giant's forming slows time for a moment.
+        private void FeedChase()
         {
-            bool isColossus = Session.IsColossusActive;
-            if (isColossus == _isCameraBackForColossus)
+            bool isColossus = Session.IsColossusActive && Session.State == HiveDefenseState.Playing;
+            if (isColossus)
+            {
+                Vector3 facing = Session.ColossusFacing;
+                facing.y = 0f;
+                Quaternion rotation = facing.sqrMagnitude > 0f ? Quaternion.LookRotation(facing, Vector3.up) : _chaseAnchor.rotation;
+                _chaseAnchor.SetPositionAndRotation(Session.ColossusPosition, rotation);
+            }
+
+            if (isColossus != _isChasing)
+            {
+                _isChasing = isColossus;
+                if (isColossus)
+                {
+                    _followCamera.EnterChase(_chaseAnchor, _colossus.Height);
+                    LockCursor();
+                    StartSlowMotion();
+                }
+                else
+                {
+                    _followCamera.ExitChase();
+                    UnlockCursor();
+                }
+            }
+
+            if (!_isChasing)
             {
                 return;
             }
 
-            _isCameraBackForColossus = isColossus;
-            if (isColossus)
+            // Mouse right turns the view right; mouse up looks up, which lowers the camera. Only a moved mouse orbits, so the
+            // camera drifts back behind the giant once the mouse rests.
+            Vector2 look = _input.LookDelta;
+            if (look.sqrMagnitude > 0f)
             {
-                _followCamera.SetDistance(_colossus.CameraDistance);
+                _followCamera.Orbit(look.x * _lookDegreesPerUnit, -look.y * _lookDegreesPerUnit);
             }
-            else
+        }
+
+        // Where the chase camera looks on the ground, ahead of the giant and no nearer or further than the root allows. A
+        // camera that looks level or up aims the furthest ahead.
+        private Vector3 ChaseAimPoint()
+        {
+            Vector3 giant = Session.ColossusPosition;
+            Vector3 ahead = _followCamera.GroundForward;
+            Transform view = _camera.transform;
+            Vector3 forward = view.forward;
+            float metres = _chaseAimMostMetres;
+            if (forward.y < 0f)
             {
-                _followCamera.ResetDistance();
+                Vector3 onGround = view.position + (forward * ((giant.y - view.position.y) / forward.y));
+                Vector3 offset = onGround - giant;
+                offset.y = 0f;
+                metres = Vector3.Dot(offset, ahead);
             }
+
+            metres = Mathf.Clamp(metres, _chaseAimLeastMetres, Mathf.Max(_chaseAimLeastMetres, _chaseAimMostMetres));
+            return giant + (ahead * metres);
+        }
+
+        // The camera backs away a little while a wave runs. The wave is over the tick its last beekeeper dies, and time
+        // slows for a moment then, also when that wave was the last.
+        private void FeedWave()
+        {
+            bool isWaveRunning = Session.State == HiveDefenseState.Playing && Session.Phase == MatchPhase.Survive;
+            if (isWaveRunning == _wasWaveRunning)
+            {
+                return;
+            }
+
+            bool isCleared = _wasWaveRunning && Session.State != HiveDefenseState.Lost;
+            _wasWaveRunning = isWaveRunning;
+            _followCamera.SetWavePullBack(isWaveRunning);
+            if (isCleared)
+            {
+                StartSlowMotion();
+            }
+        }
+
+        // In the top view the camera leans a little toward a hive under attack that stands away from the middle of the
+        // screen, the further away the more, and comes back once it is not called.
+        private void FeedLean()
+        {
+            if (_isChasing)
+            {
+                return;
+            }
+
+            HiveSet hives = Session.Hives;
+            float strongest = 0f;
+            Vector3 toward = Vector3.zero;
+            for (int index = 0; index < hives.Count; index++)
+            {
+                Hive hive = hives[index];
+                if (hive.IsDestroyed || !hive.IsUnderAttack)
+                {
+                    continue;
+                }
+
+                Vector3 viewport = _camera.WorldToViewportPoint(hive.Position);
+                float off = viewport.z <= 0f
+                    ? 1f
+                    : Mathf.Max(Mathf.Abs(viewport.x - 0.5f), Mathf.Abs(viewport.y - 0.5f));
+                float strength = Mathf.Clamp01((off - _leanStartShare) / Mathf.Max(0.01f, 0.5f - _leanStartShare));
+                if (strength > strongest)
+                {
+                    strongest = strength;
+                    toward = hive.Position;
+                }
+            }
+
+            if (strongest > 0f)
+            {
+                _followCamera.LeanToward(toward, strongest);
+            }
+        }
+
+        // Time runs at the slow-down's scale for its real seconds and then goes back to what it was. When something else
+        // changed the time scale meanwhile (a test, a pause), that change is kept. The camera's Liveliness scales how deep
+        // it goes, and 0 turns it off.
+        private void StartSlowMotion()
+        {
+            float depth = Mathf.Clamp01(_followCamera.Liveliness);
+            if (!(_slowMotionSeconds > 0f) || !(depth > 0f))
+            {
+                return;
+            }
+
+            if (!_isSlowingTime)
+            {
+                _timeScaleBeforeSlow = Time.timeScale;
+                _isSlowingTime = true;
+            }
+
+            _slowSecondsLeft = _slowMotionSeconds;
+            _slowTimeScale = _timeScaleBeforeSlow * Mathf.Lerp(1f, _slowMotionScale, depth);
+            Time.timeScale = _slowTimeScale;
+        }
+
+        private void StepSlowMotion()
+        {
+            if (!_isSlowingTime)
+            {
+                return;
+            }
+
+            _slowSecondsLeft -= Time.unscaledDeltaTime;
+            if (_slowSecondsLeft <= 0f)
+            {
+                EndSlowMotion();
+            }
+        }
+
+        private void EndSlowMotion()
+        {
+            if (!_isSlowingTime)
+            {
+                return;
+            }
+
+            _isSlowingTime = false;
+            if (Mathf.Approximately(Time.timeScale, _slowTimeScale))
+            {
+                Time.timeScale = _timeScaleBeforeSlow;
+            }
+        }
+
+        private void LockCursor()
+        {
+            if (!_isCursorLockedInChase || _hasLockedCursor)
+            {
+                return;
+            }
+
+            _hasLockedCursor = true;
+            _savedLockMode = Cursor.lockState;
+            _wasCursorVisible = Cursor.visible;
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
+        private void UnlockCursor()
+        {
+            if (!_hasLockedCursor)
+            {
+                return;
+            }
+
+            _hasLockedCursor = false;
+            Cursor.lockState = _savedLockMode;
+            Cursor.visible = _wasCursorVisible;
         }
 
         private void CheckReferences()
@@ -714,6 +983,7 @@ namespace DigitalStory.View
             Require(_input, nameof(_input));
             Require(_coreMotor, nameof(_coreMotor));
             Require(_followCamera, nameof(_followCamera));
+            Require(_chaseAnchor, nameof(_chaseAnchor));
             Require(_camera, nameof(_camera));
             Require(_swarmView, nameof(_swarmView));
             Require(_glowLight, nameof(_glowLight));

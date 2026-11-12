@@ -31,10 +31,20 @@ namespace DigitalStory.View
         private const int GizmoSampleCount = 200;
         private const float GizmoRadius = 0.06f;
 
+        private const int RingSegments = 48;
+        private const float MinimumRingRadius = 0.1f;
+        private const float RingHeight = 0.06f;
+        private const float RingInnerRatio = 0.88f;
+        private const string RingShaderName = "Sprites/Default";
+        private const float FullTurnDegrees = 360f;
+        private const float ArcHeightFactor = 4f;
+
         private static readonly int SpeedHash = Animator.StringToHash("Speed");
         private static readonly int PunchHash = Animator.StringToHash("Punch");
         private static readonly int HeavyPunchHash = Animator.StringToHash("HeavyPunch");
         private static readonly int KickHash = Animator.StringToHash("Kick");
+        private static readonly int HitHash = Animator.StringToHash("Hit");
+        private static readonly int ColorHash = Shader.PropertyToID("_Color");
         private static readonly Color FeetGizmoColor = Color.cyan;
         private static readonly Color HeadGizmoColor = Color.magenta;
 
@@ -53,6 +63,34 @@ namespace DigitalStory.View
         [SerializeField, Min(0.01f), Tooltip("Seconds the attack pivot takes to shrink back after an attack lands. Used only without attack triggers.")]
         private float _pulseRecoverSeconds = 0.2f;
 
+        [Header("Moves")]
+        [SerializeField, Min(0.05f), Tooltip("Seconds the slam's dip and rebound take.")]
+        private float _slamSeconds = 0.5f;
+
+        [SerializeField, Range(0f, 0.5f), Tooltip("How far the puppet's root squashes down at the bottom of the slam, as a share of its height.")]
+        private float _slamDip = 0.15f;
+
+        [SerializeField, Min(0.05f), Tooltip("Seconds the roar's rearing up takes.")]
+        private float _roarSeconds = 0.8f;
+
+        [SerializeField, Range(0f, 0.5f), Tooltip("How far the puppet rears up in the roar, as a share of its height.")]
+        private float _roarRear = 0.08f;
+
+        [SerializeField, Min(0.05f), Tooltip("Seconds the spin kick's one turn takes. A little longer than the rules' spin kick hit delay, so the turn is under way when it hits.")]
+        private float _spinSeconds = 0.5f;
+
+        [SerializeField, Min(0f), Tooltip("Metres the puppet rises at the top of the leap's arc. The leap's time is the rules' (ColossusConfig.LeapSeconds).")]
+        private float _leapHeight = 3f;
+
+        [SerializeField, Min(0.05f), Tooltip("Seconds a ring takes to expand and fade. The slam's, the roar's and the leap's rings reach as far as the rules' radii at the giant's level.")]
+        private float _ringSeconds = 0.45f;
+
+        [SerializeField, Tooltip("The slam's and the leap's ring colour. Its alpha is the brightest the ring gets.")]
+        private Color _slamRingColor = new Color(1f, 0.6f, 0.15f, 0.85f);
+
+        [SerializeField, Tooltip("The roar's ring colour. Softer than the slam's.")]
+        private Color _roarRingColor = new Color(1f, 0.85f, 0.4f, 0.45f);
+
         private HiveDefenseSession _session;
         private SwarmGpuView _swarm;
         private ColossusConfig _config;
@@ -62,6 +100,23 @@ namespace DigitalStory.View
         private Vector3[] _sampleOffsets;
         private float[] _sampleHeights;
         private bool _hasAttackTriggers;
+        private bool _hasHitTrigger;
+        private Vector3 _restScale = Vector3.one;
+        private ColossusAttack _move;
+        private float _moveSeconds;
+        private Material _ringMaterial;
+        private Mesh _ringMesh;
+        private MaterialPropertyBlock _ringBlock;
+        private Transform _slamRing;
+        private Renderer _slamRingRenderer;
+        private Transform _roarRing;
+        private Renderer _roarRingRenderer;
+        private float _slamRingAge = -1f;
+        private float _roarRingAge = -1f;
+        private Vector3 _slamRingCenter;
+        private Vector3 _roarRingCenter;
+        private float _slamRingRadius = MinimumRingRadius;
+        private float _roarRingRadius = MinimumRingRadius;
         private bool _isShowing;
         private Vector3 _lastPosition;
         private Vector3 _pivotRestScale = Vector3.one;
@@ -75,6 +130,15 @@ namespace DigitalStory.View
 
         /// <summary>True when the Animator plays the attacks; false when the fallback swell of the attack pivot does.</summary>
         public bool HasAttackTriggers => _hasAttackTriggers;
+
+        /// <summary>True while the puppet plays a move of its own (slam, roar, spin kick or leap), for tests and debugging.</summary>
+        public bool IsMoving => _move != ColossusAttack.None;
+
+        /// <summary>True when the controller has a trigger named Hit, so the roar plays the hit-reaction clip.</summary>
+        public bool HasHitTrigger => _hasHitTrigger;
+
+        /// <summary>The move the puppet is playing on its own (slam, roar, spin kick or leap), or None, for tests and pictures.</summary>
+        public ColossusAttack CurrentMove => _move;
 
         private void LateUpdate()
         {
@@ -102,6 +166,8 @@ namespace DigitalStory.View
 
             float deltaTime = Time.deltaTime;
             FollowRules(deltaTime);
+            AdvanceMove(deltaTime);
+            AdvanceRings(deltaTime);
             AdvancePulse(deltaTime);
             SendBones();
         }
@@ -131,7 +197,19 @@ namespace DigitalStory.View
             }
         }
 
-        private void OnDestroy() => Unsubscribe();
+        private void OnDestroy()
+        {
+            Unsubscribe();
+            if (_ringMesh != null)
+            {
+                Destroy(_ringMesh);
+            }
+
+            if (_ringMaterial != null)
+            {
+                Destroy(_ringMaterial);
+            }
+        }
 
         /// <summary>
         /// Supplies the rules and the swarm, checks the puppet matches the baked samples, and gives the swarm its places
@@ -165,6 +243,7 @@ namespace DigitalStory.View
             ReadSamples(samples);
             ReadAnimator();
             PreparePuppet();
+            BuildRings();
 
             _session = session;
             _swarm = swarm;
@@ -285,6 +364,7 @@ namespace DigitalStory.View
             }
 
             bool hasSpeed = false;
+            _hasHitTrigger = false;
             int triggerCount = 0;
             AnimatorControllerParameter[] parameters = _animator.parameters;
             for (int index = 0; index < parameters.Length; index++)
@@ -297,6 +377,10 @@ namespace DigitalStory.View
                 else if (parameter.type == AnimatorControllerParameterType.Trigger && IsAttackTrigger(parameter.nameHash))
                 {
                     triggerCount++;
+                }
+                else if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.nameHash == HitHash)
+                {
+                    _hasHitTrigger = true;
                 }
             }
 
@@ -326,6 +410,7 @@ namespace DigitalStory.View
         // nor stop posing the bones because nothing is visible. It stays off until the giant stands, so it costs nothing.
         private void PreparePuppet()
         {
+            _restScale = transform.localScale;
             _body.enabled = false;
             _animator.applyRootMotion = false;
             _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
@@ -347,6 +432,8 @@ namespace DigitalStory.View
         private void Hide()
         {
             _isShowing = false;
+            EndMove();
+            HideRings();
             EndPulse();
             _animator.enabled = false;
         }
@@ -364,6 +451,7 @@ namespace DigitalStory.View
                 ? Quaternion.LookRotation(facing, Vector3.up)
                 : transform.rotation;
             transform.SetPositionAndRotation(position, rotation);
+            transform.localScale = _restScale;
 
             if (deltaTime <= 0f)
             {
@@ -397,6 +485,8 @@ namespace DigitalStory.View
                 Show();
             }
 
+            StartMove(attack);
+
             if (_hasAttackTriggers)
             {
                 int trigger = TriggerOf(attack);
@@ -411,7 +501,7 @@ namespace DigitalStory.View
             StartPulse(attack);
         }
 
-        private static int TriggerOf(ColossusAttack attack)
+        private int TriggerOf(ColossusAttack attack)
         {
             switch (attack)
             {
@@ -420,7 +510,13 @@ namespace DigitalStory.View
                 case ColossusAttack.HeavyPunch:
                     return HeavyPunchHash;
                 case ColossusAttack.Kick:
+                case ColossusAttack.SpinKick:
                     return KickHash;
+                case ColossusAttack.Slam:
+                case ColossusAttack.LeapSlam:
+                    return HeavyPunchHash;
+                case ColossusAttack.Roar:
+                    return _hasHitTrigger ? HitHash : 0;
                 default:
                     return 0;
             }
@@ -437,6 +533,14 @@ namespace DigitalStory.View
                     return _config.HeavyPunchHitDelay;
                 case ColossusAttack.Kick:
                     return _config.KickHitDelay;
+                case ColossusAttack.Slam:
+                    return _config.SlamHitDelay;
+                case ColossusAttack.Roar:
+                    return _config.RoarHitDelay;
+                case ColossusAttack.SpinKick:
+                    return _config.SpinKickHitDelay;
+                case ColossusAttack.LeapSlam:
+                    return _config.LeapSeconds;
                 default:
                     return 0f;
             }
@@ -500,6 +604,225 @@ namespace DigitalStory.View
             {
                 _attackPivot.localScale = _pivotRestScale;
             }
+        }
+
+        // The slam's and the roar's rings show their reach at the giant's level, from the rules, so what the player sees is
+        // what is hit. The leap's ring waits for the landing.
+        private void StartMove(ColossusAttack attack)
+        {
+            float scale = _session.ColossusSizeScale;
+            switch (attack)
+            {
+                case ColossusAttack.Slam:
+                    StartRing(ref _slamRingAge, ref _slamRingCenter, ref _slamRingRadius, _session.ColossusPosition, _config.SlamRadius * scale);
+                    break;
+                case ColossusAttack.Roar:
+                    StartRing(ref _roarRingAge, ref _roarRingCenter, ref _roarRingRadius, _session.ColossusPosition, _config.RoarRadius * scale);
+                    break;
+                case ColossusAttack.SpinKick:
+                case ColossusAttack.LeapSlam:
+                    break;
+                default:
+                    return;
+            }
+
+            _move = attack;
+            _moveSeconds = 0f;
+        }
+
+        private static void StartRing(ref float age, ref Vector3 center, ref float radius, Vector3 position, float reach)
+        {
+            age = 0f;
+            center = position;
+            radius = Mathf.Max(MinimumRingRadius, reach);
+        }
+
+        // The leap's time is the rules' own, so the puppet lands on the tick the landing hits.
+        private float MoveDuration()
+        {
+            switch (_move)
+            {
+                case ColossusAttack.Slam:
+                    return _slamSeconds;
+                case ColossusAttack.Roar:
+                    return _roarSeconds;
+                case ColossusAttack.SpinKick:
+                    return _spinSeconds;
+                default:
+                    return Mathf.Max(_config.LeapSeconds, MinimumPulseSeconds);
+            }
+        }
+
+        // Runs after FollowRules put the puppet where the rules say, so the move only adds to the pose: a squash of the
+        // root, a turn about the vertical axis, or height along the leap's arc. The session owns the spot on the ground.
+        private void AdvanceMove(float deltaTime)
+        {
+            if (_move == ColossusAttack.None)
+            {
+                return;
+            }
+
+            _moveSeconds += deltaTime;
+            float duration = MoveDuration();
+            float t = Mathf.Clamp01(_moveSeconds / duration);
+            float wave = Mathf.Sin(t * Mathf.PI);
+            Vector3 scale = _restScale;
+            switch (_move)
+            {
+                case ColossusAttack.Slam:
+                    scale.y *= 1f - (_slamDip * wave);
+                    scale.x *= 1f + (_slamDip * 0.5f * wave);
+                    scale.z *= 1f + (_slamDip * 0.5f * wave);
+                    break;
+                case ColossusAttack.Roar:
+                    scale.y *= 1f + (_roarRear * wave);
+                    break;
+                case ColossusAttack.SpinKick:
+                    transform.rotation = Quaternion.AngleAxis(FullTurnDegrees * t * t * (3f - (2f * t)), Vector3.up) * transform.rotation;
+                    break;
+                case ColossusAttack.LeapSlam:
+                    Vector3 position = transform.position;
+                    position.y += _leapHeight * ArcHeightFactor * t * (1f - t);
+                    transform.position = position;
+                    break;
+            }
+
+            transform.localScale = scale;
+
+            // The rules end the leap on its landing, or drop it when the giant ends, whichever comes first.
+            bool isLanded = _move == ColossusAttack.LeapSlam && !_session.IsColossusLeaping;
+            if (t >= 1f || isLanded)
+            {
+                if (_move == ColossusAttack.LeapSlam)
+                {
+                    StartRing(
+                        ref _slamRingAge, ref _slamRingCenter, ref _slamRingRadius, _session.ColossusLeapTarget,
+                        _config.LeapRadius * _session.ColossusSizeScale);
+                }
+
+                EndMove();
+            }
+        }
+
+        private void EndMove()
+        {
+            _move = ColossusAttack.None;
+            _moveSeconds = 0f;
+            transform.localScale = _restScale;
+        }
+
+        // The two rings are made once and reused. They are the hive ring's kind: a flat band of triangles on the ground,
+        // drawn unlit and tinted with a property block.
+        private void BuildRings()
+        {
+            if (_ringMesh != null)
+            {
+                return;
+            }
+
+            Shader shader = Shader.Find(RingShaderName);
+            if (shader == null)
+            {
+                throw new InvalidOperationException($"{name}: the shader {RingShaderName} was not found.");
+            }
+
+            _ringMaterial = new Material(shader) { name = "ColossusMotor Ring", hideFlags = HideFlags.HideAndDontSave };
+            _ringMesh = BuildRingMesh(RingInnerRatio);
+            _ringBlock = new MaterialPropertyBlock();
+            _slamRing = BuildRing("SlamRing", out _slamRingRenderer);
+            _roarRing = BuildRing("RoarRing", out _roarRingRenderer);
+        }
+
+        private Transform BuildRing(string ringName, out Renderer ringRenderer)
+        {
+            var ring = new GameObject(ringName);
+            // Not a child of the puppet: the puppet's scale and spin must not move a ring that sits on the ground.
+            ring.transform.SetParent(transform.parent, false);
+            ring.AddComponent<MeshFilter>().sharedMesh = _ringMesh;
+            var meshRenderer = ring.AddComponent<MeshRenderer>();
+            meshRenderer.sharedMaterial = _ringMaterial;
+            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            meshRenderer.receiveShadows = false;
+            meshRenderer.enabled = false;
+            ringRenderer = meshRenderer;
+            return ring.transform;
+        }
+
+        private void AdvanceRings(float deltaTime)
+        {
+            AdvanceRing(ref _slamRingAge, _slamRing, _slamRingRenderer, _slamRingCenter, _slamRingRadius, _slamRingColor, deltaTime);
+            AdvanceRing(ref _roarRingAge, _roarRing, _roarRingRenderer, _roarRingCenter, _roarRingRadius, _roarRingColor, deltaTime);
+        }
+
+        private void AdvanceRing(ref float age, Transform ring, Renderer ringRenderer, Vector3 center, float radius, Color color, float deltaTime)
+        {
+            if (age < 0f)
+            {
+                return;
+            }
+
+            age += deltaTime;
+            float t = age / _ringSeconds;
+            if (t >= 1f)
+            {
+                age = -1f;
+                ringRenderer.enabled = false;
+                return;
+            }
+
+            // Fast out, then slower, while it fades away.
+            float grow = 1f - ((1f - t) * (1f - t));
+            ring.position = new Vector3(center.x, RingHeight, center.z);
+            ring.localScale = new Vector3(radius * grow, 1f, radius * grow);
+            color.a *= 1f - t;
+            _ringBlock.SetColor(ColorHash, color);
+            ringRenderer.SetPropertyBlock(_ringBlock);
+            ringRenderer.enabled = true;
+        }
+
+        private void HideRings()
+        {
+            _slamRingAge = -1f;
+            _roarRingAge = -1f;
+            if (_slamRingRenderer != null)
+            {
+                _slamRingRenderer.enabled = false;
+            }
+
+            if (_roarRingRenderer != null)
+            {
+                _roarRingRenderer.enabled = false;
+            }
+        }
+
+        private static Mesh BuildRingMesh(float innerRatio)
+        {
+            var vertices = new Vector3[RingSegments * 2];
+            var triangles = new int[RingSegments * 6];
+            for (int segment = 0; segment < RingSegments; segment++)
+            {
+                float angle = segment * Mathf.PI * 2f / RingSegments;
+                var direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                vertices[segment * 2] = direction;
+                vertices[segment * 2 + 1] = direction * innerRatio;
+
+                int next = (segment + 1) % RingSegments;
+                int outer = segment * 2;
+                int inner = outer + 1;
+                int nextOuter = next * 2;
+                int nextInner = nextOuter + 1;
+                int t = segment * 6;
+                triangles[t] = outer;
+                triangles[t + 1] = nextOuter;
+                triangles[t + 2] = inner;
+                triangles[t + 3] = inner;
+                triangles[t + 4] = nextOuter;
+                triangles[t + 5] = nextInner;
+            }
+
+            var mesh = new Mesh { name = "ColossusMotor Ring", vertices = vertices, triangles = triangles };
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         private void Unsubscribe()

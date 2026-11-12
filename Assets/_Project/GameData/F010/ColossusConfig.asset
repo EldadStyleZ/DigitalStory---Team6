@@ -15,7 +15,6 @@ MonoBehaviour:
   <Height>k__BackingField: 4
   <Speed>k__BackingField: 3.5
   <StunSeconds>k__BackingField: 0.5
-  <CameraDistance>k__BackingField: 20
   <PunchDamage>k__BackingField: 45
   <PunchRadius>k__BackingField: 1.5
   <PunchReach>k__BackingField: 2.5
@@ -29,3 +28,21 @@ MonoBehaviour:
   <KickReach>k__BackingField: 2.8
   <KickHitDelay>k__BackingField: 0.3
   <KickCooldownSeconds>k__BackingField: 0.8
+  <PhraseWindowSeconds>k__BackingField: 0.6
+  <SlamDamage>k__BackingField: 40
+  <SlamRadius>k__BackingField: 5
+  <SlamKnockback>k__BackingField: 4
+  <SlamHitDelay>k__BackingField: 0.3
+  <SlamCooldownSeconds>k__BackingField: 3
+  <RoarRadius>k__BackingField: 6
+  <RoarStunSeconds>k__BackingField: 1.2
+  <RoarHitDelay>k__BackingField: 0.2
+  <RoarCooldownSeconds>k__BackingField: 6
+  <SpinKickDamage>k__BackingField: 55
+  <SpinKickRadius>k__BackingField: 3.5
+  <SpinKickHitDelay>k__BackingField: 0.3
+  <LeapRange>k__BackingField: 10
+  <LeapSeconds>k__BackingField: 0.6
+  <LeapDamage>k__BackingField: 70
+  <LeapRadius>k__BackingField: 4
+  <LeapKnockback>k__BackingField: 6

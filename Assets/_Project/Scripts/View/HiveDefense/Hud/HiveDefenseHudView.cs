@@ -99,6 +99,7 @@ namespace DigitalStory.View
         private NestOffscreenIndicatorView _nestIndicator;
         private NestHudView _nestHud;
         private EndScreenView _endScreen;
+        private GiantHudView _giantHud;
 
         private Label _waspCount;
         private VisualElement _waspFill;
@@ -211,6 +212,8 @@ namespace DigitalStory.View
             _hitSound.Initialize(session);
             _endScreen = GetOrAdd<EndScreenView>();
             _endScreen.Initialize(session, endScreen);
+            _giantHud = GetOrAdd<GiantHudView>();
+            _giantHud.Initialize(session);
             _isReady = true; // Last, so Update never runs on a half-built HUD.
         }
 

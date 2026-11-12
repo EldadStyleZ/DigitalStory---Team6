@@ -167,6 +167,117 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(withoutUi.Median, Is.LessThanOrEqualTo(floor.Median),
                 "The swarm, beekeepers and views must not allocate garbage each frame.");
         }
+
+        [UnityTest]
+        public IEnumerator Diagnose_FirstStingCastFrame()
+        {
+            float savedCapture = Time.captureDeltaTime;
+            Time.captureDeltaTime = 1f / 60f;
+            yield return EditorSceneManager.LoadSceneAsyncInPlayMode(ScenePath, new LoadSceneParameters(LoadSceneMode.Single));
+            for (int frame = 0; frame < 300; frame++)
+            {
+                yield return null;
+            }
+
+            _root = Object.FindAnyObjectByType<HiveDefenseRoot>();
+            Debug.Log($"[F010] diag warmup done {_root.ScriptWarmup.IsDone} methods {_root.ScriptWarmup.MethodCount} failed {_root.ScriptWarmup.FailedCount}");
+            var handles = new List<Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle>();
+            Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle.GetAvailable(handles);
+            var names = new List<string>();
+            var recorders = new List<ProfilerRecorder>();
+            foreach (Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle handle in handles)
+            {
+                Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderDescription description = Unity.Profiling.LowLevel.Unsafe.ProfilerRecorderHandle.GetDescription(handle);
+                if (description.UnitType != ProfilerMarkerDataUnit.TimeNanoseconds)
+                {
+                    continue;
+                }
+
+                var recorder = new ProfilerRecorder(handle, 1, ProfilerRecorderOptions.SumAllSamplesInFrame | ProfilerRecorderOptions.WrapAroundWhenCapacityReached);
+                recorder.Start();
+                names.Add(description.Category.Name + "/" + description.Name);
+                recorders.Add(recorder);
+            }
+
+            int sting = -1;
+            for (int song = 0; song < _root.Session.Caster.Count; song++)
+            {
+                if (_root.Session.Caster[song] is DigitalStory.Logic.StingSong)
+                {
+                    sting = song;
+                }
+            }
+
+            yield return null;
+            yield return null;
+            var first = new long[recorders.Count];
+            var second = new long[recorders.Count];
+            var lines = new System.Text.StringBuilder();
+            for (int cast = 0; cast < 2; cast++)
+            {
+                long[] into = cast == 0 ? first : second;
+                int castFrame = -1;
+                int frameIndex = 0;
+                System.Action<int> onCast = _ => castFrame = frameIndex;
+                _root.Session.SongCastNow += onCast;
+                IReadOnlyList<int> keys = _root.Session.Caster[sting].Song.Keys;
+                for (frameIndex = 0; frameIndex < 12; frameIndex++)
+                {
+                    if (frameIndex < keys.Count)
+                    {
+                        _root.PressHole(keys[frameIndex]);
+                    }
+
+                    yield return null;
+                    long main = 0;
+                    for (int index = 0; index < recorders.Count; index++)
+                    {
+                        long value = recorders[index].LastValue;
+                        if (names[index] == "Internal/Main Thread")
+                        {
+                            main = value;
+                        }
+
+                        if (frameIndex >= keys.Count - 1 && frameIndex <= keys.Count + 3)
+                        {
+                            into[index] = System.Math.Max(into[index], value);
+                        }
+                    }
+
+                    lines.Append($" {frameIndex}:{main / NanosecondsPerMillisecond:F2}{(castFrame == frameIndex ? "*" : string.Empty)}");
+                }
+
+                _root.Session.SongCastNow -= onCast;
+                Debug.Log($"[F010] diag cast {cast} main thread per frame:{lines}");
+                lines.Clear();
+                for (int frame = 0; frame < 600; frame++)
+                {
+                    yield return null;
+                }
+            }
+
+            var order = new List<int>();
+            for (int index = 0; index < recorders.Count; index++)
+            {
+                order.Add(index);
+            }
+
+            order.Sort((a, b) => (first[b] - second[b]).CompareTo(first[a] - second[a]));
+            var text = new System.Text.StringBuilder();
+            for (int rank = 0; rank < 50 && rank < order.Count; rank++)
+            {
+                int index = order[rank];
+                text.Append($"\n[F010] diag {names[index]}: first {first[index] / NanosecondsPerMillisecond:F3} ms, second {second[index] / NanosecondsPerMillisecond:F3} ms");
+            }
+
+            Debug.Log("[F010] diag top:" + text);
+            foreach (ProfilerRecorder recorder in recorders)
+            {
+                recorder.Dispose();
+            }
+
+            Time.captureDeltaTime = savedCapture;
+        }
     }
 }
 #endif

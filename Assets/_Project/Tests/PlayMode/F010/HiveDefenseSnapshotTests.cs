@@ -175,6 +175,39 @@ namespace DigitalStory.Tests.PlayMode
         private const float ThrowClosePitch = 15f;
         private const float HitNumberShotSeconds = 0.05f;
 
+        // Snapshot 17, the giant version 2 in the chase view (plan section I). Holes count from 0 as H J K L. Each move's
+        // picture is taken this many seconds after the move starts: about when it lands.
+        private const int RoarHole = 0;
+        private const int PunchHole = 1;
+        private const int KickHole = 2;
+        private const int SlamHole = 3;
+        private const int SwoopShots = 4;
+        private const int SwoopColumns = 2;
+        private const float SwoopTolerance = 0.001f;
+        private const float GiantSettleSeconds = 0.6f;
+        private const float GiantWalkSeconds = 1.2f;
+        private const float GiantStopSeconds = 0.5f;
+        private const float GiantBetweenMovesSeconds = 0.9f;
+        private const float GiantPunchShotSeconds = 0.2f;
+        private const float GiantKickShotSeconds = 0.3f;
+        private const float GiantRoarShotSeconds = 0.3f;
+        private const float GiantSpinShotSeconds = 0.25f;
+        private const float GiantSlamShotSeconds = 0.3f;
+        private const float GiantLeapAirShotSeconds = 0.3f;
+        private const float GiantLeapLandShotSeconds = 0.68f;
+        private const float GiantOrbitYawDegrees = 60f;
+        private const float GiantOrbitPitchDegrees = 8f;
+        private const float GiantOrbitSeconds = 0.6f;
+        private const float MaxMoveWaitSeconds = 2f;
+
+        // The giant forms 10 m south of the middle, facing north, with three stunned sticks 8 to 12 m ahead of it.
+        private static readonly Vector3 GiantCore = new Vector3(0f, 0f, -10f);
+
+        private static readonly Vector3[] GiantBeekeepers =
+        {
+            new Vector3(-2.5f, 0f, -1f), new Vector3(1.5f, 0f, 1.5f), new Vector3(4.5f, 0f, -2.5f),
+        };
+
         // When the pictures of the stop and of the start are taken, in seconds after the core stops or starts.
         private static readonly float[] WindShotSeconds = { 0.2f, 0.5f, 0.8f, 1.1f, 1.4f, 2f };
         private static readonly float[] UnwindShotSeconds = { 0.1f, 0.25f, 0.4f, 0.6f, 0.8f, 1.2f };
@@ -1021,6 +1054,165 @@ namespace DigitalStory.Tests.PlayMode
             yield return Wait(HintPauseSeconds);
             Assert.That(swarm.SecondsToRespawn, Is.GreaterThan(0f), "the swarm came back before the picture");
             yield return CaptureHud("snap-16-returning-hud");
+        }
+
+        // Snapshot 17, the giant version 2 (plan section I) from the real game camera: the swoop from the top view into the
+        // chase view, then the giant standing, walking, and each of its moves, and the view turned by the mouse. Every picture
+        // after the swoop has the HUD drawn over it: its ring, its cooldown marks and, at first, the line of its keys. Three
+        // stunned sticks stand ahead of the giant, so the picture shows what it fights.
+        [UnityTest]
+        public IEnumerator Snapshot17_GiantChase()
+        {
+            yield return Stage(GiantCore, GiantBeekeepers);
+            FollowCamera follow = UnityEngine.Object.FindAnyObjectByType<FollowCamera>();
+            Assert.That(follow, Is.Not.Null, "The scene has no FollowCamera.");
+            HiveDefenseSession session = _root.Session;
+            var started = new List<ColossusAttack>();
+            float startedAt = 0f;
+            session.ColossusAttackStarted += attack =>
+            {
+                started.Add(attack);
+                startedAt = Time.time;
+            };
+
+            session.Fury.AddDamage(FuryDamage);
+            yield return Play(KeysOf<ColossusSong>());
+            float waited = 0f;
+            while (!session.IsColossusActive && waited < MaxColossusWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.IsColossusActive, Is.True, "The Colossus keys at full Fury did not form the Colossus.");
+            var swoop = new string[SwoopShots];
+            for (int shot = 0; shot < SwoopShots; shot++)
+            {
+                float wanted = shot / (float)(SwoopShots - 1);
+                while (follow.ChaseBlend < wanted - SwoopTolerance)
+                {
+                    yield return null;
+                }
+
+                swoop[shot] = "snap-17-swoop-" + shot;
+                yield return Capture(swoop[shot]);
+            }
+
+            CombineGrid(swoop, SwoopColumns, "snap-17-swoop");
+            Assert.That(follow.IsChasing, Is.True, "the camera did not chase the giant");
+
+            RenderTexture overlay = BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy);
+            try
+            {
+                yield return Wait(GiantSettleSeconds);
+                yield return ReadHud("snap-17-giant-chase");
+
+                _root.HoldMove(Vector2.up);
+                yield return Wait(GiantWalkSeconds);
+                yield return ReadHud("snap-17-giant-walk");
+                _root.HoldMove(Vector2.zero);
+                yield return Wait(GiantStopSeconds);
+
+                yield return Move(started, () => startedAt, PunchHole, ColossusAttack.Punch, GiantPunchShotSeconds, "snap-17-giant-punch");
+                yield return Wait(GiantBetweenMovesSeconds);
+                yield return Move(started, () => startedAt, KickHole, ColossusAttack.Kick, GiantKickShotSeconds, "snap-17-giant-kick");
+                yield return Wait(GiantBetweenMovesSeconds);
+                yield return Move(started, () => startedAt, RoarHole, ColossusAttack.Roar, GiantRoarShotSeconds, "snap-17-giant-roar");
+                yield return Wait(GiantBetweenMovesSeconds);
+
+                // K K: the second kick waits for the first to land, then the spin starts.
+                _root.PressHole(KickHole);
+                yield return null;
+                _root.PressHole(KickHole);
+                yield return WaitForMove(started, ColossusAttack.SpinKick);
+                yield return WaitSince(startedAt, GiantSpinShotSeconds);
+                yield return ReadHud("snap-17-giant-spin");
+                yield return Wait(GiantBetweenMovesSeconds);
+
+                yield return Move(started, () => startedAt, SlamHole, ColossusAttack.Slam, GiantSlamShotSeconds, "snap-17-giant-slam");
+                while (session.SlamCooldown01 > 0f)
+                {
+                    yield return null;
+                }
+
+                // L L: the leap takes off as the slam lands, to where the camera looks on the ground.
+                _root.PressHole(SlamHole);
+                yield return null;
+                _root.PressHole(SlamHole);
+                yield return WaitForMove(started, ColossusAttack.LeapSlam);
+                Assert.That(session.IsColossusLeaping, Is.True, "the leap did not take off");
+                float leapAt = startedAt;
+                yield return WaitSince(leapAt, GiantLeapAirShotSeconds);
+                yield return ReadHud("snap-17-giant-leap-air");
+                yield return WaitSince(leapAt, GiantLeapLandShotSeconds);
+                Assert.That(session.IsColossusLeaping, Is.False, "the giant had not landed for the picture");
+                yield return ReadHud("snap-17-giant-leap-land");
+                yield return Wait(GiantBetweenMovesSeconds);
+
+                follow.Orbit(GiantOrbitYawDegrees, GiantOrbitPitchDegrees);
+                yield return Wait(GiantOrbitSeconds);
+                Assert.That(session.IsColossusActive, Is.True, "the giant ended before the last picture");
+                yield return ReadHud("snap-17-giant-orbit");
+            }
+            finally
+            {
+                _root.HoldMove(Vector2.zero);
+                EndHudOverlay(overlay, document, original, copy);
+            }
+        }
+
+        // Presses one of the giant's keys, waits for its move to start and then for the moment of the picture.
+        private IEnumerator Move(List<ColossusAttack> started, Func<float> startedAt, int hole, ColossusAttack move, float shotSeconds, string name)
+        {
+            _root.PressHole(hole);
+            yield return WaitForMove(started, move);
+            yield return WaitSince(startedAt(), shotSeconds);
+            yield return ReadHud(name);
+        }
+
+        private IEnumerator WaitForMove(List<ColossusAttack> started, ColossusAttack move)
+        {
+            float waited = 0f;
+            while (!started.Contains(move) && waited < MaxMoveWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(started.Contains(move), Is.True, move + " did not start");
+            started.Clear();
+        }
+
+        // Points the HUD panel at a render texture the capturer fills with the game camera every frame, so each later read is
+        // the game's own picture with the HUD over it. EndHudOverlay puts the panel back.
+        private RenderTexture BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy)
+        {
+            document = UnityEngine.Object.FindAnyObjectByType<UIDocument>();
+            Assert.That(document, Is.Not.Null);
+            original = document.panelSettings;
+            copy = UnityEngine.Object.Instantiate(original);
+            var target = new RenderTexture(Width, Height, 24, RenderTextureFormat.ARGB32);
+            target.Create();
+            copy.targetTexture = target;
+            copy.clearColor = false;
+            document.panelSettings = copy;
+            _capturer.BeginOverlay(target);
+            return target;
+        }
+
+        private void EndHudOverlay(RenderTexture target, UIDocument document, PanelSettings original, PanelSettings copy)
+        {
+            _capturer.EndOverlay();
+            document.panelSettings = original;
+            UnityEngine.Object.Destroy(copy);
+            target.Release();
+            UnityEngine.Object.Destroy(target);
+        }
+
+        private IEnumerator ReadHud(string name)
+        {
+            _capturer.RequestOverlayRead(Path.Combine(_directory, name + ".png"));
+            yield return WaitForCapture(name);
         }
 
         private IEnumerator EightShots(bool isFull)

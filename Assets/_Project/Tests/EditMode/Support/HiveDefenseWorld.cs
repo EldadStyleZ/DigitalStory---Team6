@@ -153,7 +153,10 @@ namespace DigitalStory.Tests.EditMode
         public HiveDefenseSession Session { get; }
         public Vector3 Core { get; set; }
 
-        /// <summary>A frame with the core where it is, the mouse idle unless a test says, and nothing pressed or held.</summary>
+        /// <summary>
+        /// A frame with the core where it is, the mouse idle unless a test says, nothing pressed or held, and no camera
+        /// direction unless a test gives one, so the giant steers on the world's axes.
+        /// </summary>
         public HiveDefenseFrame Frame(
             Vector2 move = default,
             int holes = 0,
@@ -162,9 +165,10 @@ namespace DigitalStory.Tests.EditMode
             Vector3? aim = null,
             bool isMouseLive = false,
             bool give = false,
-            bool callWave = false)
+            bool callWave = false,
+            Vector3 cameraForward = default)
         {
-            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, punch, kick, isMouseLive, give, callWave);
+            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, punch, kick, isMouseLive, give, callWave, cameraForward);
         }
 
         /// <summary>Ticks with idle frames for the given seconds.</summary>
@@ -237,7 +241,16 @@ namespace DigitalStory.Tests.EditMode
         private void Tick(HiveDefenseFrame frame)
         {
             var now = new HiveDefenseFrame(
-                Core, frame.AimPoint, frame.Move, frame.PressedHoleMask, frame.Punch, frame.Kick, frame.IsMouseLive, frame.Give, frame.CallWave);
+                Core,
+                frame.AimPoint,
+                frame.Move,
+                frame.PressedHoleMask,
+                frame.Punch,
+                frame.Kick,
+                frame.IsMouseLive,
+                frame.Give,
+                frame.CallWave,
+                frame.CameraForward);
             Session.Tick(now, Step);
             Core = Session.CorePosition;
         }

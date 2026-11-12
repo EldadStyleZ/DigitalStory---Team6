@@ -1403,6 +1403,11 @@ namespace DigitalStory.Editor
             cameraComponent.farClipPlane = 200f;
             camera.transform.SetPositionAndRotation(new Vector3(0f, 14f, -10f), Quaternion.Euler(55f, 0f, 0f));
 
+            // What the chase camera follows while the giant stands (plan section I): the root puts it where the rules say the
+            // giant is, facing its way, so the puppet's spin and leap never swing the view.
+            var chaseAnchor = new GameObject("Giant Chase Anchor");
+            chaseAnchor.transform.position = colossus.transform.position;
+
             var input = new GameObject("Hive Defense Input", typeof(HiveDefenseInput));
 
             // The voice writes its sound in OnAudioFilterRead, so its source plays no clip and stays flat (2D).
@@ -1446,7 +1451,8 @@ namespace DigitalStory.Editor
             var beekeeperPool = new GameObject("Beekeeper Pool", typeof(BeekeeperViewPool));
             var smokePool = new GameObject("Smoke Pool", typeof(SmokeViewPool));
 
-            var hud = new GameObject("Hive Defense HUD", typeof(UIDocument), typeof(HiveDefenseHudView));
+            // The giant's strip has its own view, with its lines of keys as serialized words.
+            var hud = new GameObject("Hive Defense HUD", typeof(UIDocument), typeof(HiveDefenseHudView), typeof(GiantHudView));
             var document = hud.GetComponent<UIDocument>();
             document.panelSettings = Require(AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath), PanelSettingsPath);
             document.visualTreeAsset = Require(AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(HudUxmlPath), HudUxmlPath);
@@ -1478,6 +1484,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_input", input.GetComponent<HiveDefenseInput>());
             SetObject(serialized, "_coreMotor", core.GetComponent<SwarmCoreMotor>());
             SetObject(serialized, "_followCamera", camera.GetComponent<FollowCamera>());
+            SetObject(serialized, "_chaseAnchor", chaseAnchor.transform);
             SetObject(serialized, "_camera", cameraComponent);
             SetObject(serialized, "_swarmView", swarmObject.GetComponent<SwarmGpuView>());
             SetObject(serialized, "_glowLight", glowLight.GetComponent<SwarmGlowLight>());
