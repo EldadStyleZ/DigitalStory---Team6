@@ -141,7 +141,7 @@ namespace DigitalStory.Editor
             "SwarmConfig", "SquadConfig", "AimConfig", "CoreMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "NestConfig",
             "SwarmLevelConfig", "SmokeConfig", "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
             "StingSong", "TornadoSong", "MeteorSong", "HydraSong", "ScytheSong", "LanceSong", "NestSong", "DomeSong", "GustSong",
-            "HoneycombSong", "HiveCallSong", "ColossusSong",
+            "HoneycombSong", "HiveCallSong", "ColossusSong", "GamepadConfig",
         };
 
         // Assets an older build made under names that no longer fit: each moves to its new path, keeping its GUID and any
@@ -254,6 +254,7 @@ namespace DigitalStory.Editor
             BeekeeperConfig smoker = LoadOrCreateSmoker();
             SwarmSongEffect[] songs = LoadOrCreateSongs();
             var samples = LoadOrCreate<ColossusSampleSet>("ColossusSampleSet");
+            var gamepad = LoadOrCreate<GamepadConfig>("GamepadConfig");
             Debug.Log("[F010] Config assets ready.");
 
             AnimatorController controller = BuildController();
@@ -280,7 +281,7 @@ namespace DigitalStory.Editor
             AssetDatabase.SaveAssets();
             FillScene(new SceneAssets(
                 swarm, squads, aim, coreMove, fury, colossus, hive, nests, swarmLevel, smoke, waves, stick, smoker, songConfig, songs,
-                samples, colossusPrefab, hivePrefab, nestTreePrefab, stickView, smokerView, grenade, cloud));
+                samples, colossusPrefab, hivePrefab, nestTreePrefab, stickView, smokerView, grenade, cloud, gamepad));
             Debug.Log("[F010] Scene filled.");
 
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -1452,6 +1453,9 @@ namespace DigitalStory.Editor
             SetObject(hitFeedbackSerialized, "_shieldFlashMaterial", LoadOrCreateShieldFlashMaterial());
             hitFeedbackSerialized.ApplyModifiedPropertiesWithoutUndo();
 
+            // The felt hit on a controller: its motors, set from the GamepadConfig's pulses.
+            var rumble = new GameObject("Gamepad Rumble", typeof(GamepadRumbleView));
+
             var beekeeperPool = new GameObject("Beekeeper Pool", typeof(BeekeeperViewPool));
             var smokePool = new GameObject("Smoke Pool", typeof(SmokeViewPool));
 
@@ -1507,6 +1511,8 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_hitFeedback", hitFeedback.GetComponent<HitFeedbackView>());
             SetObject(serialized, "_fluteVoice", fluteVoice.GetComponent<SwarmFluteVoice>());
             SetObject(serialized, "_sound", Require(AssetDatabase.LoadAssetAtPath<SoundConfig>(SoundConfigPath), SoundConfigPath));
+            SetObject(serialized, "_gamepad", assets.Gamepad);
+            SetObject(serialized, "_rumble", rumble.GetComponent<GamepadRumbleView>());
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -2004,7 +2010,8 @@ namespace DigitalStory.Editor
                 BeekeeperView stickView,
                 BeekeeperView smokerView,
                 SmokeGrenadeView grenade,
-                SmokeCloudView cloud)
+                SmokeCloudView cloud,
+                GamepadConfig gamepad)
             {
                 Swarm = swarm;
                 Squads = squads;
@@ -2029,6 +2036,7 @@ namespace DigitalStory.Editor
                 SmokerView = smokerView;
                 Grenade = grenade;
                 Cloud = cloud;
+                Gamepad = gamepad;
             }
 
             public SwarmConfig Swarm { get; }
@@ -2054,6 +2062,7 @@ namespace DigitalStory.Editor
             public BeekeeperView SmokerView { get; }
             public SmokeGrenadeView Grenade { get; }
             public SmokeCloudView Cloud { get; }
+            public GamepadConfig Gamepad { get; }
         }
     }
 }

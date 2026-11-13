@@ -48,6 +48,7 @@ namespace DigitalStory.View
         // The store's text for each whole number of wasps, made the first time it shows, so a store that flows in or out
         // every frame builds no string.
         private readonly string[] _storeTexts;
+        private ControlDevice _device;
 
         /// <summary>Builds the panels into the column, one for each hive of the match.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
@@ -93,6 +94,21 @@ namespace DigitalStory.View
                 _storeBarShown[index] = -1;
                 _storeShown[index] = -1;
                 Build(column, index);
+            }
+        }
+
+        /// <summary>Names the heal key for the device in use (E, or RB on a controller), from the next Tick.</summary>
+        public void ShowControls(ControlDevice device)
+        {
+            if (device == _device)
+            {
+                return;
+            }
+
+            _device = device;
+            for (int index = 0; index < _hintShown.Length; index++)
+            {
+                _hintShown[index] = -1; // Written again on the next Tick.
             }
         }
 
@@ -247,7 +263,7 @@ namespace DigitalStory.View
 
             _hintShown[index] = hint;
             Label label = _hints[index];
-            label.text = hint == HintHealing ? _healingText : _holdText;
+            ControlSymbols.ShowPrompt(label, hint == HintHealing ? _healingText : _holdText, _device);
             label.EnableInClassList(HintShownClass, hint != HintNone);
         }
 

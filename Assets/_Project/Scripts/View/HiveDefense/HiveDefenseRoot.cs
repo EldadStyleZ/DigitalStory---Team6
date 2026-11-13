@@ -93,7 +93,7 @@ namespace DigitalStory.View
         private int _seed = 1010;
 
         [Header("Scene objects")]
-        [SerializeField, Tooltip("Reads the keyboard and mouse.")]
+        [SerializeField, Tooltip("Reads the keyboard, the mouse and a controller.")]
         private HiveDefenseInput _input;
 
         [SerializeField, Tooltip("Moves the swarm's core, the point the swarm gathers around.")]
@@ -193,6 +193,13 @@ namespace DigitalStory.View
 
         [SerializeField, Tooltip("How the flute sounds. Needed when the flute voice is set; it must have a pitch for every hole.")]
         private SoundConfig _sound;
+
+        [Header("Controller")]
+        [SerializeField, Tooltip("The controller's numbers: the sticks' dead zone, the right stick's aim and turn, and the rumble.")]
+        private GamepadConfig _gamepad;
+
+        [SerializeField, Tooltip("Rumbles the controller for notes, casts, hits, the giant's heavy blows and losses.")]
+        private GamepadRumbleView _rumble;
 
         // The quality level's shadow values from before the first root of this scene set its own (see SetSceneShadows).
         private static int s_rootsHoldingShadows;
@@ -319,7 +326,7 @@ namespace DigitalStory.View
             _trail = new PathTrail(_swarm.TrailPoints, _swarm.TrailSpacing);
             _trail.Reset(_coreMotor.Position);
 
-            _input.Initialize(_camera);
+            _input.Initialize(_camera, _gamepad);
             _coreMotor.Initialize(_coreMove);
             _swarmView.Initialize(_swarm, _trail);
             _glowLight.Initialize(_swarm);
@@ -340,6 +347,7 @@ namespace DigitalStory.View
             _smokePool.Initialize(Session.Smoke, _grenadePrefab, _cloudPrefab);
             _colossusMotor.Initialize(Session, _swarmView, _colossusSamples, _colossus);
             _hitFeedback.Initialize(Session, _followCamera, _swarmView);
+            _rumble.Initialize(Session, _input, _gamepad);
             SetSceneShadows();
 
             if (_fluteVoice != null)
@@ -367,6 +375,8 @@ namespace DigitalStory.View
 
             // The HUD reads the UIDocument's tree, which exists only once every object has been enabled.
             _hud.Initialize(Session);
+            _hud.ShowControls(_input.LastDevice);
+            _input.LastDeviceChanged += HandleLastDeviceChanged;
         }
 
         private void Restart()
@@ -396,6 +406,7 @@ namespace DigitalStory.View
             if (_input != null)
             {
                 _input.HolePressed -= PressHole;
+                _input.LastDeviceChanged -= HandleLastDeviceChanged;
             }
 
             if (Session != null)
@@ -485,7 +496,7 @@ namespace DigitalStory.View
             _coreMotor.Move(
                 isColossus ? Vector3.zero : move, Session.CoreSpeedMultiplier, isColossus || Session.IsCoreRooted, dt);
 
-            if (_input.TryGetAimPoint(out Vector3 aim))
+            if (_input.TryGetAimPoint(_coreMotor.Position, cameraForward, out Vector3 aim))
             {
                 _lastAimPoint = aim;
             }
@@ -495,9 +506,10 @@ namespace DigitalStory.View
                 CallWave();
             }
 
-            // The mouse aims only while it is live; otherwise auto-aim chooses (plan section I). In the chase view the mouse
-            // turns the camera, so there its aim is where the camera looks on the ground, ahead of the giant, and it is live
-            // for a moment after it turns the view or while a button is held, as anywhere else.
+            // The mouse aims only while it is live, and the right stick while it leans; otherwise auto-aim chooses (plan section
+            // I). In the chase view the mouse and the stick turn the camera, so there their aim is where the camera looks on the
+            // ground, ahead of the giant, live for a moment after the mouse turns the view, while a button is held or while the
+            // stick leans, as anywhere else.
             Vector3 aimPoint = _isChasing ? ChaseAimPoint() : _lastAimPoint;
 
             var frame = new HiveDefenseFrame(
@@ -556,6 +568,12 @@ namespace DigitalStory.View
                 _hives[index].ShowCollecting(false);
                 _hives[index].ShowGiving(false);
             }
+        }
+
+        // The HUD names the keys, or the controller's buttons, of the device the player picked up last.
+        private void HandleLastDeviceChanged(ControlDevice device)
+        {
+            _hud.ShowControls(device);
         }
 
         private void HandleFormChanged(SwarmForm form)
@@ -794,12 +812,13 @@ namespace DigitalStory.View
                 return;
             }
 
-            // Mouse right turns the view right; mouse up looks up, which lowers the camera. Only a moved mouse orbits, so the
-            // camera drifts back behind the giant once the mouse rests.
-            Vector2 look = _input.LookDelta;
+            // Mouse right turns the view right; mouse up looks up, which lowers the camera. The right stick turns it the same
+            // way, by degrees per second. Only a moved mouse or a leaning stick orbits, so the camera drifts back behind the
+            // giant once both rest.
+            Vector2 look = (_input.LookDelta * _lookDegreesPerUnit) + _input.StickLookDegrees;
             if (look.sqrMagnitude > 0f)
             {
-                _followCamera.Orbit(look.x * _lookDegreesPerUnit, -look.y * _lookDegreesPerUnit);
+                _followCamera.Orbit(look.x, -look.y);
             }
         }
 
@@ -991,6 +1010,8 @@ namespace DigitalStory.View
             Require(_colossusMotor, nameof(_colossusMotor));
             Require(_hud, nameof(_hud));
             Require(_hitFeedback, nameof(_hitFeedback));
+            Require(_gamepad, nameof(_gamepad));
+            Require(_rumble, nameof(_rumble));
 
             if (_songs == null || _songs.Length == 0)
             {

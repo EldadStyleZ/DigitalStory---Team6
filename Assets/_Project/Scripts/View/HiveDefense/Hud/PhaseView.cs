@@ -25,6 +25,7 @@ namespace DigitalStory.View
         private readonly Label _granted;
         private readonly float _bannerSeconds;
         private readonly float _grantedSeconds;
+        private readonly string _hintText;
         private float _bannerLeft;
         private float _grantedLeft;
         private MatchPhase _shownPhase;
@@ -32,6 +33,7 @@ namespace DigitalStory.View
         private int _shownRoundCount = -1;
         private int _shownSeconds = -1;
         private bool _isShown;
+        private ControlDevice _device;
 
         /// <summary>Finds "phase-label", "phase-hint", "banner-line" and "granted-line" in the root and starts listening.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
@@ -50,7 +52,8 @@ namespace DigitalStory.View
             _granted = Require(root, "granted-line");
             _bannerSeconds = bannerSeconds;
             _grantedSeconds = grantedSeconds;
-            _hint.text = hintText ?? string.Empty;
+            _hintText = hintText ?? string.Empty;
+            ControlSymbols.ShowPrompt(_hint, _hintText, _device);
             _banner.RemoveFromClassList(ShownClass);
             _granted.RemoveFromClassList(ShownClass);
 
@@ -63,6 +66,18 @@ namespace DigitalStory.View
         {
             _session.Waves.PhaseChanged -= OnPhaseChanged;
             _session.WaspsGranted -= OnWaspsGranted;
+        }
+
+        /// <summary>Names the key of the farm phase's hint for the device in use.</summary>
+        public void ShowControls(ControlDevice device)
+        {
+            if (device == _device)
+            {
+                return;
+            }
+
+            _device = device;
+            ControlSymbols.ShowPrompt(_hint, _hintText, device);
         }
 
         /// <summary>Updates the phase line and the timers. Call once per frame.</summary>

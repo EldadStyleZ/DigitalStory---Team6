@@ -38,6 +38,8 @@ namespace DigitalStory.View
         private int _shownCount = -1;
         private int _shownBar = -1;
         private bool _isCollecting;
+        private string _humText;
+        private ControlDevice _device;
 
         /// <summary>Finds "level-label", "nest-count", "collect-box", "collect-fill", "hum-line" and "level-line" in the root and starts listening.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
@@ -72,6 +74,21 @@ namespace DigitalStory.View
         {
             _session.Nests.NestCollected -= OnNestCollected;
             _session.Discovery.Hummed -= OnHummed;
+        }
+
+        /// <summary>Names the hummed notes for the device in use: the keys' letters, or a controller's button symbols.</summary>
+        public void ShowControls(ControlDevice device)
+        {
+            if (device == _device)
+            {
+                return;
+            }
+
+            _device = device;
+            if (_humText != null)
+            {
+                ControlSymbols.ShowPrompt(_hum, _humText, device);
+            }
         }
 
         /// <summary>Updates the level, the counter, the collecting bar and the timers. Call once per frame.</summary>
@@ -157,7 +174,8 @@ namespace DigitalStory.View
             }
 
             _text.Append("...");
-            _hum.text = _text.ToString();
+            _humText = _text.ToString();
+            ControlSymbols.ShowPrompt(_hum, _humText, _device);
             _humLeft = _humSeconds;
             _hum.AddToClassList(ShownClass);
         }

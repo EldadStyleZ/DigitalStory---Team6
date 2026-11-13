@@ -28,6 +28,7 @@ namespace DigitalStory.View
         private VisualElement _root;
         private Label _title;
         private Label _hintLabel;
+        private ControlDevice _device;
 
         /// <summary>True while the end screen is on screen, for tests and debugging.</summary>
         public bool IsShowing => _root != null && _root.ClassListContains(ShownClass);
@@ -46,6 +47,16 @@ namespace DigitalStory.View
 
             _session.StateChanged += HandleStateChanged;
             Show(_session.State);
+        }
+
+        /// <summary>Names the restart key for the device in use: R, or Start on a controller.</summary>
+        public void ShowControls(ControlDevice device)
+        {
+            _device = device;
+            if (_hintLabel != null)
+            {
+                ControlSymbols.ShowPrompt(_hintLabel, _hint, device);
+            }
         }
 
         private void OnDestroy()
@@ -67,7 +78,7 @@ namespace DigitalStory.View
             if (isOver)
             {
                 _title.text = state == HiveDefenseState.Won ? _wonTitle : _lostTitle;
-                _hintLabel.text = _hint;
+                ControlSymbols.ShowPrompt(_hintLabel, _hint, _device);
             }
         }
     }

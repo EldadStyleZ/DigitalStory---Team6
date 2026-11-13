@@ -130,9 +130,14 @@ namespace DigitalStory.View
         private int _shownWaspBar = -1;
         private int _shownFuryBar = -1;
         private bool _isFuryFull;
+        private string _furyKeysText;
+        private ControlDevice _device;
 
         /// <summary>The text on the wasp count, for tests and debugging.</summary>
         public string WaspCountText => _waspCount?.text;
+
+        /// <summary>The device whose controls the HUD names, for tests and debugging.</summary>
+        public ControlDevice ShownDevice => _device;
 
         /// <summary>Builds the HUD's cells from the match. Call once, before the first Update.</summary>
         /// <exception cref="ArgumentNullException">The session is missing.</exception>
@@ -142,6 +147,7 @@ namespace DigitalStory.View
             _isReady = false;
             ReleaseSongs();
             _session = session ?? throw new ArgumentNullException(nameof(session));
+            _device = ControlDevice.KeyboardMouse;
 
             VisualElement root = GetComponent<UIDocument>().rootVisualElement
                 ?? throw new InvalidOperationException("The UIDocument has no Visual Tree Asset. Set HiveDefenseHud.uxml.");
@@ -179,7 +185,8 @@ namespace DigitalStory.View
             _isDomeLineShown = false;
             _colossusSong = ColossusSongIndex();
             _isFuryRevealed = false;
-            _furyKeys.text = string.Empty;
+            _furyKeysText = null;
+            ControlSymbols.ShowPrompt(_furyKeys, string.Empty, _device);
             _songbook = new SongbookView(session, _swarmConfig, songbook);
             session.Discovery.Discovered += OnDiscovered;
             session.Caster.SongNotReady += OnSongNotReady;
@@ -215,6 +222,40 @@ namespace DigitalStory.View
             _giantHud = GetOrAdd<GiantHudView>();
             _giantHud.Initialize(session);
             _isReady = true; // Last, so Update never runs on a half-built HUD.
+        }
+
+        /// <summary>
+        /// Names the controls of <paramref name="device"/> everywhere the HUD names a key: the notes, the songbook, the lesson,
+        /// the hints and the giant's lines. Call it after <see cref="Initialize"/> and whenever the player switches device.
+        /// </summary>
+        public void ShowControls(ControlDevice device)
+        {
+            if (!_isReady || device == _device)
+            {
+                return;
+            }
+
+            _device = device;
+            if (_furyKeysText != null)
+            {
+                ControlSymbols.ShowPrompt(_furyKeys, _furyKeysText, device);
+            }
+
+            for (int slot = 0; slot < _noteCells.Length; slot++)
+            {
+                if (_noteHoles[slot] >= 0)
+                {
+                    ControlSymbols.ShowHole(_noteCells[slot], _noteHoles[slot], device);
+                }
+            }
+
+            _songbook.ShowControls(device);
+            _phase.ShowControls(device);
+            _lesson.ShowControls(device);
+            _nestHud.ShowControls(device);
+            _hives.ShowControls(device);
+            _endScreen.ShowControls(device);
+            _giantHud.ShowControls(device);
         }
 
         private void Update()
@@ -374,7 +415,8 @@ namespace DigitalStory.View
             if (!_isFuryRevealed && _colossusSong >= 0 && _session.Discovery.IsRevealed(_colossusSong))
             {
                 _isFuryRevealed = true;
-                _furyKeys.text = KeysText(_session.Caster[_colossusSong].Song);
+                _furyKeysText = KeysText(_session.Caster[_colossusSong].Song);
+                ControlSymbols.ShowPrompt(_furyKeys, _furyKeysText, _device);
             }
 
             if (fury.IsFull != _isFuryFull)
@@ -420,7 +462,7 @@ namespace DigitalStory.View
 
                     _noteHoles[slot] = hole;
                     cell.AddToClassList(HoleClassPrefix + HoleColour(hole));
-                    cell.text = HiveDefenseInput.HoleName(hole);
+                    ControlSymbols.ShowHole(cell, hole, _device);
                 }
 
                 SetHint(slot, slot >= hintFrom && hint > 0);

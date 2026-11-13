@@ -3,7 +3,8 @@
     "rootNamespace": "DigitalStory.View",
     "references": [
         "DigitalStory.Data",
-        "DigitalStory.Logic"
+        "DigitalStory.Logic",
+        "Unity.InputSystem"
     ],
     "autoReferenced": false
 }

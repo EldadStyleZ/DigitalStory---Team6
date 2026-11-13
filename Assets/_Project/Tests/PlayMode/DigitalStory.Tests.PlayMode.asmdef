@@ -5,6 +5,8 @@
         "DigitalStory.Data",
         "DigitalStory.Logic",
         "DigitalStory.View",
+        "Unity.InputSystem",
+        "Unity.InputSystem.TestFramework",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

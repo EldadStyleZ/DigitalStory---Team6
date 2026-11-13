@@ -77,6 +77,7 @@ namespace DigitalStory.View
         private int _shownRing = -1;
         private int _shownSlam = -1;
         private int _shownRoar = -1;
+        private ControlDevice _device;
 
         /// <summary>True while the strip shows, for tests and debugging.</summary>
         public bool IsShowing => _isShowing;
@@ -121,8 +122,8 @@ namespace DigitalStory.View
             _movesLine = Require<Label>(root, "giant-moves-line");
             _phrasesLine = Require<Label>(root, "giant-phrases-line");
             _songbook = Require<VisualElement>(root, "songbook");
-            _movesLine.text = _movesText;
-            _phrasesLine.text = _phrasesText;
+            ControlSymbols.ShowPrompt(_movesLine, _movesText, _device);
+            ControlSymbols.ShowPrompt(_phrasesLine, _phrasesText, _device);
             _ring.generateVisualContent += DrawRing;
 
             _isShowing = false;
@@ -141,6 +142,17 @@ namespace DigitalStory.View
             _phrasesLine.RemoveFromClassList(LineShownClass);
             _songbook.RemoveFromClassList(SongbookHiddenClass);
             _isReady = true;
+        }
+
+        /// <summary>Names the giant's moves for the device in use: the note keys' letters, or a controller's button symbols.</summary>
+        public void ShowControls(ControlDevice device)
+        {
+            _device = device;
+            if (_movesLine != null)
+            {
+                ControlSymbols.ShowPrompt(_movesLine, _movesText, device);
+                ControlSymbols.ShowPrompt(_phrasesLine, _phrasesText, device);
+            }
         }
 
         private void Update()

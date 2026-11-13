@@ -48,6 +48,7 @@ namespace DigitalStory.View
         private readonly float[] _nudgeLeft;
         private readonly bool[] _nudgeOn;
         private int _knownShown = -1;
+        private ControlDevice _device;
 
         /// <summary>Builds the chips into the container, which holds a "songbook-title" label and a "songbook-chips" column.</summary>
         public SongbookView(HiveDefenseSession session, SwarmConfig config, VisualElement songbook)
@@ -99,6 +100,21 @@ namespace DigitalStory.View
             _session.Caster.SongCast -= OnSongCast;
             _session.Caster.SongNotReady -= OnSongRefused;
             _session.Discovery.Hummed -= OnHummed;
+        }
+
+        /// <summary>Shows the found notes as the keys' letters, or as a controller's button symbols, from the next Tick.</summary>
+        public void ShowControls(ControlDevice device)
+        {
+            if (device == _device)
+            {
+                return;
+            }
+
+            _device = device;
+            for (int song = 0; song < _foundShown.Length; song++)
+            {
+                _foundShown[song] = -1; // Drawn again on the next Tick.
+            }
         }
 
         /// <summary>Updates the chips. Call once per frame.</summary>
@@ -200,7 +216,7 @@ namespace DigitalStory.View
             }
         }
 
-        // A found note is a letter on its hole colour. An unfound one is a dot, and the first one keeps the category colour.
+        // A found note is a letter, or a controller's button symbol, on its hole colour. An unfound one is a dot, and the first one keeps the category colour.
         private void ShowPips(int song, SongDiscovery discovery)
         {
             int found = discovery.KnownNotes(song);
@@ -221,7 +237,7 @@ namespace DigitalStory.View
                 bool isFound = key < found;
                 pip.EnableInClassList(UnknownPipClass, !isFound);
                 pip.EnableInClassList(holeClass, isFound);
-                pip.text = isFound ? HiveDefenseInput.HoleName(hole) : string.Empty;
+                ControlSymbols.ShowHole(pip, isFound ? hole : -1, _device);
                 if (isFound)
                 {
                     pip.style.backgroundColor = StyleKeyword.Null;

@@ -17,6 +17,7 @@ namespace DigitalStory.View
         private readonly string[] _prompts;
         private TutorialStep _shown;
         private bool _isShown;
+        private ControlDevice _device;
 
         /// <summary>Builds the view. The prompts are indexed by <see cref="TutorialStep"/>; the entry for Done is empty.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
@@ -35,6 +36,21 @@ namespace DigitalStory.View
             _prompts[(int)TutorialStep.Done] = string.Empty;
         }
 
+        /// <summary>Names the keys of the prompts for the device in use, starting with the prompt on screen.</summary>
+        public void ShowControls(ControlDevice device)
+        {
+            if (device == _device)
+            {
+                return;
+            }
+
+            _device = device;
+            if (_isShown)
+            {
+                ControlSymbols.ShowPrompt(_line, _prompts[(int)_shown], device);
+            }
+        }
+
         /// <summary>Shows the current step. Call once per frame; it changes the line only when the step changes.</summary>
         public void Tick()
         {
@@ -47,7 +63,7 @@ namespace DigitalStory.View
             _isShown = true;
             _shown = step;
             string text = _prompts[(int)step];
-            _line.text = text;
+            ControlSymbols.ShowPrompt(_line, text, _device);
             _line.EnableInClassList(ShownClass, text.Length > 0);
         }
 

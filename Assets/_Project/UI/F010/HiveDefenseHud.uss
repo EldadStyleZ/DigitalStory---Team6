@@ -460,6 +460,83 @@
     height: 2px;
 }
 
+/* Controller symbols (ControlSymbols.cs). A face button is a diamond of four dots with the pressed position filled; in a
+   prompt the filled dot takes the note's colour from the hole classes below, which come later and so win. A prompt with
+   symbols lays its words and diamonds out in a row inside its own label. */
+.pad-prompt {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.pad-part {
+    padding: 0;
+    margin: 0 2px;
+}
+
+.pad-diamond {
+    width: 12px;
+    height: 12px;
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+
+.pad-dot {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.pad-dot--west { left: 0; top: 33.3%; }
+.pad-dot--south { left: 33.3%; top: 66.6%; }
+.pad-dot--east { left: 66.6%; top: 33.3%; }
+.pad-dot--north { left: 33.3%; top: 0; }
+
+.pad-dot--on {
+    background-color: var(--text);
+}
+
+/* Inside a recent note or a songbook pip, which already wear the note's colour: centred, in the letters' dark colour. */
+.pad-diamond--cell {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    margin: 0;
+}
+
+.pad-diamond--cell .pad-dot {
+    background-color: rgba(0, 0, 0, 0.25);
+}
+
+.pad-diamond--cell .pad-dot--on {
+    background-color: var(--key-text);
+}
+
+.giant-line .pad-diamond {
+    width: 18px;
+    height: 18px;
+}
+
+.giant-line .pad-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+}
+
+.giant-line--small .pad-diamond {
+    width: 15px;
+    height: 15px;
+}
+
+.giant-line--small .pad-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 2.5px;
+}
+
 /* The six holes, in the order of the flute */
 .hole-0 { background-color: rgb(240, 120, 110); }
 .hole-1 { background-color: rgb(240, 170, 90); }
