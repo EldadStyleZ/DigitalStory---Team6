@@ -46,6 +46,7 @@ namespace DigitalStory.View
         private static readonly int HitHash = Animator.StringToHash("Hit");
         private static readonly int FistRightHash = Animator.StringToHash("FistRight");
         private static readonly int FistLeftHash = Animator.StringToHash("FistLeft");
+        private static readonly int FistPaceHash = Animator.StringToHash("FistPace");
         private static readonly int ColorHash = Shader.PropertyToID("_Color");
         private static readonly Color FeetGizmoColor = Color.cyan;
         private static readonly Color HeadGizmoColor = Color.magenta;
@@ -131,6 +132,7 @@ namespace DigitalStory.View
         private Transform _leapMarker;
         private Renderer _leapMarkerRenderer;
         private bool _hasFistTriggers;
+        private bool _hasFistPace;
         private readonly int[] _fistHandBones = { -1, -1 };
         private readonly bool[] _isFistOut = new bool[2];
         private readonly Vector3[] _fistOrigins = new Vector3[2];
@@ -415,6 +417,7 @@ namespace DigitalStory.View
 
             bool hasSpeed = false;
             _hasHitTrigger = false;
+            _hasFistPace = false;
             int fistTriggers = 0;
             int triggerCount = 0;
             AnimatorControllerParameter[] parameters = _animator.parameters;
@@ -437,6 +440,10 @@ namespace DigitalStory.View
                     && (parameter.nameHash == FistRightHash || parameter.nameHash == FistLeftHash))
                 {
                     fistTriggers++;
+                }
+                else if (parameter.type == AnimatorControllerParameterType.Float && parameter.nameHash == FistPaceHash)
+                {
+                    _hasFistPace = true;
                 }
             }
 
@@ -485,6 +492,13 @@ namespace DigitalStory.View
             _isShowing = true;
             _lastPosition = _session.ColossusPosition;
             _animator.enabled = true;
+
+            // The fist states play at FistPace times their own speed, so the arm reaches furthest as the fist leaves for
+            // the thrust ColossusConfig holds now, not the one the scene was built with.
+            if (_hasFistPace)
+            {
+                _animator.SetFloat(FistPaceHash, 1f / _config.FistThrustSeconds);
+            }
         }
 
         private void Hide()

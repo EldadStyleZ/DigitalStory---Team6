@@ -66,6 +66,10 @@ namespace DigitalStory.Editor
         // and played at the speed that brings the punch to its full reach as the fist leaves (ColossusConfig.FistThrustSeconds).
         private const string FistRightTrigger = "FistRight";
         private const string FistLeftTrigger = "FistLeft";
+
+        // Multiplies the fist states' speed. ColossusMotor sets it to 1 / FistThrustSeconds as the giant stands, so a thrust
+        // tuned in ColossusConfig keeps the reach on the launch without a rebuild; its default is that of the build.
+        private const string FistPaceParameter = "FistPace";
         private const float FistRecoverSeconds = 0.2f;
         private const float FistBlendSeconds = 0.06f;
         private const float FistLeaveBlendSeconds = 0.25f;
@@ -923,6 +927,12 @@ namespace DigitalStory.Editor
             controller.AddParameter(HitTrigger, AnimatorControllerParameterType.Trigger);
             controller.AddParameter(FistRightTrigger, AnimatorControllerParameterType.Trigger);
             controller.AddParameter(FistLeftTrigger, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(new AnimatorControllerParameter
+            {
+                name = FistPaceParameter,
+                type = AnimatorControllerParameterType.Float,
+                defaultFloat = 1f / Mathf.Max(thrustSeconds, MeasureStepSeconds),
+            });
 
             // Without an idle clip the walk clip's first pose is held while the giant stands.
             AnimatorState idle = machine.AddState("Idle");
@@ -976,8 +986,11 @@ namespace DigitalStory.Editor
 
             float speed = Mathf.Clamp(reachSeconds / Mathf.Max(thrustSeconds, MeasureStepSeconds), LeastFistSpeed, MostFistSpeed);
             float exitTime = Mathf.Clamp01((reachSeconds + (FistRecoverSeconds * speed)) / Mathf.Max(clip.length, MeasureStepSeconds));
-            AddFistState(machine, idle, "FistRight", FistRightTrigger, clip, !isRightHanded, speed, exitTime);
-            AddFistState(machine, idle, "FistLeft", FistLeftTrigger, clip, isRightHanded, speed, exitTime);
+
+            // FistPace (1 / the thrust's seconds) multiplies the state's own speed, so the two together play it at this speed.
+            float stateSpeed = speed * Mathf.Max(thrustSeconds, MeasureStepSeconds);
+            AddFistState(machine, idle, "FistRight", FistRightTrigger, clip, !isRightHanded, stateSpeed, exitTime);
+            AddFistState(machine, idle, "FistLeft", FistLeftTrigger, clip, isRightHanded, stateSpeed, exitTime);
             string hand = isRightHanded ? "right" : "left";
             Debug.Log(
                 $"[F010] Hand launch: {clip.name} punches with the {hand} hand, reaching {reachMetres:0.00} m from the hips at {reachSeconds:0.00} s; "
@@ -991,6 +1004,8 @@ namespace DigitalStory.Editor
             state.motion = clip;
             state.mirror = isMirrored;
             state.speed = speed;
+            state.speedParameterActive = true;
+            state.speedParameter = FistPaceParameter;
             state.writeDefaultValues = true;
 
             AnimatorStateTransition enter = machine.AddAnyStateTransition(state);
