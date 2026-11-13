@@ -9,8 +9,9 @@ namespace DigitalStory.Tests.EditMode
     /// <summary>
     /// A whole match as the scene sets it up, for the playtest bot: every config and song at its code default (what
     /// ResetConfigsAndBuild writes into the assets), the smoker as the scene builder makes it, the songs in the builder's
-    /// order, and the scene's hives, spawn points and nest trees, with the core starting in the middle. Only the seed of the
-    /// session's random source changes between runs.
+    /// order, and the hives, spawn points and nest trees of the map the game draws for the seed (plan section S), with the
+    /// core starting in the middle. The seed draws both the map and the session's random source, so each seed of a sweep
+    /// plays on its own map.
     /// </summary>
     internal sealed class PlaytestMatch : IDisposable
     {
@@ -38,34 +39,8 @@ namespace DigitalStory.Tests.EditMode
             + "\"<WindUpSeconds>k__BackingField\":0.8,\"<CooldownSeconds>k__BackingField\":4.5,"
             + "\"<HiveDamage>k__BackingField\":0,\"<WaspsKnockedOff>k__BackingField\":0}";
 
-        // HiveDefenseSceneBuilder: the hives 25 m apart across the middle, the spawn points 32 m out (in its child order:
-        // north, south, east, west), and the nest trees its seeded layout picks, in the order they open, as the generated
-        // scene holds them. A change to the builder's layout belongs here too.
-        private static readonly Vector3[] HivePositions =
-        {
-            new Vector3(-12.5f, 0f, 0f),
-            new Vector3(12.5f, 0f, 0f),
-        };
-
-        private static readonly Vector3[] SpawnPositions =
-        {
-            new Vector3(0f, 0f, 32f),
-            new Vector3(0f, 0f, -32f),
-            new Vector3(32f, 0f, 0f),
-            new Vector3(-32f, 0f, 0f),
-        };
-
-        private static readonly Vector3[] NestPositions =
-        {
-            new Vector3(-4.2303505f, 0f, 9.91818f),
-            new Vector3(6.0840244f, 0f, 12.559615f),
-            new Vector3(-1.1644772f, 0f, -17.937988f),
-            new Vector3(-0.48996973f, 0f, 18.718933f),
-            new Vector3(16.543379f, 0f, 13.702695f),
-            new Vector3(-18.956007f, 0f, -12.818432f),
-            new Vector3(-19.761074f, 0f, 11.611771f),
-            new Vector3(23.381496f, 0f, -8.659761f),
-        };
+        // The bot's map has no scenery: the props only stand around the edge, and nothing in the rules touches them.
+        private static readonly float[] NoScenery = new float[0];
 
         private readonly List<ScriptableObject> _created = new List<ScriptableObject>();
         private readonly SwarmSongEffect[] _songs;
@@ -92,7 +67,9 @@ namespace DigitalStory.Tests.EditMode
                 Make<SwarmConfig>(), Make<SquadConfig>(), CoreMove, Make<FuryConfig>(), Colossus, Hive, Nests, Make<SwarmLevelConfig>(),
                 Make<SmokeConfig>(), Waves, Make<BeekeeperConfig>(), smoker, Aim, Make<SongConfig>(), _songs,
                 HoleCount);
-            Session = new HiveDefenseSession(rules, HivePositions, NestPositions, SpawnPositions, Vector3.zero, new Mulberry32Random(seed));
+            Layout = Make<LayoutConfig>();
+            Map = LayoutGenerator.Generate(unchecked((int)seed), Vector3.zero, Layout, Nests, NoScenery);
+            Session = new HiveDefenseSession(rules, Map.Hives, Map.Nests, Map.Spawns, Vector3.zero, new Mulberry32Random(seed));
         }
 
         /// <summary>The match.</summary>
@@ -104,6 +81,10 @@ namespace DigitalStory.Tests.EditMode
         public HiveConfig Hive { get; }
         public NestConfig Nests { get; }
         public WaveConfig Waves { get; }
+        public LayoutConfig Layout { get; }
+
+        /// <summary>The match's map: the hives, the spawn points and the nests, drawn from the seed.</summary>
+        public ArenaLayout Map { get; }
 
         /// <summary>The Sting's asset, whose reach the aim marker uses.</summary>
         public StingSong Sting => (StingSong)_songs[StingIndex];
@@ -136,7 +117,7 @@ namespace DigitalStory.Tests.EditMode
         public HoneycombSong Honeycomb => (HoneycombSong)_songs[HoneycombIndex];
 
         /// <summary>Where the beekeepers appear, in the order the waves use them: they take turns, one beekeeper each.</summary>
-        public IReadOnlyList<Vector3> SpawnPoints => SpawnPositions;
+        public IReadOnlyList<Vector3> SpawnPoints => Map.Spawns;
 
         public void Dispose()
         {

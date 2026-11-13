@@ -18,7 +18,8 @@ namespace DigitalStory.Tests.EditMode
         // As EconomyPlaytestTests: a match neither won nor lost by then has stalled.
         private const float MatchSeconds = 20f * 60f;
 
-        // PlaytestMatch's hives: west at x = -12.5 and east at x = 12.5, the core between them.
+        // PlaytestMatch's hives: on every map the first stands 12 to 13.5 m west of the middle and the second as far east
+        // (plan section S), the core between them, so 6 m either side of the middle is nearer that side's hive.
         private const int West = 0;
         private const int East = 1;
 
