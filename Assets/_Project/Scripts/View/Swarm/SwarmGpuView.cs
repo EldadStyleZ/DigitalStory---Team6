@@ -72,6 +72,12 @@ namespace DigitalStory.View
         private const float QuarterTurn = Mathf.PI * 0.5f;
         private const float MinimumTrailMeters = 0.0001f;
 
+        // The core's past that the free swarm reads with its delays (plan section Q): 128 samples at 60 a second, a little
+        // over two seconds, more than SwarmConfig.FollowDelaySeconds may ask for. HistorySamples matches HISTORY_SIZE in
+        // WaspSwarm.compute.
+        private const int HistorySamples = 128;
+        private const float HistoryStepSeconds = 1f / 60f;
+
         // Bytes per element. Each matches a struct in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.
         private const int StaticStride = sizeof(float) * 12;
         private const int DynamicStride = sizeof(float) * 12;
@@ -125,6 +131,17 @@ namespace DigitalStory.View
         private static readonly int EightLapSecondsId = Shader.PropertyToID("_EightLapSeconds");
         private static readonly int EightYawId = Shader.PropertyToID("_EightYaw");
         private static readonly int EightSecondsId = Shader.PropertyToID("_EightSeconds");
+        private static readonly int HistoryId = Shader.PropertyToID("_History");
+        private static readonly int HistoryStepId = Shader.PropertyToID("_HistoryStep");
+        private static readonly int TrailLeadId = Shader.PropertyToID("_TrailLead");
+        private static readonly int RiverReachId = Shader.PropertyToID("_RiverReach");
+        private static readonly int EarlierFormId = Shader.PropertyToID("_EarlierForm");
+        private static readonly int FollowDelayId = Shader.PropertyToID("_FollowDelay");
+        private static readonly int FollowDelayPowerId = Shader.PropertyToID("_FollowDelayPower");
+        private static readonly int WaveJitterId = Shader.PropertyToID("_WaveJitter");
+        private static readonly int TailWidthId = Shader.PropertyToID("_TailWidth");
+        private static readonly int FormBlendSecondsId = Shader.PropertyToID("_FormBlendSeconds");
+        private static readonly int SpringStepId = Shader.PropertyToID("_SpringStep");
         private static readonly int DyingSecondsId = Shader.PropertyToID("_DyingSeconds");
         private static readonly int WaspLengthId = Shader.PropertyToID("_WaspLength");
         private static readonly int BuzzAmplitudeId = Shader.PropertyToID("_BuzzAmplitude");
@@ -179,6 +196,10 @@ namespace DigitalStory.View
         private SwarmForm _previousForm = SwarmForm.River;
         private float _formStartTime;
         private float _previousFormStartTime;
+
+        // The form before _previousForm. A quick second change (Hive Call ending as the stores run dry) finds wasps the
+        // first change's wave has not yet reached; they ease out of this one instead of jumping.
+        private SwarmForm _earlierForm = SwarmForm.River;
         private Vector3 _corePosition;
         private Vector3 _coreForward = Vector3.forward;
         private Vector3 _standingAnchor;
@@ -192,6 +213,20 @@ namespace DigitalStory.View
         private float _eightShare = 1f;
         private float _eightYaw;
         private float _eightSeconds;
+
+        // The core's past, sent each frame as _History. The swing is every turn of the eight but its slow precession, added
+        // up, so a wasp that is still wound into the eight its delay ago turns as the eight turned then. The eight's clock
+        // starts over only once even the most delayed wasp has unwound.
+        private readonly CoreHistory _history = new CoreHistory(HistorySamples, HistoryStepSeconds);
+        private readonly Vector4[] _historySamples = new Vector4[HistorySamples];
+        private float _swing;
+        private float _unwoundSeconds;
+        private double _lastTravelled;
+
+        // Metres the core has walked since the swarm was last wound into the eight, which the river is drawn out of. It
+        // starts over only once even the most delayed wasp has wound in.
+        private float _riverReach;
+        private float _woundSeconds;
         private Vector4 _firstHive;
         private Vector4 _secondHive;
         private Vector3 _lastHit;
@@ -236,6 +271,12 @@ namespace DigitalStory.View
         /// trail a river. For tests and debugging.
         /// </summary>
         public float EightShare => _eightShare;
+
+        /// <summary>
+        /// The wasps' state on the GPU (WaspDynamic in WaspSwarm.compute), or null while the view is not running, for tests
+        /// that read the swarm back. The game never reads it on the CPU: a read stalls the GPU.
+        /// </summary>
+        public GraphicsBuffer WaspStates => _dynamicBuffer;
 
         /// <summary>True while <see cref="Freeze"/> holds the swarm still, for tests and debugging.</summary>
         public bool IsFrozen => _freezeSeconds > 0f;
@@ -283,6 +324,7 @@ namespace DigitalStory.View
             }
 
             TrackEight(stepSeconds, trailCount);
+            RecordThePast(stepSeconds);
             LatchFormColors();
             BindComputeBuffers();
             PushFrame(stepSeconds, trailCount);
@@ -379,6 +421,7 @@ namespace DigitalStory.View
             _castColor = config.RiverColor;
             _formColor = config.RiverColor;
             _previousFormColor = config.RiverColor;
+            ForgetThePast();
             ClearSongs();
             _config = config;
 
@@ -410,6 +453,7 @@ namespace DigitalStory.View
                 return;
             }
 
+            _earlierForm = _previousForm;
             _previousForm = _form;
             _previousFormStartTime = _formStartTime;
             _form = form;
@@ -847,6 +891,7 @@ namespace DigitalStory.View
             _previousForm = SwarmForm.River;
             _formStartTime = 0f;
             _previousFormStartTime = 0f;
+            _earlierForm = SwarmForm.River;
             _standingSeconds = 0f;
             _standingShare = 0f;
             _sizeScale = 1f;
@@ -855,7 +900,19 @@ namespace DigitalStory.View
             _eightYaw = 0f;
             _eightSeconds = 0f;
             _hasFormChanged = false;
+            ForgetThePast();
             ClearSongs();
+        }
+
+        // A new run's swarm starts wound into the eight round a core that has always stood where it is.
+        private void ForgetThePast()
+        {
+            _swing = 0f;
+            _unwoundSeconds = 0f;
+            _lastTravelled = 0.0;
+            _riverReach = 0f;
+            _woundSeconds = 0f;
+            _history.Reset(_eightShare, _swing);
         }
 
         // Empties every slot and forgets the Sting's targets, the cast flashes and the Gust, as at the start of a run.
@@ -978,16 +1035,26 @@ namespace DigitalStory.View
             float trailLength = trailCount > 0 ? _trailPoints[trailCount - 1].w : 0f;
             float trailShare = Mathf.Clamp01(trailLength / Mathf.Max(_config.StandingTrailMeters, MinimumTrailMeters));
             _eightShare = 1f - (trailShare * (1f - _standingShare));
+            float mostDelay = _config.FollowDelaySeconds + HistoryStepSeconds;
+            _woundSeconds = _eightShare >= 1f ? _woundSeconds + stepSeconds : 0f;
+            if (_woundSeconds > mostDelay)
+            {
+                _riverReach = 0f;
+            }
 
             // Across the walk: the core's facing turned a quarter turn, cross(up, forward), as an angle on the ground.
             float acrossYaw = Mathf.Atan2(-_coreForward.x, _coreForward.z);
             if (_eightShare <= 0f)
             {
-                _eightYaw = acrossYaw;
-                _eightSeconds = 0f;
+                // The river's tail may still be wound into the eight its delay ago, so the eight's clock runs on until even
+                // it has unwound.
+                _unwoundSeconds += stepSeconds;
+                _eightSeconds = _unwoundSeconds > mostDelay ? 0f : _eightSeconds + stepSeconds;
+                Swing(acrossYaw);
                 return;
             }
 
+            _unwoundSeconds = 0f;
             _eightSeconds += stepSeconds;
             if (_standingSeconds >= _config.StandDelaySeconds)
             {
@@ -1007,7 +1074,35 @@ namespace DigitalStory.View
             }
 
             float most = EightAlignSpeed * stepSeconds;
-            _eightYaw = Mathf.Repeat(_eightYaw + Mathf.Clamp(toAcross, -most, most), FullTurn);
+            Swing(_eightYaw + Mathf.Clamp(toAcross, -most, most));
+        }
+
+        // Turns the eight to a new yaw and adds the turn to the swing the free swarm reads with its delays.
+        private void Swing(float yaw)
+        {
+            _swing += Mathf.DeltaAngle(_eightYaw * Mathf.Rad2Deg, yaw * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+            _eightYaw = Mathf.Repeat(yaw, FullTurn);
+        }
+
+        // Adds this frame to the core's past: how far it went (the trail's odometer), how far the swarm is wound into the
+        // eight and how far the eight has swung. On the swarm's own clock, so a freeze holds the past still too. A trail
+        // that started over (a new run) starts the past over with it.
+        private void RecordThePast(float stepSeconds)
+        {
+            double travelled = _trail.Travelled;
+            if (travelled < _lastTravelled)
+            {
+                _history.Reset(_eightShare, _swing);
+                _riverReach = 0f;
+            }
+            else
+            {
+                _riverReach += (float)(travelled - _lastTravelled);
+            }
+
+            _lastTravelled = travelled;
+            _history.Record(stepSeconds, travelled, _eightShare, _swing);
+            _history.CopyTo(_historySamples);
         }
 
         private void DestroyOwnedAssets()
@@ -1067,6 +1162,7 @@ namespace DigitalStory.View
             compute.SetInt(BoneCountId, _hasColossusSamples ? _boneCount : 0);
             compute.SetInt(FormId, (int)_form);
             compute.SetInt(PreviousFormId, (int)_previousForm);
+            compute.SetInt(EarlierFormId, (int)_earlierForm);
             compute.SetFloat(SimTimeId, _simTime);
             compute.SetFloat(DeltaTimeId, deltaTime);
             compute.SetFloat(FormStartTimeId, _formStartTime);
@@ -1076,6 +1172,10 @@ namespace DigitalStory.View
             compute.SetFloat(EightShareId, _eightShare);
             compute.SetFloat(EightYawId, _eightYaw);
             compute.SetFloat(EightSecondsId, _eightSeconds);
+            compute.SetVectorArray(HistoryId, _historySamples);
+            compute.SetFloat(HistoryStepId, HistoryStepSeconds);
+            compute.SetFloat(TrailLeadId, _trail.Lead);
+            compute.SetFloat(RiverReachId, _riverReach);
             compute.SetVector(HiveAId, _firstHive);
             compute.SetVector(HiveBId, _secondHive);
             compute.SetVector(LastHitId, _lastHit);
@@ -1106,6 +1206,12 @@ namespace DigitalStory.View
             compute.SetFloat(EightTiltId, _config.EightTilt);
             compute.SetFloat(EightThicknessId, _config.EightThickness * _sizeScale);
             compute.SetFloat(EightLapSecondsId, _config.EightLapSeconds);
+            compute.SetFloat(FollowDelayId, _config.FollowDelaySeconds);
+            compute.SetFloat(FollowDelayPowerId, _config.FollowDelayPower);
+            compute.SetFloat(WaveJitterId, _config.WaveJitter);
+            compute.SetFloat(TailWidthId, _config.TailWidthShare);
+            compute.SetFloat(FormBlendSecondsId, _config.FormBlendSeconds);
+            compute.SetFloat(SpringStepId, _config.SpringStepSeconds);
             compute.SetFloat(DyingSecondsId, _config.DyingSeconds);
 
             _material.SetFloat(WaspLengthId, _config.WaspLength);

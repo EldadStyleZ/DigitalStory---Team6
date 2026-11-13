@@ -50,5 +50,60 @@ namespace DigitalStory.Tests.EditMode
 
             Object.DestroyImmediate(config);
         }
+
+        // Plan section Q: a damping of 1 or more brings a wasp to its place in the river without flying past it, so a
+        // start, a stop or a turn never makes the river bounce.
+        [Test]
+        public void MotionDefaults_TheRiverSpringNeverOvershoots()
+        {
+            var config = ScriptableObject.CreateInstance<SwarmConfig>();
+
+            Assert.That(config.RiverDamping, Is.GreaterThanOrEqualTo(1f));
+
+            Object.DestroyImmediate(config);
+        }
+
+        // The springs cut each frame into equal steps of at most SpringStepSeconds. A step that divides both a 60 and a
+        // 120 frames-a-second frame into whole steps makes both rates take the very same steps.
+        [TestCase(60f)]
+        [TestCase(120f)]
+        public void MotionDefaults_TheSpringStepDividesAFrameIntoWholeSteps(float framesPerSecond)
+        {
+            var config = ScriptableObject.CreateInstance<SwarmConfig>();
+
+            float steps = 1f / (framesPerSecond * config.SpringStepSeconds);
+
+            Assert.That(steps, Is.GreaterThanOrEqualTo(1f));
+            Assert.That(steps, Is.EqualTo(Mathf.Round(steps)).Within(Tolerance));
+
+            Object.DestroyImmediate(config);
+        }
+
+        // The river's tail follows the core's path this many seconds behind its head. SwarmGpuView keeps a little more
+        // than two seconds of the core's past for the swarm to read, so the delay must stay inside it.
+        [Test]
+        public void MotionDefaults_TheTailsDelayFitsTheCoresKeptPast()
+        {
+            var config = ScriptableObject.CreateInstance<SwarmConfig>();
+
+            Assert.That(config.FollowDelaySeconds, Is.GreaterThan(0f));
+            Assert.That(config.FollowDelaySeconds * (1f + config.WaveJitter), Is.LessThanOrEqualTo(2f));
+
+            Object.DestroyImmediate(config);
+        }
+
+        // The owner felt the swarm answer late once, so a wasp eases into a new whole-swarm form quickly, and the head of
+        // the river follows the core at once while its tail thins out behind it.
+        [Test]
+        public void MotionDefaults_KeepTheHeadQuickAndThinTheTail()
+        {
+            var config = ScriptableObject.CreateInstance<SwarmConfig>();
+
+            Assert.That(config.FormBlendSeconds, Is.GreaterThan(0f).And.LessThanOrEqualTo(0.3f));
+            Assert.That(config.FollowDelayPower, Is.GreaterThan(1f));
+            Assert.That(config.TailWidthShare, Is.GreaterThan(0f).And.LessThan(1f));
+
+            Object.DestroyImmediate(config);
+        }
     }
 }

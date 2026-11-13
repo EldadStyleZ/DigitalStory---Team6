@@ -40,11 +40,11 @@ namespace DigitalStory.Data
         public float LowShare { get; private set; } = 0.3f;
 
         [field: Header("River and shapes")]
-        [field: SerializeField, Min(0f), Tooltip("Spring strength pulling a wasp toward its place in the river.")]
-        public float RiverSpring { get; private set; } = 40f;
+        [field: SerializeField, Min(0f), Tooltip("Spring strength pulling a wasp toward its place in the river and in the figure-eight. Higher follows more tightly.")]
+        public float RiverSpring { get; private set; } = 100f;
 
-        [field: SerializeField, Min(0f), Tooltip("Damping on the river spring. Higher means less overshoot.")]
-        public float RiverDamping { get; private set; } = 0.6f;
+        [field: SerializeField, Min(0f), Tooltip("Damping on the river spring. 1 brings a wasp to its place as fast as it can without flying past it; lower overshoots and bounces.")]
+        public float RiverDamping { get; private set; } = 1f;
 
         [field: SerializeField, Min(0f), Tooltip("Spring strength pulling a wasp toward its place in a form.")]
         public float ShapeSpring { get; private set; } = 180f;
@@ -52,10 +52,10 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Damping on the form spring.")]
         public float ShapeDamping { get; private set; } = 0.75f;
 
-        [field: SerializeField, Range(0f, 1f), Tooltip("Damping while the swarm wobbles after a hit.")]
-        public float WobbleDamping { get; private set; } = 0.3f;
+        [field: SerializeField, Range(0f, 1f), Tooltip("Damping while a shape that has just formed wobbles: a song's squad, Hive Call's halo, the Colossus. The river and the eight never wobble.")]
+        public float WobbleDamping { get; private set; } = 0.5f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds the wobble after a hit lasts.")]
+        [field: SerializeField, Min(0f), Tooltip("Seconds the wobble of a shape that has just formed lasts.")]
         public float WobbleSeconds { get; private set; } = 0.35f;
 
         [field: SerializeField, Min(0f), Tooltip("Seconds the change of form takes to sweep through the swarm.")]
@@ -64,8 +64,8 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Lanes per second the wasps flow along the river.")]
         public float FlowSpeed { get; private set; } = 0.08f;
 
-        [field: SerializeField, Min(0f), Tooltip("Length of the river when the core moves.")]
-        public float RiverLengthMeters { get; private set; } = 11f;
+        [field: SerializeField, Min(0f), Tooltip("Length of the river behind the core, before its tail's delay (FollowDelaySeconds) stretches it: walking, the river is this plus the metres the core covers in that delay.")]
+        public float RiverLengthMeters { get; private set; } = 8f;
 
         [field: SerializeField, Min(0f), Tooltip("Half the width of the river. Wide enough that the big wasps keep apart instead of merging into one band. The river is less than half as tall as it is wide.")]
         public float RiverRadius { get; private set; } = 1.2f;
@@ -82,8 +82,8 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Seconds the core stands before the river winds into the figure-eight round it.")]
         public float StandDelaySeconds { get; private set; } = 0.5f;
 
-        [field: SerializeField, Min(0f), Tooltip("Seconds the river takes to wind into the figure-eight, and to unwind out of it once the core moves. 0 switches at once.")]
-        public float StandBlendSeconds { get; private set; } = 0.75f;
+        [field: SerializeField, Min(0f), Tooltip("Seconds one wasp takes to wind into the figure-eight, and to unwind out of it once the core moves; each starts its own delay (FollowDelaySeconds) after the river's head. 0 switches at once.")]
+        public float StandBlendSeconds { get; private set; } = 1f;
 
         // The core is an invisible point, and nothing marks it. While it stands, the free swarm flows round a figure-eight in
         // the air whose crossing sits over it, so the eye finds the core where the loop crosses itself. The sizes grow with
@@ -103,6 +103,28 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Min(0.5f), Tooltip("Seconds a wasp takes to fly once round the whole eight.")]
         public float EightLapSeconds { get; private set; } = 5f;
+
+        // Plan section Q. Each wasp of the free swarm follows the core's recent path with its own delay, so a start, a stop
+        // or a turn reaches the head of the swarm at once and travels down to its tail as a wave, and a change of shape
+        // sweeps through the swarm instead of moving every wasp at once.
+        [field: Header("Motion")]
+        [field: SerializeField, Range(0f, 1.8f), Tooltip("Seconds the river's tail follows the core's path behind its head, which follows at once. On a stop the tail keeps flowing in for this long before it curls into the eight; on a start the eight unwinds head first.")]
+        public float FollowDelaySeconds { get; private set; } = 0.8f;
+
+        [field: SerializeField, Range(1f, 3f), Tooltip("How the delay grows from the river's head to its tail: 1 evenly; higher keeps more of the head quick and stretches the tail thinner.")]
+        public float FollowDelayPower { get; private set; } = 1.5f;
+
+        [field: SerializeField, Range(0f, 0.1f), Tooltip("Share of each wasp's place in a wave taken from its own random number, so the front of a wave is ragged like a flock's instead of a ruled line.")]
+        public float WaveJitter { get; private set; } = 0.08f;
+
+        [field: SerializeField, Range(0.1f, 1f), Tooltip("Width of the river's tail as a share of its head's, so the ribbon thins out behind the core.")]
+        public float TailWidthShare { get; private set; } = 0.55f;
+
+        [field: SerializeField, Range(0f, 0.3f), Tooltip("Seconds one wasp takes to ease from the old whole-swarm form into the new (Hive Call, the Colossus, the river) once the change's wave reaches it. 0 hands it over at once, as a jump of its goal.")]
+        public float FormBlendSeconds { get; private set; } = 0.3f;
+
+        [field: SerializeField, Range(0.001f, 0.0167f), Tooltip("Longest step the wasps' springs take. Each frame is cut into equal steps no longer than this, so the swarm moves the same at 60 and 120 frames a second. 1/240 divides both into whole steps.")]
+        public float SpringStepSeconds { get; private set; } = 1f / 240f;
 
         [field: Header("Wasps")]
         [field: SerializeField, Min(0f), Tooltip("Size of the small shake on each wasp, in metres.")]

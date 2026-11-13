@@ -4,8 +4,10 @@
 // The CPU never reads this data back. Gameplay only feeds in counts, the forms, the slots and a few positions.
 //
 // Two layers decide where a wasp flies:
-// - The whole-swarm form (_Form): River, Hive Call, Colossus or Collapsed. It sweeps through the swarm as a wave. The
-//   River trails behind the walking core and winds into a figure-eight round the standing one.
+// - The whole-swarm form (_Form): River, Hive Call, Colossus or Collapsed. It sweeps through the swarm as a wave, each
+//   wasp easing from the old form into the new as the wave reaches it. The River follows the walking core along its
+//   recent path and winds into a figure-eight round the standing one; each of its wasps reads the core's past (_History)
+//   with its own delay, so a start, a stop or a turn reaches the head at once and runs down to the tail (songs-v2 Q).
 // - Three song slots (Post, Guard, Strike). A live slot's squad, the wasps whose squad value lies in its [low, high),
 //   flies that slot's song; every other wasp flies the whole-swarm form. A Gust pulse is then added on top of both.
 // Adding a song: a form id below, one target function that returns a Steer from a SlotContext, and one case in
@@ -24,6 +26,12 @@
 
 // Matches SwarmGpuView.MostStings: the most stings one Sting cast sends.
 #define STING_MOST 10
+
+// Matches SwarmGpuView.HistorySamples: the core's past, one sample every _HistoryStep seconds, newest first.
+#define HISTORY_SIZE 128
+
+// A frame is cut into at most this many spring steps (SpringSteps); at the longest frame, 1/30 s, a 1/240 s step needs 8.
+#define MOST_SPRING_STEPS 16
 
 // 48 bytes, the same layout as SwarmGpuView.WaspStatic and the struct in WaspInstanced.shader. Written once by the CPU.
 struct WaspStatic
@@ -61,6 +69,7 @@ int _TrailCount;
 int _BoneCount;                           // 0 until the Colossus has bones and samples
 int _Form;                                // the whole-swarm DigitalStory.Logic.SwarmForm: River, HiveCall, Colossus or Collapsed
 int _PreviousForm;
+int _EarlierForm;                         // the form before _PreviousForm, for a change that comes before the last one's wave is through
 
 float _SimTime;                           // holds still while SwarmGpuView.Freeze holds the swarm
 float _DeltaTime;                         // already capped at SwarmConfig.MaxDeltaTime; 0 while the swarm is frozen
@@ -125,6 +134,20 @@ float _EightLapSeconds;                   // seconds a wasp takes round the whol
 float _EightYaw;                          // radians on the ground (as RingOffset) the first lobe points, turning slowly
 float _EightSeconds;                      // seconds the eight has shown since the swarm was last a river
 
+// The core's past for the free swarm (songs-v2 Q), from CoreHistory: sample j is the moment j x _HistoryStep seconds ago,
+// x the metres the core has travelled since then, y how far the swarm was wound into the eight then (_EightShare), and
+// z how far the eight had swung then, less its swing now (radians, added to _EightYaw).
+float4 _History[HISTORY_SIZE];
+float _HistoryStep;
+float _TrailLead;                         // metres along the path from the newest trail point to the core
+float _RiverReach;                        // metres the core has walked since the swarm was last wound into the eight
+float _FollowDelay;                       // seconds the river's tail lags behind its head (SwarmConfig.FollowDelaySeconds)
+float _FollowDelayPower;                  // how the delay grows from the head to the tail
+float _WaveJitter;                        // share of a wasp's place in a wave taken from its seed
+float _TailWidth;                         // the river's width at its tail, as a share of its head's
+float _FormBlendSeconds;                  // seconds one wasp eases from the old whole-swarm form into the new
+float _SpringStep;                        // the longest spring step, in seconds
+
 static const float FullTurn = 6.28318530718;
 static const float HalfTurn = 3.14159265359;
 static const float QuarterTurn = 1.57079632679;
@@ -180,11 +203,9 @@ static const float HaloHeight = 2.2;             // metres over the core
 static const float HaloThickness = 0.25;
 static const float HaloSpin = 2.5;               // radians per second
 
-// The figure-eight (EightTarget). The river winds into it head first: a wasp's own share of the eight runs
-// EightWindStagger of the whole blend later the further back along the river it is, so a stop draws the eight along its
-// loop from the crossing instead of pulling the whole river across the core at once. The lowest wasp of the low lobe
-// keeps EightLowest metres over the ground.
-static const float EightWindStagger = 1.0;
+// The figure-eight (EightTarget). The river winds into it head first: each wasp reads the swarm's wound share its own
+// delay late (_History), so a stop draws the eight from the crossing instead of pulling the whole river across the core
+// at once. The lowest wasp of the low lobe keeps EightLowest metres over the ground.
 static const float EightLowest = 0.35;
 
 // The wasps linger where the eight crosses itself and hurry round the lobes' tips: their place round the loop runs
@@ -781,6 +802,40 @@ float TrailLength()
     return _TrailCount > 0 ? _Trail[_TrailCount - 1].w : 0.0;
 }
 
+// The point `distance` metres back along the core's path from the core itself. The core runs up to a trail spacing ahead
+// of the newest trail point (_TrailLead), so the path starts with that stretch. Measured from the core, a place in the
+// river glides along with it instead of jumping a spacing forward each time the trail stores a point.
+void SamplePath(float distance, out float3 position, out float3 direction)
+{
+    SampleTrail(max(distance - _TrailLead, 0.0), position, direction);
+    if (distance < _TrailLead)
+    {
+        position = lerp(_CorePosition.xyz, position, distance / max(_TrailLead, Tiny));
+    }
+}
+
+// The wasp's place in a wave through the free swarm, 0 first and 1 last: its order (its place along the river, or up the
+// Colossus), made a little ragged by its seed so a wave's front is a flock's, not a ruled line.
+float WaveRank(float order, WaspStatic wasp)
+{
+    return saturate(order * (1.0 - _WaveJitter) + wasp.seed * _WaveJitter);
+}
+
+// Seconds this wasp follows the core late: none at the river's head, _FollowDelay at its tail, growing as a power so most
+// of the head answers at once and the tail stretches.
+float FollowDelayOf(float flowLane, WaspStatic wasp)
+{
+    return _FollowDelay * pow(WaveRank(flowLane, wasp), _FollowDelayPower);
+}
+
+// The core's past `delay` seconds ago, between the two samples about it.
+float4 HistoryAt(float delay)
+{
+    float place = clamp(delay / max(_HistoryStep, Tiny), 0.0, HISTORY_SIZE - 1.0);
+    int newer = min((int)place, HISTORY_SIZE - 2);
+    return lerp(_History[newer], _History[newer + 1], place - newer);
+}
+
 // The wasp's place along the river at a moment: 0 at the head, by the core, 1 at the tail.
 float FlowLaneAt(WaspStatic wasp, float time)
 {
@@ -793,18 +848,24 @@ float FlatReach(float3 position)
     return length(position.xz - _CorePosition.xz);
 }
 
+// Metres from one point to another, on the ground.
+float FlatReachFrom(float3 center, float3 position)
+{
+    return length(position.xz - center.xz);
+}
+
 // The river and the eight blend in a straight line. SwarmGpuView lays the eight across the way the core last walked, so
 // the river behind it winds out to the lobes at its sides; but the core may then walk off any way, and a straight line
-// from a lobe ahead of it to the river behind it runs across the core. This keeps a blended goal at least leastReach
-// from the core, the nearer of its two ends, so it swings round the core at that distance instead of piling through
-// it. Both ends of the blend are unchanged, and a goal bound for the crossing, at the core, still gets there.
-float3 AroundCore(float3 goal, float leastReach)
+// from a lobe ahead of it to the river behind it runs across the eight's middle. This keeps a blended goal at least
+// leastReach from that middle, the nearer of its two ends, so it swings round it at that distance instead of piling
+// through it. Both ends of the blend are unchanged, and a goal bound for the crossing, at the middle, still gets there.
+float3 AroundPoint(float3 goal, float3 center, float leastReach)
 {
-    float2 away = goal.xz - _CorePosition.xz;
+    float2 away = goal.xz - center.xz;
     float reach = length(away);
     if (reach < leastReach && reach > Tiny)
     {
-        goal.xz = _CorePosition.xz + away * (leastReach / reach);
+        goal.xz = center.xz + away * (leastReach / reach);
     }
 
     return goal;
@@ -823,7 +884,7 @@ float EightLaneAt(float flowLane)
 // (along = r sin t, across = r sin t cos t), whose plane tilts _EightTilt about the line across it, so one lobe rises
 // as the other dips. It crosses itself _EightHeight over the core, so the core reads without any marker. Each wasp keeps
 // its place in the ribbon's flat cross-section, as in the river, so the ribbon has thickness.
-float3 EightTarget(WaspStatic wasp, float eightLane)
+float3 EightTarget(WaspStatic wasp, float eightLane, float3 middle, float yaw)
 {
     // The loop crosses itself twice a lap, so the lingering repeats twice a lap.
     float loop = eightLane - EightCrossingDwell * sin(eightLane * 2.0 * FullTurn) / (2.0 * FullTurn);
@@ -838,9 +899,9 @@ float3 EightTarget(WaspStatic wasp, float eightLane)
     float tiltSin;
     float tiltCos;
     sincos(_EightTilt, tiltSin, tiltCos);
-    float3 axis = RingOffset(_EightYaw, 1.0);
+    float3 axis = RingOffset(yaw, 1.0);
     float3 aside = cross(Up, axis);
-    float3 center = _CorePosition.xyz + axis * (along * tiltCos) + aside * across + Up * (_EightHeight + along * tiltSin);
+    float3 center = middle + axis * (along * tiltCos) + aside * across + Up * (_EightHeight + along * tiltSin);
     float3 tangent = axis * (alongSlope * tiltCos) + aside * acrossSlope + Up * (alongSlope * tiltSin);
 
     // The ribbon's cross-section: wide across the loop and less tall (EightSectionHeight).
@@ -854,7 +915,7 @@ float3 EightTarget(WaspStatic wasp, float eightLane)
     float angle = wasp.ringAngle + _SimTime * RiverSwirl;
     float radius = wasp.ringRadius * _EightThickness;
     float3 goal = center + side * (cos(angle) * radius) + lift * (sin(angle) * radius * EightSectionHeight);
-    goal.y = max(goal.y, _CorePosition.y + EightLowest);
+    goal.y = max(goal.y, middle.y + EightLowest);
     return goal;
 }
 
@@ -866,33 +927,69 @@ float EightCrossingHeat(float3 goal)
     return EightCrossingGlow * _EightShare * nearness * quiet;
 }
 
-// How far this wasp is wound into the eight: the whole swarm's _EightShare, the river's head first and its tail last.
-float WoundShare(float flowLane)
+// The wasp's place in the river behind the walking core: `back` metres further back along the path than its lane's place,
+// for the metres the core has walked within this wasp's delay. The river is drawn out of the eight it was wound into, so
+// it uses only the path walked since then (_RiverReach): its lanes squeeze into that much, and a walk off after a stand
+// never lays it back along the way the core came. The ribbon thins toward its tail (_TailWidth).
+float3 RiverPoint(WaspStatic wasp, float flowLane, float back)
 {
-    return smoothstep(0.0, 1.0, _EightShare * (1.0 + EightWindStagger) - flowLane * EightWindStagger);
-}
-
-// The free swarm's goal: the river behind the walking core, the eight round the standing one, or a blend while it
-// winds from one into the other. The eight also shows while the trail is still too short to hold a river, at the start
-// of a run; SwarmGpuView works that into _EightShare.
-float3 RiverTarget(WaspStatic wasp)
-{
-    float flowLane = FlowLaneAt(wasp, _SimTime);
-    float trailLength = TrailLength();
-    float along = lerp(RiverHeadGap, max(min(_RiverLength, trailLength), RiverHeadGap), flowLane);
+    float trailLength = TrailLength() + _TrailLead;
+    float span = max(min(_RiverLength, trailLength), RiverHeadGap) - RiverHeadGap;
+    float lanePlace = RiverHeadGap + span * flowLane;
+    float room = max(_RiverReach - back - RiverHeadGap, 0.0);
+    float squeeze = span > Tiny ? saturate(room / span) : 1.0;
 
     float3 center;
     float3 direction;
-    SampleTrail(along, center, direction);
+    SamplePath(back + RiverHeadGap + span * flowLane * squeeze, center, direction);
     float3 side = cross(Up, direction);
 
     float angle = wasp.ringAngle + _SimTime * RiverSwirl;
-    float radius = wasp.ringRadius * _RiverRadius;
-    float meander = _MeanderAmplitude * sin(along * MeanderWaveNumber - _SimTime * MeanderSpeed);
-    float3 river = center + Up * (FlyHeight + sin(angle) * radius * CrossSectionHeight) + side * (cos(angle) * radius + meander);
+    float radius = wasp.ringRadius * _RiverRadius * lerp(1.0, _TailWidth, flowLane * flowLane);
+    float meander = _MeanderAmplitude * sin(lanePlace * MeanderWaveNumber - _SimTime * MeanderSpeed);
+    return center + Up * (FlyHeight + sin(angle) * radius * CrossSectionHeight) + side * (cos(angle) * radius + meander);
+}
 
-    float3 eight = EightTarget(wasp, EightLaneAt(flowLane));
-    return AroundCore(lerp(river, eight, WoundShare(flowLane)), min(FlatReach(eight), FlatReach(river)));
+// The free swarm's goal (songs-v2 Q): the river behind the walking core, the eight round the standing one, or a blend
+// while it winds from one into the other. Each wasp reads the core's past its own delay ago: the metres the core has
+// walked since put its river place that much further back along the path; the eight it winds into stands where the core
+// stood then, turned as the eight was then; and the swarm's wound share then says how far it is wound. So a start
+// unwinds the eight from the river's head and draws the river out of it, a stop lets the tail flow on to the core and
+// curl in last, and a turn bends down the river. `wound` says how far this wasp is wound into the eight.
+// The eight also shows while the trail is still too short to hold a river, at the start of a run; SwarmGpuView works
+// that into _EightShare.
+float3 RiverTarget(WaspStatic wasp, out float wound)
+{
+    float flowLane = FlowLaneAt(wasp, _SimTime);
+    float4 past = HistoryAt(FollowDelayOf(flowLane, wasp));
+    wound = smoothstep(0.0, 1.0, past.y);
+
+    float3 middle = _CorePosition.xyz;
+    if (past.x > Tiny)
+    {
+        float3 direction;
+        SamplePath(past.x, middle, direction);
+    }
+
+    float3 river = middle;
+    if (wound < 1.0)
+    {
+        river = RiverPoint(wasp, flowLane, past.x);
+    }
+
+    float3 eight = middle;
+    if (wound > 0.0)
+    {
+        eight = EightTarget(wasp, EightLaneAt(flowLane), middle, _EightYaw + past.z);
+    }
+
+    float3 goal = wound <= 0.0 ? river : eight;
+    if (wound > 0.0 && wound < 1.0)
+    {
+        goal = AroundPoint(lerp(river, eight, wound), middle, min(FlatReachFrom(middle, eight), FlatReachFrom(middle, river)));
+    }
+
+    return goal;
 }
 
 // A tight halo over the core.
@@ -924,10 +1021,11 @@ float3 ColossusTarget(WaspStatic wasp)
 // Where a wasp wants to be in a whole-swarm form, which look it shows and whether the stiff shape spring holds it.
 // A Colossus without bones, Collapsed and the River itself are the river, which winds into the eight while the core
 // stands.
-float3 GoalOf(int form, WaspStatic wasp, out int look, out bool isShape)
+float3 GoalOf(int form, WaspStatic wasp, out int look, out bool isShape, out float wound)
 {
     look = form;
     isShape = true;
+    wound = 1.0;
     float3 goal = _CorePosition.xyz;
 
     if (form == FormHiveCall)
@@ -942,7 +1040,7 @@ float3 GoalOf(int form, WaspStatic wasp, out int look, out bool isShape)
     {
         look = FormRiver;
         isShape = false;
-        goal = RiverTarget(wasp);
+        goal = RiverTarget(wasp, wound);
     }
 
     return goal;
@@ -1974,10 +2072,24 @@ bool HasLaneWrapped(WaspStatic wasp)
     return floor(now) != floor(before);
 }
 
-// The Colossus builds from the feet up. Every other whole-swarm form sweeps along the river.
-float WaveOrderOf(int form, WaspStatic wasp)
+// The Colossus builds from the feet up. Every other whole-swarm form sweeps along the river as it was at the change,
+// from its head to its tail, a little ragged by each wasp's seed.
+float WaveOrderOf(int form, WaspStatic wasp, float startTime)
 {
-    return form == FormColossus ? wasp.height01 : wasp.lane;
+    float order = form == FormColossus ? wasp.height01 : FlowLaneAt(wasp, startTime);
+    return WaveRank(order, wasp);
+}
+
+// How far a wasp has eased into a whole-swarm form, `seconds` after its change's wave reached it.
+float HandOverOf(float seconds)
+{
+    return _FormBlendSeconds > 0.0 ? smoothstep(0.0, _FormBlendSeconds, seconds) : (seconds >= 0.0 ? 1.0 : 0.0);
+}
+
+// How many equal steps the springs cut this frame into, each at most _SpringStep long. The same for every thread.
+int SpringSteps()
+{
+    return clamp((int)ceil(_DeltaTime / max(_SpringStep, Tiny) - 0.001), 1, MOST_SPRING_STEPS);
 }
 
 float3 LimitSpeed(float3 velocity, float maxSpeed)
@@ -1997,28 +2109,86 @@ void Skim(float floorY, inout WaspDynamic body)
     }
 }
 
-// The spring of spec 9.4, stepped with semi-implicit Euler. Each wasp takes up a new whole-swarm form at
-// formStartTime + order x FormWaveSeconds, so a change sweeps along the river (or up the Colossus). A wasp in a live
-// slot's squad flies that slot's song instead, starting from and returning to where the whole-swarm form wants it.
+// The spring of spec 9.4, stepped with semi-implicit Euler in equal steps of at most _SpringStep, so the swarm takes the
+// same steps at 60 and at 120 frames a second (songs-v2 Q). Each wasp takes up a new whole-swarm form at
+// formStartTime + order x FormWaveSeconds and eases into it over _FormBlendSeconds, so a change sweeps along the river
+// (or up the Colossus) as a wave and no wasp's goal jumps. A wasp in a live slot's squad flies that slot's song instead,
+// starting from and returning to where the whole-swarm form wants it.
 void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
 {
-    float switchTime = _FormStartTime + WaveOrderOf(_Form, wasp) * _FormWaveSeconds;
-    bool hasSwitched = _SimTime >= switchTime;
-    float previousSwitchTime = _PreviousFormStartTime + WaveOrderOf(_PreviousForm, wasp) * _FormWaveSeconds;
-    int form = hasSwitched ? _Form : _PreviousForm;
-    float formSeconds = max(_SimTime - (hasSwitched ? switchTime : previousSwitchTime), 0.0);
+    float switchTime = _FormStartTime + WaveOrderOf(_Form, wasp, _FormStartTime) * _FormWaveSeconds;
+    float formSeconds = _SimTime - switchTime;
+    bool hasSwitched = formSeconds >= 0.0;
+    float handOver = HandOverOf(formSeconds);
 
-    int look;
-    bool isShape;
-    float3 goal = GoalOf(form, wasp, look, isShape);
-    float4 tint = TintOf(look, hasSwitched);
+    int look = FormRiver;
+    bool isShape = false;
+    float wound = 1.0;
+    float3 goal = Still;
+    float4 tint = float4(0.0, 0.0, 0.0, 0.0);
+    float stiffness = 0.0;
+    float damping = 0.0;
+    if (handOver > 0.0)
+    {
+        goal = GoalOf(_Form, wasp, look, isShape, wound);
+        tint = TintOf(look, true);
+        stiffness = isShape ? _ShapeSpring : _RiverSpring;
+        damping = isShape ? _ShapeDamping : _RiverDamping;
+    }
+
+    // Until the wave has eased it into the new form, the wasp flies (partly) the form before.
+    if (handOver < 1.0)
+    {
+        int previousLook;
+        bool wasShape;
+        float previousWound;
+        float3 previousGoal = GoalOf(_PreviousForm, wasp, previousLook, wasShape, previousWound);
+        float4 previousTint = TintOf(previousLook, false);
+        float previousStiffness = wasShape ? _ShapeSpring : _RiverSpring;
+        float previousDamping = wasShape ? _ShapeDamping : _RiverDamping;
+
+        // The change before may still be on its way through the swarm: a wasp its wave has not yet eased over still
+        // flies (partly) the form before that, so a quick second change (Hive Call ending as the stores run dry) never
+        // makes it jump.
+        float earlierSeconds = _SimTime - (_PreviousFormStartTime + WaveOrderOf(_PreviousForm, wasp, _PreviousFormStartTime) * _FormWaveSeconds);
+        float earlierHandOver = HandOverOf(earlierSeconds);
+        if (earlierHandOver < 1.0)
+        {
+            int earlierLook;
+            bool wasEarlierShape;
+            float earlierWound;
+            float3 earlierGoal = GoalOf(_EarlierForm, wasp, earlierLook, wasEarlierShape, earlierWound);
+            previousGoal = lerp(earlierGoal, previousGoal, earlierHandOver);
+            previousTint = lerp(TintOf(earlierLook, false), previousTint, earlierHandOver);
+            previousStiffness = lerp(wasEarlierShape ? _ShapeSpring : _RiverSpring, previousStiffness, earlierHandOver);
+            previousDamping = lerp(wasEarlierShape ? _ShapeDamping : _RiverDamping, previousDamping, earlierHandOver);
+            previousWound = lerp(earlierWound, previousWound, earlierHandOver);
+            if (earlierHandOver < 0.5)
+            {
+                previousLook = earlierLook;
+                wasShape = wasEarlierShape;
+            }
+        }
+
+        goal = lerp(previousGoal, goal, handOver);
+        tint = lerp(previousTint, tint, handOver);
+        stiffness = lerp(previousStiffness, stiffness, handOver);
+        damping = lerp(previousDamping, damping, handOver);
+        wound = lerp(previousWound, wound, handOver);
+        if (handOver < 0.5)
+        {
+            look = previousLook;
+            isShape = wasShape;
+        }
+    }
+
     if (look == FormRiver)
     {
         tint.w += EightCrossingHeat(goal);
     }
-    float stiffness = isShape ? _ShapeSpring : _RiverSpring;
-    float damping = isShape ? _ShapeDamping : _RiverDamping;
-    bool isWobbling = hasSwitched && formSeconds < _WobbleSeconds;
+
+    // A shape that has just formed wobbles a moment; the river and the eight flow on without one.
+    bool isWobbling = isShape && hasSwitched && formSeconds < _WobbleSeconds;
     bool isFlowing = !isShape;
     float maxSpeed = MaxSpeed;
     float floorY = NoFloor;
@@ -2065,7 +2235,7 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     // A wasp that leaves the river's tail starts again at its head. Flying there would draw a straight, sparse
     // second river across every curve of the path, so it jumps instead; in the crowd at the head nobody sees it. Round
     // the whole eight its place runs on without a break, so there it flies on.
-    if (isFlowing && HasLaneWrapped(wasp) && _EightShare < 1.0)
+    if (isFlowing && HasLaneWrapped(wasp) && wound < 1.0)
     {
         body.position = goal;
         body.velocity = Still;
@@ -2077,9 +2247,17 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     }
 
     float3 before = body.position;
-    float3 acceleration = stiffness * (goal - body.position) - 2.0 * damping * sqrt(stiffness) * body.velocity;
-    body.velocity = LimitSpeed(body.velocity + acceleration * _DeltaTime, maxSpeed);
-    body.position += body.velocity * _DeltaTime;
+    int steps = SpringSteps();
+    float stepSeconds = _DeltaTime / steps;
+    float dampingRate = 2.0 * damping * sqrt(stiffness);
+
+    [loop]
+    for (int step = 0; step < steps; step++)
+    {
+        float3 acceleration = stiffness * (goal - body.position) - dampingRate * body.velocity;
+        body.velocity = LimitSpeed(body.velocity + acceleration * stepSeconds, maxSpeed);
+        body.position += body.velocity * stepSeconds;
+    }
 
     // A pinned wasp is placed on its goal, or eased that far toward it, and its speed becomes what it moved: the draw
     // streaks it, and the spring takes its motion over when the pin lets go. While the pin eases in, the step is held to
