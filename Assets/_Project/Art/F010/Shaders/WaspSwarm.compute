@@ -2094,9 +2094,12 @@ static const float FistArcShare = 0.2;           // the flight's arc, as a share
 static const float FistMostArc = 2.0;            // metres
 static const float FistTakeOffSeconds = 0.06;    // seconds a wasp eases from its place on the arm onto the fist's path
 static const float FistBurstSeconds = 0.15;      // seconds the fist takes to burst open over the target
+static const float FistBurstMostShare = 0.25;    // ... and at most this share of a short regrow, the rest for the way home
 static const float FistCloudShare = 0.8;         // the burst's radius, as a share of the hit's radius
 static const float FistCloudSpin = 1.5;          // radians per second the burst turns while it waits to stream home
-static const float FistReturnSeconds = 0.55;     // seconds each wasp flies home; their starts spread over the regrow
+static const float FistReturnSeconds = 0.55;     // seconds each wasp flies home; their starts spread over the regrow.
+                                                 // A regrow shorter than the burst and one way home squeezes both, so
+                                                 // every wasp is home as the arm is whole and the rules let it launch
 static const float FistReturnArcShare = 0.15;
 static const float FistMostReturnArc = 1.5;      // metres
 static const float FistForearmShare = 0.55;      // the share of the regrow's starts the forearm's wasps take, before the hand's
@@ -2216,10 +2219,12 @@ FistSteer FistSteerOf(int hand, WaspStatic wasp, float3 formGoal)
     }
 
     float sinceHit = t - flight;
-    float3 cloud = lerp(bolt, ball * (FistCloudShare / FistBoltShare), smoothstep(0.0, FistBurstSeconds, sinceHit));
+    float burstSeconds = min(FistBurstSeconds, max(regrow, 0.0) * FistBurstMostShare);
+    float returnSeconds = max(min(FistReturnSeconds, regrow - burstSeconds), Tiny);
+    float3 cloud = lerp(bolt, ball * (FistCloudShare / FistBoltShare), smoothstep(0.0, max(burstSeconds, Tiny), sinceHit));
     float order = isForearm ? FistForearmShare * wasp.seed : FistForearmShare + (1.0 - FistForearmShare) * wasp.seed;
-    float homeStart = FistBurstSeconds + order * max(regrow - FistBurstSeconds - FistReturnSeconds, 0.0);
-    float home = saturate((sinceHit - homeStart) / FistReturnSeconds);
+    float homeStart = burstSeconds + order * max(regrow - burstSeconds - returnSeconds, 0.0);
+    float home = saturate((sinceHit - homeStart) / returnSeconds);
     if (home >= 1.0)
     {
         return steer;
@@ -2316,6 +2321,9 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
         damping = isShape ? _ShapeDamping : _RiverDamping;
     }
 
+    // Only the form being taken up wobbles as it forms: the shape a wasp is leaving keeps its blended springs.
+    bool isFormingShape = isShape;
+
     // Until the wave has eased it into the new form, the wasp flies (partly) the form before.
     if (handOver < 1.0)
     {
@@ -2367,8 +2375,9 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
         tint.w += EightCrossingHeat(goal);
     }
 
-    // A shape that has just formed wobbles a moment; the river and the eight flow on without one.
-    bool isWobbling = isShape && hasSwitched && formSeconds < _WobbleSeconds;
+    // A shape that has just formed wobbles a moment; the river and the eight flow on without one, and so does a wasp
+    // that is leaving a shape for the river through the first half of its hand-over.
+    bool isWobbling = isFormingShape && hasSwitched && formSeconds < _WobbleSeconds;
     bool isFlowing = !isShape;
     float maxSpeed = MaxSpeed;
     float floorY = NoFloor;
