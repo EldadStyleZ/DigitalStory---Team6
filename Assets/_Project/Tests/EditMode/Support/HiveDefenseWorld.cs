@@ -160,15 +160,15 @@ namespace DigitalStory.Tests.EditMode
         public HiveDefenseFrame Frame(
             Vector2 move = default,
             int holes = 0,
-            bool punch = false,
-            bool kick = false,
+            bool rightHand = false,
+            bool leftHand = false,
             Vector3? aim = null,
             bool isMouseLive = false,
             bool give = false,
             bool callWave = false,
             Vector3 cameraForward = default)
         {
-            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, punch, kick, isMouseLive, give, callWave, cameraForward);
+            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, rightHand, leftHand, isMouseLive, give, callWave, cameraForward);
         }
 
         /// <summary>Ticks with idle frames for the given seconds.</summary>
@@ -245,8 +245,8 @@ namespace DigitalStory.Tests.EditMode
                 frame.AimPoint,
                 frame.Move,
                 frame.PressedHoleMask,
-                frame.Punch,
-                frame.Kick,
+                frame.RightHand,
+                frame.LeftHand,
                 frame.IsMouseLive,
                 frame.Give,
                 frame.CallWave,

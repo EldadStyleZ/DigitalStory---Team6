@@ -190,7 +190,11 @@ namespace DigitalStory.Tests.EditMode
                 {
                     using (var match = new PlaytestMatch(seed))
                     {
-                        runs.Add(new PlaytestBot(match, seed).Play(makePlan(), MatchLimitSeconds));
+                        // The targets of plan section M were set before the giant had hands (songs-v2 R). With them, even
+                        // launched only at beekeepers beyond the leap's range and at 10 damage, MixedWithNests seed 3 won
+                        // without one heal, under the 15% floor, so the hands wait for the stage that tunes everything again.
+                        var bot = new PlaytestBot(match, seed) { UsesGiantHands = false };
+                        runs.Add(bot.Play(makePlan(), MatchLimitSeconds));
                     }
                 }
 

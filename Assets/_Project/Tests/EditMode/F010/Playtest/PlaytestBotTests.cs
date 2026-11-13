@@ -88,6 +88,24 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
+        // Songs-v2 R: as a player at a beekeeper too far to reach soon, the bot launches the giant's hands, and the fists hit.
+        [Test]
+        public void FightAsGiant_OverAMatch_LaunchesItsHandsAtFarBeekeepers()
+        {
+            using (var match = new PlaytestMatch(Seed))
+            {
+                var thrown = new List<ColossusHand>();
+                int landed = 0;
+                match.Session.ColossusFistThrown += thrown.Add;
+                match.Session.ColossusFistLanded += _ => landed++;
+
+                new PlaytestBot(match, Seed).Play(new MixedPlan(), MatchSeconds);
+
+                Assert.That(thrown, Does.Contain(ColossusHand.Right));
+                Assert.That(landed, Is.GreaterThan(0));
+            }
+        }
+
         // Flies the core toward a point, and hits one hive once, by a point of health, at the first tick from a given time.
         private sealed class HitOncePlan : IPlaytestPlan
         {

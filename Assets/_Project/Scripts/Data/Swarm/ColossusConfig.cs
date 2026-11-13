@@ -120,5 +120,33 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Min(0f), Tooltip("Speed, in metres per second, that the landing throws a beekeeper away from it.")]
         public float LeapKnockback { get; private set; } = 6f;
+
+        [field: Header("Hand launch (right: R2, right mouse or Space; left: L2, left mouse or Left Shift)")]
+        [field: SerializeField, Min(0.01f), Tooltip("Seconds the arm thrusts forward before the wasps of its hand and forearm leave as a fist.")]
+        public float FistThrustSeconds { get; private set; } = 0.25f;
+
+        [field: SerializeField, Min(0f), Tooltip("Damage of a fist to every beekeeper within its radius of where it hits. Grows with the level, as every blow of the giant.")]
+        public float FistDamage { get; private set; } = 20f;
+
+        [field: SerializeField, Min(0f), Tooltip("Radius, in metres around where the fist hits, of its blow. Grows with the level.")]
+        public float FistRadius { get; private set; } = 1.2f;
+
+        [field: SerializeField, Min(0f), Tooltip("Speed, in metres per second, that a fist throws a beekeeper away from where it hits. None at first, so the hand launch adds damage only, and the giant's balance holds until a later tuning.")]
+        public float FistKnockback { get; private set; }
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds a beekeeper the fist hits, and does not kill, stays stunned. None at first, as for the throw.")]
+        public float FistStunSeconds { get; private set; }
+
+        [field: SerializeField, Min(0.1f), Tooltip("Metres per second a fist flies.")]
+        public float FistSpeed { get; private set; } = 24f;
+
+        [field: SerializeField, Min(0.01f), Tooltip("The fewest seconds a fist flies, so even a target at the giant's feet sees the fist leave the arm.")]
+        public float FistLeastFlightSeconds { get; private set; } = 0.2f;
+
+        [field: SerializeField, Min(0f), Tooltip("The most metres from the giant a fist flies: auto-aim picks a beekeeper within it, and an aimed point beyond it is pulled in to it. Grows with the level.")]
+        public float FistRange { get; private set; } = 14f;
+
+        [field: SerializeField, Min(0.1f), Tooltip("Seconds from a fist's hit until its arm has grown back and can launch again. The arm is missing until then.")]
+        public float FistRegrowSeconds { get; private set; } = 2f;
     }
 }

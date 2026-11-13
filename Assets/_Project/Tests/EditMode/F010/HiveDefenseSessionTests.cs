@@ -591,7 +591,7 @@ namespace DigitalStory.Tests.EditMode
             var landed = new List<ColossusAttack>();
             _world.Session.ColossusAttackLanded += landed.Add;
 
-            _world.Session.Tick(_world.Frame(punch: true), HiveDefenseWorld.Step);
+            _world.Session.Tick(_world.Frame(holes: HiveDefenseFrame.HoleBit(PunchHole)), HiveDefenseWorld.Step);
             _world.Run(_world.Colossus.PunchHitDelay + 0.1f);
 
             Assert.That(landed, Is.EqualTo(new[] { ColossusAttack.Punch }));
@@ -606,7 +606,7 @@ namespace DigitalStory.Tests.EditMode
             BeekeeperBrain keeper = GiantFacingOneStick();
             JsonUtility.FromJsonOverwrite("{\"<ColossusDamageShare>k__BackingField\":0.5}", _world.Fury);
 
-            _world.Session.Tick(_world.Frame(punch: true), HiveDefenseWorld.Step);
+            _world.Session.Tick(_world.Frame(holes: HiveDefenseFrame.HoleBit(PunchHole)), HiveDefenseWorld.Step);
             _world.Run(_world.Colossus.PunchHitDelay + 0.1f);
 
             Assert.That(keeper.Health, Is.EqualTo(_world.Stick.Health - _world.Colossus.PunchDamage).Within(0.01f));
@@ -1036,38 +1036,46 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Caster.RecentNoteCount, Is.EqualTo(0));
         }
 
-        // Space or the left mouse button still punches, and Left Shift or the right button still kicks.
-        [TestCase(true, false, ColossusAttack.Punch)]
-        [TestCase(false, true, ColossusAttack.Kick)]
-        public void Giant_PunchAndKickButtons_StillPunchAndKick(bool punch, bool kick, ColossusAttack move)
+        // Songs-v2 R: the buttons that punched and kicked (Space and the mouse buttons, R2 and L2) launch the hands now; only
+        // J punches and only K kicks.
+        [TestCase(true, false, ColossusHand.Right)]
+        [TestCase(false, true, ColossusHand.Left)]
+        public void Giant_HandButtons_LaunchTheirHandAndNeitherPunchNorKick(bool rightHand, bool leftHand, ColossusHand hand)
         {
             _world = new HiveDefenseWorld();
             HiveDefenseSession session = _world.Session;
             var started = new List<ColossusAttack>();
+            var thrown = new List<ColossusHand>();
             session.ColossusAttackStarted += started.Add;
+            session.ColossusFistThrown += thrown.Add;
             Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
             _world.Run(HiveDefenseWorld.Step);
 
-            _world.RunWith(HiveDefenseWorld.Step, _world.Frame(punch: punch, kick: kick));
+            _world.RunWith(HiveDefenseWorld.Step, _world.Frame(rightHand: rightHand, leftHand: leftHand));
 
-            Assert.That(started, Is.EqualTo(new[] { move }));
+            Assert.That(started, Is.Empty);
+            Assert.That(thrown, Is.EqualTo(new[] { hand }));
         }
 
-        // K and Left Shift pressed on one tick are one kick, not a K K phrase.
+        // Songs-v2 R: Left Shift (L2, the left mouse button) is the left hand's launch now, not a kick, so K with it on one
+        // tick is one kick and one left fist, and the kick and the fist never wait for each other.
         [Test]
-        public void Giant_KAndTheKickButtonOnOneTick_AreOneKick()
+        public void Giant_KAndTheLeftHandOnOneTick_AreOneKickAndOneLeftFist()
         {
             _world = new HiveDefenseWorld();
             HiveDefenseSession session = _world.Session;
             var started = new List<ColossusAttack>();
+            var thrown = new List<ColossusHand>();
             session.ColossusAttackStarted += started.Add;
+            session.ColossusFistThrown += thrown.Add;
             Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
             _world.Run(HiveDefenseWorld.Step);
 
-            _world.RunWith(HiveDefenseWorld.Step, _world.Frame(holes: HiveDefenseFrame.HoleBit(KickHole), kick: true));
+            _world.RunWith(HiveDefenseWorld.Step, _world.Frame(holes: HiveDefenseFrame.HoleBit(KickHole), leftHand: true));
             _world.Run(1f);
 
             Assert.That(started, Is.EqualTo(new[] { ColossusAttack.Kick }));
+            Assert.That(thrown, Is.EqualTo(new[] { ColossusHand.Left }));
         }
 
         [Test]
@@ -1247,13 +1255,18 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.ColossusFacing.z, Is.EqualTo(1f).Within(1e-4f), "it faces the way it leaps");
 
             // In the air it can neither be steered nor attack.
-            _world.RunWith(giant.LeapSeconds * 0.5f, _world.Frame(move: new Vector2(1f, 0f), punch: true, aim: aim, isMouseLive: true));
+            var thrown = new List<ColossusHand>();
+            session.ColossusFistThrown += thrown.Add;
+            _world.RunWith(
+                giant.LeapSeconds * 0.5f,
+                _world.Frame(move: new Vector2(1f, 0f), holes: HiveDefenseFrame.HoleBit(PunchHole), rightHand: true, leftHand: true, aim: aim, isMouseLive: true));
 
             Assert.That(session.IsColossusLeaping, Is.True);
             Assert.That(session.ColossusPosition.x, Is.EqualTo(0f).Within(1e-4f), "not steered");
             Assert.That(session.ColossusPosition.z, Is.GreaterThan(2f).And.LessThan(8f), "on its way");
             Assert.That(session.CorePosition.z, Is.EqualTo(session.ColossusPosition.z).Within(1e-4f), "the core rides along");
             Assert.That(started.Count, Is.EqualTo(2), "no punch in the air");
+            Assert.That(thrown, Is.Empty, "no hand launch in the air");
 
             _world.Run((giant.LeapSeconds * 0.5f) + 0.1f);
 
@@ -2608,7 +2621,7 @@ namespace DigitalStory.Tests.EditMode
             _world.Run(HiveDefenseWorld.Step);
             BeekeeperBrain keeper = session.ActiveBeekeeper(0);
 
-            session.Tick(_world.Frame(punch: true), HiveDefenseWorld.Step);
+            session.Tick(_world.Frame(holes: HiveDefenseFrame.HoleBit(PunchHole)), HiveDefenseWorld.Step);
             _world.Run(_world.Colossus.PunchHitDelay + 0.1f);
 
             Assert.That(session.ColossusSizeScale, Is.EqualTo(afterANest ? 1.12f : 1f).Within(1e-5f), "the giant's size follows the level");
@@ -2893,7 +2906,7 @@ namespace DigitalStory.Tests.EditMode
             var hits = new List<SongHit>();
             session.SongLanded += hits.Add;
 
-            session.Tick(_world.Frame(punch: true), HiveDefenseWorld.Step);
+            session.Tick(_world.Frame(holes: HiveDefenseFrame.HoleBit(PunchHole)), HiveDefenseWorld.Step);
             _world.Run(_world.Colossus.PunchHitDelay + 0.1f);
 
             Assert.That(hits.Count, Is.EqualTo(1));
