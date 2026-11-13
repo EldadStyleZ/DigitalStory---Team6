@@ -200,6 +200,13 @@ namespace DigitalStory.Tests.PlayMode
         private const float GiantOrbitSeconds = 0.6f;
         private const float MaxMoveWaitSeconds = 2f;
 
+        // When the fist pictures are taken: near the end of the thrust, halfway through the flight, a third into the regrow, and
+        // a moment after the arm is whole.
+        private const float FistThrustShotShare = 0.8f;
+        private const float FistFlightShotShare = 0.5f;
+        private const float FistMissingShotShare = 0.3f;
+        private const float FistRegrownShotSeconds = 0.3f;
+
         // The giant forms 10 m south of the middle, facing north, with three stunned sticks 8 to 12 m ahead of it.
         private static readonly Vector3 GiantCore = new Vector3(0f, 0f, -10f);
 
@@ -1159,6 +1166,73 @@ namespace DigitalStory.Tests.PlayMode
                 _root.HoldMove(Vector2.zero);
                 EndHudOverlay(overlay, document, original, copy);
             }
+        }
+
+        // Songs-v2 R: the giant's right hand launch, with the HUD over it: the arm thrusting, the fist in flight to the stick
+        // auto-aim picks, the arm missing as the wasps stream back, and the arm whole again.
+        [UnityTest]
+        public IEnumerator Snapshot20_Fist()
+        {
+            yield return Stage(GiantCore, GiantBeekeepers);
+            FollowCamera follow = UnityEngine.Object.FindAnyObjectByType<FollowCamera>();
+            HiveDefenseSession session = _root.Session;
+            session.Fury.AddDamage(FuryDamage);
+            yield return Play(KeysOf<ColossusSong>());
+            float waited = 0f;
+            while ((!session.IsColossusActive || follow.ChaseBlend < 1f - SwoopTolerance) && waited < MaxColossusWaitSeconds + SettleCameraSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.IsColossusActive, Is.True, "The Colossus keys at full Fury did not form the Colossus.");
+            RenderTexture overlay = BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy);
+            try
+            {
+                yield return Wait(GiantSettleSeconds);
+                ColossusConfig giant = LoadColossus();
+                _root.PressHand(ColossusHand.Right);
+                yield return null;
+                Assert.That(session.FistPhaseOf(ColossusHand.Right), Is.EqualTo(FistPhase.Thrust), "the right hand did not thrust");
+                yield return Wait(giant.FistThrustSeconds * FistThrustShotShare);
+                yield return ReadHud("snap-20-fist-thrust");
+
+                yield return WaitForFist(session, FistPhase.Flight);
+                yield return Wait(session.FistFlightSeconds(ColossusHand.Right) * FistFlightShotShare);
+                yield return ReadHud("snap-20-fist-flight");
+
+                yield return WaitForFist(session, FistPhase.Regrow);
+                yield return Wait(giant.FistRegrowSeconds * FistMissingShotShare);
+                yield return ReadHud("snap-20-fist-missing");
+
+                yield return WaitForFist(session, FistPhase.Ready);
+                yield return Wait(FistRegrownShotSeconds);
+                Assert.That(session.IsColossusActive, Is.True, "the giant ended before the last picture");
+                yield return ReadHud("snap-20-fist-regrown");
+            }
+            finally
+            {
+                EndHudOverlay(overlay, document, original, copy);
+            }
+        }
+
+        private static IEnumerator WaitForFist(HiveDefenseSession session, FistPhase phase)
+        {
+            float waited = 0f;
+            while (session.FistPhaseOf(ColossusHand.Right) != phase && waited < MaxMoveWaitSeconds * 2f)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.FistPhaseOf(ColossusHand.Right), Is.EqualTo(phase), "the right fist never reached " + phase);
+        }
+
+        private static ColossusConfig LoadColossus()
+        {
+            var config = UnityEditor.AssetDatabase.LoadAssetAtPath<ColossusConfig>("Assets/_Project/GameData/F010/ColossusConfig.asset");
+            Assert.That(config, Is.Not.Null, "No ColossusConfig asset.");
+            return config;
         }
 
         // Presses one of the giant's keys, waits for its move to start and then for the moment of the picture.

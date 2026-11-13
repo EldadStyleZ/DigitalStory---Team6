@@ -62,6 +62,18 @@ namespace DigitalStory.Editor
         private const string KickTrigger = "Kick";
         private const string HitTrigger = "Hit";
 
+        // Songs-v2 R: the hand launch plays the punch clip on that side, mirrored for the hand the clip does not punch with,
+        // and played at the speed that brings the punch to its full reach as the fist leaves (ColossusConfig.FistThrustSeconds).
+        private const string FistRightTrigger = "FistRight";
+        private const string FistLeftTrigger = "FistLeft";
+        private const float FistRecoverSeconds = 0.2f;
+        private const float FistBlendSeconds = 0.06f;
+        private const float FistLeaveBlendSeconds = 0.25f;
+        private const float LeastFistSpeed = 0.5f;
+        private const float MostFistSpeed = 8f;
+        private const float MeasureStepSeconds = 1f / 60f;
+        private const float LeastPunchMetres = 0.05f;
+
         private const string IdleClip = "Idle";
         private const string RunClip = "Run";
 
@@ -270,7 +282,7 @@ namespace DigitalStory.Editor
             BeekeeperView stickView = MakeBeekeeperPrefab("F010StickBeekeeper", beekeeperSource, controller, false);
             BeekeeperView smokerView = MakeBeekeeperPrefab("F010SmokerBeekeeper", beekeeperSource, controller, true);
             Debug.Log("[F010] Prefabs F010StickBeekeeper and F010SmokerBeekeeper saved.");
-            MixamoKit mixamo = PrepareMixamo();
+            MixamoKit mixamo = PrepareMixamo(colossus);
             GameObject colossusPrefab = MakeColossusPrefab(beekeeperSource, controller, colossus, mixamo);
             BakeSamples(colossusPrefab, swarm, samples);
             Debug.Log("[F010] Prefab F010Colossus saved and its samples baked.");
@@ -588,7 +600,7 @@ namespace DigitalStory.Editor
 
         // Reads Art/Mixamo. Returns null, and leaves the beekeeper's rig as the puppet, when the folder is missing or holds no
         // character model or no idle or walking clip.
-        private static MixamoKit PrepareMixamo()
+        private static MixamoKit PrepareMixamo(ColossusConfig colossus)
         {
             if (!AssetDatabase.IsValidFolder(MixamoFolder))
             {
@@ -681,7 +693,7 @@ namespace DigitalStory.Editor
             kit.HeavyPunch = heavy ?? punch;
             kit.Kick = FirstClip(clipFiles, MixamoClip.Kick);
             kit.Hit = FirstClip(clipFiles, MixamoClip.Hit);
-            kit.Controller = BuildColossusController(kit);
+            kit.Controller = BuildColossusController(kit, colossus.FistThrustSeconds);
 
             var names = new StringBuilder();
             AppendClipName(names, "Idle", kit.Idle);
@@ -893,7 +905,7 @@ namespace DigitalStory.Editor
 
         // Speed above the threshold walks. Each attack trigger comes from Any State and returns to Idle at the clip's end.
         // A missing clip leaves its trigger without a state.
-        private static AnimatorController BuildColossusController(MixamoKit kit)
+        private static AnimatorController BuildColossusController(MixamoKit kit, float thrustSeconds)
         {
             var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ColossusControllerPath);
             if (controller == null)
@@ -924,6 +936,8 @@ namespace DigitalStory.Editor
             controller.AddParameter(HeavyPunchTrigger, AnimatorControllerParameterType.Trigger);
             controller.AddParameter(KickTrigger, AnimatorControllerParameterType.Trigger);
             controller.AddParameter(HitTrigger, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(FistRightTrigger, AnimatorControllerParameterType.Trigger);
+            controller.AddParameter(FistLeftTrigger, AnimatorControllerParameterType.Trigger);
 
             // Without an idle clip the walk clip's first pose is held while the giant stands.
             AnimatorState idle = machine.AddState("Idle");
@@ -949,9 +963,142 @@ namespace DigitalStory.Editor
             AddAttackState(machine, idle, "HeavyPunch", HeavyPunchTrigger, kit.HeavyPunch);
             AddAttackState(machine, idle, "Kick", KickTrigger, kit.Kick);
             AddAttackState(machine, idle, "Hit", HitTrigger, kit.Hit);
+            AddFistStates(controller, machine, idle, kit, thrustSeconds);
 
             EditorUtility.SetDirty(controller);
             return controller;
+        }
+
+        // The heavy punch's clip, measured on the character: which hand it punches with and when that hand reaches furthest
+        // from the hips. The fist state on that side plays it as it is and the other mirrored, both fast enough that the reach
+        // comes as the fist leaves, and each returns to idle a moment after.
+        private static void AddFistStates(AnimatorController controller, AnimatorStateMachine machine, AnimatorState idle, MixamoKit kit, float thrustSeconds)
+        {
+            AnimationClip clip = kit.HeavyPunch;
+            if (clip == null)
+            {
+                Debug.LogWarning("[F010] Mixamo folder has no punch clip: the giant's hand launch plays no thrust.");
+                return;
+            }
+
+            bool isMeasured = MeasurePunch(controller, kit, out bool isRightHanded, out float reachSeconds, out float reachMetres);
+            if (!isMeasured)
+            {
+                isRightHanded = true;
+                reachSeconds = thrustSeconds;
+                Debug.LogWarning($"[F010] Could not measure {clip.name} on the character, so the hand launch plays it at its own speed as a right-handed punch.");
+            }
+
+            float speed = Mathf.Clamp(reachSeconds / Mathf.Max(thrustSeconds, MeasureStepSeconds), LeastFistSpeed, MostFistSpeed);
+            float exitTime = Mathf.Clamp01((reachSeconds + (FistRecoverSeconds * speed)) / Mathf.Max(clip.length, MeasureStepSeconds));
+            AddFistState(machine, idle, "FistRight", FistRightTrigger, clip, !isRightHanded, speed, exitTime);
+            AddFistState(machine, idle, "FistLeft", FistLeftTrigger, clip, isRightHanded, speed, exitTime);
+            string hand = isRightHanded ? "right" : "left";
+            Debug.Log(
+                $"[F010] Hand launch: {clip.name} punches with the {hand} hand, reaching {reachMetres:0.00} m from the hips at {reachSeconds:0.00} s; "
+                + $"played at speed {speed:0.00}, so the reach comes {reachSeconds / speed:0.00} s after the press (thrust {thrustSeconds:0.00} s).");
+        }
+
+        private static void AddFistState(
+            AnimatorStateMachine machine, AnimatorState idle, string stateName, string trigger, AnimationClip clip, bool isMirrored, float speed, float exitTime)
+        {
+            AnimatorState state = machine.AddState(stateName);
+            state.motion = clip;
+            state.mirror = isMirrored;
+            state.speed = speed;
+            state.writeDefaultValues = true;
+
+            AnimatorStateTransition enter = machine.AddAnyStateTransition(state);
+            enter.hasExitTime = false;
+            enter.hasFixedDuration = true;
+            enter.duration = FistBlendSeconds;
+            enter.canTransitionToSelf = true;
+            enter.AddCondition(AnimatorConditionMode.If, 0f, trigger);
+
+            AnimatorStateTransition leave = state.AddTransition(idle);
+            leave.hasExitTime = true;
+            leave.exitTime = exitTime;
+            leave.hasFixedDuration = true;
+            leave.duration = FistLeaveBlendSeconds;
+        }
+
+        // Plays the HeavyPunch state on a copy of the character and follows both hands on the ground, away from the hips.
+        private static bool MeasurePunch(
+            AnimatorController controller, MixamoKit kit, out bool isRightHanded, out float reachSeconds, out float reachMetres)
+        {
+            isRightHanded = true;
+            reachSeconds = 0f;
+            reachMetres = 0f;
+            if (kit.Avatar == null || !kit.Avatar.isHuman || kit.Character == null)
+            {
+                return false;
+            }
+
+            var instance = (GameObject)Object.Instantiate(kit.Character);
+            try
+            {
+                Animator animator = instance.GetComponent<Animator>();
+                if (animator == null)
+                {
+                    animator = instance.AddComponent<Animator>();
+                }
+
+                animator.avatar = kit.Avatar;
+                animator.runtimeAnimatorController = controller;
+                animator.applyRootMotion = false;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Rebind();
+                Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+                Transform right = animator.GetBoneTransform(HumanBodyBones.RightHand);
+                Transform left = animator.GetBoneTransform(HumanBodyBones.LeftHand);
+                if (hips == null || right == null || left == null)
+                {
+                    return false;
+                }
+
+                animator.Play("HeavyPunch", 0, 0f);
+                animator.Update(0f);
+                float rightStart = GroundDistance(hips, right);
+                float leftStart = GroundDistance(hips, left);
+                float rightMost = 0f;
+                float leftMost = 0f;
+                float rightAt = 0f;
+                float leftAt = 0f;
+                float length = kit.HeavyPunch.length;
+                for (float time = MeasureStepSeconds; time <= length; time += MeasureStepSeconds)
+                {
+                    animator.Update(MeasureStepSeconds);
+                    float rightReach = GroundDistance(hips, right) - rightStart;
+                    float leftReach = GroundDistance(hips, left) - leftStart;
+                    if (rightReach > rightMost)
+                    {
+                        rightMost = rightReach;
+                        rightAt = time;
+                    }
+
+                    if (leftReach > leftMost)
+                    {
+                        leftMost = leftReach;
+                        leftAt = time;
+                    }
+                }
+
+                isRightHanded = rightMost >= leftMost;
+                reachMetres = isRightHanded ? rightMost : leftMost;
+                reachSeconds = isRightHanded ? rightAt : leftAt;
+                return reachMetres > LeastPunchMetres && reachSeconds > 0f;
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+
+        private static float GroundDistance(Transform from, Transform to)
+        {
+            Vector3 offset = to.position - from.position;
+            offset.y = 0f;
+            return offset.magnitude;
         }
 
         private static void AddSpeedTransition(AnimatorState from, AnimatorState to, AnimatorConditionMode mode)

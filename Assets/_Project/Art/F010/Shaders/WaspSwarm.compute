@@ -33,6 +33,10 @@
 // A frame is cut into at most this many spring steps (SpringSteps); at the longest frame, 1/30 s, a 1/240 s step needs 8.
 #define MOST_SPRING_STEPS 16
 
+// Matches SwarmGpuView.FistCount and SwarmGpuView.VectorsPerFist: the giant's two hands, right then left.
+#define FIST_COUNT 2
+#define FIST_VECTORS 3
+
 // 48 bytes, the same layout as SwarmGpuView.WaspStatic and the struct in WaspInstanced.shader. Written once by the CPU.
 struct WaspStatic
 {
@@ -98,6 +102,17 @@ float4 _SlotFlash;
 // target lives, or the moment it fell, in _SimTime. Only the first _StingTargetCount are set.
 float4 _StingTargets[STING_MOST];
 int _StingTargetCount;
+
+// The giant's hand launches (SwarmGpuView.SetFist, songs-v2 R), FIST_VECTORS float4s a hand, every time in _SimTime:
+//   [0] xyz where the fist left the arm (the hand as it launched), w the launch, or -1 while no fist is out
+//   [1] xyz the target on the ground, live, w the hit
+//   [2] x the end of the regrow, y the moment the giant ended with the fist still flying (-1 while it did not),
+//       z the hit's radius
+float4 _Fists[FIST_COUNT * FIST_VECTORS];
+
+// The Colossus bones each hand's fist is made of, its forearm, hand and fingers: x to y the right's, z to w the left's;
+// -1 for none.
+float4 _FistBones;
 
 // The Gust pulse: xy the centre on the ground (world x and z), z its start in _SimTime, w its radius (0: no gust yet).
 float4 _Pulse;
@@ -2063,6 +2078,171 @@ float3 GustPush(float3 goal, WaspStatic wasp, out float heat)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// The giant's hand launch (songs-v2 R). At the end of the arm's thrust the wasps of that hand and its forearm leave the
+// arm in turn, the hand first, and fly as one tight fist on a low arc; all of them reach the target together, so the bolt
+// tightens as it flies, and it speeds up into the hit. It bursts open over the target to the hit's radius, turns there,
+// and streams home over the regrow, the forearm's wasps first and the fingers' last, so the arm grows again from the
+// elbow. A fist the giant's end cuts off in flight never hits: its wasps ease back into the swarm from where it was.
+
+static const float FistBoltShare = 0.3;          // the bolt's radius, as a share of the hit's radius: a tight fist
+static const float FistStretch = 1.8;            // the bolt's length along its flight, as a share of its width
+static const float FistStagger = 0.1;            // seconds from the first wasp leaving the arm to the last, at most
+static const float FistStaggerShare = 0.4;       // ... and at most this share of a short flight
+static const float FistChestHeight = 1.0;        // metres above the target's feet the fist flies at
+static const float FistArcShare = 0.2;           // the flight's arc, as a share of its length: high enough that the chase
+                                                 // camera, behind the giant, sees the fist rise over its shoulder
+static const float FistMostArc = 2.0;            // metres
+static const float FistTakeOffSeconds = 0.06;    // seconds a wasp eases from its place on the arm onto the fist's path
+static const float FistBurstSeconds = 0.15;      // seconds the fist takes to burst open over the target
+static const float FistCloudShare = 0.8;         // the burst's radius, as a share of the hit's radius
+static const float FistCloudSpin = 1.5;          // radians per second the burst turns while it waits to stream home
+static const float FistReturnSeconds = 0.55;     // seconds each wasp flies home; their starts spread over the regrow
+static const float FistReturnArcShare = 0.15;
+static const float FistMostReturnArc = 1.5;      // metres
+static const float FistForearmShare = 0.55;      // the share of the regrow's starts the forearm's wasps take, before the hand's
+static const float FistDropSeconds = 0.6;        // seconds a fist cut off in flight takes to ease back into the swarm
+static const float FistFloor = 0.15;             // metres above the ground the burst keeps
+
+struct FistSteer
+{
+    float3 goal;    // already blended with the form's goal by share
+    float share;    // 0 while the wasp flies its form, 1 while the fist holds it
+    float heat;
+    float pin;
+    bool isFast;
+};
+
+// The hand whose fist the wasp is part of, 0 right or 1 left, or -1.
+int FistHandOf(WaspStatic wasp)
+{
+    if (!HasColossusPlace(wasp))
+    {
+        return -1;
+    }
+
+    int bone = BoneOf(wasp);
+    if (bone >= (int)_FistBones.x && bone <= (int)_FistBones.y)
+    {
+        return 0;
+    }
+
+    return bone >= (int)_FistBones.z && bone <= (int)_FistBones.w ? 1 : -1;
+}
+
+bool IsForearm(WaspStatic wasp, int hand)
+{
+    return BoneOf(wasp) == (int)(hand == 0 ? _FistBones.x : _FistBones.z);
+}
+
+// A point in the unit ball, the same for the wasp every frame, spread evenly through the ball's volume.
+float3 BallPoint(WaspStatic wasp)
+{
+    float height = wasp.level01 * 2.0 - 1.0;
+    float around = wasp.phase01 * FullTurn;
+    float ring = sqrt(saturate(1.0 - height * height));
+    return float3(cos(around) * ring, height, sin(around) * ring) * pow(max(wasp.seed, Tiny), 1.0 / 3.0);
+}
+
+float3 TurnAboutUp(float3 offset, float angle)
+{
+    float turnSin;
+    float turnCos;
+    sincos(angle, turnSin, turnCos);
+    return float3(offset.x * turnCos - offset.z * turnSin, offset.y, offset.x * turnSin + offset.z * turnCos);
+}
+
+float3 FistPath(float3 from, float3 to, float along, float arcShare, float mostArc)
+{
+    float arc = min(length(to - from) * arcShare, mostArc);
+    return lerp(from, to, along) + Up * (sin(along * HalfTurn) * arc);
+}
+
+FistSteer FistSteerOf(int hand, WaspStatic wasp, float3 formGoal)
+{
+    FistSteer steer;
+    steer.goal = formGoal;
+    steer.share = 0.0;
+    steer.heat = 0.0;
+    steer.pin = 0.0;
+    steer.isFast = false;
+
+    int at = hand * FIST_VECTORS;
+    float4 launch = _Fists[at];
+    float t = _SimTime - launch.w;
+    if (launch.w < 0.0 || t < 0.0)
+    {
+        return steer;
+    }
+
+    float4 hit = _Fists[at + 1];
+    float4 grow = _Fists[at + 2];
+    float flight = max(hit.w - launch.w, Tiny);
+    float regrow = grow.x - hit.w;
+    float dropped = grow.y < 0.0 ? -1.0 : grow.y - launch.w;
+    bool isDropped = dropped >= 0.0 && dropped < flight;
+
+    float3 from = launch.xyz;
+    float3 to = hit.xyz + Up * FistChestHeight;
+    float3 way = to - from;
+    float wayLength = length(way);
+    float3 forward = wayLength > Tiny ? way / wayLength : float3(0.0, 0.0, 1.0);
+    float3 ball = BallPoint(wasp) * (FistBoltShare * grow.z);
+    float3 bolt = ball + forward * (dot(ball, forward) * (FistStretch - 1.0));
+
+    bool isForearm = IsForearm(wasp, hand);
+    float leaves = (isForearm ? 0.5 + 0.5 * wasp.seed : 0.5 * wasp.seed) * min(FistStagger, flight * FistStaggerShare);
+    float flown = isDropped ? min(t, dropped) : t;
+    float along = saturate((flown - leaves) / max(flight - leaves, Tiny));
+    float3 flying = FistPath(from, to, along * along, FistArcShare, FistMostArc) + bolt;
+
+    if (isDropped)
+    {
+        float leftArm = smoothstep(0.0, FistTakeOffSeconds, dropped - leaves);
+        steer.share = leftArm * (1.0 - smoothstep(0.0, FistDropSeconds, t - dropped));
+        steer.goal = lerp(formGoal, flying, steer.share);
+        steer.heat = HoldHeat;
+        return steer;
+    }
+
+    if (t < flight)
+    {
+        float takeOff = smoothstep(0.0, FistTakeOffSeconds, t - leaves);
+        steer.share = takeOff;
+        steer.goal = lerp(formGoal, flying, takeOff);
+        steer.pin = takeOff;
+        steer.isFast = true;
+        steer.heat = lerp(WindUpStartHeat, WindUpHeat, along);
+        return steer;
+    }
+
+    float sinceHit = t - flight;
+    float3 cloud = lerp(bolt, ball * (FistCloudShare / FistBoltShare), smoothstep(0.0, FistBurstSeconds, sinceHit));
+    float order = isForearm ? FistForearmShare * wasp.seed : FistForearmShare + (1.0 - FistForearmShare) * wasp.seed;
+    float homeStart = FistBurstSeconds + order * max(regrow - FistBurstSeconds - FistReturnSeconds, 0.0);
+    float home = saturate((sinceHit - homeStart) / FistReturnSeconds);
+    if (home >= 1.0)
+    {
+        return steer;
+    }
+
+    steer.share = 1.0;
+    steer.isFast = true;
+    if (sinceHit < homeStart)
+    {
+        steer.goal = to + TurnAboutUp(cloud, sinceHit * FistCloudSpin);
+        steer.heat = sinceHit < ImpactSeconds ? ImpactHeat : HoldHeat;
+        return steer;
+    }
+
+    float eased = smoothstep(0.0, 1.0, home);
+    float3 waited = to + TurnAboutUp(cloud, homeStart * FistCloudSpin);
+    steer.goal = FistPath(waited, formGoal, eased, FistReturnArcShare, FistMostReturnArc);
+    steer.pin = smoothstep(0.0, FistTakeOffSeconds, sinceHit - homeStart);
+    steer.heat = HoldHeat * (1.0 - eased);
+    return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 
 // True in the one frame a wasp's river lane wraps from the tail (1) back to the core (0).
 bool HasLaneWrapped(WaspStatic wasp)
@@ -2195,6 +2375,28 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     float tintSharpness = TintSharpness;
     float pin = 0.0;
     bool isFlashing = false;
+
+    // The giant's hand launch: the wasps of a launched hand fly its fist instead of their places on the arm.
+    int fistHand = FistHandOf(wasp);
+    if (fistHand >= 0)
+    {
+        FistSteer fist = FistSteerOf(fistHand, wasp, goal);
+        if (fist.share > 0.0)
+        {
+            goal = fist.goal;
+            tint.a = lerp(tint.a, fist.heat, saturate(fist.share));
+            isWobbling = false;
+            isFlowing = false;
+            pin = saturate(fist.pin);
+            floorY = FistFloor;
+            if (fist.isFast)
+            {
+                stiffness = StrikeSpring;
+                damping = StrikeDamping;
+                maxSpeed = StrikeMaxSpeed;
+            }
+        }
+    }
 
     int slot = SlotOf(wasp);
     if (slot != NoSlot)

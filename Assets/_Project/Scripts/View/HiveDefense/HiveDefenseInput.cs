@@ -25,8 +25,8 @@ namespace DigitalStory.View
         private const int HoleButtonMask = 0b1111;
         private const int GiveBit = 1 << 4;
         private const int StartBit = 1 << 5;
-        private const int PunchBit = 1 << 6;
-        private const int KickBit = 1 << 7;
+        private const int RightHandBit = 1 << 6;
+        private const int LeftHandBit = 1 << 7;
 
         // Holes 0 to 3, lowest first: H J K L, then the top row, then the keypad.
         private static readonly KeyCode[] LetterKeys = { KeyCode.H, KeyCode.J, KeyCode.K, KeyCode.L };
@@ -45,7 +45,15 @@ namespace DigitalStory.View
             ("E", "RB"),
             ("Enter", "Start"),
             ("R", "Start"),
+            ("Right click or Space", "RT"),
+            ("Left click or Shift", "LT"),
+            ("RMB", "RT"),
+            ("LMB", "LT"),
         };
+
+        // The device the player held when the match restarted, for the next scene's input to start with, so the HUD keeps
+        // naming the controls in their hands (songs-v2 R). A restart reloads the scene; a first load finds none.
+        private static ControlDevice? s_carriedDevice;
 
         private Camera _camera;
         private GamepadConfig _gamepad;
@@ -71,11 +79,17 @@ namespace DigitalStory.View
         /// </summary>
         public Vector2 LocalMove { get; private set; }
 
-        /// <summary>True only on the frame the punch was pressed (Space, left mouse or the right trigger).</summary>
-        public bool PunchPressed { get; private set; }
+        /// <summary>
+        /// True only on the frame the right hand's launch was pressed (the right trigger, the right mouse button or Space). Only
+        /// the giant uses it.
+        /// </summary>
+        public bool RightHandPressed { get; private set; }
 
-        /// <summary>True only on the frame the kick was pressed (Left Shift, right mouse or the left trigger).</summary>
-        public bool KickPressed { get; private set; }
+        /// <summary>
+        /// True only on the frame the left hand's launch was pressed (the left trigger, the left mouse button or Left Shift).
+        /// Only the giant uses it.
+        /// </summary>
+        public bool LeftHandPressed { get; private set; }
 
         /// <summary>True only on the frame restart was pressed (R or Start).</summary>
         public bool RestartPressed { get; private set; }
@@ -106,6 +120,15 @@ namespace DigitalStory.View
 
         /// <summary>The device the player used last, the keyboard and mouse until a controller is used. The HUD names its controls.</summary>
         public ControlDevice LastDevice { get; private set; }
+
+        /// <summary>
+        /// Keeps <paramref name="device"/> for the input of the scene that loads next, which starts with it as
+        /// <see cref="LastDevice"/>. The root calls it as it restarts the match; the next input takes it once.
+        /// </summary>
+        public static void CarryOverRestart(ControlDevice device)
+        {
+            s_carriedDevice = device;
+        }
 
         /// <summary>The key word of each hole (H J K L), lowest first, for the HUD.</summary>
         public static IReadOnlyList<string> HoleKeyNames => HoleNames;
@@ -189,11 +212,20 @@ namespace DigitalStory.View
             LastDeviceChanged?.Invoke(next);
         }
 
+        private void Awake()
+        {
+            if (s_carriedDevice.HasValue)
+            {
+                LastDevice = s_carriedDevice.Value;
+                s_carriedDevice = null;
+            }
+        }
+
         private void Update()
         {
             Vector2 keysMove = ReadMove();
-            bool isPunchKey = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
-            bool isKickKey = Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.LeftShift);
+            bool isRightHandKey = Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Space);
+            bool isLeftHandKey = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.LeftShift);
             bool isRestartKey = Input.GetKeyDown(KeyCode.R);
             bool isGiveKey = Input.GetKey(KeyCode.E);
             bool isCallWaveKey = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
@@ -204,14 +236,14 @@ namespace DigitalStory.View
             int padPressed = ReadPad();
 
             LocalMove = Vector2.ClampMagnitude(keysMove + _padMove, 1f);
-            PunchPressed = isPunchKey || (padPressed & PunchBit) != 0;
-            KickPressed = isKickKey || (padPressed & KickBit) != 0;
+            RightHandPressed = isRightHandKey || (padPressed & RightHandBit) != 0;
+            LeftHandPressed = isLeftHandKey || (padPressed & LeftHandBit) != 0;
             RestartPressed = isRestartKey || (padPressed & StartBit) != 0;
             GiveHeld = isGiveKey || (_padHeld & GiveBit) != 0;
             CallWavePressed = isCallWaveKey || (padPressed & StartBit) != 0;
             IsMouseLive = _isMouseLive || _isStickAiming;
 
-            bool isKeyboardUsed = keysMove.sqrMagnitude > 0f || isPunchKey || isKickKey || isRestartKey || isGiveKey
+            bool isKeyboardUsed = keysMove.sqrMagnitude > 0f || isRightHandKey || isLeftHandKey || isRestartKey || isGiveKey
                 || isCallWaveKey || isMouseHeld || hasMouseMoved || holeKeys != 0;
             bool isGamepadUsed = _padHeld != 0 || _padMove.sqrMagnitude > 0f || _isStickAiming;
             RecordUse(isKeyboardUsed, isGamepadUsed);
@@ -319,8 +351,8 @@ namespace DigitalStory.View
             bits |= pad.buttonNorth.isPressed ? 1 << 3 : 0;
             bits |= pad.rightShoulder.isPressed ? GiveBit : 0;
             bits |= pad.startButton.isPressed ? StartBit : 0;
-            bits |= pad.rightTrigger.isPressed ? PunchBit : 0;
-            bits |= pad.leftTrigger.isPressed ? KickBit : 0;
+            bits |= pad.rightTrigger.isPressed ? RightHandBit : 0;
+            bits |= pad.leftTrigger.isPressed ? LeftHandBit : 0;
             return bits;
         }
 

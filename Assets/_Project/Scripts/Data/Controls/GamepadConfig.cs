@@ -35,6 +35,9 @@ namespace DigitalStory.Data
         [field: SerializeField, Tooltip("A heavy one when the giant's slam or its leap lands.")]
         public RumblePulse HeavyPulse { get; private set; } = new RumblePulse(0.9f, 0.6f, 0.3f);
 
+        [field: SerializeField, Tooltip("A firm one when a giant's fist leaves its arm, and again when it hits.")]
+        public RumblePulse FistPulse { get; private set; } = new RumblePulse(0.6f, 0.5f, 0.12f);
+
         [field: SerializeField, Tooltip("A long, low one when a hive is destroyed or the swarm collapses.")]
         public RumblePulse LossPulse { get; private set; } = new RumblePulse(0.7f, 0.1f, 0.9f);
     }

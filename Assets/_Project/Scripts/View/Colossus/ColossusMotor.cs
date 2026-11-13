@@ -44,6 +44,8 @@ namespace DigitalStory.View
         private static readonly int HeavyPunchHash = Animator.StringToHash("HeavyPunch");
         private static readonly int KickHash = Animator.StringToHash("Kick");
         private static readonly int HitHash = Animator.StringToHash("Hit");
+        private static readonly int FistRightHash = Animator.StringToHash("FistRight");
+        private static readonly int FistLeftHash = Animator.StringToHash("FistLeft");
         private static readonly int ColorHash = Shader.PropertyToID("_Color");
         private static readonly Color FeetGizmoColor = Color.cyan;
         private static readonly Color HeadGizmoColor = Color.magenta;
@@ -91,6 +93,12 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The roar's ring colour. Softer than the slam's.")]
         private Color _roarRingColor = new Color(1f, 0.85f, 0.4f, 0.45f);
 
+        [SerializeField, Tooltip("The colour of the marker where a leap (L L) will land, shown from the take-off until the landing. Its alpha is the brightest it gets.")]
+        private Color _leapMarkerColor = new Color(1f, 0.45f, 0.1f, 0.9f);
+
+        [SerializeField, Range(0f, 1f), Tooltip("How much wider than the landing's reach the leap marker starts; it closes to the reach as the giant comes down.")]
+        private float _leapMarkerSpread = 0.25f;
+
         private HiveDefenseSession _session;
         private SwarmGpuView _swarm;
         private ColossusConfig _config;
@@ -120,6 +128,12 @@ namespace DigitalStory.View
         private bool _isShowing;
         private Vector3 _lastPosition;
         private Vector3 _pivotRestScale = Vector3.one;
+        private Transform _leapMarker;
+        private Renderer _leapMarkerRenderer;
+        private bool _hasFistTriggers;
+        private readonly int[] _fistHandBones = { -1, -1 };
+        private readonly bool[] _isFistOut = new bool[2];
+        private readonly Vector3[] _fistOrigins = new Vector3[2];
         private bool _isPulsing;
         private float _pulseSeconds;
         private float _pulseRiseSeconds;
@@ -139,6 +153,22 @@ namespace DigitalStory.View
 
         /// <summary>The move the puppet is playing on its own (slam, roar, spin kick or leap), or None, for tests and pictures.</summary>
         public ColossusAttack CurrentMove => _move;
+
+        /// <summary>True when the controller has the FistRight and FistLeft triggers, so a hand launch plays its arm's thrust.</summary>
+        public bool HasFistTriggers => _hasFistTriggers;
+
+        /// <summary>True while the marker shows where the leap will land, from its take-off until it lands, for tests.</summary>
+        public bool IsLeapMarkerShowing => _leapMarkerRenderer != null && _leapMarkerRenderer.enabled;
+
+        /// <summary>Where the leap marker stands, for tests.</summary>
+        public Vector3 LeapMarkerPosition => _leapMarker != null ? _leapMarker.position : Vector3.zero;
+
+        /// <summary>Where the hand bone is now, the place a fist leaves from, for tests and pictures. Zero without the bone.</summary>
+        public Vector3 HandPosition(ColossusHand hand)
+        {
+            int bone = _fistHandBones[(int)hand];
+            return _bones != null && bone >= 0 && bone < _bones.Length ? _bones[bone].position : Vector3.zero;
+        }
 
         private void LateUpdate()
         {
@@ -168,8 +198,10 @@ namespace DigitalStory.View
             FollowRules(deltaTime);
             AdvanceMove(deltaTime);
             AdvanceRings(deltaTime);
+            ShowLeapMarker();
             AdvancePulse(deltaTime);
             SendBones();
+            SendFists();
         }
 
         // Shows the samples in Play Mode, so a person can check they sit on the body (spec 9.5). Colour runs from the
@@ -249,12 +281,30 @@ namespace DigitalStory.View
             _swarm = swarm;
             _config = config;
             _session.ColossusAttackStarted += HandleColossusAttackStarted;
+            _session.ColossusFistThrown += HandleColossusFistThrown;
 
             // A swarm view that switched itself off (no compute shaders) has already said so, and holds no wasps.
             if (swarm.enabled)
             {
                 swarm.SetColossusSamples(_sampleBones, _sampleOffsets, _sampleHeights);
+                FindFistBones(samples);
             }
+        }
+
+        // Songs-v2 R: the wasps on each forearm, hand and fingers are that hand's fist. A rig without them launches nothing
+        // visible, but the rules still fly and hit.
+        private void FindFistBones(ColossusSampleSet samples)
+        {
+            bool hasRight = ColossusArmBones.Find(samples.BoneNames, ColossusHand.Right, out int rightFirst, out int rightLast, out int rightHand);
+            bool hasLeft = ColossusArmBones.Find(samples.BoneNames, ColossusHand.Left, out int leftFirst, out int leftLast, out int leftHand);
+            if (!hasRight || !hasLeft)
+            {
+                Debug.LogWarning($"{name}: {samples.name} has no forearm and hand bones on both sides, so a hand launch shows no fist.", this);
+            }
+
+            _fistHandBones[(int)ColossusHand.Right] = rightHand;
+            _fistHandBones[(int)ColossusHand.Left] = leftHand;
+            _swarm.SetFistBones(rightFirst, rightLast, leftFirst, leftLast);
         }
 
         private void RequireSceneReferences()
@@ -365,6 +415,7 @@ namespace DigitalStory.View
 
             bool hasSpeed = false;
             _hasHitTrigger = false;
+            int fistTriggers = 0;
             int triggerCount = 0;
             AnimatorControllerParameter[] parameters = _animator.parameters;
             for (int index = 0; index < parameters.Length; index++)
@@ -382,7 +433,14 @@ namespace DigitalStory.View
                 {
                     _hasHitTrigger = true;
                 }
+                else if (parameter.type == AnimatorControllerParameterType.Trigger
+                    && (parameter.nameHash == FistRightHash || parameter.nameHash == FistLeftHash))
+                {
+                    fistTriggers++;
+                }
             }
+
+            _hasFistTriggers = fistTriggers == 2;
 
             if (!hasSpeed)
             {
@@ -436,6 +494,12 @@ namespace DigitalStory.View
             HideRings();
             EndPulse();
             _animator.enabled = false;
+            _isFistOut[0] = false;
+            _isFistOut[1] = false;
+            if (_swarm != null)
+            {
+                _swarm.DropFists();
+            }
         }
 
         private void FollowRules(float deltaTime)
@@ -470,6 +534,54 @@ namespace DigitalStory.View
             }
 
             _swarm.SetColossusBones(_boneMatrices, _bones.Length);
+        }
+
+        // Each frame the giant stands, after its bones: where each hand's fist is. The fist leaves from where the hand is on
+        // the frame it launches, and that place is kept for its whole flight.
+        private void SendFists()
+        {
+            if (!_swarm.enabled)
+            {
+                return;
+            }
+
+            float radius = _config.FistRadius * _session.ColossusSizeScale;
+            for (int hand = 0; hand < _isFistOut.Length; hand++)
+            {
+                var side = (ColossusHand)hand;
+                float since = _session.FistSecondsSinceLaunch(side);
+                if (since < 0f)
+                {
+                    _isFistOut[hand] = false;
+                }
+                else if (!_isFistOut[hand])
+                {
+                    _isFistOut[hand] = true;
+                    _fistOrigins[hand] = HandPosition(side);
+                }
+
+                _swarm.SetFist(
+                    hand, _fistOrigins[hand], _session.FistTarget(side), since, _session.FistFlightSeconds(side),
+                    _config.FistRegrowSeconds, radius);
+            }
+        }
+
+        private void HandleColossusFistThrown(ColossusHand hand)
+        {
+            if (!_session.IsColossusActive)
+            {
+                return;
+            }
+
+            if (!_isShowing)
+            {
+                Show();
+            }
+
+            if (_hasFistTriggers)
+            {
+                _animator.SetTrigger(hand == ColossusHand.Right ? FistRightHash : FistLeftHash);
+            }
         }
 
         private void HandleColossusAttackStarted(ColossusAttack attack)
@@ -731,6 +843,7 @@ namespace DigitalStory.View
             _ringBlock = new MaterialPropertyBlock();
             _slamRing = BuildRing("SlamRing", out _slamRingRenderer);
             _roarRing = BuildRing("RoarRing", out _roarRingRenderer);
+            _leapMarker = BuildRing("LeapMarker", out _leapMarkerRenderer);
         }
 
         private Transform BuildRing(string ringName, out Renderer ringRenderer)
@@ -780,10 +893,43 @@ namespace DigitalStory.View
             ringRenderer.enabled = true;
         }
 
+        // Songs-v2 R, small fix 1: from the take-off, when the rules have chosen where the leap lands, until the landing, a ring
+        // as wide as the landing's reach marks the spot. It starts a little wider and brightens as it closes, as the giant
+        // comes down.
+        private void ShowLeapMarker()
+        {
+            if (_leapMarkerRenderer == null)
+            {
+                return;
+            }
+
+            bool isLeaping = _session.IsColossusLeaping;
+            _leapMarkerRenderer.enabled = isLeaping;
+            if (!isLeaping)
+            {
+                return;
+            }
+
+            float flown = _move == ColossusAttack.LeapSlam ? Mathf.Clamp01(_moveSeconds / MoveDuration()) : 0f;
+            float radius = Mathf.Max(MinimumRingRadius, _config.LeapRadius * _session.ColossusSizeScale) * (1f + (_leapMarkerSpread * (1f - flown)));
+            Vector3 target = _session.ColossusLeapTarget;
+            _leapMarker.position = new Vector3(target.x, RingHeight, target.z);
+            _leapMarker.localScale = new Vector3(radius, 1f, radius);
+            Color color = _leapMarkerColor;
+            color.a *= Mathf.Lerp(0.55f, 1f, flown);
+            _ringBlock.SetColor(ColorHash, color);
+            _leapMarkerRenderer.SetPropertyBlock(_ringBlock);
+        }
+
         private void HideRings()
         {
             _slamRingAge = -1f;
             _roarRingAge = -1f;
+            if (_leapMarkerRenderer != null)
+            {
+                _leapMarkerRenderer.enabled = false;
+            }
+
             if (_slamRingRenderer != null)
             {
                 _slamRingRenderer.enabled = false;
@@ -830,6 +976,7 @@ namespace DigitalStory.View
             if (_session != null)
             {
                 _session.ColossusAttackStarted -= HandleColossusAttackStarted;
+                _session.ColossusFistThrown -= HandleColossusFistThrown;
             }
         }
     }

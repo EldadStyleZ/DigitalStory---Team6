@@ -41,6 +41,9 @@ namespace DigitalStory.View
         [SerializeField, Range(0f, 1f), Tooltip("How hard the camera pushes in when one of the giant's heavy blows lands (the ground slam, the leap slam or the third punch), 0 to 1. The camera's Liveliness scales it.")]
         private float _giantPushIn = 0.5f;
 
+        [SerializeField, Range(0f, 1f), Tooltip("How hard the camera pushes in as a giant's fist leaves its arm, 0 to 1: a small push. The camera's Liveliness scales it.")]
+        private float _fistPushIn = 0.25f;
+
         [Header("Freeze")]
         [SerializeField, Min(0f), Tooltip("Seconds the swarm's motion holds still on a heavy hit.")]
         private float _heavyFreezeSeconds = 0.05f;
@@ -136,6 +139,7 @@ namespace DigitalStory.View
             _session.SongCastNow += OnSongCastNow;
             _session.Forms.Landed += OnFormLanded;
             _session.ColossusAttackLanded += OnColossusLanded;
+            _session.ColossusFistLaunched += OnColossusFistLaunched;
             _isReady = true;
         }
 
@@ -180,6 +184,7 @@ namespace DigitalStory.View
                 _session.SongCastNow -= OnSongCastNow;
                 _session.Forms.Landed -= OnFormLanded;
                 _session.ColossusAttackLanded -= OnColossusLanded;
+                _session.ColossusFistLaunched -= OnColossusFistLaunched;
             }
         }
 
@@ -248,6 +253,12 @@ namespace DigitalStory.View
             {
                 _camera.PushIn(_giantPushIn);
             }
+        }
+
+        // Songs-v2 R: a small push as the fist leaves; its hit is heavy, felt through SongLanded like the giant's other blows.
+        private void OnColossusFistLaunched(ColossusHand hand)
+        {
+            _camera.PushIn(_fistPushIn);
         }
 
         private void OnSongCastNow(int song)

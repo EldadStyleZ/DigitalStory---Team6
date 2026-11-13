@@ -47,6 +47,7 @@
         </ui:VisualElement>
         <ui:VisualElement name="giant-hint" class="giant-hint" picking-mode="Ignore">
             <ui:Label name="giant-moves-line" text="" class="giant-line" picking-mode="Ignore" />
+            <ui:Label name="giant-hands-line" text="" class="giant-line giant-line--hands" picking-mode="Ignore" />
             <ui:Label name="giant-phrases-line" text="" class="giant-line giant-line--small" picking-mode="Ignore" />
         </ui:VisualElement>
         <ui:VisualElement name="giant-strip" class="giant-strip" picking-mode="Ignore">
@@ -64,6 +65,18 @@
                     <ui:Label text="H roar" class="giant-mark-label" picking-mode="Ignore" />
                     <ui:VisualElement class="giant-mark" picking-mode="Ignore">
                         <ui:VisualElement name="giant-roar-fill" class="giant-mark-fill" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="giant-mark-row" picking-mode="Ignore">
+                    <ui:Label name="giant-left-label" text="LMB fist" class="giant-mark-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="giant-mark" picking-mode="Ignore">
+                        <ui:VisualElement name="giant-left-fill" class="giant-mark-fill" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="giant-mark-row" picking-mode="Ignore">
+                    <ui:Label name="giant-right-label" text="RMB fist" class="giant-mark-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="giant-mark" picking-mode="Ignore">
+                        <ui:VisualElement name="giant-right-fill" class="giant-mark-fill" picking-mode="Ignore" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

@@ -59,6 +59,8 @@ MonoBehaviour:
   _ringSeconds: 0.45
   _slamRingColor: {r: 1, g: 0.6, b: 0.15, a: 0.85}
   _roarRingColor: {r: 1, g: 0.85, b: 0.4, a: 0.45}
+  _leapMarkerColor: {r: 1, g: 0.45, b: 0.1, a: 0.9}
+  _leapMarkerSpread: 0.25
 --- !u!1001 &4044213481476458974
 PrefabInstance:
   m_ObjectHideFlags: 0

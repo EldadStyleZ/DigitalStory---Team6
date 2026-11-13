@@ -63,6 +63,14 @@ namespace DigitalStory.View
         // LateUpdates a cast flash lasts: one bright frame or two, then the squad cools back to its song's heat.
         private const int FlashFrames = 2;
 
+        // The giant's two hands (DigitalStory.Logic.ColossusHand), three float4s each. Match FIST_COUNT and FIST_VECTORS in
+        // WaspSwarm.compute. NoFist is "no fist out" in a launch's w and "not dropped" in the drop.
+        private const int FistCount = 2;
+        private const int VectorsPerFist = 3;
+        private const int FistHitOffset = 1;
+        private const int FistGrowOffset = 2;
+        private const float NoFist = -1f;
+
         // The figure-eight round the standing core turns this fast about it, so it never looks frozen. Once the core walks
         // on, it swings back across the walk at up to EightAlignSpeed, so the river forming behind the core unwinds from
         // its sides instead of through the core.
@@ -108,6 +116,8 @@ namespace DigitalStory.View
         private static readonly int SlotFlashId = Shader.PropertyToID("_SlotFlash");
         private static readonly int StingTargetsId = Shader.PropertyToID("_StingTargets");
         private static readonly int StingTargetCountId = Shader.PropertyToID("_StingTargetCount");
+        private static readonly int FistsId = Shader.PropertyToID("_Fists");
+        private static readonly int FistBonesId = Shader.PropertyToID("_FistBones");
         private static readonly int PulseId = Shader.PropertyToID("_Pulse");
         private static readonly int RiverColorId = Shader.PropertyToID("_RiverColor");
         private static readonly int CastColorId = Shader.PropertyToID("_CastColor");
@@ -249,6 +259,15 @@ namespace DigitalStory.View
         private readonly Vector4[] _stingTargetVectors = new Vector4[MostStings];
         private int _stingTargetCount;
 
+        // The giant's fists as WaspSwarm.compute reads them (_Fists and _FistBones). SetFist keeps the rules' clocks until
+        // LateUpdate has stepped this view's clock, as SetSlot does, and only then turns them into its times.
+        private readonly Vector4[] _fistVectors = new Vector4[FistCount * VectorsPerFist];
+        private readonly float[] _fistSinceLaunch = new float[FistCount];
+        private readonly float[] _fistFlight = new float[FistCount];
+        private readonly float[] _fistRegrow = new float[FistCount];
+        private readonly bool[] _isFistFresh = new bool[FistCount];
+        private Vector4 _fistBones = new Vector4(NoFist, NoFist, NoFist, NoFist);
+
         // The Gust pulse, kept the same way: the rules' seconds since the Gust until LateUpdate turns them into a start.
         private Vector3 _gustCenter;
         private float _gustRadius;
@@ -280,6 +299,9 @@ namespace DigitalStory.View
 
         /// <summary>True while <see cref="Freeze"/> holds the swarm still, for tests and debugging.</summary>
         public bool IsFrozen => _freezeSeconds > 0f;
+
+        /// <summary>True while the hand's fist is out, from its launch until its wasps are all home, for tests and debugging.</summary>
+        public bool IsFistOut(int hand) => _fistVectors[FistIndex(hand) * VectorsPerFist].w >= 0f && _simTime < _fistVectors[(hand * VectorsPerFist) + FistGrowOffset].x;
 
         /// <summary>How many sting targets the last <see cref="SetStingTargets"/> gave, for tests and debugging.</summary>
         public int StingTargetCount => _stingTargetCount;
@@ -315,6 +337,7 @@ namespace DigitalStory.View
             _simTime += stepSeconds;
             TrackStanding(deltaTime);
             TimeSlots();
+            TimeFists();
             TimeGust();
 
             int trailCount = _trail.CopyTo(_trailPoints);
@@ -638,6 +661,65 @@ namespace DigitalStory.View
             _secondHive = new Vector4(second.x, second.y, second.z, secondStands ? StandsFlag : FallenFlag);
         }
 
+        /// <summary>
+        /// Which Colossus bones each hand's fist is made of, its forearm, hand and fingers (ColossusArmBones), as indices into the
+        /// bones of <see cref="SetColossusBones"/>; -1 first and last for a hand that has none. Call once with the samples.
+        /// </summary>
+        public void SetFistBones(int rightFirst, int rightLast, int leftFirst, int leftLast)
+        {
+            _fistBones = new Vector4(rightFirst, rightLast, leftFirst, leftLast);
+        }
+
+        /// <summary>
+        /// The hand's fist this frame (songs-v2 R), in the rules' clock: call it every frame the giant stands. While the fist is
+        /// not out (<paramref name="secondsSinceLaunch"/> below 0) its wasps keep their places on the arm. Once it is, they leave
+        /// the arm, fly from <paramref name="origin"/> to <paramref name="target"/> to hit after <paramref name="flightSeconds"/>,
+        /// burst to <paramref name="hitRadius"/> and stream home over <paramref name="regrowSeconds"/>.
+        /// </summary>
+        /// <param name="hand">The hand: (int)ColossusHand.Right or Left.</param>
+        /// <param name="origin">Where the fist left the arm: the hand as it launched.</param>
+        /// <param name="target">Where it flies, on the ground; the shader aims at the chest above it.</param>
+        /// <param name="secondsSinceLaunch">Seconds since the fist left, or below 0 while it is not out.</param>
+        /// <param name="flightSeconds">Seconds from the launch to the hit.</param>
+        /// <param name="regrowSeconds">Seconds from the hit until the arm is whole again.</param>
+        /// <param name="hitRadius">The hit's radius in metres, which the fist bursts to.</param>
+        /// <exception cref="ArgumentOutOfRangeException">The hand is not 0 or 1.</exception>
+        public void SetFist(int hand, Vector3 origin, Vector3 target, float secondsSinceLaunch, float flightSeconds, float regrowSeconds, float hitRadius)
+        {
+            int at = FistIndex(hand) * VectorsPerFist;
+            if (!(secondsSinceLaunch >= 0f))
+            {
+                _fistVectors[at].w = NoFist;
+                _isFistFresh[hand] = false;
+                return;
+            }
+
+            _fistVectors[at] = new Vector4(origin.x, origin.y, origin.z, _fistVectors[at].w);
+            _fistVectors[at + FistHitOffset] = new Vector4(target.x, target.y, target.z, _fistVectors[at + FistHitOffset].w);
+            _fistVectors[at + FistGrowOffset] = new Vector4(_fistVectors[at + FistGrowOffset].x, NoFist, Mathf.Max(hitRadius, 0f), 0f);
+            _fistSinceLaunch[hand] = secondsSinceLaunch;
+            _fistFlight[hand] = Mathf.Max(flightSeconds, 0f);
+            _fistRegrow[hand] = Mathf.Max(regrowSeconds, 0f);
+            _isFistFresh[hand] = true;
+        }
+
+        /// <summary>
+        /// The giant has ended: a fist still flying never hits, and its wasps ease back into the swarm from where it was. A fist
+        /// that has hit streams home as it would have. Nothing more need be fed for either.
+        /// </summary>
+        public void DropFists()
+        {
+            for (int hand = 0; hand < FistCount; hand++)
+            {
+                int at = hand * VectorsPerFist;
+                _isFistFresh[hand] = false;
+                if (_fistVectors[at].w >= 0f && _simTime < _fistVectors[at + FistHitOffset].w)
+                {
+                    _fistVectors[at + FistGrowOffset].y = _simTime;
+                }
+            }
+        }
+
         /// <summary>Where the swarm was last hit. Lost wasps scatter away from it.</summary>
         public void SetLastHit(Vector3 point) => _lastHit = point;
 
@@ -935,6 +1017,15 @@ namespace DigitalStory.View
             }
 
             _stingTargetCount = 0;
+            for (int hand = 0; hand < FistCount; hand++)
+            {
+                int at = hand * VectorsPerFist;
+                _fistVectors[at] = new Vector4(0f, 0f, 0f, NoFist);
+                _fistVectors[at + FistHitOffset] = Vector4.zero;
+                _fistVectors[at + FistGrowOffset] = new Vector4(0f, NoFist, 0f, 0f);
+                _isFistFresh[hand] = false;
+            }
+
             _gustRadius = 0f;
             _gustStartTime = 0f;
             _isGustFresh = false;
@@ -987,6 +1078,36 @@ namespace DigitalStory.View
             float released = _slotReleasedSeconds[slot];
             _slotVectors[header].y = _simTime - _slotSeconds[slot];
             _slotVectors[header + ParamBOffset].w = released < 0f ? NotReleased : Mathf.Max(_simTime - released, 0f);
+        }
+
+        // The fists' launches, hits and regrows into this view's times, as for the slots.
+        private void TimeFists()
+        {
+            for (int hand = 0; hand < FistCount; hand++)
+            {
+                if (!_isFistFresh[hand])
+                {
+                    continue;
+                }
+
+                int at = hand * VectorsPerFist;
+                float launch = _simTime - _fistSinceLaunch[hand];
+                float hit = launch + _fistFlight[hand];
+                _fistVectors[at].w = launch;
+                _fistVectors[at + FistHitOffset].w = hit;
+                _fistVectors[at + FistGrowOffset].x = hit + _fistRegrow[hand];
+                _isFistFresh[hand] = false;
+            }
+        }
+
+        private static int FistIndex(int hand)
+        {
+            if (hand < 0 || hand >= FistCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(hand), hand, "A hand is 0 (right) or 1 (left).");
+            }
+
+            return hand;
         }
 
         // The same for the Gust. A Gust that is over keeps its start, so the shader's pulse finishes on its own.
@@ -1183,6 +1304,8 @@ namespace DigitalStory.View
             compute.SetVector(SlotFlashId, new Vector4(FlashOf((int)SongSlot.Post), FlashOf((int)SongSlot.Guard), FlashOf((int)SongSlot.Strike), 0f));
             compute.SetVectorArray(StingTargetsId, _stingTargetVectors);
             compute.SetInt(StingTargetCountId, _stingTargetCount);
+            compute.SetVectorArray(FistsId, _fistVectors);
+            compute.SetVector(FistBonesId, _fistBones);
             compute.SetVector(PulseId, new Vector4(_gustCenter.x, _gustCenter.z, _gustStartTime, _gustRadius));
         }
 

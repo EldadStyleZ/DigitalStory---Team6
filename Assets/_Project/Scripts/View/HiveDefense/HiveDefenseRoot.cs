@@ -228,6 +228,8 @@ namespace DigitalStory.View
         private bool _isReady;
         private bool _isWaveCalled;
         private bool _isGiveHeld;
+        private bool _isRightHandPressed;
+        private bool _isLeftHandPressed;
         private Vector2 _heldMove;
 
         /// <summary>The running match, for the views, tests and debugging.</summary>
@@ -261,6 +263,27 @@ namespace DigitalStory.View
             if (_isReady)
             {
                 _isWaveCalled = true;
+            }
+        }
+
+        /// <summary>
+        /// Presses one of the giant's hand launches, as its trigger, mouse button or key does (songs-v2 R). Read on the next
+        /// tick; it does nothing while no giant stands. For tests and the benchmark; the buttons work either way.
+        /// </summary>
+        public void PressHand(ColossusHand hand)
+        {
+            if (!_isReady)
+            {
+                return;
+            }
+
+            if (hand == ColossusHand.Right)
+            {
+                _isRightHandPressed = true;
+            }
+            else
+            {
+                _isLeftHandPressed = true;
             }
         }
 
@@ -381,6 +404,7 @@ namespace DigitalStory.View
 
         private void Restart()
         {
+            HiveDefenseInput.CarryOverRestart(_input.LastDevice);
             Scene scene = SceneManager.GetActiveScene();
             if (scene.buildIndex >= 0)
             {
@@ -517,13 +541,15 @@ namespace DigitalStory.View
                 aimPoint,
                 localMove,
                 _holeMask,
-                _input.PunchPressed,
-                _input.KickPressed,
+                _input.RightHandPressed || _isRightHandPressed,
+                _input.LeftHandPressed || _isLeftHandPressed,
                 _input.IsMouseLive,
                 _input.GiveHeld || _isGiveHeld,
                 _isWaveCalled,
                 cameraForward);
             _holeMask = 0;
+            _isRightHandPressed = false;
+            _isLeftHandPressed = false;
             _isWaveCalled = false;
             _hasFormChangedThisTick = false;
             Session.Tick(in frame, dt);

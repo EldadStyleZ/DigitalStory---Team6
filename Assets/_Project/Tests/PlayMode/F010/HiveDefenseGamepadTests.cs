@@ -32,6 +32,10 @@ namespace DigitalStory.Tests.PlayMode
         private const int MaxFramesToEnd = 60;
         private const int MaxFramesToRestart = 120;
 
+        // The loss rumble lasts 0.9 s (GamepadConfig.LossPulse): it must still run well into that, and be over a while after.
+        private const float LeastLossRumbleSeconds = 0.6f;
+        private const float LongestLossRumbleSeconds = 1.6f;
+
         private Gamepad _pad;
         private HiveDefenseRoot _root;
         private HiveDefenseInput _input;
@@ -176,6 +180,82 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(restarted, Is.Not.Null, "Start on the end screen did not play again");
             Assert.That(restarted.Session.State, Is.EqualTo(HiveDefenseState.Playing));
             Assert.That(restarted.Session.Phase, Is.EqualTo(MatchPhase.Farm), "the held Start also called the wave early");
+        }
+
+        // Songs-v2 R, small fix 3: a match restarted from the pad still names the pad's buttons before it is touched again.
+        [UnityTest]
+        public IEnumerator Restart_FromThePad_TheNewMatchStillNamesThePad()
+        {
+            yield return LoadSceneWithPad();
+            yield return PressAndRelease(_pad.buttonSouth);
+            Assert.That(_input.LastDevice, Is.EqualTo(ControlDevice.Gamepad));
+            yield return LoseTheMatch();
+
+            HiveDefenseRoot ended = _root;
+            Press(_pad.startButton);
+            yield return null;
+            Release(_pad.startButton);
+            HiveDefenseRoot restarted = null;
+            for (int frame = 0; frame < MaxFramesToRestart && restarted == null; frame++)
+            {
+                yield return null;
+                HiveDefenseRoot found = Object.FindAnyObjectByType<HiveDefenseRoot>();
+                restarted = found != null && found != ended && found.Session != null ? found : null;
+            }
+
+            yield return null;
+            yield return null;
+            var input = Object.FindAnyObjectByType<HiveDefenseInput>();
+            var hud = Object.FindAnyObjectByType<HiveDefenseHudView>();
+
+            Assert.That(restarted, Is.Not.Null, "Start on the end screen did not play again");
+            Assert.That(input.LastDevice, Is.EqualTo(ControlDevice.Gamepad), "the new match forgot the pad");
+            Assert.That(hud.ShownDevice, Is.EqualTo(ControlDevice.Gamepad), "the new match's HUD names the keys");
+        }
+
+        // Songs-v2 R, small fix 4: the last hive's long, low rumble starts on the tick the match ends, and plays out.
+        [UnityTest]
+        public IEnumerator LastHiveFalling_ItsRumblePlaysOutAfterTheMatchEnds_ThenStops()
+        {
+            yield return LoadSceneWithPad();
+            yield return PressAndRelease(_pad.buttonSouth);
+            var rumble = Object.FindAnyObjectByType<GamepadRumbleView>();
+            Assert.That(rumble, Is.Not.Null, "the scene has no GamepadRumbleView");
+            yield return LoseTheMatch();
+            yield return null;
+            float lowAtTheEnd = rumble.Speeds.Low;
+
+            float started = Time.realtimeSinceStartup;
+            float stillAt = -1f;
+            while (Time.realtimeSinceStartup - started < LongestLossRumbleSeconds)
+            {
+                yield return null;
+                if (stillAt < 0f && rumble.Speeds.IsStill)
+                {
+                    stillAt = Time.realtimeSinceStartup - started;
+                }
+            }
+
+            Assert.That(lowAtTheEnd, Is.GreaterThan(0.5f), "the last hive's rumble was cut as the match ended");
+            Assert.That(stillAt, Is.GreaterThan(LeastLossRumbleSeconds), "the rumble stopped before it played out");
+            Assert.That(rumble.Speeds.IsStill, Is.True, "the rumble did not stop after it played out");
+        }
+
+        // Destroys every hive at once, on one tick, and waits for the match to end.
+        private IEnumerator LoseTheMatch()
+        {
+            HiveDefenseSession session = _root.Session;
+            for (int index = 0; index < session.Hives.Count; index++)
+            {
+                session.Hives[index].Damage(session.Hives[index].MaxHealth);
+            }
+
+            for (int frame = 0; frame < MaxFramesToEnd && session.State == HiveDefenseState.Playing; frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(session.State, Is.EqualTo(HiveDefenseState.Lost), "the match did not end");
         }
 
         private IEnumerator LoadSceneWithPad()
