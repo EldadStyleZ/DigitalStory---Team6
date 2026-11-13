@@ -112,7 +112,8 @@ namespace DigitalStory.Tests.EditMode
                 run.Seconds, run.SurviveSeconds, run.LongestQuietSeconds);
         }
 
-        // Every song that dealt any damage, the most first, with its casts; then any damage no song could be tied to.
+        // Every song that dealt any damage, the most first, with its casts; then any damage no song could be tied to, and the
+        // share of all the damage the giant's fists dealt.
         private static string DamageLine(IReadOnlyList<PlaytestRun> runs)
         {
             IReadOnlyList<PlaytestRun> won = WonRuns(runs);
@@ -121,6 +122,8 @@ namespace DigitalStory.Tests.EditMode
             var casts = new int[shares.Length];
             float unattributed = 0f;
             float total = 0f;
+            float fists = 0f;
+            int fistsLanded = 0;
             foreach (PlaytestRun run in measured)
             {
                 for (int song = 0; song < casts.Length; song++)
@@ -130,6 +133,8 @@ namespace DigitalStory.Tests.EditMode
 
                 unattributed += run.UnattributedDamage;
                 total += run.DamageDealt;
+                fists += run.FistDamage;
+                fistsLanded += run.FistsLanded;
             }
 
             var order = new List<int>();
@@ -153,6 +158,13 @@ namespace DigitalStory.Tests.EditMode
             if (unattributed > 0f)
             {
                 line.AppendFormat(CultureInfo.InvariantCulture, " untied {0:F0}", unattributed);
+            }
+
+            // The giant's hands are part of its share above; this says how much of it they dealt.
+            if (fistsLanded > 0)
+            {
+                line.AppendFormat(
+                    CultureInfo.InvariantCulture, " (of the Colossus, fists {0:P1} x{1})", total > 0f ? fists / total : 0f, fistsLanded);
             }
 
             return line.ToString().TrimEnd(',');

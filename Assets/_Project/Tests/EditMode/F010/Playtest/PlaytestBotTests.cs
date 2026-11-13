@@ -89,7 +89,8 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        // Songs-v2 R: as a player at a beekeeper too far to reach soon, the bot launches the giant's hands, and the fists hit.
+        // Songs-v2 R: as a player at a beekeeper too far to reach soon, the bot launches the giant's hands, both of them, and
+        // the fists hit.
         [Test]
         public void FightAsGiant_OverAMatch_LaunchesItsHandsAtFarBeekeepers()
         {
@@ -103,6 +104,7 @@ namespace DigitalStory.Tests.EditMode
                 new PlaytestBot(match, Seed).Play(new MixedPlan(), MatchSeconds);
 
                 Assert.That(thrown, Does.Contain(ColossusHand.Right));
+                Assert.That(thrown, Does.Contain(ColossusHand.Left), "a player uses both hands, the other while one regrows");
                 Assert.That(landed, Is.GreaterThan(0));
             }
         }

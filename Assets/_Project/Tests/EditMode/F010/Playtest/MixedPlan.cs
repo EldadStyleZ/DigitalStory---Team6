@@ -15,7 +15,8 @@ namespace DigitalStory.Tests.EditMode
     /// pack in front, the Tornado when it is surrounded, the Lance at a file or a far smoker, the Hydra at several spread out)
     /// and the Sting otherwise, keeping a reserve of wasps; with plenty to spare above it, it spends the Meteor and the
     /// Tornado on a lone beekeeper too. It calls the stores home with Hive Call when the swarm runs low and nobody is near.
-    /// It keeps the one Post slot busy: before each wave it leaves a Nest on the lane the wave's first beekeeper walks, and
+    /// It keeps the one Post slot busy: before each wave it leaves a Nest on the lane the wave's first beekeeper walks (when
+    /// it calls the wave, or 12 s before the farm phase ends if it never got ready to call), and
     /// in the wave, once that nest has gone off, it shells the hive it leaves with the Honeycomb (the threatened hive it is
     /// not guarding, once auto-aim would shell it), or lobs a Nest onto a pack. Between waves it heals a hive that has
     /// stopped making wasps just past the line where it makes them again, spending almost all it has since the income pays
@@ -58,6 +59,10 @@ namespace DigitalStory.Tests.EditMode
         // beekeeper walks through it on its way in. In a wave, a nest is lobbed onto this many beekeepers or more.
         private const float LaneNestMetres = 6f;
         private const int NestPack = 2;
+
+        // A farm phase it never got ready to call (the swarm did not fill) still ends in a wave: this many seconds before, it
+        // leaves the lane's nest anyway, time enough to fly within the Nest's reach and play it.
+        private const float LastNestSeconds = 12f;
 
         // Beekeepers within this many metres of a hive threaten it.
         private const float ThreatMetres = 8f;
@@ -162,6 +167,12 @@ namespace DigitalStory.Tests.EditMode
                     bot.CallWave();
                 }
 
+                return;
+            }
+
+            // Not ready, but the wave comes soon all the same: the lane still gets its nest before it does.
+            if (session.FarmSecondsLeft <= LastNestSeconds && LeaveLaneNest(bot))
+            {
                 return;
             }
 

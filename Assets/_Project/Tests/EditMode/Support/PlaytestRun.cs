@@ -87,6 +87,12 @@ namespace DigitalStory.Tests.EditMode
         /// <summary>Damage the bot could not tie to a song. It stays 0 while every song that hurts is measured.</summary>
         public float UnattributedDamage { get; set; }
 
+        /// <summary>Of the giant's damage in <see cref="DamageBySong"/>, what its hands' fists dealt (songs-v2 R).</summary>
+        public float FistDamage { get; set; }
+
+        /// <summary>How many of the giant's fists hit, whether or not they hurt anyone.</summary>
+        public int FistsLanded { get; set; }
+
         /// <summary>Wasps spent in all: on songs and on healing.</summary>
         public int Spent => SpentOnSongs + SpentOnHealing;
 

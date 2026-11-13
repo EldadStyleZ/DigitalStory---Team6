@@ -205,12 +205,6 @@ namespace DigitalStory.Tests.EditMode
         /// <summary>How far from the beekeeper it attacks this player stands: inside the Sting's reach, near a stick's notice.</summary>
         public float StandOffMetres => _standOffMetres;
 
-        /// <summary>
-        /// True while the giant launches its hands at far beekeepers (songs-v2 R), as it does unless a caller turns it off. The
-        /// economy playtests turn it off until the balance is tuned again with the hands: their targets were set before the
-        /// giant had them.
-        /// </summary>
-        public bool UsesGiantHands { get; set; } = true;
 
         /// <summary>
         /// Plays the match with <paramref name="plan"/> until it is won or lost, or <paramref name="maxSeconds"/> of game time
@@ -346,9 +340,10 @@ namespace DigitalStory.Tests.EditMode
         /// about to hit a hive, slams (L) when two or more are in the slam's reach, and leaps (L L) onto a pack beyond the
         /// slam where the leap would land: auto-aim's pick, as it plays from the keyboard. With two or more close while the
         /// slam cools down it spins (K K); otherwise it punches the beekeeper in front of it (J), three in a row, then kicks
-        /// (K). While no hive is under attack it launches a hand (songs-v2 R), the right one first, at a beekeeper beyond the
-        /// leap's range, as a player does at one too far to reach soon: the fist flies to auto-aim's pick, the most threatening
-        /// beekeeper within the fist's range. Does nothing while the giant does not stand or is in the air.
+        /// (K). It launches a hand (songs-v2 R), the right one first and the left while the right regrows, at a beekeeper
+        /// beyond the leap's range, hive under attack or not, as a player does at one too far to reach soon: the fist flies to
+        /// auto-aim's pick, the most threatening beekeeper within the fist's range. Does nothing while the giant does not
+        /// stand or is in the air.
         /// </summary>
         public void FightAsGiant()
         {
@@ -903,28 +898,17 @@ namespace DigitalStory.Tests.EditMode
             return true;
         }
 
-        // A hand launch when no hive is under attack and auto-aim's pick within the fist's range stands beyond the leap's
-        // range, at this player's pace and the same as a key press, so the giant's moves and its hands take turns as a player's
-        // fingers do.
+        // A hand launch when auto-aim's pick within the fist's range stands beyond the leap's range, whether or not a hive is
+        // under attack: a player throws a fist at a beekeeper too far to reach soon, the one swinging at a far hive included.
+        // At this player's pace and the same as a key press, so the giant's moves and its hands take turns as a player's
+        // fingers do; the right hand first, the left while the right one regrows.
         private void LaunchHandAtFarTarget()
         {
             ColossusConfig giant = _match.Colossus;
             float scale = _session.ColossusSizeScale;
-            if (!UsesGiantHands)
-            {
-                return;
-            }
-
             bool isRightReady = _session.FistPhaseOf(ColossusHand.Right) == FistPhase.Ready;
             bool isLeftReady = _session.FistPhaseOf(ColossusHand.Left) == FistPhase.Ready;
             if ((!isRightReady && !isLeftReady) || Time < _nextGiantPressAt)
-            {
-                return;
-            }
-
-            // While a hive is under attack the giant runs to it and fights there; the hands are for the beekeepers it would
-            // otherwise walk to.
-            if (MostThreatenedHive(HiveThreatMetres) >= 0)
             {
                 return;
             }
@@ -1197,10 +1181,11 @@ namespace DigitalStory.Tests.EditMode
             _lastLanded = attack;
         }
 
-        // A fist's hit is the giant's damage, as its other blows are.
+        // A fist's hit is the giant's damage, as its other blows are, and is also counted on its own.
         private void OnColossusFistLanded(ColossusHand hand)
         {
-            MeasureDamage(_colossusSong, null);
+            _run.FistDamage += MeasureDamage(_colossusSong, null);
+            _run.FistsLanded++;
         }
 
         private void OnHiveHit(BeekeeperBrain brain, int hive)
@@ -1220,9 +1205,10 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // Gives every beekeeper's health lost since it was last measured (only <paramref name="only"/>'s when given) to song
-        // number <paramref name="song"/>, or to nobody when it is -1.
-        private void MeasureDamage(int song, BeekeeperBrain only)
+        // number <paramref name="song"/>, or to nobody when it is -1, and returns how much that was.
+        private float MeasureDamage(int song, BeekeeperBrain only)
         {
+            float measured = 0f;
             for (int index = 0; index < _brains.Count; index++)
             {
                 BeekeeperBrain brain = _brains[index];
@@ -1233,6 +1219,7 @@ namespace DigitalStory.Tests.EditMode
                 }
 
                 _brainHealth[index] = brain.Health;
+                measured += lost;
                 if (song >= 0)
                 {
                     _run.DamageBySong[song] += lost;
@@ -1242,6 +1229,8 @@ namespace DigitalStory.Tests.EditMode
                     _run.UnattributedDamage += lost;
                 }
             }
+
+            return measured;
         }
 
         private PlaytestRun Finish()
