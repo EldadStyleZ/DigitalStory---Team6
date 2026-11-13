@@ -513,3 +513,29 @@ Added 2026-11-13, overnight. The owner: "In giant mode I want a punch where the 
 3. A restart carries the device used last to the next scene, so the HUD keeps naming the controller's buttons.
 4. When the match ends the rumble takes no new pulse but lets the running one play out, so the last hive's long, low rumble is felt in full. Pause, focus loss and unloading still stop it at once.
 5. The first Sting's slow frame was not taken further: section Q left about 1.9 ms of first-use cost, unmeasured in a player.
+
+### S. A new map each match
+
+Added 2026-11-13, overnight. The owner: "I want the hives to be placed somewhat randomly, and the trees as well." Each match draws its own map from a seed (`LayoutGenerator`, plain C#), random within `LayoutConfig`'s rules and `NestConfig`'s (section H), so every map is fair. The bands come from the old fixed map, so distances stay in its range.
+
+| Value (LayoutConfig) | Set | Old fixed map |
+|---|---|---|
+| Hives from the middle | 12 to 13.5 m, the first west and the second east | 12.5 m |
+| A hive's turn off due west or east | 15 degrees at most | 0 |
+| Hives apart | 24 m at least | 25 m |
+| Spawn points | 4, 31 to 33 m out, turned with the hives' line by up to 8 degrees: ahead, behind, beyond the east hive, beyond the west hive | 32 m: north, south, east, west |
+| Spawn point to any hive | 19 m at least | 19.5 m |
+| Ahead and behind spawn points | 1 m nearer the west hive | a tie, which went to the west hive |
+| Nests open at the start | 15 to 40 degrees either side of ahead (NestConfig's 10 to 14 m out) | 20 to 35 degrees |
+| Later nests | one in each 60 degree slice, turned with the hives' line, 10 degrees of jitter (NestConfig's 16 to 30 m, and 12 m clear of hives) | the same, unturned |
+| Nest trees | inside 24 m, 8 m apart, 8 m from spawn points, 8 m from the start | the same |
+| Scenery | 25.5 to 34 m out, pivots 2 m apart and half their two footprints; its footprint 6 m clear of hives, 3 m of nest trees, 4 m of spawn points, 10 m of the start, and 2 m of every lane (spawn point to hive) | 4 m from spawn points only |
+| Tries | 30 maps, 200 per hive pair, spawn point or nest, 40 per prop | none |
+
+- **Fallback.** If 30 maps all fail, the config's fixed map stands: the old map, with the ahead and behind spawn points 2 m toward the west hive. A prop that finds no place is hidden for that match. Over 200 seeds no map needed the fallback, and at least 63 of 70 test props were placed on every map. The scene's three snapshot maps placed 65 to 67 of 70.
+- **The west lean is on purpose.** Beekeepers walk to the nearest standing hive. On the old map the ahead and behind spawn points were a tie, so the west hive took three of every four beekeepers and the east hive, which starts hurt, took one. The economy was tuned on that split. Without it, the share of wasps the nest player spent healing swung from 0% to 30% between maps. The stage that retunes may drop the lean.
+- **Why the hive bands are tight.** With hives 11 to 14 m out, 22 m apart and turned up to 20 degrees, Mixed (no nests), which lost every match in round 5 on the old map, won one in five with only 10% of its wasps spent on healing. The nests and the scenery carry most of the variety.
+- **Seed.** A fresh seed each match, from the clock. `-f010Seed n` on the command line plays seed n first and n + 1, n + 2 on each restart, so a demo can be replayed. PlayMode tests fix every match to 1010 (`F010MapSeedFixture`). Each match logs "[F010] Map seed n" so a map you liked can be replayed. Nothing about the seed is on the HUD. The benchmark finds its spots from the session, so it runs on any map, but runs compare fairly only with the same `-f010Seed`.
+- **Scene.** The composition root draws the map in `Awake`, once. It moves the props (`SceneryView`, turned at random about their pivots) and the spawn points, puts the nest trees in place, and gives the session the hives, nests and spawn points. Hive and nest views move themselves to the session's positions as before, along with their lights, rings, bars and HUD markers. The chase camera's blocker boxes are measured again where the props now stand. The scene builder draws the saved scene's map with seed 1010, so the Editor shows a real map before Play.
+- **No static batching on the props and nest trees.** A statically batched mesh keeps drawing where it was built. Runtime batching needs readable meshes, and Raz's are not. Main-thread time in the full-swarm test stayed at 0.21 ms. The extra draw calls of about 70 unbatched props were not measured in a player.
+- **Playtest bot.** `PlaytestMatch` draws the map from its seed, so every seed of the economy playtests plays its own map. At the code defaults, on five seeds: Mixed won 1 of 5 (21% healing, 15% towers), MixedWithNests won 5 of 5 (healing 18 to 22%, towers 8 to 17%), and the rest won none.
