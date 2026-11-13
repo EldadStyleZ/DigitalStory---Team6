@@ -125,6 +125,54 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(rightRegrown, Is.GreaterThan(rightBefore * 0.85f), "the right arm did not grow back");
         }
 
+        // After review: once the match is over the rules' clock stands still. A fist in flight then must not hang in the air,
+        // glowing, on the end screen: it flies on, bursts, and its wasps go home, so the arm is whole again.
+        [UnityTest]
+        public IEnumerator Fist_InFlightWhenTheMatchEnds_FinishesAndTheArmGrowsBack()
+        {
+            yield return FormTheGiant();
+            yield return WaitGameSeconds(BuiltSeconds);
+            HiveDefenseSession session = _root.Session;
+            var motor = Object.FindAnyObjectByType<ColossusMotor>();
+            var swarm = Object.FindAnyObjectByType<SwarmGpuView>();
+            var samples = AssetDatabase.LoadAssetAtPath<ColossusSampleSet>(SamplesPath);
+            var giant = AssetDatabase.LoadAssetAtPath<ColossusConfig>(ColossusPath);
+            List<int> right = WaspsOf(samples, ColossusHand.Right, session.Swarm.Count);
+            var states = new WaspState[session.Swarm.Count];
+            float armMetres = ArmMetres * session.ColossusSizeScale;
+            float rightBefore = ShareNear(swarm, states, right, motor.HandPosition(ColossusHand.Right), armMetres);
+
+            _root.PressHand(ColossusHand.Right);
+            int frames = 0;
+            while (session.FistPhaseOf(ColossusHand.Right) != FistPhase.Flight && frames < MaxFrames)
+            {
+                frames++;
+                yield return null;
+            }
+
+            Assert.That(session.FistPhaseOf(ColossusHand.Right), Is.EqualTo(FistPhase.Flight), "the right fist did not launch");
+            yield return null;
+            for (int index = 0; index < session.Hives.Count; index++)
+            {
+                session.Hives[index].Damage(session.Hives[index].MaxHealth);
+            }
+
+            frames = 0;
+            while (session.State == HiveDefenseState.Playing && frames < MaxFrames)
+            {
+                frames++;
+                yield return null;
+            }
+
+            Assert.That(session.State, Is.EqualTo(HiveDefenseState.Lost), "the match did not end");
+            Assert.That(swarm.IsFistOut((int)ColossusHand.Right), Is.True, "the fist was not out when the match ended");
+            yield return WaitGameSeconds(session.FistFlightSeconds(ColossusHand.Right) + giant.FistRegrowSeconds + RegrownMarginSeconds);
+            float rightRegrown = ShareNear(swarm, states, right, motor.HandPosition(ColossusHand.Right), armMetres);
+
+            Assert.That(swarm.IsFistOut((int)ColossusHand.Right), Is.False, "the fist still hangs where the match ended");
+            Assert.That(rightRegrown, Is.GreaterThan(rightBefore * 0.85f), "the right arm did not grow back on the end screen");
+        }
+
         // Songs-v2 R, small fix 1: a ring marks where the leap will land from its take-off until it lands.
         [UnityTest]
         public IEnumerator LeapMarker_FromTakeOffUntilTheLanding_MarksTheLandingSpot()

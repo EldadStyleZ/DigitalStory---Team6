@@ -537,10 +537,12 @@ namespace DigitalStory.View
         }
 
         // Each frame the giant stands, after its bones: where each hand's fist is. The fist leaves from where the hand is on
-        // the frame it launches, and that place is kept for its whole flight.
+        // the frame it launches, and that place is kept for its whole flight. Once the match is over the rules' clock stands
+        // still, so a fist that is out is no longer fed: the swarm's own clock flies it on, bursts it and brings its wasps home,
+        // instead of pinning it in the air at the moment the match ended.
         private void SendFists()
         {
-            if (!_swarm.enabled)
+            if (!_swarm.enabled || _session.State != HiveDefenseState.Playing)
             {
                 return;
             }
