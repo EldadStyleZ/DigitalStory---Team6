@@ -194,6 +194,9 @@ namespace DigitalStory.View
         /// <summary>How far the swoop has gone: 0 is the top view, 1 is the chase view.</summary>
         public float ChaseBlend => _chaseBlend;
 
+        /// <summary>The boxes the chase camera never looks through, for tests and debugging.</summary>
+        public System.Collections.Generic.IReadOnlyList<Bounds> ChaseBlockers => _chaseBlockers;
+
         /// <summary>
         /// What the camera's forward is on the ground, unit length, in both views. The root puts it in the frame so walking is
         /// relative to the camera. It is the camera's up flattened when the camera looks straight down.

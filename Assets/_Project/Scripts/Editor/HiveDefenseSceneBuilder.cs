@@ -87,31 +87,15 @@ namespace DigitalStory.Editor
         private const float GroundSize = 160f; // Past the scenery to the horizon, so a low camera never sees its edge.
         private const float PlaneBaseSize = 10f;
         private const float ClearHalfSize = 25f;
-        private const float EdgeHalfSize = 34f;
-        private const float HiveSpacing = 25f;
-        private const float SpawnDistance = 32f;
-        private const float SpawnClearance = 4f;
         private const int SceneryCount = 70;
-        private const int SceneryAttempts = 30;
-        private const int SceneSeed = 1010;
 
-        // The nest trees (plan section H). NestConfig holds the rules every layout keeps; these only choose one of the many
-        // layouts that keep them. The nests stay inside the clear middle, short of the scenery around the edge, and apart
-        // from each other and the spawn points, so no two collect circles touch and no beekeeper enters under a nest.
+        // The seed of the props' kinds and sizes, and of the map the saved scene shows. Each match draws its own map when it
+        // starts (plan section S), so this map is only what the Editor shows before Play.
+        private const int SceneSeed = 1010;
         private const float NestTreeHeight = 5f;
 
         // Props at least this tall block the chase camera's view of the giant; the bushes below it are looked over.
         private const float CameraBlockerLeastHeight = 2f;
-        private const float NestInsideHalfSize = 24f;
-        private const float NestSpacing = 8f;
-        private const float NestSpawnClearance = 8f;
-        private const float NestHiveMargin = 0.5f;
-        // Degrees off straight ahead (+Z), one nest to each side, so both are in the opening view and neither tree stands
-        // between the camera and a core walking straight ahead to the north spawn.
-        private const float FirstNestsNarrowestBearing = 20f;
-        private const float FirstNestsWidestBearing = 35f;
-        private const float LaterNestJitterDegrees = 10f;
-        private const int NestAttempts = 2000;
 
         private const string RightHandName = "RightHand";
         private const string FluteName = "Flute";
@@ -151,7 +135,7 @@ namespace DigitalStory.Editor
         private static readonly string[] ConfigAssetNames =
         {
             "SwarmConfig", "SquadConfig", "AimConfig", "CoreMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "NestConfig",
-            "SwarmLevelConfig", "SmokeConfig", "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
+            "LayoutConfig", "SwarmLevelConfig", "SmokeConfig", "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
             "StingSong", "TornadoSong", "MeteorSong", "HydraSong", "ScytheSong", "LanceSong", "NestSong", "DomeSong", "GustSong",
             "HoneycombSong", "HiveCallSong", "ColossusSong", "GamepadConfig",
         };
@@ -258,6 +242,7 @@ namespace DigitalStory.Editor
             var colossus = LoadOrCreate<ColossusConfig>("ColossusConfig");
             var hive = LoadOrCreate<HiveConfig>("HiveConfig");
             var nests = LoadOrCreate<NestConfig>("NestConfig");
+            var layout = LoadOrCreate<LayoutConfig>("LayoutConfig");
             var swarmLevel = LoadOrCreate<SwarmLevelConfig>("SwarmLevelConfig");
             var smoke = LoadOrCreate<SmokeConfig>("SmokeConfig");
             var waves = LoadOrCreate<WaveConfig>("WaveConfig");
@@ -292,8 +277,8 @@ namespace DigitalStory.Editor
 
             AssetDatabase.SaveAssets();
             FillScene(new SceneAssets(
-                swarm, squads, aim, coreMove, fury, colossus, hive, nests, swarmLevel, smoke, waves, stick, smoker, songConfig, songs,
-                samples, colossusPrefab, hivePrefab, nestTreePrefab, stickView, smokerView, grenade, cloud, gamepad));
+                swarm, squads, aim, coreMove, fury, colossus, hive, nests, layout, swarmLevel, smoke, waves, stick, smoker, songConfig,
+                songs, samples, colossusPrefab, hivePrefab, nestTreePrefab, stickView, smokerView, grenade, cloud, gamepad));
             Debug.Log("[F010] Scene filled.");
 
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -1532,16 +1517,21 @@ namespace DigitalStory.Editor
         {
             BuildLighting();
             BuildGround();
-            Transform spawns = BuildSpawnPoints();
-            Transform scenery = BuildScenery(spawns);
-
-            var hives = new HiveView[2];
-            var hiveSource = AssetDatabase.LoadAssetAtPath<GameObject>(HiveSourcePath);
-            hives[0] = BuildHive(hiveSource, "Hive A", new Vector3(-HiveSpacing * 0.5f, 0f, 0f));
-            hives[1] = BuildHive(hiveSource, "Hive B", new Vector3(HiveSpacing * 0.5f, 0f, 0f));
-            NestView[] nests = BuildNests(assets.NestTreePrefab, assets.Nests, assets.CoreMove, hives, spawns);
-
             GameObject core = BuildCore();
+            SceneryView sceneryView = BuildScenery();
+
+            // Plan section S: the map the saved scene shows, drawn as each match draws its own when it starts.
+            ArenaLayout layout = LayoutGenerator.Generate(SceneSeed, core.transform.position, assets.Layout, assets.Nests, sceneryView.Footprints);
+            NestLayout.Check(layout.Nests, layout.Hives, assets.Nests, assets.CoreMove.PlayAreaHalfSize);
+            sceneryView.Place(layout.Scenery);
+            Transform spawns = BuildSpawnPoints(layout.Spawns);
+
+            var hives = new HiveView[LayoutGenerator.HiveCount];
+            var hiveSource = AssetDatabase.LoadAssetAtPath<GameObject>(HiveSourcePath);
+            hives[0] = BuildHive(hiveSource, "Hive A", layout.Hives[0]);
+            hives[1] = BuildHive(hiveSource, "Hive B", layout.Hives[1]);
+            NestView[] nests = BuildNests(assets.NestTreePrefab, layout.Nests);
+
             var colossus = (GameObject)PrefabUtility.InstantiatePrefab(assets.ColossusPrefab);
             colossus.name = "Colossus Puppet";
             colossus.transform.position = new Vector3(0f, 0f, -ClearHalfSize * 0.5f);
@@ -1558,7 +1548,7 @@ namespace DigitalStory.Editor
             // giant is, facing its way, so the puppet's spin and leap never swing the view.
             var chaseAnchor = new GameObject("Giant Chase Anchor");
             chaseAnchor.transform.position = colossus.transform.position;
-            SetChaseBlockers(camera.GetComponent<FollowCamera>(), scenery, nests);
+            SetChaseBlockers(camera.GetComponent<FollowCamera>(), sceneryView.transform, nests);
 
             var input = new GameObject("Hive Defense Input", typeof(HiveDefenseInput));
 
@@ -1627,6 +1617,7 @@ namespace DigitalStory.Editor
             SetObject(serialized, "_colossus", assets.Colossus);
             SetObject(serialized, "_hive", assets.Hive);
             SetObject(serialized, "_nests", assets.Nests);
+            SetObject(serialized, "_layout", assets.Layout);
             SetObject(serialized, "_swarmLevel", assets.SwarmLevel);
             SetObject(serialized, "_smoke", assets.Smoke);
             SetObject(serialized, "_waves", assets.Waves);
@@ -1647,6 +1638,7 @@ namespace DigitalStory.Editor
             SetObjects(serialized, "_hives", hives);
             SetObjects(serialized, "_nestViews", nests);
             SetObjects(serialized, "_spawnPoints", ChildTransforms(spawns));
+            SetObject(serialized, "_scenery", sceneryView);
             SetObject(serialized, "_beekeeperPool", beekeeperPool.GetComponent<BeekeeperViewPool>());
             SetObject(serialized, "_stickPrefab", assets.StickView);
             SetObject(serialized, "_smokerPrefab", assets.SmokerView);
@@ -1720,13 +1712,14 @@ namespace DigitalStory.Editor
             ground.isStatic = true;
         }
 
-        private static Transform BuildSpawnPoints()
+        // In the order the waves take them, which the map keeps: ahead, behind, beyond the east hive, beyond the west hive.
+        private static Transform BuildSpawnPoints(IReadOnlyList<Vector3> places)
         {
             var parent = new GameObject("Spawn Points").transform;
-            CreateSpawn(parent, "Spawn North", new Vector3(0f, 0f, SpawnDistance));
-            CreateSpawn(parent, "Spawn South", new Vector3(0f, 0f, -SpawnDistance));
-            CreateSpawn(parent, "Spawn East", new Vector3(SpawnDistance, 0f, 0f));
-            CreateSpawn(parent, "Spawn West", new Vector3(-SpawnDistance, 0f, 0f));
+            CreateSpawn(parent, "Spawn Ahead", places[0]);
+            CreateSpawn(parent, "Spawn Behind", places[1]);
+            CreateSpawn(parent, "Spawn East", places[2]);
+            CreateSpawn(parent, "Spawn West", places[3]);
             return parent;
         }
 
@@ -1748,15 +1741,19 @@ namespace DigitalStory.Editor
             return children;
         }
 
-        // Around the edge only, never in the middle 50 x 50 m, and never on a spawn point.
         // Plan section I: the chase camera moves in front of what stands between it and the giant, but Raz's tree crowns and
-        // ruins have no collider, so it is given each tall prop's box, the scenery's and the nest trees', instead.
+        // ruins have no collider, so it is given each tall prop's box, the shown scenery's and the nest trees', instead. These
+        // are the saved map's; each match measures its own again (HiveDefenseRoot).
         private static void SetChaseBlockers(FollowCamera follow, Transform scenery, NestView[] nests)
         {
             var blockers = new List<Bounds>();
             for (int index = 0; index < scenery.childCount; index++)
             {
-                AddChaseBlocker(blockers, scenery.GetChild(index));
+                Transform prop = scenery.GetChild(index);
+                if (prop.gameObject.activeSelf)
+                {
+                    AddChaseBlocker(blockers, prop);
+                }
             }
 
             for (int index = 0; index < nests.Length; index++)
@@ -1784,12 +1781,16 @@ namespace DigitalStory.Editor
             }
         }
 
-        // Returns the parent of every prop.
-        private static Transform BuildScenery(Transform spawns)
+        // The props, each at the middle of the map, turned and sized at random, with its feet on the ground; the map moves
+        // them to the edge. They are not static, because a statically batched mesh keeps drawing where it was built, and each
+        // match moves them (plan section S). Each footprint is measured here, once, for every map to keep clear of.
+        private static SceneryView BuildScenery()
         {
-            var parent = new GameObject("Scenery").transform;
+            var parent = new GameObject("Scenery", typeof(SceneryView)).transform;
             var random = new System.Random(SceneSeed);
             var prefabs = new Dictionary<string, GameObject>();
+            var props = new Transform[SceneryCount];
+            var footprints = new float[SceneryCount];
 
             for (int count = 0; count < SceneryCount; count++)
             {
@@ -1801,15 +1802,10 @@ namespace DigitalStory.Editor
                     prefabs[name] = prefab;
                 }
 
-                if (!TryPickEdgePoint(random, spawns, out Vector3 point))
-                {
-                    continue;
-                }
-
                 // The random turn goes on top of the prefab's own root rotation, which stands the Z-up model upright.
                 var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
                 Quaternion turn = Quaternion.Euler(0f, (float)random.NextDouble() * 360f, 0f);
-                instance.transform.SetPositionAndRotation(point, turn * prefab.transform.localRotation);
+                instance.transform.SetPositionAndRotation(Vector3.zero, turn * prefab.transform.localRotation);
                 float target = height * (0.85f + ((float)random.NextDouble() * 0.3f));
                 float current = MeasureBounds(instance.transform).size.y;
                 if (current > 1e-4f)
@@ -1819,47 +1815,31 @@ namespace DigitalStory.Editor
 
                 Bounds bounds = MeasureBounds(instance.transform);
                 instance.transform.position += new Vector3(0f, -bounds.min.y, 0f);
-
-                Transform[] all = instance.GetComponentsInChildren<Transform>(true);
-                for (int index = 0; index < all.Length; index++)
-                {
-                    all[index].gameObject.isStatic = true;
-                }
+                props[count] = instance.transform;
+                footprints[count] = Footprint(bounds);
             }
 
-            return parent;
+            var serialized = new SerializedObject(parent.GetComponent<SceneryView>());
+            SetObjects(serialized, "_props", props);
+            SerializedProperty footprintProperty = Property(serialized, "_footprints");
+            footprintProperty.arraySize = footprints.Length;
+            for (int index = 0; index < footprints.Length; index++)
+            {
+                footprintProperty.GetArrayElementAtIndex(index).floatValue = footprints[index];
+            }
+
+            Property(serialized, "_blockerLeastHeight").floatValue = CameraBlockerLeastHeight;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            return parent.GetComponent<SceneryView>();
         }
 
-        private static bool TryPickEdgePoint(System.Random random, Transform spawns, out Vector3 point)
+        // Metres on the ground from the pivot, at the middle of the map, to the farthest corner of the box: a circle that
+        // holds the prop whichever way it turns about its pivot.
+        private static float Footprint(Bounds bounds)
         {
-            for (int attempt = 0; attempt < SceneryAttempts; attempt++)
-            {
-                float x = ((float)random.NextDouble() * 2f - 1f) * EdgeHalfSize;
-                float z = ((float)random.NextDouble() * 2f - 1f) * EdgeHalfSize;
-                if (Mathf.Abs(x) < ClearHalfSize + 0.5f && Mathf.Abs(z) < ClearHalfSize + 0.5f)
-                {
-                    continue;
-                }
-
-                point = new Vector3(x, 0f, z);
-                bool isOnSpawn = false;
-                for (int index = 0; index < spawns.childCount; index++)
-                {
-                    if ((spawns.GetChild(index).position - point).sqrMagnitude < SpawnClearance * SpawnClearance)
-                    {
-                        isOnSpawn = true;
-                        break;
-                    }
-                }
-
-                if (!isOnSpawn)
-                {
-                    return true;
-                }
-            }
-
-            point = Vector3.zero;
-            return false;
+            float x = Mathf.Max(Mathf.Abs(bounds.min.x), Mathf.Abs(bounds.max.x));
+            float z = Mathf.Max(Mathf.Abs(bounds.min.z), Mathf.Abs(bounds.max.z));
+            return Mathf.Sqrt((x * x) + (z * z));
         }
 
         private static HiveView BuildHive(GameObject source, string name, Vector3 position)
@@ -1895,26 +1875,10 @@ namespace DigitalStory.Editor
             return hive.GetComponent<HiveView>();
         }
 
-        // Plan section H: Raz's nest trees, in the order they open. The places are chosen with the scene's seeded random, so
-        // every build gives the same layout, and checked against NestConfig's rules before anything is placed.
-        private static NestView[] BuildNests(GameObject source, NestConfig config, CoreMoveConfig coreMove, HiveView[] hives, Transform spawns)
+        // Plan section H: Raz's nest trees, in the order they open, where the map put them (section S). Each match moves them
+        // to its own map when it starts.
+        private static NestView[] BuildNests(GameObject source, IReadOnlyList<Vector3> positions)
         {
-            var hivePositions = new Vector3[hives.Length];
-            for (int index = 0; index < hives.Length; index++)
-            {
-                hivePositions[index] = hives[index].transform.position;
-            }
-
-            Transform[] spawnPoints = ChildTransforms(spawns);
-            var spawnPositions = new Vector3[spawnPoints.Length];
-            for (int index = 0; index < spawnPoints.Length; index++)
-            {
-                spawnPositions[index] = spawnPoints[index].position;
-            }
-
-            List<Vector3> positions = PickNestPositions(config, hivePositions, spawnPositions);
-            NestLayout.Check(positions, hivePositions, config, coreMove.PlayAreaHalfSize);
-
             var parent = new GameObject("Nests").transform;
             var views = new NestView[positions.Count];
             for (int index = 0; index < views.Length; index++)
@@ -1925,89 +1889,9 @@ namespace DigitalStory.Editor
             return views;
         }
 
-        // The ones open at the start stand ahead of the core, where the opening camera looks, one to each side. The rest stand
-        // one in each equal slice of the circle around the middle, so they are spread around it, and the nearer ones open
-        // first, so each wave's nests are a longer trip than the last.
-        private static List<Vector3> PickNestPositions(NestConfig config, Vector3[] hives, Vector3[] spawns)
-        {
-            var random = new System.Random(SceneSeed);
-            var placed = new List<Vector3>(config.NestCount);
-            for (int index = 0; index < config.OpenAtStart; index++)
-            {
-                float side = index % 2 == 0 ? -1f : 1f;
-                placed.Add(PickNest(
-                    random, placed, hives, spawns, config, side * FirstNestsNarrowestBearing, side * FirstNestsWidestBearing,
-                    config.FirstNestsNearest, config.FirstNestsFarthest, $"nest {index}, open at the start"));
-            }
-
-            int later = config.NestCount - config.OpenAtStart;
-            var laterNests = new List<Vector3>(later);
-            for (int index = 0; index < later; index++)
-            {
-                float slice = index * 360f / later;
-                Vector3 nest = PickNest(
-                    random, placed, hives, spawns, config, slice - LaterNestJitterDegrees, slice + LaterNestJitterDegrees,
-                    config.LaterNestsNearest, config.LaterNestsFarthest, $"nest {config.OpenAtStart + index}, opened after a wave");
-                placed.Add(nest);
-                laterNests.Add(nest);
-            }
-
-            laterNests.Sort((left, right) => GroundRadius(left).CompareTo(GroundRadius(right)));
-            placed.RemoveRange(config.OpenAtStart, later);
-            placed.AddRange(laterNests);
-            return placed;
-        }
-
-        private static Vector3 PickNest(
-            System.Random random,
-            List<Vector3> placed,
-            Vector3[] hives,
-            Vector3[] spawns,
-            NestConfig config,
-            float fromBearing,
-            float toBearing,
-            float nearest,
-            float farthest,
-            string which)
-        {
-            for (int attempt = 0; attempt < NestAttempts; attempt++)
-            {
-                float bearing = Mathf.Lerp(fromBearing, toBearing, (float)random.NextDouble()) * Mathf.Deg2Rad;
-                float radius = Mathf.Lerp(nearest, farthest, (float)random.NextDouble());
-                var point = new Vector3(Mathf.Sin(bearing) * radius, 0f, Mathf.Cos(bearing) * radius);
-                bool isInside = Mathf.Abs(point.x) <= NestInsideHalfSize && Mathf.Abs(point.z) <= NestInsideHalfSize;
-                if (isInside
-                    && IsClearOf(point, hives, config.HiveClearance + NestHiveMargin)
-                    && IsClearOf(point, spawns, NestSpawnClearance)
-                    && IsClearOf(point, placed, NestSpacing))
-                {
-                    return point;
-                }
-            }
-
-            throw new InvalidOperationException($"[F010] Found no place for {which} that keeps NestConfig's rules and the builder's spacing.");
-        }
-
-        private static bool IsClearOf(Vector3 point, IReadOnlyList<Vector3> others, float distance)
-        {
-            for (int index = 0; index < others.Count; index++)
-            {
-                Vector3 offset = others[index] - point;
-                offset.y = 0f;
-                if (offset.sqrMagnitude < distance * distance)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static float GroundRadius(Vector3 point) => new Vector2(point.x, point.z).magnitude;
-
         // NestView stands where the nest is, and Raz's tree under it keeps its own rotation, which stands the Z-up model
-        // upright, with its trunk on that spot, scaled to a tree's height. The tree is static; the nest in it is not, because
-        // NestView tints it and hides it once it is collected.
+        // upright, with its trunk on that spot, scaled to a tree's height. Nothing in it is static, because each match moves
+        // the tree to its own map (plan section S), and NestView tints the nest in it and hides it once it is collected.
         private static NestView BuildNestTree(GameObject source, Transform parent, string name, Vector3 position)
         {
             var nest = new GameObject(name, typeof(NestView));
@@ -2022,12 +1906,6 @@ namespace DigitalStory.Editor
             if (nestObject == null)
             {
                 throw new InvalidOperationException($"[F010] {source.name} has no child named {NestObjectName}, which NestView shows.");
-            }
-
-            Transform[] all = tree.GetComponentsInChildren<Transform>(true);
-            for (int index = 0; index < all.Length; index++)
-            {
-                all[index].gameObject.isStatic = !all[index].IsChildOf(nestObject);
             }
 
             Renderer[] nestRenderers = nestObject.GetComponentsInChildren<Renderer>(true);
@@ -2143,6 +2021,7 @@ namespace DigitalStory.Editor
                 ColossusConfig colossus,
                 HiveConfig hive,
                 NestConfig nests,
+                LayoutConfig layout,
                 SwarmLevelConfig swarmLevel,
                 SmokeConfig smoke,
                 WaveConfig waves,
@@ -2168,6 +2047,7 @@ namespace DigitalStory.Editor
                 Colossus = colossus;
                 Hive = hive;
                 Nests = nests;
+                Layout = layout;
                 SwarmLevel = swarmLevel;
                 Smoke = smoke;
                 Waves = waves;
@@ -2194,6 +2074,7 @@ namespace DigitalStory.Editor
             public ColossusConfig Colossus { get; }
             public HiveConfig Hive { get; }
             public NestConfig Nests { get; }
+            public LayoutConfig Layout { get; }
             public SwarmLevelConfig SwarmLevel { get; }
             public SmokeConfig Smoke { get; }
             public WaveConfig Waves { get; }

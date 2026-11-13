@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
@@ -15,7 +16,7 @@ namespace DigitalStory.View
     [AddComponentMenu("DigitalStory/Hive Defense Root")]
     public sealed class HiveDefenseRoot : MonoBehaviour
     {
-        private const int RequiredHiveCount = 2;
+        private const int RequiredHiveCount = LayoutGenerator.HiveCount;
 
         // A sting's target as the swarm view reads it: w is 1 while the sting wraps a living beekeeper. The rules give each
         // sting a new target when its own dies, and end them all at once, letting the song go, when none is left; so every
@@ -61,6 +62,9 @@ namespace DigitalStory.View
 
         [SerializeField, Tooltip("The wild nests' numbers: when they open, how the core collects one, what one gives and where they may stand.")]
         private NestConfig _nests;
+
+        [SerializeField, Tooltip("Where each match's map puts the hives, the spawn points, the nest trees and the scenery. Each match draws a new map (MatchSeed).")]
+        private LayoutConfig _layout;
 
         [SerializeField, Tooltip("What each swarm level multiplies the songs' sizes and damage by.")]
         private SwarmLevelConfig _swarmLevel;
@@ -123,8 +127,11 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("Draws the wild nests, in the order they open. Each stands where its nest is, so the first ones are those open at the start.")]
         private NestView[] _nestViews = new NestView[0];
 
-        [SerializeField, Tooltip("Where beekeepers enter. At least one.")]
+        [SerializeField, Tooltip("Where beekeepers enter: four, which the root moves to the match's map when it starts.")]
         private Transform[] _spawnPoints = new Transform[0];
+
+        [SerializeField, Tooltip("The props around the arena's edge, which the root places on the match's map when it starts.")]
+        private SceneryView _scenery;
 
         [SerializeField, Tooltip("Shows the beekeepers.")]
         private BeekeeperViewPool _beekeeperPool;
@@ -235,6 +242,9 @@ namespace DigitalStory.View
         /// <summary>The running match, for the views, tests and debugging.</summary>
         public HiveDefenseSession Session { get; private set; }
 
+        /// <summary>The match's map (plan section S), drawn when the match started, for tests and debugging.</summary>
+        public ArenaLayout Layout { get; private set; }
+
         /// <summary>
         /// The one entry point for a played note. Collects the hole for the next tick and sounds it. The hole counts from 0.
         /// While the giant stands the holes are its moves (plan section I), so they reach the session but the flute is silent.
@@ -318,33 +328,13 @@ namespace DigitalStory.View
         private void Awake()
         {
             CheckReferences();
-
-            var positions = new Vector3[_hives.Length];
-            for (int index = 0; index < positions.Length; index++)
-            {
-                positions[index] = _hives[index].transform.position;
-            }
-
-            var nests = new Vector3[_nestViews.Length];
-            for (int index = 0; index < nests.Length; index++)
-            {
-                nests[index] = _nestViews[index].transform.position;
-            }
-
-            var spawns = new Vector3[_spawnPoints.Length];
-            for (int index = 0; index < spawns.Length; index++)
-            {
-                spawns[index] = _spawnPoints[index].position;
-            }
-
-            // A nest moved by hand in the scene must still keep the plan's rules (section H), so a broken layout stops here.
-            NestLayout.Check(nests, positions, _nests, _coreMove.PlayAreaHalfSize);
+            Layout = DrawMap();
 
             var rules = new HiveDefenseRules(
                 _swarm, _squads, _coreMove, _fury, _colossus, _hive, _nests, _swarmLevel, _smoke, _waves, _stick, _smoker, _aim,
                 _songConfig, _songs, _holeCount);
             var random = new Mulberry32Random(unchecked((uint)_seed));
-            Session = new HiveDefenseSession(rules, positions, nests, spawns, _coreMotor.Position, random);
+            Session = new HiveDefenseSession(rules, Layout.Hives, Layout.Nests, Layout.Spawns, _coreMotor.Position, random);
 
             _trail = new PathTrail(_swarm.TrailPoints, _swarm.TrailSpacing);
             _trail.Reset(_coreMotor.Position);
@@ -1002,6 +992,37 @@ namespace DigitalStory.View
             Cursor.visible = _wasCursorVisible;
         }
 
+        // Plan section S: a new map each match. The scenery, the spawn points and the nest trees move here, once, and the
+        // hives and nests stand where their views put them in Initialize, from the session. The chase camera's blocker boxes
+        // are measured again from where the props now stand, the nest trees before their rings exist.
+        private ArenaLayout DrawMap()
+        {
+            int seed = MatchSeed.Next();
+            ArenaLayout layout = LayoutGenerator.Generate(seed, _coreMotor.Position, _layout, _nests, _scenery.Footprints);
+            string fallback = layout.IsFallback ? " No map kept the rules, so the fallback map stands." : string.Empty;
+            Debug.Log($"[F010] Map seed {seed}: launch with {MatchSeed.CommandLineOption} {seed} to play this map again.{fallback}");
+
+            // The rules every map keeps are checked here too, so a broken config stops the match before it starts.
+            NestLayout.Check(layout.Nests, layout.Hives, _nests, _coreMove.PlayAreaHalfSize);
+
+            _scenery.Place(layout.Scenery);
+            for (int index = 0; index < _spawnPoints.Length; index++)
+            {
+                _spawnPoints[index].position = layout.Spawns[index];
+            }
+
+            var blockers = new List<Bounds>();
+            _scenery.AddBlockers(blockers);
+            for (int index = 0; index < _nestViews.Length; index++)
+            {
+                _nestViews[index].transform.position = layout.Nests[index];
+                _scenery.AddBlocker(blockers, _nestViews[index].transform);
+            }
+
+            _followCamera.SetChaseBlockers(blockers.ToArray());
+            return layout;
+        }
+
         private void CheckReferences()
         {
             Require(_swarm, nameof(_swarm));
@@ -1012,6 +1033,7 @@ namespace DigitalStory.View
             Require(_colossus, nameof(_colossus));
             Require(_hive, nameof(_hive));
             Require(_nests, nameof(_nests));
+            Require(_layout, nameof(_layout));
             Require(_swarmLevel, nameof(_swarmLevel));
             Require(_smoke, nameof(_smoke));
             Require(_waves, nameof(_waves));
@@ -1038,6 +1060,12 @@ namespace DigitalStory.View
             Require(_hitFeedback, nameof(_hitFeedback));
             Require(_gamepad, nameof(_gamepad));
             Require(_rumble, nameof(_rumble));
+            Require(_scenery, nameof(_scenery));
+
+            if (_scenery.Footprints.Count != _scenery.PropCount)
+            {
+                throw new InvalidOperationException($"{name}: the scenery has {_scenery.PropCount} props but {_scenery.Footprints.Count} footprints. Rebuild the scene.");
+            }
 
             if (_songs == null || _songs.Length == 0)
             {
@@ -1070,9 +1098,10 @@ namespace DigitalStory.View
                 Require(_nestViews[index], $"{nameof(_nestViews)}[{index}]");
             }
 
-            if (_spawnPoints == null || _spawnPoints.Length == 0)
+            if (_spawnPoints == null || _spawnPoints.Length != LayoutGenerator.SpawnCount)
             {
-                throw new InvalidOperationException($"{name}: HiveDefenseRoot needs at least one spawn point.");
+                throw new InvalidOperationException(
+                    $"{name}: HiveDefenseRoot needs {LayoutGenerator.SpawnCount} spawn points, as every map has: ahead, behind, east and west.");
             }
 
             for (int index = 0; index < _spawnPoints.Length; index++)
