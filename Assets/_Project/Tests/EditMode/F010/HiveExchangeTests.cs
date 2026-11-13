@@ -235,15 +235,19 @@ namespace DigitalStory.Tests.EditMode
         {
             int needed = Mathf.RoundToInt((_hives[1].MaxHealth - _hives[1].Health) * _config.WaspsPerHealthPoint);
 
-            Give(5f, AtHive1);
+            // Whatever the price of a point: wasps enough above the collapse line to pay for the whole heal, and a second
+            // longer than it takes at the give rate.
+            _swarm.Gain(needed);
+            int before = _swarm.Count;
+            Give((needed / _config.HealWaspsPerSecond) + 1f, AtHive1);
 
             Assert.That(_hives[1].Health, Is.EqualTo(_hives[1].MaxHealth).Within(0.001f));
-            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps - needed), "no wasp is paid past full health");
+            Assert.That(_swarm.Count, Is.EqualTo(before - needed), "no wasp is paid past full health");
 
             Give(0.5f, AtHive1);
 
             Assert.That(_exchange.IsGiving, Is.False);
-            Assert.That(_swarm.Count, Is.EqualTo(_swarmConfig.StartingWasps - needed));
+            Assert.That(_swarm.Count, Is.EqualTo(before - needed));
         }
 
         [Test]
