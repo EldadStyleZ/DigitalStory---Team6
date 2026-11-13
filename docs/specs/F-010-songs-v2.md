@@ -449,3 +449,36 @@ Agreed with the owner on 2026-11-12, after he played the build. Where this secti
 ### P. Controller
 
 Added 2026-11-13. A controller works beside the keyboard and mouse: the left stick moves; the face buttons are the notes, West H, South J, East K and North L, so they are also the giant's moves; the right stick aims from the core (8 m at a full lean, live while it leans) or turns the chase view; RB gives (E), Start calls the wave or plays again (Enter, R), RT punches and LT kicks. While the controller is the device used last, the HUD draws each note as a diamond of four dots with its button filled and says RB and Start, and the controller rumbles for notes, casts, hits, the giant's slam and leap, and a lost hive or collapsed swarm.
+
+### Q. Motion: the swarm moves as one living ribbon
+
+Added 2026-11-13, overnight, after the owner said the movement "looks a bit weird" and the hand-over between idle and moving is "too sharp, I want a wave movement". A player build already held 120 fps everywhere, so this is about how the motion is computed and paced.
+
+**What games and demos do.** Big swarms fly each particle to a target the game computes (a formation, a path, a shape) on a spring. They look alive through three things: every change is staggered by a per-particle delay, so it runs through the flock as a wave; the body follows the leader's recorded path with a delay, so a turn bends down it; and layered noise (curl noise is the swirl-only kind). Smooth means critically damped springs (damping 1: the fastest settle with no overshoot), stepped so the result does not depend on the frame rate, by an exact solution or by fixed sub-steps. Neighbour rules (boids) need a spatial grid rebuilt every frame; a target-driven swarm does not.
+
+**Data structure.** Each wasp reads only its own state and a few shared values: one thread per wasp, O(n), no neighbour queries. At 800 to 6,000 wasps a spatial hash or grid would add dispatches and a sort for nothing, so the two structured buffers stay. The one new structure is the core's past, `CoreHistory` in Logic: 128 samples at 60 a second (2.1 s), 2 KB of constants.
+
+**What changed.**
+- Follow with a delay. Each free wasp follows the core 0.8 s x rank^1.5 late (rank: 0 at the river's head, 1 at its tail, 8% from its seed). From `_History` it reads the metres the core walked since then, which move its river place that far back along the path. It also reads the swarm's wound share then and the eight's swing then; the eight it winds into stands where the core stood then. So a stop lets the tail flow on and curl in last, a turn bends down the river, and the head (rank under 0.1) answers within about 25 ms.
+- On a start, the river is drawn out of the coil: it uses only the path walked since the swarm was last wound (`_RiverReach`), so it never lays itself back along the way the core came.
+- The river has 8 m of lane places (was 11); walking, the delay stretches it to about 11.6 m, as before. Its tail thins to 55% of its width. Places are measured from the core (`PathTrail.Lead`), so they glide instead of jumping 0.15 m whenever the trail stores a point.
+- Whole-swarm forms (Hive Call, the Colossus, the river) hand over as an eased wave: each wasp starts at its river place x 0.6 s, as before, and eases over 0.3 s instead of jumping. A second change that comes before the first wave is through (Hive Call ending as the stores run dry) blends from the form before. Winding into the eight and out of it takes each wasp 1.0 s (was 0.75 s, and in practice half that).
+- Springs: the river and the eight use stiffness 100 at damping 1 (was 40 at 0.6, which overshot by 10%). All springs step in equal sub-steps of at most 1/240 s, so 60 and 120 fps take the same steps. Only shapes wobble after forming, at 0.5 (was 0.3, the river too). Strike springs and pins are unchanged, so no song's timing moved.
+- First cast: Mono's `RuntimeHelpers.PrepareMethod` compiles nothing (3,598 methods in 0.1 ms), so the warm-up did nothing. It now calls `GetFunctionPointer` for each method, which compiles it: 42 ms over the first 17 frames.
+
+**Measured** with `HiveDefenseMotionTests`, 200 of 800 wasps read back every frame, at 60 fps (120 fps within 0.5), before then after:
+
+| Hand-over | Peak mean acceleration (m/s²) | Answers, 10th to 90th percentile | Front |
+|---|---|---|---|
+| Start | 17.1 then 13.0 | | 0.10 then 0.23 s |
+| Stop | 52.9 then 12.7 | 0.017 then 0.58 s apart | 0.13 then 0.13 s |
+| Turn start | 47.9 then 10.4 | | 0.13 then 0.17 s |
+| Turn stop | 52.3 then 12.9 | 0.000 then 0.60 s apart | 0.13 then 0.13 s |
+| Hive Call | 78.7 then 47.7 | 0.53 then 0.57 s apart | 0.13 then 0.12 s |
+
+- The mean velocity at 60 and at 120 fps differed by 1.19 m/s at most, and now by 0.26 m/s.
+- The old start "front" was quicker because the whole eight was dragged along at once. Per wasp, the new river spring reaches 60% of the core's speed in 0.2 s; the old one took 0.24 s.
+- Hive Call's remaining peak is the wave itself. Round the standing eight, river order is loop order, so the wasps that ease over at any moment come from one stretch of the loop and move together.
+- First Sting in the Editor: 2.23 ms against 0.51 ms for the second one before, and 2.33 against 0.46 after. About 1.9 ms of first-use cost remains in script updates. The game's own non-generic methods are now compiled ahead, so this cost lies elsewhere: generic or engine code, or a first sound. It has not been measured in a player.
+
+Not done: curl noise, and banking, which needs a field that the 48-byte wasp state does not have.
