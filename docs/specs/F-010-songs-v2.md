@@ -504,7 +504,7 @@ Added 2026-11-13, overnight. The owner: "In giant mode I want a punch where the 
 | Regrow, from the hit until the arm is whole | 2 s |
 
 - The arm thrusts with the heavy punch's clip (Cross Punch). The scene builder plays it on the character, finds that it punches with the right hand and reaches furthest 1.13 s in, and plays it 4.53 times as fast, mirrored for the left hand, so the reach comes as the fist leaves.
-- The target is chosen at the press: while the mouse or the right stick aims, the beekeeper under the aim or else the aimed point; otherwise auto-aim's most threatening beekeeper within the fist's range, or else ahead. A point is pulled in to the range. A giant standing still turns to it. The fist homes on its beekeeper and hits everyone within its radius, a heavy hit that fills no Fury; each kill adds to the giant's time.
+- The target is chosen at the press. The giant always stands in the chase view, where the mouse and the right stick turn the camera, so the camera's way on the ground is the aim: first the beekeeper within the fist's range nearest that way, within 25 degrees of it (`FistAimConeDegrees`); otherwise auto-aim's most threatening beekeeper within the range; otherwise along the camera's way to the range. The mouse's point never moves a fist, so a click aims as Space and R2 do (changed after review: a click used to aim at the invisible spot 12 to 16 m ahead where the camera looks, and mostly hit empty ground, while Space homed on a beekeeper). A giant standing still turns to the target. The fist homes on its beekeeper and hits everyone within its radius, a heavy hit that fills no Fury; each kill adds to the giant's time.
 - While a fist flies and its arm grows back, that hand cannot launch; the other hand never waits for it. No launch in the air. When the giant ends, a fist in flight never hits, and its wasps ease back into the swarm from where they were.
 - GPU: the wasps on the forearm, hand and finger bones of a side (`ColossusArmBones`, 46 and 43 of 800 wasps, 239 and 256 of 4,000) leave the arm in turn, the hand first, within 0.1 s, fly pinned to an arc that rises 20% of its length (at most 2 m) and speeds up into the hit, all arriving together, so the bolt tightens. They burst to 80% of the hit's radius, turn there, and stream home along an arc over the regrow, the forearm first and the fingers last, so the arm grows back from the elbow. Two hands, three float4s each (`_Fists`), and the bone ranges (`_FistBones`); no new buffer, no readback.
 - Feel: a firm rumble (0.6 and 0.5 for 0.12 s) on the launch and on the hit, a small camera push (0.25) on the launch; the hit has the heavy hits' shake and 50 ms hold.
@@ -517,6 +517,12 @@ Added 2026-11-13, overnight. The owner: "In giant mode I want a punch where the 
 3. A restart carries the device used last to the next scene, so the HUD keeps naming the controller's buttons.
 4. When the match ends the rumble takes no new pulse but lets the running one play out, so the last hive's long, low rumble is felt in full. Pause, focus loss and unloading still stop it at once.
 5. The first Sting's slow frame was not taken further: section Q left about 1.9 ms of first-use cost, unmeasured in a player.
+
+**After review** (closing stage of the night):
+- A fist out when the match ends no longer hangs in the air, glowing, on the end screen. The rules stop at Won or Lost, so `ColossusMotor` stops feeding the fists then, and the swarm's own clock flies the fist on, bursts it and brings its wasps home.
+- A wasp leaving a shape for the river no longer takes the shape's wobble damping (0.5) through the first half of its hand-over. Only the form being taken up wobbles.
+- The fist's burst (0.15 s) and way home (0.55 s) are squeezed to fit a regrow shorter than 0.7 s, so every wasp is home when the rules make the arm ready again. A burst takes at most a quarter of the regrow. At the 2 s regrow nothing changes.
+- The arm's thrust follows `FistThrustSeconds` without a rebuild. The scene builder gives the fist states a `FistPace` speed parameter, and `ColossusMotor` sets it to 1 / `FistThrustSeconds` whenever the giant stands.
 
 ### S. A new map each match
 
