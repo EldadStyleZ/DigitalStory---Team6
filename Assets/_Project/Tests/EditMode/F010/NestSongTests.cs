@@ -93,7 +93,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_song.Song.CooldownSeconds, Is.EqualTo(8f));
             Assert.That(_song.Song.Keys, Is.EqualTo(Keys));
             Assert.That(_song.Category, Is.EqualTo(SongCategory.Attack));
-            Assert.That(_song.WaspCost, Is.EqualTo(200), "the playtest bot after plan section O: was 100");
+            Assert.That(_song.WaspCost, Is.EqualTo(300), "the playtest bot after plan section I: was 200, and 100 before plan section O");
             Assert.That(_song.Slot, Is.EqualTo(SongSlot.Post));
             Assert.That(_song.Form, Is.EqualTo(SwarmForm.Nest));
             Assert.That(_song.Share, Is.EqualTo(0.15f));

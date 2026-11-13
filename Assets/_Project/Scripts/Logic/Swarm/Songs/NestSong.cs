@@ -7,10 +7,11 @@ namespace DigitalStory.Logic
     [CreateAssetMenu(menuName = "DigitalStory/F010/Songs/Nest", fileName = "NestSong")]
     public sealed class NestSong : SlotSongEffect
     {
-        // K L J H: the Honeycomb played backwards. 200 wasps, which stay on the lane while it stands. The playtest bot set it
-        // (was 100) after plan section O made the stings cheaper, so the towers still take a real share of a win's wasps.
+        // K L J H: the Honeycomb played backwards. 300 wasps, which stay on the lane while it stands. The playtest bot set it
+        // (was 100, then 200 after plan section O made the stings cheaper, then 300 with the giant of section I), so the
+        // towers still take a real share of a win's wasps.
         public NestSong()
-            : base(new SongDefinition("Nest", "A trap of wasps waits on the lane", 8f, 2, 3, 1, 0), SongCategory.Attack, 0.15f, 200)
+            : base(new SongDefinition("Nest", "A trap of wasps waits on the lane", 8f, 2, 3, 1, 0), SongCategory.Attack, 0.15f, 300)
         {
         }
 

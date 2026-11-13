@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using DigitalStory.Logic;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -6,11 +8,15 @@ namespace DigitalStory.Tests.EditMode
     /// <summary>
     /// The playtest bot reads which hive a Honeycomb would shell as the Hive aim rule chooses it (plan section E): the
     /// standing hive hit within the last <see cref="DigitalStory.Data.AimConfig.HiveRecentSeconds"/>, otherwise the standing
-    /// hive nearest the core. The towers plans place their shells by it, so the tower shares in section M rest on it.
+    /// hive nearest the core. The towers plans place their shells by it, so the tower shares in section M rest on it. It
+    /// also fights as the giant with the giant's keys (plan section I), so the giant's share of the damage rests on that.
     /// </summary>
     public sealed class PlaytestBotTests
     {
         private const uint Seed = 1;
+
+        // As EconomyPlaytestTests: a match neither won nor lost by then has stalled.
+        private const float MatchSeconds = 20f * 60f;
 
         // PlaytestMatch's hives: west at x = -12.5 and east at x = 12.5, the core between them.
         private const int West = 0;
@@ -58,6 +64,27 @@ namespace DigitalStory.Tests.EditMode
                 bot.Play(new HitOncePlan(NearWest, East, 0.5f), 0.5f + match.Aim.HiveRecentSeconds + 1f);
 
                 Assert.That(bot.ShellHive(), Is.EqualTo(West));
+            }
+        }
+
+        // Plan section I: over a whole match without nests the bot, pressing the giant's keys, roars, punches, kicks and
+        // slams, and plays both phrases, the spin kick and the leap slam.
+        [Test]
+        public void FightAsGiant_OverAMatch_UsesEveryMoveAndBothPhrases()
+        {
+            using (var match = new PlaytestMatch(Seed))
+            {
+                var started = new HashSet<ColossusAttack>();
+                match.Session.ColossusAttackStarted += attack => started.Add(attack);
+
+                new PlaytestBot(match, Seed).Play(new MixedPlan(), MatchSeconds);
+
+                var moves = new[]
+                {
+                    ColossusAttack.Roar, ColossusAttack.Punch, ColossusAttack.Kick, ColossusAttack.Slam, ColossusAttack.SpinKick,
+                    ColossusAttack.LeapSlam,
+                };
+                Assert.That(started, Is.SupersetOf(moves));
             }
         }
 

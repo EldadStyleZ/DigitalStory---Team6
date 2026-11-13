@@ -93,6 +93,9 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("What the chase camera never looks through: when something on these layers stands between the camera and the target's chest or feet, the camera moves in front of it. Triggers and character controllers never count.")]
         private LayerMask _chaseObstacleLayers = Physics.DefaultRaycastLayers;
 
+        [SerializeField, Tooltip("Boxes the chase camera never looks through either, for scenery with no collider on its crown or walls (the scene's trees and ruins). The scene builder fills them from each prop's meshes; the camera moves in front of one as it does for a collider.")]
+        private Bounds[] _chaseBlockers = new Bounds[0];
+
         [SerializeField, Min(0.01f), Tooltip("The radius of the sphere swept from the target's chest to the camera to find what is in the way, in metres.")]
         private float _obstacleRadius = 0.4f;
 
@@ -321,6 +324,15 @@ namespace DigitalStory.View
             _orbitIdle = 0f;
         }
 
+        /// <summary>
+        /// Sets the boxes the chase camera never looks through, as the scene builder does for scenery without colliders. The
+        /// array is kept, not copied. Never null; an empty array means none.
+        /// </summary>
+        public void SetChaseBlockers(Bounds[] blockers)
+        {
+            _chaseBlockers = blockers ?? throw new System.ArgumentNullException(nameof(blockers), "FollowCamera.SetChaseBlockers needs an array; pass an empty one for none.");
+        }
+
         /// <summary>Chooses what to follow and jumps to it at once.</summary>
         public void SetTarget(Transform target)
         {
@@ -432,8 +444,8 @@ namespace DigitalStory.View
             }
         }
 
-        // The metres along the line from the start that are clear of the obstacle layers, less the margin. What the sweep starts
-        // inside (the target's own core, a hive it stands in) and triggers do not count.
+        // The metres along the line from the start that are clear of the obstacle layers and the blocker boxes, less the margin.
+        // What the sweep starts inside (the target's own core, a hive or a tree it stands in) and triggers do not count.
         private float SweepClear(Vector3 start, Vector3 direction, float length)
         {
             int count = Physics.SphereCastNonAlloc(
@@ -448,6 +460,21 @@ namespace DigitalStory.View
                 }
 
                 clear = Mathf.Min(clear, hit.distance - _obstacleMargin);
+            }
+
+            // Each box grows by the sweep's radius, so a line that meets the grown box is a sphere that meets the box.
+            var line = new Ray(start, direction);
+            float grow = _obstacleRadius * 2f;
+            for (int index = 0; index < _chaseBlockers.Length; index++)
+            {
+                Bounds box = _chaseBlockers[index];
+                box.Expand(grow);
+                if (box.Contains(start) || !box.IntersectRay(line, out float distance) || distance > length)
+                {
+                    continue;
+                }
+
+                clear = Mathf.Min(clear, distance - _obstacleMargin);
             }
 
             return clear;

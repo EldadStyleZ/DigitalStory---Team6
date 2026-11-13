@@ -10,7 +10,7 @@ namespace DigitalStory.View
     /// the camera shakes in proportion to the damage, a heavy hit holds the swarm still for a moment, and a hit a shield blocks flashes
     /// blue on the shield. The frame a song is cast, the squad flashes and the camera kicks, before any wasp has moved. The
     /// Tornado's hit also flashes a red ring on the ground at its reach, so where it throws is impossible to miss. A heavy song's
-    /// impact, and the giant's slam and leap, push the camera in for a moment.
+    /// impact, and the giant's heavy blows (its slam, its leap's landing and its third punch), push the camera in for a moment.
     /// Several hits in one frame merge into one shake and one freeze.
     /// </summary>
     [DisallowMultipleComponent]
@@ -38,7 +38,7 @@ namespace DigitalStory.View
         [SerializeField, Range(0f, 1f), Tooltip("How hard the camera pushes in on a heavy song's impact (the Meteor, the Lance, the Hydra, a Nest going off, the Tornado's throw), 0 to 1. The camera's Liveliness scales it.")]
         private float _heavyPushIn = 0.8f;
 
-        [SerializeField, Range(0f, 1f), Tooltip("How hard the camera pushes in when the giant's ground slam or leap slam lands, 0 to 1. The camera's Liveliness scales it.")]
+        [SerializeField, Range(0f, 1f), Tooltip("How hard the camera pushes in when one of the giant's heavy blows lands (the ground slam, the leap slam or the third punch), 0 to 1. The camera's Liveliness scales it.")]
         private float _giantPushIn = 0.5f;
 
         [Header("Freeze")]
@@ -240,11 +240,11 @@ namespace DigitalStory.View
                 || form == SwarmForm.Tornado;
         }
 
-        // The giant's ground slam and leap slam land with a push-in, whether or not they hit anyone; their hits are felt
-        // through SongLanded like any other.
+        // The giant's heavy blows (plan section I: the ground slam, the leap's landing and the third punch) land with a
+        // push-in, whether or not they hit anyone; their hits are felt through SongLanded like any other.
         private void OnColossusLanded(ColossusAttack attack)
         {
-            if (attack == ColossusAttack.Slam || attack == ColossusAttack.LeapSlam)
+            if (attack == ColossusAttack.Slam || attack == ColossusAttack.LeapSlam || attack == ColossusAttack.HeavyPunch)
             {
                 _camera.PushIn(_giantPushIn);
             }

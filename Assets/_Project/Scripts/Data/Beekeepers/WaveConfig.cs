@@ -13,14 +13,15 @@ namespace DigitalStory.Data
         // wave 3 lost a stick (from 6 + 3) so the player reaches them with a few more wasps. After plan section O (sticks go
         // for the hives, the Dome shields them, a Sting sends several stings) waves 4 and 5 grew again, from 16 + 11 and
         // 18 + 12, and the beekeepers come closer together (SpawnIntervalSeconds), so a player without nests still loses.
+        // With the giant of plan section I, which no longer fills Fury by itself, they grew again, from 18 + 13 and 20 + 13.
         [SerializeField, Tooltip("The waves in order, one a round. Each says how many sticks and smokers it sends.")]
         private WaveEntry[] _waves =
         {
             new WaveEntry(4, 0),
             new WaveEntry(5, 1),
             new WaveEntry(5, 3),
-            new WaveEntry(18, 13),
-            new WaveEntry(20, 13)
+            new WaveEntry(22, 14),
+            new WaveEntry(23, 14)
         };
 
         /// <summary>The waves in order, one a round.</summary>

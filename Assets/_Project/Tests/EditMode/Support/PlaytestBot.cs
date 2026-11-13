@@ -9,8 +9,8 @@ namespace DigitalStory.Tests.EditMode
     /// <summary>
     /// Plays a whole match through the rules, as a player at the keyboard would: each tick it asks a plan what to do, moves
     /// the core toward where the plan wants it at the core's speed, presses the holes of a song's real keys one by one, holds
-    /// Give, calls the wave and swings the giant, then ticks the session at a fixed 1/30 s and measures: where the wasps came
-    /// from and went (the towers among the songs), and which song dealt each point of damage. It knows every song, so
+    /// Give, calls the wave and presses the giant's moves, then ticks the session at a fixed 1/30 s and measures: where the
+    /// wasps came from and went (the towers among the songs), and which song dealt each point of damage. It knows every song, so
     /// finding songs is not what it measures. It plays from the keyboard only, so it places a tower as auto-aim would: it
     /// faces the spot and plays the song that far from it, and it reads which hive a Honeycomb would shell. Like a person it
     /// is not instant, and each seed is a different person: how long it takes to react after a song, how fast it plays its
@@ -40,6 +40,22 @@ namespace DigitalStory.Tests.EditMode
         // The giant turns to face a beekeeper by stepping toward it this far, and faces it once the cosine is above this.
         private const float TurnStepMetres = 0.3f;
         private const float FacingCosine = 0.9f;
+
+        // Not game tuning: while the giant stands its moves are the flute's keys (plan section I), holes counting from 0 as
+        // H J K L. H roars, J punches, K kicks and L slams.
+        private const int RoarHole = 0;
+        private const int PunchHole = 1;
+        private const int KickHole = 2;
+        private const int SlamHole = 3;
+        private const int NoHole = -1;
+
+        // How the bot fights as the giant: this many beekeepers make a pack, worth a slam or a spin kick in their reach, a
+        // roar when they are about to hit a hive, and a leap when they stand beyond the slam. One within AboutToHitMetres of a
+        // hive is about to swing at it (a stick swings from 1.8 m), and one within HiveThreatMetres threatens it, as the
+        // mixes count.
+        private const int GiantPack = 2;
+        private const float AboutToHitMetres = 4f;
+        private const float HiveThreatMetres = 8f;
 
         // Within this many metres of where it flies, the core counts as there and stands.
         private const float ArriveMetres = 0.25f;
@@ -86,8 +102,6 @@ namespace DigitalStory.Tests.EditMode
         private bool _hasDestination;
         private bool _give;
         private bool _callWave;
-        private bool _punch;
-        private bool _kick;
         private int _typingCount;
         private int _typingNext;
         private float _nextNoteAt;
@@ -98,6 +112,16 @@ namespace DigitalStory.Tests.EditMode
         private int _lost;
         private float _quietSeconds;
         private int _spawned;
+
+        // The giant's key pressed this tick, when the next may be pressed at this player's pace, the second key of a phrase
+        // still to press, the move under way (from its start until it lands), the last move that landed, and when the kick
+        // has cooled down.
+        private int _giantHoles;
+        private float _nextGiantPressAt;
+        private int _phraseHole = NoHole;
+        private ColossusAttack _giantMove;
+        private ColossusAttack _lastLanded;
+        private float _kickReadyAt;
 
         /// <summary>Gets the bot ready to play <paramref name="match"/>, timing itself from <paramref name="seed"/>.</summary>
         public PlaytestBot(PlaytestMatch match, uint seed)
@@ -153,6 +177,7 @@ namespace DigitalStory.Tests.EditMode
             _session.WaspsGranted += OnWaspsGranted;
             _session.BeekeeperSpawned += OnBeekeeperSpawned;
             _session.Forms.Landed += OnSongLanded;
+            _session.ColossusAttackStarted += OnColossusStarted;
             _session.ColossusAttackLanded += OnColossusLanded;
         }
 
@@ -194,8 +219,7 @@ namespace DigitalStory.Tests.EditMode
                 _hasDestination = false;
                 _give = false;
                 _callWave = false;
-                _punch = false;
-                _kick = false;
+                _giantHoles = 0;
                 plan.Decide(this);
                 TickOnce();
             }
@@ -303,50 +327,68 @@ namespace DigitalStory.Tests.EditMode
         }
 
         /// <summary>
-        /// Swings the giant at the nearest beekeeper: walks it there and, once the beekeeper is where its fists land, punches
-        /// and kicks. Does nothing while the giant does not stand.
+        /// Fights as the giant, pressing its keys as a player does (plan section I): one key at a time at this player's pace,
+        /// each once the move before it has landed, except the second key of a phrase. It walks the giant to the pack at the
+        /// threatened hive (of the beekeepers within 8 m of the hive with the most, the one nearest the giant), or to the
+        /// nearest beekeeper while no hive is threatened. It roars (H) when two beekeepers or more in the roar's reach are
+        /// about to hit a hive, slams (L) when two or more are in the slam's reach, and leaps (L L) onto a pack beyond the
+        /// slam where the leap would land: auto-aim's pick, as it plays from the keyboard. With two or more close while the
+        /// slam cools down it spins (K K); otherwise it punches the beekeeper in front of it (J), three in a row, then kicks
+        /// (K). Does nothing while the giant does not stand or is in the air.
         /// </summary>
         public void FightAsGiant()
         {
-            if (!_session.IsColossusActive)
+            if (!_session.IsColossusActive || _session.IsColossusLeaping)
             {
                 return;
             }
 
-            BeekeeperBrain target = NearestBeekeeper(_core);
+            if (_phraseHole != NoHole)
+            {
+                if (PressGiantKey(_phraseHole))
+                {
+                    _phraseHole = NoHole;
+                }
+
+                return;
+            }
+
+            BeekeeperBrain target = GiantTarget();
             if (target == null)
             {
                 return;
             }
 
-            // A fist lands PunchReach ahead of where the giant faces and hits within PunchRadius of that, so the beekeeper
-            // must stand in front of it, neither too far nor too close, and the giant only turns by walking.
+            ColossusConfig giant = _match.Colossus;
             float scale = _session.ColossusSizeScale;
-            float reach = _match.Colossus.PunchReach * scale;
-            float radius = _match.Colossus.PunchRadius * scale;
-            Vector3 offset = Flat(target.Position - _core);
-            float distance = offset.magnitude;
-            Vector3 toward = distance > 0f ? offset / distance : _session.ColossusFacing;
-            if (distance > reach + (radius * 0.5f))
+            bool isFacing = WalkGiantTo(target, giant.PunchReach * scale, giant.PunchRadius * scale);
+            if (_giantMove != ColossusAttack.None)
             {
-                FlyTo(target.Position);
                 return;
             }
 
-            if (distance < reach - radius)
+            bool isSlamReady = _session.SlamCooldown01 <= 0f;
+            bool isKickReady = Time >= _kickReadyAt;
+            if (_session.RoarCooldown01 <= 0f && CountAboutToHitHive(giant.RoarRadius * scale) >= GiantPack)
             {
-                FlyTo(_core - (toward * reach));
-                return;
+                PressGiantKey(RoarHole);
             }
-
-            if (Vector3.Dot(toward, _session.ColossusFacing) < FacingCosine)
+            else if (isSlamReady && CountWithin(_core, giant.SlamRadius * scale) >= GiantPack)
             {
-                FlyTo(_core + (toward * TurnStepMetres));
-                return;
+                PressGiantKey(SlamHole);
             }
-
-            _punch = true;
-            _kick = true;
+            else if (isSlamReady && IsFarPackAimed(giant, scale))
+            {
+                StartGiantPhrase(SlamHole);
+            }
+            else if (isKickReady && CountWithin(_core, giant.SpinKickRadius * scale) >= GiantPack)
+            {
+                StartGiantPhrase(KickHole);
+            }
+            else if (isFacing)
+            {
+                PressGiantKey(_lastLanded == ColossusAttack.HeavyPunch && isKickReady ? KickHole : PunchHole);
+            }
         }
 
         /// <summary>
@@ -787,6 +829,129 @@ namespace DigitalStory.Tests.EditMode
             return toMiddle.sqrMagnitude > 0f ? position + (toMiddle.normalized * inside) : position + (Vector3.forward * inside);
         }
 
+        // ---- The giant ----
+
+        // Of the beekeepers threatening the hive with the most of them, the one nearest the giant; with no hive threatened,
+        // the nearest beekeeper.
+        private BeekeeperBrain GiantTarget()
+        {
+            int hive = MostThreatenedHive(HiveThreatMetres);
+            if (hive < 0)
+            {
+                return NearestBeekeeper(_core);
+            }
+
+            Vector3 hivePosition = _session.Hives[hive].Position;
+            float threat = HiveThreatMetres * HiveThreatMetres;
+            BeekeeperBrain nearest = null;
+            float best = float.MaxValue;
+            for (int index = 0; index < _session.ActiveBeekeeperCount; index++)
+            {
+                BeekeeperBrain brain = _session.ActiveBeekeeper(index);
+                float distance = Flat(brain.Position - _core).sqrMagnitude;
+                if (brain.IsAlive && Flat(brain.Position - hivePosition).sqrMagnitude <= threat && distance < best)
+                {
+                    best = distance;
+                    nearest = brain;
+                }
+            }
+
+            return nearest;
+        }
+
+        // A fist lands its reach ahead of where the giant faces and hits within its radius of that, so the beekeeper must
+        // stand in front of it, neither too far nor too close, and the giant only turns by walking. True once it does.
+        private bool WalkGiantTo(BeekeeperBrain target, float reach, float radius)
+        {
+            Vector3 offset = Flat(target.Position - _core);
+            float distance = offset.magnitude;
+            Vector3 toward = distance > 0f ? offset / distance : _session.ColossusFacing;
+            if (distance > reach + (radius * 0.5f))
+            {
+                FlyTo(target.Position);
+                return false;
+            }
+
+            if (distance < reach - radius)
+            {
+                FlyTo(_core - (toward * reach));
+                return false;
+            }
+
+            if (Vector3.Dot(toward, _session.ColossusFacing) < FacingCosine)
+            {
+                FlyTo(_core + (toward * TurnStepMetres));
+                return false;
+            }
+
+            return true;
+        }
+
+        // How many living beekeepers within <paramref name="metres"/> of the giant are about to hit a standing hive.
+        private int CountAboutToHitHive(float metres)
+        {
+            int count = 0;
+            float squared = metres * metres;
+            float onHive = AboutToHitMetres * AboutToHitMetres;
+            for (int index = 0; index < _session.ActiveBeekeeperCount; index++)
+            {
+                BeekeeperBrain brain = _session.ActiveBeekeeper(index);
+                if (!brain.IsAlive || Flat(brain.Position - _core).sqrMagnitude > squared)
+                {
+                    continue;
+                }
+
+                for (int hive = 0; hive < _session.Hives.Count; hive++)
+                {
+                    Hive candidate = _session.Hives[hive];
+                    if (!candidate.IsDestroyed && Flat(brain.Position - candidate.Position).sqrMagnitude <= onHive)
+                    {
+                        count++;
+                        break;
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        // From the keyboard the leap lands on auto-aim's pick, the most threatening beekeeper within the Sting's reach. Worth
+        // it when that one stands beyond the slam's reach and within the leap's range, with a pack where the landing hits.
+        private bool IsFarPackAimed(ColossusConfig giant, float scale)
+        {
+            BeekeeperBrain aimed = MostThreatening(_match.Sting.MaxRange * _session.SizeScale);
+            if (aimed == null)
+            {
+                return false;
+            }
+
+            float distance = Flat(aimed.Position - _core).magnitude;
+            return distance > giant.SlamRadius * scale && distance <= giant.LeapRange * scale
+                && CountWithin(aimed.Position, giant.LeapRadius * scale) >= GiantPack;
+        }
+
+        // Presses one of the giant's keys this tick, at this player's pace between two presses. False while too soon.
+        private bool PressGiantKey(int hole)
+        {
+            if (Time < _nextGiantPressAt)
+            {
+                return false;
+            }
+
+            _giantHoles = HiveDefenseFrame.HoleBit(hole);
+            _nextGiantPressAt = Time + _noteSeconds;
+            return true;
+        }
+
+        // The first key of a phrase (K K or L L); the second follows at this player's pace, well inside the phrase's window.
+        private void StartGiantPhrase(int hole)
+        {
+            if (PressGiantKey(hole))
+            {
+                _phraseHole = hole;
+            }
+        }
+
         // ---- The tick ----
 
         private void TickOnce()
@@ -833,11 +998,19 @@ namespace DigitalStory.Tests.EditMode
             }
 
             var frame = new HiveDefenseFrame(
-                _core, _core, new Vector2(direction.x, direction.z), holes, _punch, _kick, false, _give, _callWave);
+                _core, _core, new Vector2(direction.x, direction.z), holes | _giantHoles, false, false, false, _give, _callWave);
             _session.Tick(in frame, Step);
             _core = _session.CorePosition;
             _ticks++;
             MeasureRestOfDamage();
+
+            // A giant that ended dropped the move under way, so the next one starts afresh.
+            if (!_session.IsColossusActive)
+            {
+                _giantMove = ColossusAttack.None;
+                _lastLanded = ColossusAttack.None;
+                _phraseHole = NoHole;
+            }
 
             // Measured against the health at the end of the last tick, as auto-aim notes a hit, so a change between ticks
             // counts too. In a match only the session's tick changes a hive's health.
@@ -952,9 +1125,21 @@ namespace DigitalStory.Tests.EditMode
             MeasureDamage(_songOfForm[(int)form], null);
         }
 
+        // A player sees each move start and land. The kick cools down from its start.
+        private void OnColossusStarted(ColossusAttack attack)
+        {
+            _giantMove = attack;
+            if (attack == ColossusAttack.Kick)
+            {
+                _kickReadyAt = Time + _match.Colossus.KickCooldownSeconds;
+            }
+        }
+
         private void OnColossusLanded(ColossusAttack attack)
         {
             MeasureDamage(_colossusSong, null);
+            _giantMove = ColossusAttack.None;
+            _lastLanded = attack;
         }
 
         private void OnHiveHit(BeekeeperBrain brain, int hive)

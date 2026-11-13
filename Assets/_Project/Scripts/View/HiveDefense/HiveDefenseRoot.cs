@@ -268,8 +268,8 @@ namespace DigitalStory.View
 
         /// <summary>
         /// Holds a move, as holding W A S D does, until it is set back to zero: y forward and x to the right, length 0 to 1.
-        /// While the giant stands it walks relative to the camera, so (0, 1) walks it away from the camera. For tests and the
-        /// benchmark; the keys work either way.
+        /// It goes the keys' way: relative to the camera, so (0, 1) walks the core or the giant away from the camera (north
+        /// in the top view). For tests and the benchmark; the keys work either way.
         /// </summary>
         public void HoldMove(Vector2 move)
         {
@@ -474,14 +474,13 @@ namespace DigitalStory.View
                 return;
             }
 
-            // While the giant stands the move steers the giant, which the session moves with the core inside it, so the
-            // motor only settles the core on the ground. The giant walks relative to the camera: y is the camera's way.
+            // The keys, or a held move, are relative to the camera: y is the camera's way on the ground and x its right. They
+            // are turned onto the ground once (GroundStep): here for the core, and in the session for the giant, which gets
+            // them unturned. While the giant stands it carries the core, so the motor only settles the core on the ground.
             bool isColossus = Session.IsColossusActive;
-            Vector3 move = _input.Move;
-            if (_heldMove.sqrMagnitude > 0f)
-            {
-                move = new Vector3(_heldMove.x, 0f, _heldMove.y);
-            }
+            Vector2 localMove = _heldMove.sqrMagnitude > 0f ? _heldMove : _input.LocalMove;
+            Vector3 cameraForward = _followCamera.GroundForward;
+            Vector3 move = HiveDefenseFrame.GroundStep(localMove, cameraForward);
 
             _coreMotor.Move(
                 isColossus ? Vector3.zero : move, Session.CoreSpeedMultiplier, isColossus || Session.IsCoreRooted, dt);
@@ -496,27 +495,22 @@ namespace DigitalStory.View
                 CallWave();
             }
 
-            // The mouse aims only while it is live; otherwise auto-aim chooses. In the chase view the mouse turns the camera,
-            // so the aim is where the camera looks on the ground, ahead of the giant (plan section I).
-            bool isMouseLive = _input.IsMouseLive;
-            Vector3 aimPoint = _lastAimPoint;
-            if (_isChasing)
-            {
-                aimPoint = ChaseAimPoint();
-                isMouseLive = true;
-            }
+            // The mouse aims only while it is live; otherwise auto-aim chooses (plan section I). In the chase view the mouse
+            // turns the camera, so there its aim is where the camera looks on the ground, ahead of the giant, and it is live
+            // for a moment after it turns the view or while a button is held, as anywhere else.
+            Vector3 aimPoint = _isChasing ? ChaseAimPoint() : _lastAimPoint;
 
             var frame = new HiveDefenseFrame(
                 _coreMotor.Position,
                 aimPoint,
-                new Vector2(move.x, move.z),
+                localMove,
                 _holeMask,
                 _input.PunchPressed,
                 _input.KickPressed,
-                isMouseLive,
+                _input.IsMouseLive,
                 _input.GiveHeld || _isGiveHeld,
                 _isWaveCalled,
-                _followCamera.GroundForward);
+                cameraForward);
             _holeMask = 0;
             _isWaveCalled = false;
             _hasFormChangedThisTick = false;

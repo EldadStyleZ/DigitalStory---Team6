@@ -9,9 +9,15 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(1f), Tooltip("Fury needed for the Colossus.")]
         public float Max { get; private set; } = 100f;
 
-        // 1 point per 4 damage, so the giant stays a highlight (plan section I asked for 3; the playtest bot settled on 4,
-        // because at 3 the giant came so often that songs, and the wasps they cost, mattered less).
+        // 1 point per 7 damage, so the giant stays a highlight. Plan section I asked for 3, and the playtest bot settled on 4
+        // while the giant stood 11 s; with the giant of 20 to 30 s it set 7, so the giant deals under 45% of the damage in
+        // the wins and the songs, and the wasps they cost, still matter.
         [field: SerializeField, Min(0.01f), Tooltip("Damage that earns one point of Fury.")]
-        public float DamagePerFuryPoint { get; private set; } = 4f;
+        public float DamagePerFuryPoint { get; private set; } = 7f;
+
+        // None, by the playtest bot: a giant of 20 to 30 s filled the meter again by itself (about 600 damage, 150 points at
+        // 1 per 4) and stood through nearly every wave.
+        [field: SerializeField, Range(0f, 1f), Tooltip("Share of the giant's own damage that fills Fury: 0 none, 1 all of it, as the songs' damage does.")]
+        public float ColossusDamageShare { get; private set; }
     }
 }

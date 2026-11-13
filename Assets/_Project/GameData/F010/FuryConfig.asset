@@ -13,4 +13,5 @@ MonoBehaviour:
   m_Name: FuryConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.FuryConfig
   <Max>k__BackingField: 100
-  <DamagePerFuryPoint>k__BackingField: 4
+  <DamagePerFuryPoint>k__BackingField: 7
+  <ColossusDamageShare>k__BackingField: 0

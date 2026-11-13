@@ -464,8 +464,8 @@ namespace DigitalStory.Tests.EditMode
         // ---- Costs (plan section M) ----
 
         // The song at each index costs the plan's price: Dome 40, Sting 5 for each sting, Tornado 60, Gust 20, Hive Call 0,
-        // Colossus 0 (Fury is its price), Meteor 90, Hydra 60, Scythe 30, Lance 70, Nest 200 and Honeycomb 150. The playtest bot
-        // set the Sting's (was 10) and the Nest's (was 100) after plan section O.
+        // Colossus 0 (Fury is its price), Meteor 90, Hydra 60, Scythe 30, Lance 70, Nest 300 and Honeycomb 150. The playtest bot
+        // set the Sting's (was 10) and the Nest's (was 100, then 200) after plan sections O and I.
         [TestCase(0, 40)]
         [TestCase(1, 5)]
         [TestCase(2, 60)]
@@ -476,7 +476,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(7, 60)]
         [TestCase(8, 30)]
         [TestCase(9, 70)]
-        [TestCase(10, 200)]
+        [TestCase(10, 300)]
         [TestCase(11, 150)]
         public void WaspCost_IsThePlansPrice(int song, int cost)
         {

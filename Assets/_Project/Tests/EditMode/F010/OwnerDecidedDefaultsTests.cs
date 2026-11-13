@@ -83,14 +83,14 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // The playtest bot's waves: later ones bigger, because the swarm grows, and waves 4 and 5 most, so a player without
-        // nests loses (plan section H), even with the towers and the rules of plan section O; a beekeeper every 2.5 s, so a
-        // wave comes in over time instead of all at once.
+        // nests loses (plan section H), even with the towers, the rules of plan section O and the giant of section I; a
+        // beekeeper every 2.5 s, so a wave comes in over time instead of all at once.
         [Test]
         public void WaveConfig_HoldsTheFarmPhasesAndWavesOfPlanSectionL()
         {
             var config = ScriptableObject.CreateInstance<WaveConfig>();
-            int[] sticks = { 4, 5, 5, 18, 20 };
-            int[] smokers = { 0, 1, 3, 13, 13 };
+            int[] sticks = { 4, 5, 5, 22, 23 };
+            int[] smokers = { 0, 1, 3, 14, 14 };
 
             Assert.AreEqual(45f, config.FirstFarmSeconds);
             Assert.AreEqual(40f, config.FarmSeconds);
@@ -147,14 +147,16 @@ namespace DigitalStory.Tests.EditMode
             Object.DestroyImmediate(config);
         }
 
-        // The giant stays a highlight: 1 Fury point per 4 damage, 100 points to fill.
+        // The giant stays a highlight: 1 Fury point per 7 damage of the songs, 100 points to fill, and none from the giant's own
+        // blows, so a giant of 20 s or more cannot fill the meter again by itself and stand through a whole wave.
         [Test]
         public void FuryConfig_HoldsTheGiantsPriceThePlaytestBotSet()
         {
             var config = ScriptableObject.CreateInstance<FuryConfig>();
 
             Assert.AreEqual(100f, config.Max);
-            Assert.AreEqual(4f, config.DamagePerFuryPoint);
+            Assert.AreEqual(7f, config.DamagePerFuryPoint);
+            Assert.AreEqual(0f, config.ColossusDamageShare);
 
             Object.DestroyImmediate(config);
         }
@@ -179,7 +181,8 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // The Sting's is for each sting a cast sends (plan section O), and the playtest bot halved it and doubled the Nest's
-        // after that section, so a cast at the starting 800 wasps still costs 10.
+        // after that section, so a cast at the starting 800 wasps still costs 10. With the giant of section I it raised the
+        // Nest's again, to 300, so the towers keep a real share of a win's wasps.
         [TestCase(typeof(StingSong), 5)]
         [TestCase(typeof(GustSong), 20)]
         [TestCase(typeof(DomeSong), 40)]
@@ -188,7 +191,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(typeof(HydraSong), 60)]
         [TestCase(typeof(ScytheSong), 30)]
         [TestCase(typeof(LanceSong), 70)]
-        [TestCase(typeof(NestSong), 200)]
+        [TestCase(typeof(NestSong), 300)]
         [TestCase(typeof(HoneycombSong), 150)]
         [TestCase(typeof(ColossusSong), 0)]
         [TestCase(typeof(HiveCallSong), 0)]

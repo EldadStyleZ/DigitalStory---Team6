@@ -773,3 +773,8 @@
 .giant-mark--ready {
     background-color: var(--fury-glow);
 }
+
+/* No song can be cast while the giant stands, so the songbook steps aside and leaves the chase view clear. */
+.songbook--hidden {
+    display: none;
+}

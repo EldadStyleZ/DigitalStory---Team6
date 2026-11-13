@@ -582,17 +582,12 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.IsCoreRooted, Is.False);
         }
 
+        // The giant's own blows fill no Fury by default, so a giant of 20 s or more cannot fill the meter again by itself
+        // and stand through a whole wave.
         [Test]
-        public void Colossus_Punch_HurtsAndStunsABeekeeperInReachAndFillsFury()
+        public void Colossus_Punch_HurtsAndStunsABeekeeperInReach_AndFillsNoFury()
         {
-            // The giant faces +z by default, and the stick spawns 2.5 m ahead of it.
-            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(0f, 0f, 2.5f) });
-            _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
-            _world.Session.Fury.TryUse();
-            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
-            _world.Session.Forms.StartColossus(ColossusSeconds);
-            _world.Run(HiveDefenseWorld.Step);
-            BeekeeperBrain keeper = _world.Session.ActiveBeekeeper(0);
+            BeekeeperBrain keeper = GiantFacingOneStick();
             var landed = new List<ColossusAttack>();
             _world.Session.ColossusAttackLanded += landed.Add;
 
@@ -602,7 +597,33 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(landed, Is.EqualTo(new[] { ColossusAttack.Punch }));
             Assert.That(keeper.Health, Is.EqualTo(_world.Stick.Health - _world.Colossus.PunchDamage).Within(0.01f));
             Assert.That(keeper.State, Is.EqualTo(BeekeeperState.Stunned));
-            Assert.That(_world.Session.Fury.Value, Is.GreaterThan(0f));
+            Assert.That(_world.Session.Fury.Value, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void Colossus_Punch_WithAShareOfItsDamageForFury_FillsFuryByThatShare()
+        {
+            BeekeeperBrain keeper = GiantFacingOneStick();
+            JsonUtility.FromJsonOverwrite("{\"<ColossusDamageShare>k__BackingField\":0.5}", _world.Fury);
+
+            _world.Session.Tick(_world.Frame(punch: true), HiveDefenseWorld.Step);
+            _world.Run(_world.Colossus.PunchHitDelay + 0.1f);
+
+            Assert.That(keeper.Health, Is.EqualTo(_world.Stick.Health - _world.Colossus.PunchDamage).Within(0.01f));
+            float expected = _world.Colossus.PunchDamage * 0.5f / _world.Fury.DamagePerFuryPoint;
+            Assert.That(_world.Session.Fury.Value, Is.EqualTo(expected).Within(1e-3f));
+        }
+
+        // A giant standing over empty Fury, with one stick 2.5 m ahead of it, where a punch lands: it faces +z by default.
+        private BeekeeperBrain GiantFacingOneStick()
+        {
+            _world = new HiveDefenseWorld(OneStick(), spawns: new[] { new Vector3(0f, 0f, 2.5f) });
+            _world.Session.Fury.AddDamage(_world.Fury.Max * _world.Fury.DamagePerFuryPoint);
+            _world.Session.Fury.TryUse();
+            _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 10f);
+            _world.Session.Forms.StartColossus(ColossusSeconds);
+            _world.Run(HiveDefenseWorld.Step);
+            return _world.Session.ActiveBeekeeper(0);
         }
 
         // Plan section K: the Colossus is the whole swarm. The core rides inside it, so a place the View gives the core
@@ -1095,7 +1116,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(hits[0].Form, Is.EqualTo(SwarmForm.Colossus));
             Assert.That(hits[0].IsHeavy, Is.True);
             Assert.That(hits[0].Damage, Is.EqualTo(_world.Colossus.SlamDamage).Within(0.01f));
-            Assert.That(session.Fury.Value, Is.GreaterThan(0f), "the giant's damage fills Fury, as a punch's does");
+            Assert.That(session.Fury.Value, Is.EqualTo(0f), "the giant's own blows fill no Fury, as a punch's does not");
         }
 
         [Test]
@@ -1398,6 +1419,72 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.ColossusFacing.x, Is.EqualTo(expectedX).Within(1e-4f));
             Assert.That(session.ColossusFacing.z, Is.EqualTo(expectedZ).Within(1e-4f));
             Assert.That(session.CoreFacing.x, Is.EqualTo(expectedX).Within(1e-4f), "the core faces the way the giant walked");
+        }
+
+        // The keys are relative to the camera, and the one step from them to the ground turns them by the camera's way once:
+        // the View walks the core with it and the session steers the giant with it. Here the camera looks down as the chase
+        // camera does, turned a quarter, a half and three quarters of a turn from the world's north. A move longer than 1 is
+        // cut to 1.
+        [TestCase(0f, 1f, 90f, 1f, 0f)]
+        [TestCase(1f, 0f, 90f, 0f, -1f)]
+        [TestCase(0f, 1f, 180f, 0f, -1f)]
+        [TestCase(1f, 0f, 180f, -1f, 0f)]
+        [TestCase(0f, -1f, 270f, 1f, 0f)]
+        [TestCase(-1f, 0f, 270f, 0f, -1f)]
+        [TestCase(1f, 1f, 0f, 0.70711f, 0.70711f)]
+        public void GroundStep_ForACameraTurnedAway_StepsAlongItsWayOnTheGround(
+            float moveX, float moveY, float yawDegrees, float expectedX, float expectedZ)
+        {
+            Vector3 cameraForward = Quaternion.Euler(16f, yawDegrees, 0f) * Vector3.forward;
+
+            Vector3 step = HiveDefenseFrame.GroundStep(new Vector2(moveX, moveY), cameraForward);
+
+            Assert.That(step.x, Is.EqualTo(expectedX).Within(1e-4f));
+            Assert.That(step.y, Is.EqualTo(0f));
+            Assert.That(step.z, Is.EqualTo(expectedZ).Within(1e-4f));
+        }
+
+        // The camera's way on the ground is the session's steering too, so a frame with the keys' move and that way walks the
+        // giant exactly the step the View would walk the core, at a camera turned half a turn.
+        [Test]
+        public void Giant_Steering_WalksTheStepTheKeysAskFor()
+        {
+            _world = new HiveDefenseWorld(core: new Vector3(5f, 0f, 5f));
+            HiveDefenseSession session = _world.Session;
+            Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
+            _world.Run(HiveDefenseWorld.Step);
+            Vector3 camera = Quaternion.Euler(16f, 180f, 0f) * Vector3.forward;
+            var keys = new Vector2(0f, 1f);
+            Vector3 step = HiveDefenseFrame.GroundStep(keys, camera);
+
+            _world.RunWith(1f, _world.Frame(move: keys, cameraForward: camera));
+
+            Assert.That(session.ColossusPosition.x, Is.EqualTo(5f + (step.x * _world.Colossus.Speed)).Within(0.2f));
+            Assert.That(session.ColossusPosition.z, Is.EqualTo(5f + (step.z * _world.Colossus.Speed)).Within(0.2f));
+            Assert.That(session.ColossusPosition.z, Is.LessThan(5f), "W walked the giant toward the camera");
+        }
+
+        // Plan section I: with the mouse idle the leap goes to auto-aim's pick, the most threatening beekeeper within the
+        // Sting's reach, and not to the frame's aim point. The stick stands off the giant's facing, so the landing is not the
+        // fallback 6 m ahead.
+        [Test]
+        public void Giant_LeapWithTheMouseIdle_GoesToTheBeekeeperAutoAimPicks()
+        {
+            List<BeekeeperBrain> keepers = GiantAmong(ColossusSeconds, new Vector3(3f, 0f, 6f));
+            HiveDefenseSession session = _world.Session;
+            ColossusConfig giant = _world.Colossus;
+            var elsewhere = new Vector3(-8f, 0f, 0f);
+            HiveDefenseFrame idle = _world.Frame(aim: elsewhere);
+            HiveDefenseFrame slam = _world.Frame(holes: HiveDefenseFrame.HoleBit(SlamHole), aim: elsewhere);
+
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+            _world.RunWith(giant.SlamHitDelay + 0.05f, idle);
+            _world.RunWith(HiveDefenseWorld.Step, slam);
+
+            Assert.That(session.IsColossusLeaping, Is.True);
+            Vector3 stick = keepers[0].Position;
+            Assert.That(session.ColossusLeapTarget.x, Is.EqualTo(stick.x).Within(0.05f), "it leapt to the stick");
+            Assert.That(session.ColossusLeapTarget.z, Is.EqualTo(stick.z).Within(0.05f), "it leapt to the stick");
         }
 
         [Test]

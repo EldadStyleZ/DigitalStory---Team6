@@ -19,10 +19,10 @@ MonoBehaviour:
     _smokers: 1
   - _sticks: 5
     _smokers: 3
-  - _sticks: 18
-    _smokers: 13
-  - _sticks: 20
-    _smokers: 13
+  - _sticks: 22
+    _smokers: 14
+  - _sticks: 23
+    _smokers: 14
   <FirstFarmSeconds>k__BackingField: 45
   <FarmSeconds>k__BackingField: 40
   <EarlyBonusPerSecond>k__BackingField: 5

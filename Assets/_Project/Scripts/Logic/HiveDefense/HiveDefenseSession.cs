@@ -863,30 +863,15 @@ namespace DigitalStory.Logic
         // The giant walks through hives and scenery, but never past the play area, where the ground ends.
         private void SteerColossus(Vector2 move, Vector3 cameraForward, float dt)
         {
-            if (move.sqrMagnitude > 1f)
-            {
-                move.Normalize();
-            }
-
-            if (!(move.sqrMagnitude > 0f))
+            Vector3 step = HiveDefenseFrame.GroundStep(move, cameraForward);
+            if (!(step.sqrMagnitude > 0f))
             {
                 return;
             }
 
-            Vector3 forward = GroundForward(cameraForward);
-            var right = new Vector3(forward.z, 0f, -forward.x);
-            Vector3 step = (right * move.x) + (forward * move.y);
             _colossusPosition = KeepInPlayArea(_colossusPosition + (step * (_rules.Colossus.Speed * dt)));
             _colossusFacing = step.normalized;
             _coreFacing = _colossusFacing;
-        }
-
-        // Only the camera's way on the ground counts; with none, or one looking straight down, it is the world's forward.
-        private static Vector3 GroundForward(Vector3 direction)
-        {
-            direction.y = 0f;
-            float sqr = direction.sqrMagnitude;
-            return sqr > CoincidentSqrMetres ? direction / Mathf.Sqrt(sqr) : Vector3.forward;
         }
 
         // Plan section I: J or Space punches, K or Left Shift kicks, L slams and H roars. A hole and its button pressed on one
@@ -1164,8 +1149,9 @@ namespace DigitalStory.Logic
 
         // Every living beekeeper on the ground within the radius of the centre takes the damage, as hard and as far as the
         // level the giant stood up at, and each hit is reported once (plan section O). One that lives is stunned and, with a
-        // knockback, thrown: away from the centre for a hit all around, along the giant's facing for a blow ahead. The damage
-        // fills Fury, and each kill adds to the giant's time.
+        // knockback, thrown: away from the centre for a hit all around, along the giant's facing for a blow ahead. Only
+        // FuryConfig.ColossusDamageShare of the damage fills Fury (none by default, so a giant cannot fill the meter again by
+        // itself), and each kill adds to the giant's time.
         private void Hit(Vector3 center, float damage, float radius, float knockback, bool isAround, bool isHeavy)
         {
             damage *= _colossusDamageScale;
@@ -1205,9 +1191,10 @@ namespace DigitalStory.Logic
                 }
             }
 
-            if (dealt > 0f)
+            float forFury = dealt * _rules.Fury.ColossusDamageShare;
+            if (forFury > 0f)
             {
-                Forms.AddColossusDamage(dealt);
+                Forms.AddColossusDamage(forFury);
             }
 
             if (kills > 0)

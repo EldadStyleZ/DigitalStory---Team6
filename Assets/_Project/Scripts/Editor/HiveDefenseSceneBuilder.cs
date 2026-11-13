@@ -87,6 +87,9 @@ namespace DigitalStory.Editor
         // layouts that keep them. The nests stay inside the clear middle, short of the scenery around the edge, and apart
         // from each other and the spawn points, so no two collect circles touch and no beekeeper enters under a nest.
         private const float NestTreeHeight = 5f;
+
+        // Props at least this tall block the chase camera's view of the giant; the bushes below it are looked over.
+        private const float CameraBlockerLeastHeight = 2f;
         private const float NestInsideHalfSize = 24f;
         private const float NestSpacing = 8f;
         private const float NestSpawnClearance = 8f;
@@ -1382,7 +1385,7 @@ namespace DigitalStory.Editor
             BuildLighting();
             BuildGround();
             Transform spawns = BuildSpawnPoints();
-            BuildScenery(spawns);
+            Transform scenery = BuildScenery(spawns);
 
             var hives = new HiveView[2];
             var hiveSource = AssetDatabase.LoadAssetAtPath<GameObject>(HiveSourcePath);
@@ -1407,6 +1410,7 @@ namespace DigitalStory.Editor
             // giant is, facing its way, so the puppet's spin and leap never swing the view.
             var chaseAnchor = new GameObject("Giant Chase Anchor");
             chaseAnchor.transform.position = colossus.transform.position;
+            SetChaseBlockers(camera.GetComponent<FollowCamera>(), scenery, nests);
 
             var input = new GameObject("Hive Defense Input", typeof(HiveDefenseInput));
 
@@ -1592,7 +1596,43 @@ namespace DigitalStory.Editor
         }
 
         // Around the edge only, never in the middle 50 x 50 m, and never on a spawn point.
-        private static void BuildScenery(Transform spawns)
+        // Plan section I: the chase camera moves in front of what stands between it and the giant, but Raz's tree crowns and
+        // ruins have no collider, so it is given each tall prop's box, the scenery's and the nest trees', instead.
+        private static void SetChaseBlockers(FollowCamera follow, Transform scenery, NestView[] nests)
+        {
+            var blockers = new List<Bounds>();
+            for (int index = 0; index < scenery.childCount; index++)
+            {
+                AddChaseBlocker(blockers, scenery.GetChild(index));
+            }
+
+            for (int index = 0; index < nests.Length; index++)
+            {
+                AddChaseBlocker(blockers, nests[index].transform);
+            }
+
+            var serialized = new SerializedObject(follow);
+            SerializedProperty property = Property(serialized, "_chaseBlockers");
+            property.arraySize = blockers.Count;
+            for (int index = 0; index < blockers.Count; index++)
+            {
+                property.GetArrayElementAtIndex(index).boundsValue = blockers[index];
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void AddChaseBlocker(List<Bounds> blockers, Transform prop)
+        {
+            Bounds bounds = MeasureBounds(prop);
+            if (bounds.size.y >= CameraBlockerLeastHeight)
+            {
+                blockers.Add(bounds);
+            }
+        }
+
+        // Returns the parent of every prop.
+        private static Transform BuildScenery(Transform spawns)
         {
             var parent = new GameObject("Scenery").transform;
             var random = new System.Random(SceneSeed);
@@ -1633,6 +1673,8 @@ namespace DigitalStory.Editor
                     all[index].gameObject.isStatic = true;
                 }
             }
+
+            return parent;
         }
 
         private static bool TryPickEdgePoint(System.Random random, Transform spawns, out Vector3 point)

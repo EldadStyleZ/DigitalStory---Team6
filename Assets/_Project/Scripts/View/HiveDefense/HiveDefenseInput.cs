@@ -31,8 +31,11 @@ namespace DigitalStory.View
         /// <summary>Raised for each hole pressed this frame, lowest hole first. The hole counts from 0.</summary>
         public event Action<int> HolePressed;
 
-        /// <summary>The walking direction on the ground, relative to the camera's yaw. Length at most 1.</summary>
-        public Vector3 Move { get; private set; }
+        /// <summary>
+        /// The walking keys, relative to the camera and not turned by it: y forward (W) and x to the right (D), length at most 1.
+        /// The root turns it onto the ground once, with <see cref="DigitalStory.Logic.HiveDefenseFrame.GroundStep"/>.
+        /// </summary>
+        public Vector2 LocalMove { get; private set; }
 
         /// <summary>True only on the frame the punch was pressed (Space or left mouse).</summary>
         public bool PunchPressed { get; private set; }
@@ -55,7 +58,10 @@ namespace DigitalStory.View
         /// </summary>
         public Vector2 LookDelta { get; private set; }
 
-        /// <summary>True for 1 s after the mouse moves 4 px, and while a mouse button is held. Then the mouse aims.</summary>
+        /// <summary>
+        /// True for 1 s after the mouse moves 4 px, or turns the view while the cursor is locked (the giant's chase), and while
+        /// a mouse button is held. Then the mouse aims; otherwise auto-aim chooses.
+        /// </summary>
         public bool IsMouseLive { get; private set; }
 
         /// <summary>True while a key for a hole is held down (H J K L, top row or keypad). The hole counts from 0.</summary>
@@ -71,7 +77,7 @@ namespace DigitalStory.View
             return hole >= 0 && hole < HoleNames.Length ? HoleNames[hole] : "?";
         }
 
-        /// <summary>Supplies the camera that walking and aiming are relative to. Call once, before the first Update.</summary>
+        /// <summary>Supplies the camera that aiming is relative to. Call once, before the first Update.</summary>
         public void Initialize(Camera camera)
         {
             _camera = camera;
@@ -102,7 +108,7 @@ namespace DigitalStory.View
 
         private void Update()
         {
-            Move = ReadMove();
+            LocalMove = ReadMove();
             PunchPressed = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
             KickPressed = Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.LeftShift);
             RestartPressed = Input.GetKeyDown(KeyCode.R);
@@ -122,22 +128,28 @@ namespace DigitalStory.View
 
         private void UpdateMouseLive()
         {
-            Vector3 mouse = Input.mousePosition;
-            if (_hasLastMouse && (mouse - _lastMouse).sqrMagnitude >= MouseMovePixels * MouseMovePixels)
+            bool hasMoved;
+            if (Cursor.lockState == CursorLockMode.Locked)
             {
-                _mouseLiveLeft = MouseLiveSeconds;
+                // A locked cursor stays put while the mouse turns the view, so a turn is the move. The reference is taken
+                // afresh once the cursor is free, so its jump back is no move.
+                hasMoved = LookDelta.sqrMagnitude > 0f;
+                _hasLastMouse = false;
             }
             else
             {
-                _mouseLiveLeft = Mathf.Max(0f, _mouseLiveLeft - Time.unscaledDeltaTime);
+                Vector3 mouse = Input.mousePosition;
+                hasMoved = _hasLastMouse && (mouse - _lastMouse).sqrMagnitude >= MouseMovePixels * MouseMovePixels;
+
+                // The reference moves only when the mouse has moved 4 px, so slow drags still add up.
+                if (!_hasLastMouse || hasMoved)
+                {
+                    _lastMouse = mouse;
+                    _hasLastMouse = true;
+                }
             }
 
-            // The reference moves only when the mouse has moved 4 px, so slow drags still add up.
-            if (!_hasLastMouse || (mouse - _lastMouse).sqrMagnitude >= MouseMovePixels * MouseMovePixels)
-            {
-                _lastMouse = mouse;
-                _hasLastMouse = true;
-            }
+            _mouseLiveLeft = hasMoved ? MouseLiveSeconds : Mathf.Max(0f, _mouseLiveLeft - Time.unscaledDeltaTime);
 
             bool held = Input.GetMouseButton(0) || Input.GetMouseButton(1);
             if (held)
@@ -148,41 +160,12 @@ namespace DigitalStory.View
             IsMouseLive = held || _mouseLiveLeft > 0f;
         }
 
-        private Vector3 ReadMove()
+        // Only the keys, not turned by the camera: the root turns the move once, so the core and the giant agree.
+        private static Vector2 ReadMove()
         {
             float x = Axis(KeyCode.RightArrow, KeyCode.D) - Axis(KeyCode.LeftArrow, KeyCode.A);
-            float z = Axis(KeyCode.UpArrow, KeyCode.W) - Axis(KeyCode.DownArrow, KeyCode.S);
-
-            if (x == 0f && z == 0f)
-            {
-                return Vector3.zero;
-            }
-
-            Vector3 forward = Vector3.forward;
-            Vector3 right = Vector3.right;
-
-            if (_camera != null)
-            {
-                Transform view = _camera.transform;
-                forward = Flatten(view.forward, view.up);
-                right = Flatten(view.right, Vector3.right);
-            }
-
-            return Vector3.ClampMagnitude((right * x) + (forward * z), 1f);
-        }
-
-        // A camera looking straight down has no horizontal forward, so the up vector stands in for it.
-        private static Vector3 Flatten(Vector3 direction, Vector3 fallback)
-        {
-            direction.y = 0f;
-
-            if (direction.sqrMagnitude < 1e-6f)
-            {
-                fallback.y = 0f;
-                direction = fallback;
-            }
-
-            return direction.normalized;
+            float y = Axis(KeyCode.UpArrow, KeyCode.W) - Axis(KeyCode.DownArrow, KeyCode.S);
+            return Vector2.ClampMagnitude(new Vector2(x, y), 1f);
         }
 
         private static float Axis(KeyCode arrow, KeyCode letter)

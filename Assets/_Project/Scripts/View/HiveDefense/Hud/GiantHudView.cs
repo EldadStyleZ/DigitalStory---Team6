@@ -9,7 +9,8 @@ namespace DigitalStory.View
     /// The HUD's giant strip (plan section I). While the Colossus stands it shows a ring of the seconds left, which glows for a
     /// moment when a kill adds time, and two small marks for the slam's and the roar's cooldowns. Each time the giant forms, a
     /// line names its moves for a few seconds and then fades, with a smaller line of its two phrases the first times only.
-    /// Hidden otherwise.
+    /// Hidden otherwise. No song can be cast while the giant stands, so the songbook steps aside then and leaves the right of
+    /// the chase view to what the giant fights.
     /// </summary>
     /// <remarks>Lives on the same GameObject as the HUD's UIDocument. The HUD view adds it and calls Initialize.</remarks>
     [DisallowMultipleComponent]
@@ -19,6 +20,7 @@ namespace DigitalStory.View
         private const string ShownClass = "giant-strip--shown";
         private const string LineShownClass = "giant-line--shown";
         private const string ReadyClass = "giant-mark--ready";
+        private const string SongbookHiddenClass = "songbook--hidden";
         private const float PercentScale = 100f;
         private const float FullTurnDegrees = 360f;
         private const float TopDegrees = -90f;
@@ -63,6 +65,7 @@ namespace DigitalStory.View
         private VisualElement _roarFill;
         private Label _movesLine;
         private Label _phrasesLine;
+        private VisualElement _songbook;
         private bool _isShowing;
         private int _formations;
         private float _lineLeft;
@@ -83,6 +86,9 @@ namespace DigitalStory.View
 
         /// <summary>True while the phrases' line shows with the moves' line, for tests and debugging.</summary>
         public bool IsPhrasesHintShowing => _phrasesLine != null && _phrasesLine.ClassListContains(LineShownClass);
+
+        /// <summary>True while the songbook is hidden because the giant stands, for tests and debugging.</summary>
+        public bool IsSongbookHidden => _songbook != null && _songbook.ClassListContains(SongbookHiddenClass);
 
         /// <summary>The share of the giant's time the ring shows as left, 0 to 1, for tests and debugging.</summary>
         public float RingShare => _ringShare;
@@ -114,6 +120,7 @@ namespace DigitalStory.View
             _roarFill = Require<VisualElement>(root, "giant-roar-fill");
             _movesLine = Require<Label>(root, "giant-moves-line");
             _phrasesLine = Require<Label>(root, "giant-phrases-line");
+            _songbook = Require<VisualElement>(root, "songbook");
             _movesLine.text = _movesText;
             _phrasesLine.text = _phrasesText;
             _ring.generateVisualContent += DrawRing;
@@ -132,6 +139,7 @@ namespace DigitalStory.View
             _strip.RemoveFromClassList(ShownClass);
             _movesLine.RemoveFromClassList(LineShownClass);
             _phrasesLine.RemoveFromClassList(LineShownClass);
+            _songbook.RemoveFromClassList(SongbookHiddenClass);
             _isReady = true;
         }
 
@@ -191,6 +199,7 @@ namespace DigitalStory.View
             _strip.AddToClassList(ShownClass);
             _movesLine.AddToClassList(LineShownClass);
             _phrasesLine.EnableInClassList(LineShownClass, _formations <= _phraseFormations);
+            _songbook.AddToClassList(SongbookHiddenClass);
         }
 
         private void Hide()
@@ -200,6 +209,7 @@ namespace DigitalStory.View
             _strip.RemoveFromClassList(ShownClass);
             _movesLine.RemoveFromClassList(LineShownClass);
             _phrasesLine.RemoveFromClassList(LineShownClass);
+            _songbook.RemoveFromClassList(SongbookHiddenClass);
         }
 
         // The ring is the share of the giant's whole time still left. A kill that adds seconds makes it glow for a moment.

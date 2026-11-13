@@ -14,7 +14,8 @@ namespace DigitalStory.Tests.PlayMode
     /// <summary>
     /// The giant, version 2 (plan section I), in the hive defense scene through the root, as the keys would drive it: H J K L
     /// are its moves and no song is cast while it stands, W walks it away from the chase camera, the line of its keys shows
-    /// when it forms and fades, and time slows for a moment as it forms and puts itself back.
+    /// when it forms and fades, and time slows for a moment as it forms and puts itself back. The camera's effects answer the
+    /// giant's heavy blows and the waves.
     /// </summary>
     public sealed class HiveDefenseGiantTests
     {
@@ -33,6 +34,8 @@ namespace DigitalStory.Tests.PlayMode
         private const float HintSeconds = 6f;
         private const float FadeMarginSeconds = 0.5f;
         private const float FastTimeScale = 5f;
+        private const float WavePullSeconds = 2.5f;
+        private const float HalfWay = 0.5f;
 
         // Holes count from 0 as H J K L.
         private const int RoarHole = 0;
@@ -151,6 +154,7 @@ namespace DigitalStory.Tests.PlayMode
             var hint = Object.FindAnyObjectByType<GiantHudView>();
             Assert.That(hint, Is.Not.Null, "The scene has no GiantHudView.");
             Assert.That(hint.IsHintShowing, Is.False, "the keys show before the giant");
+            Assert.That(hint.IsSongbookHidden, Is.False, "the songbook is hidden before the giant");
 
             yield return FormTheGiant();
             yield return null;
@@ -158,6 +162,7 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(hint.IsShowing, Is.True, "the giant strip does not show");
             Assert.That(hint.IsHintShowing, Is.True, "the line of the giant's keys does not show");
             Assert.That(hint.IsPhrasesHintShowing, Is.True, "the phrases do not show the first time");
+            Assert.That(hint.IsSongbookHidden, Is.True, "the songbook still covers the chase view");
 
             Time.timeScale = FastTimeScale;
             yield return WaitGameSeconds(HintSeconds + FadeMarginSeconds);
@@ -187,6 +192,44 @@ namespace DigitalStory.Tests.PlayMode
 
             Assert.That(_root.IsSlowingTime, Is.False, "the slow-down did not end");
             Assert.That(Time.timeScale, Is.EqualTo(1f), "the time scale was not put back");
+        }
+
+        // The owner's ask for camera effects, wired by the root and the hit feel: the giant's slam lands with a push-in.
+        [UnityTest]
+        public IEnumerator Slam_WhenItLands_PushesTheCameraIn()
+        {
+            yield return FormTheGiant();
+            var follow = Object.FindAnyObjectByType<FollowCamera>();
+            bool hasLanded = false;
+            _root.Session.ColossusAttackLanded += attack => hasLanded |= attack == ColossusAttack.Slam;
+
+            _root.PressHole(SlamHole);
+            float waited = 0f;
+            int frames = 0;
+            while (!hasLanded && waited < MaxMoveWaitSeconds && frames < MaxFrames)
+            {
+                waited += Time.deltaTime;
+                frames++;
+                yield return null;
+            }
+
+            Assert.That(hasLanded, Is.True, "the slam did not land");
+            yield return null;
+            Assert.That(follow.PushInStrength, Is.GreaterThan(0f), "the slam did not push the camera in");
+        }
+
+        // The owner's ask for camera effects: while a wave runs the camera backs away a little.
+        [UnityTest]
+        public IEnumerator Wave_WhileItRuns_PullsTheCameraBack()
+        {
+            var follow = Object.FindAnyObjectByType<FollowCamera>();
+            Assert.That(follow.WavePullBack01, Is.EqualTo(0f).Within(1e-3f), "the camera is pulled back before the wave");
+
+            _root.CallWave();
+            yield return WaitGameSeconds(WavePullSeconds);
+
+            Assert.That(_root.Session.Phase, Is.EqualTo(MatchPhase.Survive), "the wave did not start");
+            Assert.That(follow.WavePullBack01, Is.GreaterThan(HalfWay), "the camera did not back away while the wave runs");
         }
 
         // Fills Fury, plays the Colossus keys and waits until the giant stands.

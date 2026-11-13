@@ -32,7 +32,9 @@ namespace DigitalStory.Tests.EditMode
         private const float FewestTowerShare = 0.08f;
         private const float MostDamageShare = 0.5f;
 
-        // Plan section O: the giant was near half the damage, so it must stay clearly below it.
+        // Plan section O: the giant was near half the damage, so it must stay clearly below it. The giant of section I, 20 s
+        // and more, dealt 82% while its own blows filled Fury; with that stopped it deals 44% on these seeds (43% on thirty),
+        // and with the towers' 9% in the poorest win it is the thinnest margin here.
         private const float MostColossusShare = 0.45f;
         private const float ShortestWinSeconds = 6f * 60f;
         private const float LongestWinSeconds = 9f * 60f;

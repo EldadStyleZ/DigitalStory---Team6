@@ -125,6 +125,28 @@ namespace DigitalStory.Tests.PlayMode
             }
         }
 
+        // The scene's tree crowns have no collider, so the builder gives the camera boxes it never looks through: with one
+        // behind the target, the chase camera stops in front of it, still behind the target, rather than inside or past it.
+        [UnityTest]
+        public IEnumerator Chase_WithABlockerBehindTheTarget_StopsInFrontOfIt()
+        {
+            var blocker = new Bounds(new Vector3(0f, 4f, -8f), new Vector3(6f, 6f, 2f));
+            _camera.SetChaseBlockers(new[] { blocker });
+            _camera.EnterChase(_target, GiantHeight);
+            yield return Wait(BlendSeconds + 0.5f);
+
+            Vector3 position = _camera.transform.position;
+            Assert.That(blocker.Contains(position), Is.False, "The camera is inside the blocker.");
+            Assert.That(position.z, Is.GreaterThan(blocker.max.z), "The camera is past the blocker, looking through it.");
+            Assert.That(position.z, Is.LessThan(_target.position.z), "The camera is not behind the target.");
+        }
+
+        [Test]
+        public void SetChaseBlockers_WithNull_FailsLoudly()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => _camera.SetChaseBlockers(null));
+        }
+
         [UnityTest]
         public IEnumerator GroundForward_IsFlatAndUnitLengthInBothViews()
         {

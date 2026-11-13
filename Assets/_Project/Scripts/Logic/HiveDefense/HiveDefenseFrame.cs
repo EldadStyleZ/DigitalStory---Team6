@@ -5,6 +5,9 @@ namespace DigitalStory.Logic
     /// <summary>What the View tells the session each tick: where it moved the core, what the player aims at, presses and holds.</summary>
     public readonly struct HiveDefenseFrame
     {
+        // Not game tuning: a camera way on the ground shorter than this (squared) is none, as for a camera looking straight down.
+        private const float NoWaySqr = 0.00000001f;
+
         /// <summary>
         /// Makes a frame with the mouse idle, so auto-aim chooses what an aimed song strikes, and Give and Call Wave untouched.
         /// <paramref name="move"/> is x and z on the ground and steers the giant.
@@ -100,8 +103,9 @@ namespace DigitalStory.Logic
         public bool IsMouseLive { get; }
 
         /// <summary>
-        /// The steering input for the giant, length 0 to 1: y forward along <see cref="CameraForward"/> (W) and x to its right
-        /// (D). With no camera direction, x and y are the world's x and z.
+        /// The keys' move, relative to the camera and not yet turned by it, length 0 to 1: y forward along
+        /// <see cref="CameraForward"/> (W) and x to its right (D). With no camera direction, x and y are the world's x and z.
+        /// It steers the giant through <see cref="GroundStep"/>.
         /// </summary>
         public Vector2 Move { get; }
 
@@ -132,5 +136,21 @@ namespace DigitalStory.Logic
 
         /// <summary>The bit for a hole, counting from 0.</summary>
         public static int HoleBit(int hole) => 1 << hole;
+
+        /// <summary>
+        /// Turns a move relative to the camera into a step on the ground, once: y along the way
+        /// <paramref name="cameraForward"/> looks on the ground (W) and x to its right (D). A move longer than 1 is cut to 1.
+        /// A zero camera way, or one straight down, means the world's forward, so x and y are then the world's x and z. The
+        /// View walks the core with it and the session steers the giant with it, so the keys mean the same to both.
+        /// </summary>
+        public static Vector3 GroundStep(Vector2 move, Vector3 cameraForward)
+        {
+            move = Vector2.ClampMagnitude(move, 1f);
+            cameraForward.y = 0f;
+            float sqr = cameraForward.sqrMagnitude;
+            Vector3 forward = sqr > NoWaySqr ? cameraForward / Mathf.Sqrt(sqr) : Vector3.forward;
+            var right = new Vector3(forward.z, 0f, -forward.x);
+            return (right * move.x) + (forward * move.y);
+        }
     }
 }
