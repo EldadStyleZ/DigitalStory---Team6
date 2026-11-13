@@ -134,5 +134,53 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(mixer.Tick(Frame).Low, Is.EqualTo(0.8f).Within(Tolerance));
         }
+
+        // Songs-v2 R, small fix 4: the last hive's long rumble starts on the tick the match ends, and plays out.
+        [Test]
+        public void Close_WithAPulseRunning_LetsItPlayOutThenIsStill()
+        {
+            var mixer = new RumbleMixer();
+            mixer.Add(new RumblePulse(0.7f, 0.1f, 0.9f));
+
+            mixer.Close();
+            MotorSpeeds during = mixer.Tick(0.5f);
+            MotorSpeeds late = mixer.Tick(0.3f);
+            mixer.Tick(0.2f);
+            MotorSpeeds after = mixer.Tick(Frame);
+
+            Assert.That(mixer.IsClosed, Is.True);
+            Assert.That(during.Low, Is.EqualTo(0.7f).Within(Tolerance));
+            Assert.That(late.Low, Is.EqualTo(0.7f).Within(Tolerance), "0.8 s into a 0.9 s pulse");
+            Assert.That(after.IsStill, Is.True);
+        }
+
+        [Test]
+        public void Close_ThenAPulse_IsRefusedUntilOpen()
+        {
+            var mixer = new RumbleMixer();
+
+            mixer.Close();
+            mixer.Add(new RumblePulse(0.4f, 0.4f, 0.5f));
+            MotorSpeeds closed = mixer.Tick(Frame);
+            mixer.Open();
+            mixer.Add(new RumblePulse(0.4f, 0.4f, 0.5f));
+            MotorSpeeds open = mixer.Tick(Frame);
+
+            Assert.That(closed.IsStill, Is.True);
+            Assert.That(mixer.IsClosed, Is.False);
+            Assert.That(open.Low, Is.EqualTo(0.4f).Within(Tolerance));
+        }
+
+        [Test]
+        public void Clear_WhileClosed_StopsThePulseAtOnce()
+        {
+            var mixer = new RumbleMixer();
+            mixer.Add(new RumblePulse(0.7f, 0.1f, 0.9f));
+            mixer.Close();
+
+            mixer.Clear();
+
+            Assert.That(mixer.Tick(Frame).IsStill, Is.True);
+        }
     }
 }
