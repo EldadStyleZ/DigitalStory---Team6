@@ -143,8 +143,11 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0.01f), Tooltip("The fewest seconds a fist flies, so even a target at the giant's feet sees the fist leave the arm.")]
         public float FistLeastFlightSeconds { get; private set; } = 0.2f;
 
-        [field: SerializeField, Min(0f), Tooltip("The most metres from the giant a fist flies: auto-aim picks a beekeeper within it, and an aimed point beyond it is pulled in to it. Grows with the level.")]
+        [field: SerializeField, Min(0f), Tooltip("The most metres from the giant a fist flies: it picks a beekeeper within it, and with none it flies this far. Grows with the level.")]
         public float FistRange { get; private set; } = 14f;
+
+        [field: SerializeField, Range(0f, 90f), Tooltip("Degrees either side of the way the camera looks on the ground within which a fist flies to the beekeeper nearest that way, before auto-aim's most threatening one. The mouse and the right stick aim by turning the camera, so a click, Space and R2 all aim alike. 0 leaves it to auto-aim.")]
+        public float FistAimConeDegrees { get; private set; } = 25f;
 
         [field: SerializeField, Min(0.1f), Tooltip("Seconds from a fist's hit until its arm has grown back and can launch again. The arm is missing until then.")]
         public float FistRegrowSeconds { get; private set; } = 2f;

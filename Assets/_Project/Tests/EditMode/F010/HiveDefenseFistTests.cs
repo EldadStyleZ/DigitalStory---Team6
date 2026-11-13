@@ -138,8 +138,68 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.ActiveBeekeeper(0).Health, Is.EqualTo(_world.Stick.Health - (2f * _world.Colossus.FistDamage)).Within(0.01f));
         }
 
+        // After review: in the chase view the mouse and the right stick turn the camera, so the way the camera looks is the
+        // aim. A fist flies to the beekeeper nearest that way, within FistAimConeDegrees of it and within the fist's range.
         [Test]
-        public void Fist_WhileTheMouseAims_FliesToTheAimedPointPulledInToItsRange()
+        public void Fist_FliesToTheBeekeeperTheCameraLooksAt()
+        {
+            var ahead = new Vector3(0f, 0f, 9f);
+            var right = new Vector3(9f, 0f, 0f);
+            List<BeekeeperBrain> keepers = GiantAmong(ColossusSeconds, ahead, right);
+            HiveDefenseSession session = _world.Session;
+            ahead = StandingNear(keepers, ahead);
+            right = StandingNear(keepers, right);
+
+            _world.RunWith(Step, _world.Frame(rightHand: true, cameraForward: Vector3.right));
+            Vector3 rightFist = session.FistTarget(ColossusHand.Right);
+            _world.RunWith(Step, _world.Frame(leftHand: true, cameraForward: new Vector3(0f, -0.6f, 0.8f)));
+            Vector3 leftFist = session.FistTarget(ColossusHand.Left);
+
+            Assert.That(GroundDistance(rightFist, right), Is.LessThan(0.01f), "the camera looked right");
+            Assert.That(GroundDistance(leftFist, ahead), Is.LessThan(0.01f), "the camera looked ahead, and down at the ground");
+        }
+
+        // The mouse never moves a fist's target, so a click aims as Space and R2 do.
+        [Test]
+        public void Fist_AClickAimsAsSpaceDoes()
+        {
+            var ahead = new Vector3(0f, 0f, 9f);
+            var right = new Vector3(9f, 0f, 0f);
+            List<BeekeeperBrain> keepers = GiantAmong(ColossusSeconds, ahead, right);
+            HiveDefenseSession session = _world.Session;
+            ahead = StandingNear(keepers, ahead);
+            right = StandingNear(keepers, right);
+
+            _world.RunWith(Step, _world.Frame(rightHand: true, aim: right, isMouseLive: true, cameraForward: Vector3.forward));
+            Vector3 clicked = session.FistTarget(ColossusHand.Right);
+            _world.RunWith(Step, _world.Frame(leftHand: true, cameraForward: Vector3.forward));
+            Vector3 pressed = session.FistTarget(ColossusHand.Left);
+
+            Assert.That(GroundDistance(clicked, ahead), Is.LessThan(0.01f), "the click flew where the camera looks");
+            Assert.That(GroundDistance(pressed, ahead), Is.LessThan(0.01f));
+        }
+
+        // With no beekeeper near the camera's way, auto-aim's most threatening one in range, never empty ground.
+        [Test]
+        public void Fist_WithNoBeekeeperWhereTheCameraLooks_FliesToOneInRange()
+        {
+            var ahead = new Vector3(0f, 0f, 9f);
+            var right = new Vector3(9f, 0f, 0f);
+            List<BeekeeperBrain> keepers = GiantAmong(ColossusSeconds, ahead, right);
+            HiveDefenseSession session = _world.Session;
+            ahead = StandingNear(keepers, ahead);
+            right = StandingNear(keepers, right);
+
+            _world.RunWith(Step, _world.Frame(rightHand: true, cameraForward: Vector3.back));
+            Vector3 target = session.FistTarget(ColossusHand.Right);
+
+            float nearest = Mathf.Min(GroundDistance(target, ahead), GroundDistance(target, right));
+            Assert.That(nearest, Is.LessThan(0.01f), "the fist flew at empty ground");
+        }
+
+        // With no beekeeper in range at all, along the camera's way to the fist's range; the mouse does not move it.
+        [Test]
+        public void Fist_WithNoBeekeeperInRange_FliesAlongTheCameraToItsRange()
         {
             _world = new HiveDefenseWorld();
             HiveDefenseSession session = _world.Session;
@@ -147,7 +207,7 @@ namespace DigitalStory.Tests.EditMode
             _world.Run(Step);
             Listen();
 
-            _world.RunWith(Step, _world.Frame(rightHand: true, aim: new Vector3(30f, 0f, 0f), isMouseLive: true));
+            _world.RunWith(Step, _world.Frame(rightHand: true, aim: new Vector3(0f, 0f, 30f), isMouseLive: true, cameraForward: Vector3.right));
             Vector3 target = session.FistTarget(ColossusHand.Right);
             _world.Run(_world.Colossus.FistThrustSeconds + Step);
             float flight = session.FistFlightSeconds(ColossusHand.Right);
@@ -155,7 +215,29 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(target.x, Is.EqualTo(_world.Colossus.FistRange).Within(1e-3f));
             Assert.That(target.z, Is.EqualTo(0f).Within(1e-3f));
             Assert.That(flight, Is.EqualTo(_world.Colossus.FistRange / _world.Colossus.FistSpeed).Within(0.03f));
-            Assert.That(session.ColossusFacing.x, Is.EqualTo(1f).Within(1e-3f), "it turns to the aimed point");
+            Assert.That(session.ColossusFacing.x, Is.EqualTo(1f).Within(1e-3f), "it turns to where the fist flies");
+        }
+
+        private static float GroundDistance(Vector3 a, Vector3 b)
+        {
+            return new Vector2(a.x - b.x, a.z - b.z).magnitude;
+        }
+
+        // Where the stick that spawned at the spot stands.
+        private static Vector3 StandingNear(List<BeekeeperBrain> keepers, Vector3 spot)
+        {
+            BeekeeperBrain nearest = null;
+            for (int index = 0; index < keepers.Count; index++)
+            {
+                if (nearest == null || GroundDistance(keepers[index].Position, spot) < GroundDistance(nearest.Position, spot))
+                {
+                    nearest = keepers[index];
+                }
+            }
+
+            Assert.That(nearest, Is.Not.Null);
+            Assert.That(GroundDistance(nearest.Position, spot), Is.LessThan(2f), "no stick spawned at " + spot);
+            return nearest.Position;
         }
 
         [Test]

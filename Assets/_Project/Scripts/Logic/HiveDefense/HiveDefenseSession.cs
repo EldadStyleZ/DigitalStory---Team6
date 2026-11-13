@@ -797,6 +797,13 @@ namespace DigitalStory.Logic
             _aimPoint = _autoAim.AimPoint;
         }
 
+        private void ChooseIgnoringMouse(AimRule rule, float range)
+        {
+            _autoAim.Select(rule, range, _corePosition, _coreFacing, false, _mousePoint);
+            _aimTarget = _autoAim.Target;
+            _aimPoint = _autoAim.AimPoint;
+        }
+
         private void PressHoles(int mask)
         {
             if (mask == 0)
@@ -939,12 +946,12 @@ namespace DigitalStory.Logic
             bool isWalking = frame.Move.sqrMagnitude > 0f;
             if (frame.RightHand)
             {
-                ThrowFist(ColossusHand.Right, isWalking);
+                ThrowFist(ColossusHand.Right, isWalking, frame.CameraForward);
             }
 
             if (frame.LeftHand)
             {
-                ThrowFist(ColossusHand.Left, isWalking);
+                ThrowFist(ColossusHand.Left, isWalking, frame.CameraForward);
             }
         }
 
@@ -1278,7 +1285,7 @@ namespace DigitalStory.Logic
         }
 
         // Songs-v2 R: the arm thrusts, and the target is chosen now, so a giant standing still turns to face it as it thrusts.
-        private void ThrowFist(ColossusHand hand, bool isWalking)
+        private void ThrowFist(ColossusHand hand, bool isWalking, Vector3 cameraForward)
         {
             int index = FistIndex(hand);
             if (!_fists[index].TryThrust())
@@ -1286,7 +1293,7 @@ namespace DigitalStory.Logic
                 return;
             }
 
-            ChooseFistTarget(index);
+            ChooseFistTarget(index, cameraForward);
             Vector3 target = _fistPoints[index];
             if (!isWalking && GroundMath.DistanceSquared(target, _colossusPosition) > TurnSqrMetres)
             {
@@ -1297,19 +1304,76 @@ namespace DigitalStory.Logic
             ColossusFistThrown?.Invoke(hand);
         }
 
-        // Where a fist flies: while the mouse or the right stick aims, the beekeeper under the aim, or else the aimed point;
-        // otherwise auto-aim's most threatening beekeeper within the fist's range, or else ahead. A point is pulled in to the
-        // range, which grows with the giant's level, and kept on the ground inside the play area.
-        private void ChooseFistTarget(int index)
+        // Where a fist flies (songs-v2 R, after review): the giant stands in the chase view, where the mouse and the right
+        // stick turn the camera, so the way the camera looks is the aim and the mouse's point never moves a fist. A click
+        // aims as Space and R2 do. First the beekeeper within the fist's range nearest that way, within FistAimConeDegrees of
+        // it; otherwise auto-aim's most threatening beekeeper in range; otherwise along the camera's way (or ahead, with no
+        // camera) to the range, which grows with the giant's level, kept on the ground inside the play area.
+        private void ChooseFistTarget(int index, Vector3 cameraForward)
         {
-            float range = _rules.Colossus.FistRange * _colossusSizeScale;
-            Choose(AimRule.Threat, range);
-            ISwarmTarget target = AimTarget;
-            _fistTargets[index] = target;
-            Vector3 point = target != null ? target.Position : _aimPoint;
-            point.y = 0f;
+            ColossusConfig config = _rules.Colossus;
+            float range = config.FistRange * _colossusSizeScale;
             var giant = new Vector3(_colossusPosition.x, 0f, _colossusPosition.z);
+            var way = new Vector3(cameraForward.x, 0f, cameraForward.z);
+            bool hasWay = way.sqrMagnitude > TurnSqrMetres;
+            if (hasWay)
+            {
+                way.Normalize();
+            }
+
+            ISwarmTarget target = hasWay ? LookedAt(giant, way, range, config.FistAimConeDegrees) : null;
+            Vector3 ahead = giant + (way * range);
+            if (target == null)
+            {
+                ChooseIgnoringMouse(AimRule.Threat, range);
+                target = AimTarget;
+                if (!hasWay)
+                {
+                    ahead = _aimPoint;
+                }
+            }
+
+            _fistTargets[index] = target;
+            Vector3 point = target != null ? target.Position : ahead;
+            point.y = 0f;
             _fistPoints[index] = target != null ? point : KeepInPlayArea(GroundMath.PullIn(point, giant, range));
+        }
+
+        // The living beekeeper within the range whose way from the giant is nearest the camera's, within the cone; or none.
+        private BeekeeperBrain LookedAt(Vector3 giant, Vector3 way, float range, float coneDegrees)
+        {
+            if (!(coneDegrees > 0f))
+            {
+                return null;
+            }
+
+            float leastCosine = Mathf.Cos(Mathf.Min(coneDegrees, 90f) * Mathf.Deg2Rad);
+            float rangeSqr = range * range;
+            BeekeeperBrain best = null;
+            float bestCosine = leastCosine;
+            for (int slot = 0; slot < _pool.Length; slot++)
+            {
+                if (!_isActive[slot] || !_pool[slot].IsAlive)
+                {
+                    continue;
+                }
+
+                Vector3 position = _pool[slot].Position;
+                float distanceSqr = GroundMath.DistanceSquared(position, giant);
+                if (distanceSqr > rangeSqr || distanceSqr <= TurnSqrMetres)
+                {
+                    continue;
+                }
+
+                float cosine = Vector3.Dot(GroundMath.Direction(giant, position), way);
+                if (cosine >= bestCosine)
+                {
+                    best = _pool[slot];
+                    bestCosine = cosine;
+                }
+            }
+
+            return best;
         }
 
         // Each hand on its own: the fist leaves at the end of the thrust and flies at the fist's speed, homing on its beekeeper
