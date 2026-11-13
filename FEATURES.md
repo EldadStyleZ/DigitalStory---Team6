@@ -152,3 +152,4 @@ Add a row when the team decides something that future work must follow.
 | 2026-10-30 | Inject dependencies by hand, with one composition root per scene. No DI container for now. | Keeps Logic testable without adding a package. |
 | 2026-10-31 | The game is The Piper, rebuilt from the team's HTML prototype to our standards. | The prototype already defines the rules, so we keep them and replace the structure. |
 | 2026-10-31 | The game is one night, with no levels, unlocks or saved progress. | The team does not want levels. |
+| 2026-11-13 | Add `com.unity.inputsystem` 1.20.1 with Active Input Handling set to Both, for F-010's controller support and rumble. F-009 uses the same version and setting. | The Input Manager cannot rumble a controller. Keyboard and mouse code keeps working because both systems stay on. |
