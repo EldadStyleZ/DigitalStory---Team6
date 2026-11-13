@@ -482,3 +482,34 @@ Added 2026-11-13, overnight, after the owner said the movement "looks a bit weir
 - First Sting in the Editor: 2.23 ms against 0.51 ms for the second one before, and 2.33 against 0.46 after. About 1.9 ms of first-use cost remains in script updates. The game's own non-generic methods are now compiled ahead, so this cost lies elsewhere: generic or engine code, or a first sound. It has not been measured in a player.
 
 Not done: curl noise, and banking, which needs a field that the 48-byte wasp state does not have.
+
+### R. The giant's hands, and five small fixes
+
+Added 2026-11-13, overnight. The owner: "In giant mode I want a punch where the hand moves forward and then all the bees on that hand fly off to the target. R2 does it with the right hand and L2 with the left hand." Where this section differs from sections I and P, it wins.
+
+**Hand launch.** Right hand: R2, the right mouse button or Space. Left hand: L2, the left mouse button or Left Shift. These buttons punched and kicked before; J and K still do, and outside the giant the buttons still do nothing but keep the mouse live while held.
+
+| Value (ColossusConfig) | Set |
+|---|---|
+| Thrust, press to launch | 0.25 s |
+| Damage, times the level's damage scale | 20 (a punch is 45) |
+| Radius, times the level's size scale | 1.2 m |
+| Throw and stun | none |
+| Speed | 24 m/s, at least 0.2 s of flight |
+| Range, times the level's size scale | 14 m |
+| Regrow, from the hit until the arm is whole | 2 s |
+
+- The arm thrusts with the heavy punch's clip (Cross Punch). The scene builder plays it on the character, finds that it punches with the right hand and reaches furthest 1.13 s in, and plays it 4.53 times as fast, mirrored for the left hand, so the reach comes as the fist leaves.
+- The target is chosen at the press: while the mouse or the right stick aims, the beekeeper under the aim or else the aimed point; otherwise auto-aim's most threatening beekeeper within the fist's range, or else ahead. A point is pulled in to the range. A giant standing still turns to it. The fist homes on its beekeeper and hits everyone within its radius, a heavy hit that fills no Fury; each kill adds to the giant's time.
+- While a fist flies and its arm grows back, that hand cannot launch; the other hand never waits for it. No launch in the air. When the giant ends, a fist in flight never hits, and its wasps ease back into the swarm from where they were.
+- GPU: the wasps on the forearm, hand and finger bones of a side (`ColossusArmBones`, 46 and 43 of 800 wasps, 239 and 256 of 4,000) leave the arm in turn, the hand first, within 0.1 s, fly pinned to an arc that rises 20% of its length (at most 2 m) and speeds up into the hit, all arriving together, so the bolt tightens. They burst to 80% of the hit's radius, turn there, and stream home along an arc over the regrow, the forearm first and the fingers last, so the arm grows back from the elbow. Two hands, three float4s each (`_Fists`), and the bone ranges (`_FistBones`); no new buffer, no readback.
+- Feel: a firm rumble (0.6 and 0.5 for 0.12 s) on the launch and on the hit, a small camera push (0.25) on the launch; the hit has the heavy hits' shake and 50 ms hold.
+- HUD: a second hint line names the hands ("Right click or Space: right fist · Left click or Shift: left fist", and "RT: right fist · LT: left fist" on a controller), and the strip has a mark for each hand ("RMB fist", "LMB fist", or "RT fist", "LT fist").
+- The playtest bot launches a hand when no hive is under attack and auto-aim's pick stands beyond the leap's range. Its fists count as the giant's damage. The economy playtests turn the hands off: with them, at 30, 20 or 10 damage and with the launches narrowed step by step, MixedWithNests seed 3 always won without a heal (the 15% floor) and, early on, Mixed won 3 of 5. The stage that tunes everything again turns them on.
+
+**Small fixes.**
+1. A ring marks where the leap (L L) will land, from its take-off until it lands, 25% wider than the landing's reach at first and closing to it.
+2. While the giant stands, the time ring and its marks take the songbook's corner, bottom right, and the lines at the bottom (the "New song" toast among them) move to the bottom left. The hint lines moved up from 19% to 11% of the height, above the giant's head.
+3. A restart carries the device used last to the next scene, so the HUD keeps naming the controller's buttons.
+4. When the match ends the rumble takes no new pulse but lets the running one play out, so the last hive's long, low rumble is felt in full. Pause, focus loss and unloading still stop it at once.
+5. The first Sting's slow frame was not taken further: section Q left about 1.9 ms of first-use cost, unmeasured in a player.
