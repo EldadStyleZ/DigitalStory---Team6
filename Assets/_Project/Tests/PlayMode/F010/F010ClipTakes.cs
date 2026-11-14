@@ -65,6 +65,23 @@ namespace DigitalStory.Tests.PlayMode
         private static readonly Vector3 OverviewFocus = new Vector3(0f, 0f, -4f);
         private static readonly int[] MapSeeds = { 101, 202, 303 };
 
+        // The song strips: the core 6 m south of the middle, three sticks 4 to 6 m ahead of it, and when each picture is
+        // taken, in game seconds after the cast (the Meteor lands at 1 s, the giant forms over about 1.5 s).
+        private const float StripWalkMetres = 1.5f;
+        private const float StripWalkSeconds = 0.3f;
+        private const float StripSettleSeconds = 1.2f;
+        private static readonly Vector3 StripCore = new Vector3(0f, 0f, -6f);
+
+        private static readonly Vector3[] StripBeekeepers =
+        {
+            new Vector3(-3f, 0f, -1.5f), new Vector3(0.5f, 0f, 0f), new Vector3(3.5f, 0f, -2f),
+        };
+
+        private static readonly int[] StripWasps = { 800, 4000 };
+        private static readonly float[] StripSeconds = { 0.1f, 0.25f, 0.4f, 0.6f, 1f, 1.8f };
+        private static readonly float[] MeteorStripSeconds = { 0.25f, 0.6f, 0.95f, 1.1f, 1.4f, 2.2f };
+        private static readonly float[] GiantStripSeconds = { 0.3f, 0.8f, 1.4f, 2.2f, 3.2f, 4.5f };
+
         private string _directory;
         private float _savedTimeScale;
         private float _savedCaptureDeltaTime;
@@ -199,6 +216,177 @@ namespace DigitalStory.Tests.PlayMode
             finally
             {
                 RenderSettings.fog = wasFoggy;
+            }
+        }
+
+        // Songs-v2 Z: a strip of each song's cast, from the cast to the settle, in the game camera (so the feel layer's
+        // shake and punches are in it), at a swarm of 800 and of 4,000. Three stunned sticks stand ahead of the core, in every
+        // attack's reach. Each song gets a fresh scene. One picture per song: the 800 row above the 4,000 row.
+        [UnityTest]
+        [Explicit(ExplicitReason)]
+        public IEnumerator Take4_SongStrips()
+        {
+            string folder = TakeFolder("take-4-song-strips");
+            Type[] songs =
+            {
+                typeof(StingSong), typeof(TornadoSong), typeof(MeteorSong), typeof(HydraSong), typeof(ScytheSong),
+                typeof(LanceSong), typeof(DomeSong), typeof(GustSong), typeof(HoneycombSong), typeof(NestSong),
+                typeof(HiveCallSong), typeof(ColossusSong),
+            };
+
+            foreach (Type song in songs)
+            {
+                float[] times = song == typeof(ColossusSong) ? GiantStripSeconds
+                    : song == typeof(MeteorSong) ? MeteorStripSeconds : StripSeconds;
+                var names = new List<string>();
+                foreach (int wasps in StripWasps)
+                {
+                    yield return LoadScene();
+                    yield return StageSong(song, wasps);
+                    int index = SongIndexOf(song);
+                    IReadOnlyList<int> keys = _root.Session.Caster[index].Song.Keys;
+                    for (int key = 0; key < keys.Count; key++)
+                    {
+                        _root.PressHole(keys[key]);
+                        yield return null;
+                    }
+
+                    // The last note is read on the next tick: the cast.
+                    yield return null;
+                    float castAt = Time.time;
+                    for (int shot = 0; shot < times.Length; shot++)
+                    {
+                        while (Time.time - castAt < times[shot])
+                        {
+                            yield return null;
+                        }
+
+                        string name = $"{song.Name}-{wasps}-{shot}";
+                        _capturer.RequestCapture(Path.Combine(folder, name + ".png"));
+                        yield return WaitForCapture();
+                        names.Add(name);
+                    }
+                }
+
+                CombineStrip(folder, names, times.Length, "strip-" + song.Name);
+            }
+        }
+
+        // Puts the core 6 m south of the middle facing north, with three sticks stunned ahead, the swarm at `wasps` and, for the
+        // giant, full Fury; then lets the river settle.
+        private IEnumerator StageSong(Type song, int wasps)
+        {
+            HiveDefenseSession session = _root.Session;
+            _core.PlaceAt(StripCore + (Vector3.back * StripWalkMetres), true);
+            float walked = 0f;
+            while (walked < StripWalkSeconds)
+            {
+                _core.Move(Vector3.forward, 1f, false, Time.deltaTime);
+                walked += Time.deltaTime;
+                yield return null;
+            }
+
+            session.BeekeeperSpawned += keeper => keeper.Stun(StunSeconds);
+            _root.CallWave();
+            float waited = 0f;
+            while (session.ActiveBeekeeperCount < StripBeekeepers.Length && waited < MaxWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.ActiveBeekeeperCount, Is.GreaterThanOrEqualTo(StripBeekeepers.Length));
+            for (int index = 0; index < StripBeekeepers.Length; index++)
+            {
+                BeekeeperBrain keeper = session.ActiveBeekeeper(index);
+                keeper.Spawn(StripBeekeepers[index]);
+                keeper.Stun(StunSeconds);
+            }
+
+            SwarmBody swarm = session.Swarm;
+            swarm.GrowCapacity(Mathf.Max(0, wasps - swarm.Capacity));
+            if (swarm.Count < wasps)
+            {
+                swarm.Gain(wasps - swarm.Count);
+            }
+            else
+            {
+                swarm.Lose(swarm.Count - wasps);
+            }
+
+            if (song == typeof(ColossusSong))
+            {
+                session.Fury.AddDamage(FuryDamage);
+            }
+
+            yield return WaitGameSeconds(StripSettleSeconds);
+        }
+
+        private int SongIndexOf(Type song)
+        {
+            SwarmSongCaster caster = _root.Session.Caster;
+            for (int index = 0; index < caster.Count; index++)
+            {
+                if (caster[index].GetType() == song)
+                {
+                    return index;
+                }
+            }
+
+            Assert.Fail("The scene has no " + song.Name + ".");
+            return -1;
+        }
+
+        // Writes the pictures, at half size, in rows of `columns`, the first at the top left, as one file.
+        private static void CombineStrip(string folder, List<string> names, int columns, string name)
+        {
+            var images = new Texture2D[names.Count];
+            Texture2D strip = null;
+            try
+            {
+                for (int index = 0; index < names.Count; index++)
+                {
+                    images[index] = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                    Assert.That(images[index].LoadImage(File.ReadAllBytes(Path.Combine(folder, names[index] + ".png"))), Is.True, names[index]);
+                }
+
+                int width = images[0].width / 2;
+                int height = images[0].height / 2;
+                int rows = (names.Count + columns - 1) / columns;
+                strip = new Texture2D(width * columns, height * rows, TextureFormat.RGB24, false);
+                var pixels = new Color[width * height];
+                for (int index = 0; index < images.Length; index++)
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        for (int x = 0; x < width; x++)
+                        {
+                            pixels[(y * width) + x] = images[index].GetPixel(x * 2, y * 2);
+                        }
+                    }
+
+                    int column = index % columns;
+                    int row = rows - 1 - (index / columns);
+                    strip.SetPixels(column * width, row * height, width, height, pixels);
+                }
+
+                strip.Apply();
+                File.WriteAllBytes(Path.Combine(folder, name + ".png"), strip.EncodeToPNG());
+            }
+            finally
+            {
+                for (int index = 0; index < images.Length; index++)
+                {
+                    if (images[index] != null)
+                    {
+                        UnityEngine.Object.Destroy(images[index]);
+                    }
+                }
+
+                if (strip != null)
+                {
+                    UnityEngine.Object.Destroy(strip);
+                }
             }
         }
 
