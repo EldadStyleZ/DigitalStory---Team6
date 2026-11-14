@@ -57,10 +57,20 @@ namespace DigitalStory.View
             ApplyScale(LastScale);
         }
 
+        /// <summary>The display's own width in pixels, whatever the window draws at.</summary>
+        public static int DisplayWidth => Display.main.systemWidth > 0 ? Display.main.systemWidth : Screen.currentResolution.width;
+
+        /// <summary>The display's own height in pixels, whatever the window draws at.</summary>
+        /// <remarks>
+        /// Not Screen.currentResolution: once the full-screen window is resized, macOS reports the window's size there, so
+        /// Native would never come back and each 75% would shrink the window again.
+        /// </remarks>
+        public static int DisplayHeight => Display.main.systemHeight > 0 ? Display.main.systemHeight : Screen.currentResolution.height;
+
         /// <summary>The share of the display a render-scale choice draws at here.</summary>
         public float ScaleOf(RenderScaleChoice choice)
         {
-            return RenderScaleRule.ScaleFor(choice, Screen.currentResolution.height, _config.AutoMostLines);
+            return RenderScaleRule.ScaleFor(choice, DisplayHeight, _config.AutoMostLines);
         }
 
         /// <summary>How a frame-rate choice reads in the panel on this display.</summary>
@@ -100,9 +110,8 @@ namespace DigitalStory.View
                 return;
             }
 
-            Resolution display = Screen.currentResolution;
-            int width = Mathf.Max(1, Mathf.RoundToInt(display.width * scale));
-            int height = Mathf.Max(1, Mathf.RoundToInt(display.height * scale));
+            int width = Mathf.Max(1, Mathf.RoundToInt(DisplayWidth * scale));
+            int height = Mathf.Max(1, Mathf.RoundToInt(DisplayHeight * scale));
             if (width != Screen.width || height != Screen.height)
             {
                 Screen.SetResolution(width, height, Screen.fullScreenMode);

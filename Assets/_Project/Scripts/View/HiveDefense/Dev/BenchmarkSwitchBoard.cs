@@ -322,8 +322,8 @@ namespace DigitalStory.View
                     Assign(null, typeof(QualitySettings), "shadowResolution", ShadowResolution.Medium);
                     break;
                 case BenchmarkSwitch.Scale75:
-                    _savedWidth = Screen.currentResolution.width;
-                    _savedHeight = Screen.currentResolution.height;
+                    _savedWidth = DisplaySettingsApplier.DisplayWidth;
+                    _savedHeight = DisplaySettingsApplier.DisplayHeight;
                     Screen.SetResolution(Mathf.RoundToInt(_savedWidth * ThreeQuarters), Mathf.RoundToInt(_savedHeight * ThreeQuarters), Screen.fullScreenMode);
                     break;
                 case BenchmarkSwitch.DynRes75:
@@ -332,8 +332,8 @@ namespace DigitalStory.View
                     break;
                 case BenchmarkSwitch.HalfRes:
                     // From the display's size, not the window's, so a switch held over a fresh match never halves twice.
-                    _savedWidth = Screen.currentResolution.width;
-                    _savedHeight = Screen.currentResolution.height;
+                    _savedWidth = DisplaySettingsApplier.DisplayWidth;
+                    _savedHeight = DisplaySettingsApplier.DisplayHeight;
                     Screen.SetResolution(_savedWidth / HalfResDivisor, _savedHeight / HalfResDivisor, Screen.fullScreenMode);
                     break;
             }

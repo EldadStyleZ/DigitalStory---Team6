@@ -1504,7 +1504,7 @@ namespace DigitalStory.View
                 if (_root != null && _root.Display != null)
                 {
                     FramePacing pacing = _root.DisplayApplier.LastPacing;
-                    notes.WriteLine($"display settings: frame rate {_root.Display.FrameRate}, render scale {_root.Display.RenderScale}, pacing vSyncCount {pacing.VSyncCount} target {pacing.TargetFrameRate}, scale {_root.DisplayApplier.LastScale:F3}, backbuffer {Screen.width}x{Screen.height}, now vSyncCount {QualitySettings.vSyncCount} targetFrameRate {Application.targetFrameRate}");
+                    notes.WriteLine($"display settings: frame rate {_root.Display.FrameRate}, render scale {_root.Display.RenderScale}, pacing vSyncCount {pacing.VSyncCount} target {pacing.TargetFrameRate}, scale {_root.DisplayApplier.LastScale:F3}, display's own size {DisplaySettingsApplier.DisplayWidth}x{DisplaySettingsApplier.DisplayHeight}, backbuffer {Screen.width}x{Screen.height}, now vSyncCount {QualitySettings.vSyncCount} targetFrameRate {Application.targetFrameRate}");
                 }
 
                 _recorders?.Describe(notes);
