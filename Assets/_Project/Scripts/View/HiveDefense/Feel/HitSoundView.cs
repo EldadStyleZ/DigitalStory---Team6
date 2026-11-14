@@ -1,4 +1,5 @@
 using System;
+using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
 
@@ -47,6 +48,8 @@ namespace DigitalStory.View
         private float[] _lastPlayed;
         private bool _isReady;
         private HitFeedbackView _chain;
+        private GameSoundPlayer _recorded;
+        private float _effectsGain = 1f;
 
         /// <summary>The pitch the last kill pop played at, before its small random variation. For tests.</summary>
         public float LastKillPitch { get; private set; } = 1f;
@@ -137,8 +140,37 @@ namespace DigitalStory.View
             _chain.KillChained += OnKillChained;
         }
 
+        /// <summary>
+        /// Lets the optional recorded sounds of plan section AC replace this view's own: a moment the player has a recorded
+        /// sound for (a hit, a kill, a song's cast) no longer plays its synthesised one here, so nothing sounds twice. Null
+        /// gives every moment back to this view.
+        /// </summary>
+        public void UseRecorded(GameSoundPlayer recorded)
+        {
+            _recorded = recorded;
+        }
+
+        /// <summary>Sets the share of this view's volume to let through, 0 to 1 (the Effects setting).</summary>
+        public void SetEffectsGain(float gain)
+        {
+            _effectsGain = Mathf.Clamp01(gain);
+        }
+
+        /// <summary>Plays the hit's thump once, as the settings panel does to let the player hear the Effects volume.</summary>
+        public void PlaySample()
+        {
+            Play(KindHit, _hitVolume);
+        }
+
+        private bool IsRecorded(GameSoundEvent sound) => _recorded != null && _recorded.Has(sound);
+
         private void OnKillChained(KillChainStep step)
         {
+            if (IsRecorded(GameSoundEvent.BeekeeperDeath))
+            {
+                return;
+            }
+
             LastKillPitch = Mathf.Pow(2f, step.Semitones / 12f);
             Play(KindKill, _killVolume, LastKillPitch);
         }
@@ -151,12 +183,12 @@ namespace DigitalStory.View
             }
             else if (hit.IsKill)
             {
-                if (_chain == null)
+                if (_chain == null && !IsRecorded(GameSoundEvent.BeekeeperDeath))
                 {
                     Play(KindKill, _killVolume);
                 }
             }
-            else
+            else if (!IsRecorded(GameSoundEvent.BeekeeperHit))
             {
                 Play(KindHit, _hitVolume);
             }
@@ -164,6 +196,11 @@ namespace DigitalStory.View
 
         private void OnSongCastNow(int song)
         {
+            if (_recorded != null && _recorded.HasCastSound(song))
+            {
+                return;
+            }
+
             Play(KindCast, _castVolume);
         }
 
@@ -187,7 +224,7 @@ namespace DigitalStory.View
 
             _lastPlayed[kind] = now;
             _source.pitch = pitch * (1f + UnityEngine.Random.Range(-_pitchVariation, _pitchVariation));
-            _source.PlayOneShot(_clips[kind], volume);
+            _source.PlayOneShot(_clips[kind], volume * _effectsGain);
             PlayedCount++;
         }
 
