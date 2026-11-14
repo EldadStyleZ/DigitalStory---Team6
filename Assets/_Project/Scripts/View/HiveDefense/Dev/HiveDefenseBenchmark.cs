@@ -111,6 +111,7 @@ namespace DigitalStory.View
             "nodamagenumbers", "nocursorlock", "nograss", "nowater", "nowaterreflections", "noforest", "noterrain", "nomist",
             "nominimap", "nosmoke", "noambience", "halfres", "waterslices6", "waterres256", "waternoshadowsim", "waternofoamsim",
             "waternounderwater", "waterreflecthalf", "nohdr", "nomsaa", "grassthin", "shadowlite", "scale75", "dynres75",
+            "waternodepthcopy", "waternocolorcopy",
         };
 
         // The giant's moves, each measured in a window of its own in the chase camera, over two giants: one cannot stand long
@@ -853,7 +854,12 @@ namespace DigitalStory.View
             {
                 yield return EnsureFarm(StationLoopSeconds, _session.RoundCount - 1);
                 BenchmarkSwitch change = songSwitches[index];
-                yield return Switch(change);
+                if (!TryApply(change))
+                {
+                    continue;
+                }
+
+                yield return Settle(change);
                 foreach (string station in _options.Stations)
                 {
                     yield return RunStation(station);
@@ -865,7 +871,12 @@ namespace DigitalStory.View
             yield return LastWave();
             for (int index = 0; index < waveSwitches.Length; index++)
             {
-                yield return Switch(waveSwitches[index]);
+                if (!TryApply(waveSwitches[index]))
+                {
+                    continue;
+                }
+
+                yield return Settle(waveSwitches[index]);
                 yield return Measure(WaveLast, StationSeconds);
                 yield return Unswitch();
             }
@@ -888,10 +899,26 @@ namespace DigitalStory.View
             return switches;
         }
 
-        private IEnumerator Switch(BenchmarkSwitch change)
+        // A switch that cannot reach its part (a renamed field in a package, say) is put back and skipped, with an event in
+        // the notes, so one switch never costs the rest of the run.
+        private bool TryApply(BenchmarkSwitch change)
         {
             _phase = Phase.Setup;
-            _switches.Apply(change);
+            try
+            {
+                _switches.Apply(change);
+                return true;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException || exception is System.Reflection.TargetInvocationException || exception is ArgumentException)
+            {
+                _events.Add($"{_frame}: SKIPPED switch {SwitchNames[(int)change]}: {exception.GetType().Name}: {exception.Message}");
+                _switches.Restore();
+                return false;
+            }
+        }
+
+        private IEnumerator Settle(BenchmarkSwitch change)
+        {
             yield return Hold(_scenario, Phase.Settle, change == BenchmarkSwitch.HalfWasps ? AfterHalfSeconds : SettleSeconds);
         }
 
@@ -1474,6 +1501,12 @@ namespace DigitalStory.View
                 notes.WriteLine($"lodBias {QualitySettings.lodBias}, maximumLODLevel {QualitySettings.maximumLODLevel}, terrain pixel error {(Terrain.activeTerrain != null ? Terrain.activeTerrain.heightmapPixelError : -1f)}, shadowProjection {QualitySettings.shadowProjection}, softParticles {QualitySettings.softParticles}, realtimeReflectionProbes {QualitySettings.realtimeReflectionProbes}, anisotropic {QualitySettings.anisotropicFiltering}");
                 notes.WriteLine($"cameras {Camera.allCamerasCount}, depth texture of the main camera {_camera.depthTextureMode}, hdr {_camera.allowHDR}, dynamic resolution {_camera.allowDynamicResolution}");
                 notes.WriteLine(_switches.DescribeMap());
+                if (_root != null && _root.Display != null)
+                {
+                    FramePacing pacing = _root.DisplayApplier.LastPacing;
+                    notes.WriteLine($"display settings: frame rate {_root.Display.FrameRate}, render scale {_root.Display.RenderScale}, pacing vSyncCount {pacing.VSyncCount} target {pacing.TargetFrameRate}, scale {_root.DisplayApplier.LastScale:F3}, backbuffer {Screen.width}x{Screen.height}, now vSyncCount {QualitySettings.vSyncCount} targetFrameRate {Application.targetFrameRate}");
+                }
+
                 _recorders?.Describe(notes);
                 foreach (Light light in _switches.Lights)
                 {

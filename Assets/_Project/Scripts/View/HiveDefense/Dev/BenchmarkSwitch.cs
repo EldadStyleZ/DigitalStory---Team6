@@ -122,5 +122,11 @@ namespace DigitalStory.View
 
         /// <summary>The game camera renders at 75% through dynamic resolution; the HUD stays at the display's resolution.</summary>
         DynRes75 = 39,
+
+        /// <summary>The water stops rendering its surface's depth a second time to merge it into the camera's depth texture.</summary>
+        WaterNoDepthCopy = 40,
+
+        /// <summary>The water stops copying the camera's colour for its own use (the opaque texture written before transparents).</summary>
+        WaterNoColorCopy = 41,
     }
 }

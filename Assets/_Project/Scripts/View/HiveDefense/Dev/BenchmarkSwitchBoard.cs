@@ -284,7 +284,7 @@ namespace DigitalStory.View
                     Assign(Water(), "LodLevels", 6);
                     break;
                 case BenchmarkSwitch.WaterRes256:
-                    Assign(Water(), "Resolution", 256);
+                    Assign(Water(), "_Resolution", 256);
                     break;
                 case BenchmarkSwitch.WaterNoShadowSim:
                     Assign(WaterPart("ShadowLod"), "Enabled", false);
@@ -295,6 +295,12 @@ namespace DigitalStory.View
                 case BenchmarkSwitch.WaterNoUnderwater:
                     Assign(WaterPart("Underwater"), "Enabled", false);
                     Assign(WaterPart("Meniscus"), "Enabled", false);
+                    break;
+                case BenchmarkSwitch.WaterNoDepthCopy:
+                    Assign(Water(), "_WriteToDepthTexture", false);
+                    break;
+                case BenchmarkSwitch.WaterNoColorCopy:
+                    Assign(Water(), "_WriteToColorTexture", false);
                     break;
                 case BenchmarkSwitch.WaterReflectHalf:
                     // Crest only skips frames for a reflection that serves one camera.
