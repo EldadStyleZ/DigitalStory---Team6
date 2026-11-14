@@ -20,6 +20,10 @@ namespace DigitalStory.View
         private const float GlowWidth = 9f;
         private const float ViewReach = 65f;              // metres from the core to the map's rim
 
+        // Plan section AD: painting the map tessellates every arc of every dot and halo on the main thread (about 1.3 ms a
+        // frame in a wave of 39 beekeepers), so it is painted 30 times a second, not every frame. Its dots move slowly.
+        private const float RepaintSeconds = 1f / 30f;
+
         private static readonly Color Background = new Color(0.02f, 0.04f, 0.07f, 0.6f);
         private static readonly Color InnerShade = new Color(1f, 0.8f, 0.35f, 0.05f);
         private static readonly Color Border = new Color(1f, 0.82f, 0.38f, 1f);
@@ -49,6 +53,7 @@ namespace DigitalStory.View
         private bool _hasLastCore;
         private Vector2 _heading = new Vector2(0f, 1f);   // the swarm's way on the ground, in world x and z
         private float _scale;
+        private float _sinceRepaint = RepaintSeconds;
 
         /// <param name="session">The match to show.</param>
         /// <param name="hudRoot">The HUD's root element. The map is added to it.</param>
@@ -70,8 +75,9 @@ namespace DigitalStory.View
             (hudRoot ?? throw new ArgumentNullException(nameof(hudRoot))).Add(_map);
         }
 
-        /// <summary>Redraws the map. Call it once a frame.</summary>
-        public void Tick()
+        /// <summary>Follows the core and the camera, and repaints the map at most 30 times a second. Call it once a frame.</summary>
+        /// <param name="deltaTime">Real seconds since the last frame, so the map keeps updating while the match is paused.</param>
+        public void Tick(float deltaTime)
         {
             Vector3 forward = _cameraForward();
             var flat = new Vector2(forward.x, forward.z);
@@ -94,7 +100,12 @@ namespace DigitalStory.View
 
             _lastCore = core;
             _hasLastCore = true;
-            _map.MarkDirtyRepaint();
+            _sinceRepaint += deltaTime;
+            if (_sinceRepaint >= RepaintSeconds)
+            {
+                _sinceRepaint = 0f;
+                _map.MarkDirtyRepaint();
+            }
         }
 
         public void Dispose()

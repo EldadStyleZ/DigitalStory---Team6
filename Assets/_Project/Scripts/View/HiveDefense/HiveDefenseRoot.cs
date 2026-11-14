@@ -661,7 +661,7 @@ namespace DigitalStory.View
                 return;
             }
 
-            _minimap?.Tick();
+            _minimap?.Tick(Time.unscaledDeltaTime);
             _keys?.Tick(Time.unscaledDeltaTime);
             _badges?.Tick(Time.unscaledDeltaTime);
             // The load's fade-in runs on the game clock, as the match does: on the real clock a fast machine (or a test or the
