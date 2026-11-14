@@ -161,22 +161,35 @@ namespace DigitalStory.View
             _particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
 
+        // While leaving Play mode the editor may already count as not playing, where only DestroyImmediate is allowed.
+        private static void Release(UnityEngine.Object thing)
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(thing);
+            }
+            else
+            {
+                DestroyImmediate(thing);
+            }
+        }
+
         private void OnDestroy()
         {
             Faded = null;
             if (_puffMaterial != null)
             {
-                Destroy(_puffMaterial);
+                Release(_puffMaterial);
             }
 
             if (_discMaterial != null)
             {
-                Destroy(_discMaterial);
+                Release(_discMaterial);
             }
 
             if (_discMesh != null)
             {
-                Destroy(_discMesh);
+                Release(_discMesh);
             }
 
             s_puffUsers--;

@@ -89,7 +89,8 @@ namespace DigitalStory.View
                 }
 
                 Vector3 exit = Cost(bridge._from, target) < Cost(bridge._to, target) ? bridge._from : bridge._to;
-                return FlatDistance(position, exit) <= ExitReach ? target : exit;
+                // Measured along the deck, so a walker that already stepped past the exit end never turns back to it.
+                return bridge.LeftTo(position, exit) <= ExitReach ? target : exit;
             }
 
             if (IsDry(position, target))
@@ -236,6 +237,20 @@ namespace DigitalStory.View
                     _wet[(z * _wetSize) + x] = terrain.SampleHeight(point) + corner.y < wetBelow;
                 }
             }
+        }
+
+        // Metres still to walk along the deck to this end; below zero once past it.
+        private float LeftTo(Vector3 point, Vector3 end)
+        {
+            Vector3 start = end == _to ? _from : _to;
+            var along = new Vector2(end.x - start.x, end.z - start.z);
+            float length = along.magnitude;
+            if (length < 0.01f)
+            {
+                return 0f;
+            }
+
+            return length - Vector2.Dot(new Vector2(point.x - start.x, point.z - start.z), along / length);
         }
 
         private bool OnDeck(Vector3 point)

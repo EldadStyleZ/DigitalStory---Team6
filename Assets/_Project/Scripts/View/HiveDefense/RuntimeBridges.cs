@@ -50,23 +50,80 @@ namespace DigitalStory.View
             float waterLevel = water.transform.position.y;
             int built = 0;
             var middles = new List<Vector3>();
+            var built_ends = new List<(Vector3, Vector3)>();
             for (int index = 0; index < spawns.Count; index++)
             {
                 Vector3 hive = hives[index % hives.Count];
-                foreach ((Vector3 from, Vector3 to) in Crossings(terrain, spawns[index], hive, waterLevel))
+                foreach ((Vector3 from, Vector3 to) in Joined(Crossings(terrain, spawns[index], hive, waterLevel)))
                 {
                     // Beekeepers from the same side share one bridge: a crossing near one already built is skipped, and the
                     // route sends them over the bridge that stands.
                     Vector3 middle = (from + to) * 0.5f;
-                    if (middles.Exists(other => Vector3.Distance(other, middle) < ShareDistance))
+                    if (CanShare(terrain, built_ends, from, to, waterLevel))
                     {
                         continue;
                     }
 
                     middles.Add(middle);
+                    built_ends.Add((from, to));
                     MakeBridge(root.transform, terrain, from, to, waterLevel, s_materials, built++);
                 }
             }
+        }
+
+        // A crossing shares a bridge already built when that bridge is near and the beekeeper can walk dry from this bank to
+        // its near end and from its far end on to this crossing's far bank.
+        private static bool CanShare(Terrain terrain, List<(Vector3, Vector3)> built, Vector3 from, Vector3 to, float waterLevel)
+        {
+            Vector3 middle = (from + to) * 0.5f;
+            foreach ((Vector3 a, Vector3 b) in built)
+            {
+                if (Vector3.Distance((a + b) * 0.5f, middle) >= ShareDistance)
+                {
+                    continue;
+                }
+
+                if ((Dry(terrain, from, a, waterLevel) && Dry(terrain, b, to, waterLevel)) || (Dry(terrain, from, b, waterLevel) && Dry(terrain, a, to, waterLevel)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool Dry(Terrain terrain, Vector3 from, Vector3 to, float waterLevel)
+        {
+            float length = Vector3.Distance(new Vector3(from.x, 0f, from.z), new Vector3(to.x, 0f, to.z));
+            for (float d = 0f; d <= length; d += 0.5f)
+            {
+                Vector3 point = Vector3.Lerp(from, to, length > 0f ? d / length : 0f);
+                if (Height(terrain, point) < waterLevel + WetAbove)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Two crossings on one way in that lie close together (a river bend) become one long bridge over both, so the way
+        // stays dry and no two bridges stand side by side.
+        private static List<(Vector3, Vector3)> Joined(IEnumerable<(Vector3, Vector3)> crossings)
+        {
+            var joined = new List<(Vector3, Vector3)>();
+            foreach ((Vector3 from, Vector3 to) in crossings)
+            {
+                if (joined.Count > 0 && Vector3.Distance(joined[joined.Count - 1].Item2, from) < ShareDistance)
+                {
+                    joined[joined.Count - 1] = (joined[joined.Count - 1].Item1, to);
+                    continue;
+                }
+
+                joined.Add((from, to));
+            }
+
+            return joined;
         }
 
         private static Material Plain(Color color)

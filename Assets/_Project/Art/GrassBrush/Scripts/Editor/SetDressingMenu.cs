@@ -56,6 +56,9 @@ namespace DigitalStory.GrassBrush.Editor
             // The dressing frames the play area; the terrain itself reaches much farther, out of sight.
             _edge = Mathf.Min(MapEdge, Mathf.Min(Mathf.Min(-corner.x, corner.x + size.x), Mathf.Min(-corner.z, corner.z + size.z)) - 2f);
             CollectGameplay();
+            // The hives, nests and spawns move every match now, so the wood keeps no trails or clearings for their old places.
+            Spots.Clear();
+            Paths.Clear();
 
             Undo.SetCurrentGroupName("Dress The Map");
             int group = Undo.GetCurrentGroup();
@@ -217,6 +220,14 @@ namespace DigitalStory.GrassBrush.Editor
             float wander = (Mathf.Sin((angle * 3f) + _clearingPhase) * 5f) + (Mathf.Sin((angle * 7f) + (_clearingPhase * 2.3f)) * 2.5f)
                 + (Mathf.Sin((angle * 13f) + (_clearingPhase * 0.7f)) * 1.2f);
             return ClearingRadius + wander;
+        }
+
+        // The forest wall's inner edge: just past the square play area, wandering a little so it reads as grown.
+        private const float PlayEdge = 100f;
+        private static float EdgeAt(Vector2 point)
+        {
+            float angle = Mathf.Atan2(point.y, point.x);
+            return PlayEdge + 1.5f + (Mathf.Sin((angle * 9f) + _clearingPhase) * 0.8f) + (Mathf.Sin((angle * 23f) + (_clearingPhase * 1.7f)) * 0.5f);
         }
 
         // The existing scenery joins the picture: its trees go to the treeline, its bushes to the undergrowth, and its ruins
@@ -381,7 +392,7 @@ namespace DigitalStory.GrassBrush.Editor
             for (float angle = 0f; angle < 360f; angle += 1.6f)
             {
                 Vector2 dir = Dir(angle + Jitter(0.8f));
-                float rim = ClearingAt(dir * 100f);
+                float rim = EdgeAt(dir * 100f) - 2f;
                 // The play area is a square, so the rim follows the square: a wall of wood on every side.
                 Vector2 point = dir * ((rim + Mathf.Lerp(-1.5f, 5f, Chance())) / Mathf.Max(Mathf.Abs(dir.x), Mathf.Abs(dir.y)));
                 float pick = Chance();
@@ -405,8 +416,9 @@ namespace DigitalStory.GrassBrush.Editor
                 for (float z = -_edge; z <= _edge; z += Spacing)
                 {
                     var point = new Vector2(x, z) + (Jitter2() * (Spacing * 0.45f));
-                    float into = Mathf.Max(Mathf.Abs(point.x), Mathf.Abs(point.y)) - ClearingAt(point);
-                    if (into < 3f || Chance() > Mathf.Lerp(0.55f, 0.95f, Mathf.InverseLerp(3f, 15f, into)))
+                    // A wall of wood starts right past the play area's square edge, thick from its first row.
+                    float into = Mathf.Max(Mathf.Abs(point.x), Mathf.Abs(point.y)) - EdgeAt(point);
+                    if (into < 0f || Chance() > 0.92f)
                     {
                         continue;
                     }

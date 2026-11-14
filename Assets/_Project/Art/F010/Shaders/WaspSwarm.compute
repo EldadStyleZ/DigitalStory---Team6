@@ -259,7 +259,7 @@ static const float RiverBulgeWaves = 2.5;        // bulges along the whole river
 static const float RiverBulgeSpeed = 3.0;        // radians per second the bulges roll toward the tail
 static const float RiverBellySwirl = 1.8;        // extra swirl in the thickest part, as a share of RiverSwirl
 static const float RiverBreath = 0.18;           // how much each wasp drifts in and out of the body on its own
-static const float RiverBellyPack = 0.9;         // how much the belly's wasps crowd toward its middle line, so it reads dense
+static const float RiverBellyPack = 1.0;         // how much the belly's wasps crowd toward its middle line, so it reads dense
 static const float RiverBellyCrowd = 0.7;        // 0 spreads the wasps evenly along the river; up to 1 gathers them into the
                                                  // belly, so it is the densest part and the head and tail thin out
 // A big swarm reads as a snake if it only gets longer, so as it grows it gets shorter, much fatter and looser instead:
@@ -267,9 +267,9 @@ static const float RiverBellyCrowd = 0.7;        // 0 spreads the wasps evenly a
 static const float CrowdFrom = 0.0;             // wasps at which the swarm starts to bunch up
 static const float CrowdFull = 700.0;            // wasps at which it is fully a cloud
 static const float CrowdLength = 0.4;            // share of the river's length left at full crowd
-static const float CrowdRadius = 3.0;            // times the river's radius at full crowd
+static const float CrowdRadius = 2.2;            // times the river's radius at full crowd
 static const float CrowdEnds = 0.85;             // how far the thin head and tail fill out toward the belly at full crowd
-static const float CrowdScatter = 1.6;           // metres each wasp wanders round its place at full crowd
+static const float CrowdScatter = 1.0;           // metres each wasp wanders round its place at full crowd
 static const float CrowdLift = 1.4;             // metres the fat cloud rises, so its lower half stays above the grass
 static const float CrowdScatterSpeed = 0.9;      // how fast that wander turns
 static const float RiverHeadGap = 0.5;           // metres behind the core where the river starts, so its head shows where

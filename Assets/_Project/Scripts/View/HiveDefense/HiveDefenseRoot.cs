@@ -1150,6 +1150,8 @@ namespace DigitalStory.View
 
             var blockers = new List<Bounds>();
             _scenery.AddBlockers(blockers);
+            // The swarm flows round the scenery only: it has to fly into the nest trees to take their bees.
+            _mapBoxes = new List<Bounds>(blockers);
             for (int index = 0; index < _nestViews.Length; index++)
             {
                 _nestViews[index].transform.position = layout.Nests[index];
@@ -1157,7 +1159,6 @@ namespace DigitalStory.View
             }
 
             _followCamera.SetChaseBlockers(blockers.ToArray());
-            _mapBoxes = blockers;
             return layout;
         }
 
