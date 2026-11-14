@@ -10,11 +10,13 @@ namespace DigitalStory.Tests.EditMode
     /// Once for the class it plays whole matches with each plan on five seeds at the code defaults, prints the results table
     /// to the log (lines starting "[F010] bot:"), and each test asserts one target on those results. The owner's two are
     /// section H's "lost without nests, winnable with them" and section M's "none of the three always wins and doing
-    /// nothing always loses": no plan without nests wins more than two matches in five, and the player who fetches the
-    /// nests wins at least four and ends clearly better off. The bot also checks that every sink of wasps matters (healing
-    /// and the towers), that a won match lasts six to nine minutes, that no one song deals most of the damage in the wins,
-    /// and that the giant stays under 45% of it. <see cref="WideSweep_ThirtySeeds_HoldsTheRates"/> plays thirty seeds; it
-    /// is explicit, so only a person asks for it.
+    /// nothing always loses": no single-minded plan wins a match in five, the careful player who never fetches a nest wins
+    /// at most two, and the same player fetching the nests wins all five and ends clearly better off. The bot also checks
+    /// that every sink of wasps matters (healing and the towers), that a won match lasts six to nine minutes, that no song
+    /// but the giant deals more than 40% of the damage in the wins, that the Sting deals at most 25% and is not the top song,
+    /// and that the giant, its hands included, stays under 45% of it. Each seed
+    /// plays its own map (plan section S). <see cref="WideSweep_ThirtySeeds_HoldsTheRates"/> plays thirty seeds; it is
+    /// explicit, so only a person asks for it.
     /// </summary>
     public sealed class EconomyPlaytestTests
     {
@@ -30,11 +32,14 @@ namespace DigitalStory.Tests.EditMode
         private const float FewestHealingShare = 0.15f;
         private const float MostHealingShare = 0.45f;
         private const float FewestTowerShare = 0.08f;
-        private const float MostDamageShare = 0.5f;
+        // Songs-v2 V: no song but the giant deals more than 40% of the damage in the wins (was half), and the Sting, the
+        // weakest attack by the owner's wish, at most 25% and less than some other song.
+        private const float MostDamageShare = 0.4f;
+        private const float MostStingShare = 0.25f;
 
         // Plan section O: the giant was near half the damage, so it must stay clearly below it. The giant of section I, 20 s
-        // and more, dealt 82% while its own blows filled Fury; with that stopped it deals 44% on these seeds (43% on thirty),
-        // and with the towers' 9% in the poorest win it is the thinnest margin here.
+        // and more, dealt 82% while its own blows filled Fury; with that stopped, and with its hands (songs-v2 R), it deals 40%
+        // on these seeds and on thirty.
         private const float MostColossusShare = 0.45f;
         private const float ShortestWinSeconds = 6f * 60f;
         private const float LongestWinSeconds = 9f * 60f;
@@ -79,9 +84,9 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(AttackOnly)]
         [TestCase(HealOnly)]
         [TestCase(TowersOnly)]
-        public void PurePlan_WinsAtMostTwoMatchesInFive(string plan)
+        public void PurePlan_LosesEveryMatchInFive(string plan)
         {
-            Assert.LessOrEqual(PlaytestReport.Wins(_runs[plan]), 2, Wins(plan));
+            Assert.AreEqual(0, PlaytestReport.Wins(_runs[plan]), Wins(plan));
         }
 
         // Section H: "lost without nests". Even a careful player who never fetches a nest loses most matches.
@@ -91,17 +96,17 @@ namespace DigitalStory.Tests.EditMode
             Assert.LessOrEqual(PlaytestReport.Wins(_runs[Mixed]), 2, Wins(Mixed));
         }
 
-        // Section H: "winnable with them". The same player who fetches the nests wins nearly every match, but is not
-        // required to win them all.
+        // Section H: "winnable with them". The same player who fetches the nests wins every match here, and at least 27 in
+        // the thirty of the sweep, so no map is beyond them.
         [Test]
-        public void MixedWithNests_WinsAtLeastFourInFive_AndEndsClearlyBetterOffThanMixed()
+        public void MixedWithNests_WinsAllFive_AndEndsClearlyBetterOffThanMixed()
         {
             IReadOnlyList<PlaytestRun> nests = _runs[MixedWithNests];
             IReadOnlyList<PlaytestRun> mixed = _runs[Mixed];
             float nestsHives = AverageHiveShare(nests);
             float mixedHives = AverageHiveShare(mixed);
 
-            Assert.GreaterOrEqual(PlaytestReport.Wins(nests), 4, Wins(MixedWithNests));
+            Assert.AreEqual(nests.Count, PlaytestReport.Wins(nests), Wins(MixedWithNests));
             string kept = $"hive health kept: {nestsHives:P0} with nests, {mixedHives:P0} without";
             Assert.Greater(nestsHives, mixedHives + ClearlyBetterHiveShare, kept);
             Assert.Greater(LowestLevel(nests), HighestLevel(mixed), "every match with nests ends at a higher level than any without");
@@ -137,10 +142,11 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        // The songs differ, so none carries the wins: across every match won, no one song (the giant included) deals more
-        // than half the damage, and the giant less than 45%.
+        // The songs differ, so none carries the wins: across every match won, no song but the giant deals more than 40% of
+        // the damage, the Sting (the weakest attack, songs-v2 V) at most 25% and less than the top song, and the giant less
+        // than 45%.
         [Test]
-        public void Wins_NoSongDealsMoreThanHalfTheDamage_AndTheGiantUnderFortyFivePercent()
+        public void Wins_NoSongCarriesTheDamage_TheStingIsNotTheTop_AndTheGiantUnderFortyFivePercent()
         {
             AssertNoSongCarriesTheWins(_runs);
         }
@@ -160,8 +166,9 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        // Thirty seeds, to see how often each plan wins rather than whether five particular matches do. The rates leave room
-        // for luck: what the five-seed tests demand of every five, this demands of the share.
+        // Thirty seeds, thirty maps, to see how often each plan wins rather than whether five particular matches do. The
+        // rates leave room for luck, except that the player who fetches the nests must win at least 27: a map that beats them
+        // more often is unfair.
         [Test]
         [Explicit("Plays 210 matches; run it by name after changing the economy.")]
         [Category("PlaytestSweep")]
@@ -175,7 +182,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.LessOrEqual(PlaytestReport.Wins(runs[HealOnly]), WideSeedCount * 2 / 5, "HealOnly");
             Assert.LessOrEqual(PlaytestReport.Wins(runs[TowersOnly]), WideSeedCount * 2 / 5, "TowersOnly");
             Assert.LessOrEqual(PlaytestReport.Wins(runs[Mixed]), WideSeedCount * 2 / 5, "Mixed");
-            Assert.GreaterOrEqual(PlaytestReport.Wins(runs[MixedWithNests]), WideSeedCount * 4 / 5, "MixedWithNests");
+            Assert.GreaterOrEqual(PlaytestReport.Wins(runs[MixedWithNests]), WideSeedCount * 9 / 10, "MixedWithNests");
             AssertNoSongCarriesTheWins(runs);
         }
 
@@ -216,11 +223,24 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.IsNotEmpty(wins, "no match was won");
             float[] shares = PlaytestReport.DamageShares(wins);
+            float topOther = 0f;
             for (int song = 0; song < shares.Length; song++)
             {
+                if (song == PlaytestMatch.ColossusIndex)
+                {
+                    continue;
+                }
+
                 Assert.LessOrEqual(shares[song], MostDamageShare, $"{wins[0].SongNames[song]} dealt {shares[song]:P1} of the damage in the wins");
+                if (song != PlaytestMatch.StingIndex)
+                {
+                    topOther = Mathf.Max(topOther, shares[song]);
+                }
             }
 
+            float sting = shares[PlaytestMatch.StingIndex];
+            Assert.LessOrEqual(sting, MostStingShare, $"the Sting dealt {sting:P1} of the damage in the wins");
+            Assert.Less(sting, topOther, $"the Sting dealt {sting:P1}, the most of the songs; the next {topOther:P1}");
             float giant = shares[PlaytestMatch.ColossusIndex];
             Assert.Less(giant, MostColossusShare, $"the giant dealt {giant:P1} of the damage in the wins");
         }

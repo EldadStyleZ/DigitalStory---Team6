@@ -8,6 +8,9 @@
 | Claimed | The F-010 row is already on `main` |
 | Scene | `Assets/_Project/Scenes/eldad-lab-2-scene.unity` (new) |
 | Build prompt | `docs/specs/F-010-rider-prompt.md` |
+| Later plan | [`docs/specs/F-010-songs-v2.md`](F-010-songs-v2.md) supersedes much of this spec |
+
+> **Where the game stands now.** This file is the first spec. The songs, the economy, the farm and survive phases, the giant and the map have moved on since; [`F-010-songs-v2.md`](F-010-songs-v2.md) holds the plan, sections A to S, and what was built on 2026-11-14 for the owner's polish pass before bosses: T (a wider map and rings that follow their hives), U (a combo collects a nest), V (the Sting is the weakest attack), W (the giant throws red wasps), X (the swarm flows round trees and obstacles), Y (game feel: trauma shake and camera moments), Z (every song checked for lag in the built player) and AA (review fixes: combos per match, typos cast no song, sting numbers in tenths). Where the two disagree, the later plan wins.
 
 ## 1. The game
 

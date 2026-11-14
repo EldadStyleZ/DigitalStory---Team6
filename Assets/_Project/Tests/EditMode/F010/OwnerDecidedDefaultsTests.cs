@@ -38,7 +38,8 @@ namespace DigitalStory.Tests.EditMode
             var config = ScriptableObject.CreateInstance<NestConfig>();
 
             Assert.AreEqual(2.5f, config.CollectRadius);
-            Assert.AreEqual(2f, config.CollectSeconds);
+            Assert.AreEqual(4, config.ComboShortest);
+            Assert.AreEqual(5, config.ComboLongest);
             Assert.AreEqual(400, config.CapacityPerNest);
             Assert.AreEqual(400, config.WaspsPerNest);
             Assert.AreEqual(2, config.HummedNotes);
@@ -49,7 +50,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.AreEqual(10f, config.FirstNestsNearest);
             Assert.AreEqual(14f, config.FirstNestsFarthest);
             Assert.AreEqual(16f, config.LaterNestsNearest);
-            Assert.AreEqual(30f, config.LaterNestsFarthest);
+            Assert.AreEqual(34f, config.LaterNestsFarthest); // Plan section T: the owner asked for trees over a bigger area.
 
             Object.DestroyImmediate(config);
         }
@@ -83,13 +84,13 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // The playtest bot's waves: later ones bigger, because the swarm grows, and waves 4 and 5 most, so a player without
-        // nests loses (plan section H), even with the towers, the rules of plan section O and the giant of section I; a
-        // beekeeper every 2.5 s, so a wave comes in over time instead of all at once.
+        // nests loses (plan section H), even with the towers, the rules of plan section O, the giant of section I and its
+        // hands (songs-v2 R); a beekeeper every 2.5 s, so a wave comes in over time instead of all at once.
         [Test]
         public void WaveConfig_HoldsTheFarmPhasesAndWavesOfPlanSectionL()
         {
             var config = ScriptableObject.CreateInstance<WaveConfig>();
-            int[] sticks = { 4, 5, 5, 22, 23 };
+            int[] sticks = { 4, 5, 5, 24, 25 };
             int[] smokers = { 0, 1, 3, 14, 14 };
 
             Assert.AreEqual(45f, config.FirstFarmSeconds);
@@ -147,15 +148,16 @@ namespace DigitalStory.Tests.EditMode
             Object.DestroyImmediate(config);
         }
 
-        // The giant stays a highlight: 1 Fury point per 7 damage of the songs, 100 points to fill, and none from the giant's own
-        // blows, so a giant of 20 s or more cannot fill the meter again by itself and stand through a whole wave.
+        // The giant stays a highlight: 1 Fury point per 8.5 damage of the songs (7 before the giant had hands), 100 points to
+        // fill, and none from the giant's own blows, so a giant of 20 s or more cannot fill the meter again by itself and stand
+        // through a whole wave.
         [Test]
         public void FuryConfig_HoldsTheGiantsPriceThePlaytestBotSet()
         {
             var config = ScriptableObject.CreateInstance<FuryConfig>();
 
             Assert.AreEqual(100f, config.Max);
-            Assert.AreEqual(7f, config.DamagePerFuryPoint);
+            Assert.AreEqual(11.5f, config.DamagePerFuryPoint, "the playtest bot once the Sting became the weakest attack (songs-v2 V): was 8.5");
             Assert.AreEqual(0f, config.ColossusDamageShare);
 
             Object.DestroyImmediate(config);
@@ -174,7 +176,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.AreEqual(3f, config.CollectRadius);
             Assert.AreEqual(150f, config.CollectPerSecond);
             Assert.AreEqual(60f, config.HealWaspsPerSecond);
-            Assert.AreEqual(3f, config.WaspsPerHealthPoint, "the playtest bot raised it from 2.5 once the Sting hit from its arrival");
+            Assert.AreEqual(4f, config.WaspsPerHealthPoint, "the playtest bot raised it from 2.5 once the Sting hit from its arrival, from 3 once the giant had hands, and from 3.5 once the Sting became the weakest attack");
             Assert.AreEqual(0.8f, config.DamagedStartFraction, 0.0001f);
 
             Object.DestroyImmediate(config);

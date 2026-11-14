@@ -51,6 +51,7 @@ namespace DigitalStory.View
         private const float BesideNestMetres = 1.5f;
         private const float BesideHiveMetres = 3f;
         private const float FullFuryDamage = 1000f;
+        private const int MostFuryAdds = 100;
         private const float HiveCallRoomShare = 0.1f;
         private const float KillDamage = 1000000f;
         private const float SpawnStepSeconds = 0.5f;
@@ -71,6 +72,8 @@ namespace DigitalStory.View
         private const float StationLoopSeconds = 16f;
         private const float DomeStingSeconds = 14f;
         private const float NestSeconds = 10f;
+        private const float NestComboReadSeconds = 0.6f;
+        private const float NestComboNoteSeconds = 0.3f;
         private const double MostRunSeconds = 900.0;
         private const int TimeDecimals = 3;
         private const int SecondsDecimals = 4;
@@ -103,7 +106,7 @@ namespace DigitalStory.View
         {
             "none", "noglow", "noswarmlights", "nohivenestlights", "noshadows", "nowaspdraw", "nocompute", "noground",
             "noscenery", "noanimators", "halfwasps", "nohud", "noattacklight", "nocastflash", "nocastsound", "nocamerakick",
-            "nodamagenumbers",
+            "nodamagenumbers", "nocursorlock",
         };
 
         // The giant's moves, each measured in a window of its own in the chase camera, over two giants: one cannot stand long
@@ -758,10 +761,23 @@ namespace DigitalStory.View
 
             yield return Hold(NestName, Phase.Settle, ShortSettleSeconds);
             _motor.PlaceAt(nests[chosen].Position + (Vector3.back * BesideNestMetres), true);
+            StartCoroutine(PlayNestCombo(nests[chosen]));
             yield return Measure(NestName, MeasureSeconds);
             _events.Add($"{_frame}: nest {chosen} collected={nests[chosen].IsCollected}");
             _motor.PlaceAt(_start, true);
             yield return Hold(NestName, Phase.Wait, AfterMoveSeconds);
+        }
+
+        // Plan section U: a nest is collected by playing its combo, read first and then played at a person's pace, while the
+        // frames are measured.
+        private IEnumerator PlayNestCombo(Nest nest)
+        {
+            yield return new WaitForSeconds(NestComboReadSeconds);
+            for (int index = 0; index < nest.Combo.Count && !nest.IsCollected; index++)
+            {
+                _root.PressHole(nest.Combo[index]);
+                yield return new WaitForSeconds(NestComboNoteSeconds);
+            }
         }
 
         private IEnumerator WaveOfEightBeekeepers()
@@ -954,7 +970,12 @@ namespace DigitalStory.View
             SwarmSongEffect effect = _session.Caster[song];
             if (effect is ColossusSong)
             {
-                _session.Fury.AddDamage(FullFuryDamage);
+                // Since songs-v2 V a point of Fury costs more damage, and 1,000 no longer filled it: the giant was refused
+                // and its windows went unmeasured. Damage is added until the meter is full, whatever its price.
+                for (int add = 0; add < MostFuryAdds && !_session.Fury.IsFull; add++)
+                {
+                    _session.Fury.AddDamage(FullFuryDamage);
+                }
             }
             else if (effect is HiveCallSong)
             {

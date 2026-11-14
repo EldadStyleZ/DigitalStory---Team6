@@ -120,5 +120,72 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Min(0f), Tooltip("Speed, in metres per second, that the landing throws a beekeeper away from it.")]
         public float LeapKnockback { get; private set; } = 6f;
+
+        [field: Header("Hand launch (right: R2, right mouse or Space; left: L2, left mouse or Left Shift)")]
+        [field: SerializeField, Min(0.01f), Tooltip("Seconds the arm thrusts forward before the wasps of its hand and forearm leave as a fist.")]
+        public float FistThrustSeconds { get; private set; } = 0.25f;
+
+        [field: SerializeField, Min(0f), Tooltip("Damage of a fist to every beekeeper within its radius of where it hits. Grows with the level, as every blow of the giant.")]
+        public float FistDamage { get; private set; } = 20f;
+
+        [field: SerializeField, Min(0f), Tooltip("Radius, in metres around where the fist hits, of its blow. Grows with the level.")]
+        public float FistRadius { get; private set; } = 1.2f;
+
+        [field: SerializeField, Min(0f), Tooltip("Speed, in metres per second, that a fist throws a beekeeper away from where it hits. None at first, so the hand launch adds damage only, and the giant's balance holds until a later tuning.")]
+        public float FistKnockback { get; private set; }
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds a beekeeper the fist hits, and does not kill, stays stunned. None at first, as for the throw.")]
+        public float FistStunSeconds { get; private set; }
+
+        [field: SerializeField, Min(0.1f), Tooltip("Metres per second a fist flies.")]
+        public float FistSpeed { get; private set; } = 24f;
+
+        [field: SerializeField, Min(0.01f), Tooltip("The fewest seconds a fist flies, so even a target at the giant's feet sees the fist leave the arm.")]
+        public float FistLeastFlightSeconds { get; private set; } = 0.2f;
+
+        [field: SerializeField, Min(0f), Tooltip("The most metres from the giant a fist flies: it picks a beekeeper within it, and with none it flies this far. Grows with the level.")]
+        public float FistRange { get; private set; } = 14f;
+
+        [field: SerializeField, Range(0f, 90f), Tooltip("Degrees either side of the way the camera looks on the ground within which a fist flies to the beekeeper nearest that way, before auto-aim's most threatening one. The mouse and the right stick aim by turning the camera, so a click, Space and R2 all aim alike. 0 leaves it to auto-aim.")]
+        public float FistAimConeDegrees { get; private set; } = 25f;
+
+        [field: SerializeField, Min(0.1f), Tooltip("Seconds from a fist's hit until its arm has grown back and can launch again. The arm is missing until then.")]
+        public float FistRegrowSeconds { get; private set; } = 2f;
+
+        // Songs-v2 W. A look only: every throw leaves on the hit the rules already have and changes no damage, time or reach.
+        // The shares keep the giant whole: the leap, the biggest, sends about a fifth of the body out at once.
+        [field: Header("Thrown wasps (a look only: every move sheds wasps from the limb that strikes, on its hit)")]
+        [field: SerializeField, Tooltip("J, and the chain's third punch: a tight cone straight out of the striking fist.")]
+        public ColossusThrow PunchThrow { get; private set; } = new ColossusThrow(0.65f, 14f, 16f, 0.6f);
+
+        [field: SerializeField, Tooltip("K: a low fan sweeping out from the striking foot.")]
+        public ColossusThrow KickThrow { get; private set; } = new ColossusThrow(0.55f, 60f, 13f, 0.65f);
+
+        [field: SerializeField, Tooltip("L: a ring racing outward along the ground from both hands.")]
+        public ColossusThrow SlamThrow { get; private set; } = new ColossusThrow(0.8f, 180f, 16f, 0.75f);
+
+        [field: SerializeField, Tooltip("H: a spray from the head and chest in a wide arc ahead.")]
+        public ColossusThrow RoarThrow { get; private set; } = new ColossusThrow(0.6f, 70f, 10f, 0.75f);
+
+        [field: SerializeField, Tooltip("K K: a spiral from both legs unwinding around the giant.")]
+        public ColossusThrow SpinKickThrow { get; private set; } = new ColossusThrow(0.6f, 180f, 11f, 0.7f);
+
+        [field: SerializeField, Tooltip("L L's landing: a crater ring from the hands and feet, with a second, slower ring.")]
+        public ColossusThrow LeapThrow { get; private set; } = new ColossusThrow(0.55f, 180f, 15f, 0.8f);
+
+        [field: SerializeField, Range(0.1f, 0.8f), Tooltip("Share of a throw's time until its wasps are back that they spend flying out; the rest is a short hold and the stream home.")]
+        public float ThrowOutShare { get; private set; } = 0.4f;
+
+        [field: SerializeField, Range(0.1f, 1f), Tooltip("The leap's second ring: its share of the thrown wasps, and its speed as a share of the first ring's.")]
+        public float ThrowSecondRingShare { get; private set; } = 0.5f;
+
+        [field: SerializeField, Min(0f), Tooltip("Radians per second the spin kick's spiral turns as it unwinds.")]
+        public float ThrowSpiralSpin { get; private set; } = 9f;
+
+        [field: SerializeField, Tooltip("The colour thrown wasps and the flying fists burn while they are off the body. They turn from the giant's gold to it as they leave and back as they rejoin.")]
+        public Color ThrowColor { get; private set; } = new Color(1f, 0.12f, 0.04f, 1f);
+
+        [field: SerializeField, Min(0f), Tooltip("Seconds a thrown wasp takes to turn from gold to the throw colour as it leaves.")]
+        public float ThrowRedSeconds { get; private set; } = 0.08f;
     }
 }

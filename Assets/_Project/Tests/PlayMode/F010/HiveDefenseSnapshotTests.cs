@@ -45,7 +45,8 @@ namespace DigitalStory.Tests.PlayMode
         private const float TornadoSeconds = 0.8f;
         private const float ColossusSeconds = 2.5f;
         private const float MaxColossusWaitSeconds = 2f;
-        private const float FuryDamage = 1000f;
+        // Fills Fury at any rate up to 20 damage a point (11.5 since songs-v2 V, when 1,000 stopped filling it).
+        private const float FuryDamage = 2000f;
         private const float MaxWaveSeconds = 60f;
         private const float MaxWalkSeconds = 15f;
         private const float NearBeekeeperMeters = 6f;
@@ -97,7 +98,9 @@ namespace DigitalStory.Tests.PlayMode
         private const float BesideNestMetres = 1.5f;
         private const float OutsideNestRingMetres = 5f;
         private const float NestStayMarginSeconds = 0.3f;
-        private const float HalfCollectShare = 0.5f;
+        private const float NestComboReadSeconds = 0.6f;
+        private const float MaxCooldownWaitSeconds = 20f;
+        private const float NestComboPopSettleSeconds = 0.35f;
         private const float NestRingPitch = 45f;
         private const float NestsInViewBackMetres = 4f;
         private const float NestsSettleSeconds = 2f;
@@ -174,6 +177,7 @@ namespace DigitalStory.Tests.PlayMode
         private const float ThrowCloseDistance = 15f;
         private const float ThrowClosePitch = 15f;
         private const float HitNumberShotSeconds = 0.05f;
+        private const float JuiceGiantShotSeconds = 0.1f;
 
         // Snapshot 17, the giant version 2 in the chase view (plan section I). Holes count from 0 as H J K L. Each move's
         // picture is taken this many seconds after the move starts: about when it lands.
@@ -199,6 +203,20 @@ namespace DigitalStory.Tests.PlayMode
         private const float GiantOrbitPitchDegrees = 8f;
         private const float GiantOrbitSeconds = 0.6f;
         private const float MaxMoveWaitSeconds = 2f;
+
+        // Songs-v2 W: the thrown wasps are taken this long after each move's hit, from this far off the giant's side.
+        private const float ThrowShotSeconds = 0.15f;
+        private const float ThrowViewDistance = 7.5f;
+        private const float ThrowFocusAhead = 1.5f;
+        private const float ThrowSidePitch = 12f;
+        private const float ThrowHighPitch = 38f;
+
+        // When the fist pictures are taken: near the end of the thrust, halfway through the flight, a third into the regrow, and
+        // a moment after the arm is whole.
+        private const float FistThrustShotShare = 0.8f;
+        private const float FistFlightShotShare = 0.5f;
+        private const float FistMissingShotShare = 0.3f;
+        private const float FistRegrownShotSeconds = 0.3f;
 
         // The giant forms 10 m south of the middle, facing north, with three stunned sticks 8 to 12 m ahead of it.
         private static readonly Vector3 GiantCore = new Vector3(0f, 0f, -10f);
@@ -658,19 +676,21 @@ namespace DigitalStory.Tests.PlayMode
             yield return Capture("snap-14-nests-game");
         }
 
-        // Plan section H: while the core collects, the ring on the ground fills clockwise from the top, here half way, and
-        // motes stream from the nest down to it. The core waits outside the ring first, so the camera has caught up.
+        // Plan sections H and U: while the core plays a nest's combo, the ring on the ground fills clockwise from the top,
+        // here about half way, and motes stream from the nest down to it. The core waits outside the ring first, so the
+        // camera has caught up.
         [UnityTest]
         public IEnumerator Snapshot14_Collecting()
         {
-            NestConfig config = LoadNestConfig();
             Nest nest = _root.Session.Nests[0];
             _core.PlaceAt(nest.Position + (Vector3.back * OutsideNestRingMetres), true);
             yield return Wait(SettleCameraSeconds);
             Assert.That(nest.Progress01, Is.EqualTo(0f), "the nest was being collected from outside its ring");
 
             _core.PlaceAt(nest.Position + (Vector3.back * BesideNestMetres), true);
-            yield return Wait(config.CollectSeconds * HalfCollectShare);
+            yield return Wait(NestComboReadSeconds);
+            yield return Play(HalfOf(nest.Combo));
+            yield return Wait(NestComboReadSeconds);
             Assert.That(nest.Progress01, Is.GreaterThan(0.3f).And.LessThan(0.7f), "the collecting is not about half way");
             yield return CaptureClose("snap-14-collecting", nest.Position + (Vector3.up * CloseFocusHeight), WideCloseDistance, NestRingPitch);
         }
@@ -1043,6 +1063,44 @@ namespace DigitalStory.Tests.PlayMode
             yield return CaptureHud("snap-16-hit-number");
         }
 
+        // Plan section Y: the frame after the Tornado lands, with the cast's zoom punch, the trauma shake, the ring and the
+        // popping hit numbers on the HUD.
+        [UnityTest]
+        public IEnumerator Snapshot25_JuiceTornado()
+        {
+            yield return Stage(ThrowCore, ThrowCore + HitNumberBeekeeper);
+            yield return Play(KeysOf<TornadoSong>());
+            TornadoSong tornado = (TornadoSong)_root.Session.Caster[SongIndex<TornadoSong>()];
+            yield return WaitForSlot(SongSlot.Strike, tornado.HitSeconds + HitNumberShotSeconds);
+            FollowCamera follow = UnityEngine.Object.FindAnyObjectByType<FollowCamera>();
+            Assert.That(follow.ShakeStrength, Is.GreaterThan(0f), "the Tornado's landing added no trauma");
+            yield return CaptureHud("snap-25-juice-tornado");
+        }
+
+        // Plan section Y: a tenth of a second after the swarm becomes the giant, with the zoom punch and the trauma shake on
+        // top of the swoop to the chase view.
+        [UnityTest]
+        public IEnumerator Snapshot25_JuiceGiantForms()
+        {
+            yield return Stage(GiantCore, GiantBeekeepers);
+            HiveDefenseSession session = _root.Session;
+            FollowCamera follow = UnityEngine.Object.FindAnyObjectByType<FollowCamera>();
+            session.Fury.AddDamage(FuryDamage);
+            yield return Play(KeysOf<ColossusSong>());
+            float waited = 0f;
+            while (!session.IsColossusActive && waited < MaxColossusWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.IsColossusActive, Is.True, "The Colossus keys at full Fury did not form the Colossus.");
+            yield return Wait(JuiceGiantShotSeconds);
+            Assert.That(follow.PunchShare, Is.GreaterThan(0f), "the giant's forming did not punch the zoom");
+            Assert.That(follow.ShakeStrength, Is.GreaterThan(0f), "the giant's forming added no trauma");
+            yield return Capture("snap-25-juice-giant-forms");
+        }
+
         // The swarm has collapsed: nothing of it shows, and the HUD says it is returning and counts the seconds.
         [UnityTest]
         public IEnumerator Snapshot16_ReturningHud()
@@ -1159,6 +1217,216 @@ namespace DigitalStory.Tests.PlayMode
                 _root.HoldMove(Vector2.zero);
                 EndHudOverlay(overlay, document, original, copy);
             }
+        }
+
+        // Songs-v2 R: the giant's right hand launch, with the HUD over it: the arm thrusting, the fist in flight to the stick
+        // auto-aim picks, the arm missing as the wasps stream back, and the arm whole again.
+        [UnityTest]
+        public IEnumerator Snapshot20_Fist()
+        {
+            yield return Stage(GiantCore, GiantBeekeepers);
+            FollowCamera follow = UnityEngine.Object.FindAnyObjectByType<FollowCamera>();
+            HiveDefenseSession session = _root.Session;
+            session.Fury.AddDamage(FuryDamage);
+            yield return Play(KeysOf<ColossusSong>());
+            float waited = 0f;
+            while ((!session.IsColossusActive || follow.ChaseBlend < 1f - SwoopTolerance) && waited < MaxColossusWaitSeconds + SettleCameraSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.IsColossusActive, Is.True, "The Colossus keys at full Fury did not form the Colossus.");
+            RenderTexture overlay = BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy);
+            try
+            {
+                yield return Wait(GiantSettleSeconds);
+                ColossusConfig giant = LoadColossus();
+                _root.PressHand(ColossusHand.Right);
+                yield return null;
+                Assert.That(session.FistPhaseOf(ColossusHand.Right), Is.EqualTo(FistPhase.Thrust), "the right hand did not thrust");
+                yield return Wait(giant.FistThrustSeconds * FistThrustShotShare);
+                yield return ReadHud("snap-20-fist-thrust");
+
+                yield return WaitForFist(session, FistPhase.Flight);
+                yield return Wait(session.FistFlightSeconds(ColossusHand.Right) * FistFlightShotShare);
+                yield return ReadHud("snap-20-fist-flight");
+
+                yield return WaitForFist(session, FistPhase.Regrow);
+                yield return Wait(giant.FistRegrowSeconds * FistMissingShotShare);
+                yield return ReadHud("snap-20-fist-missing");
+
+                yield return WaitForFist(session, FistPhase.Ready);
+                yield return Wait(FistRegrownShotSeconds);
+                Assert.That(session.IsColossusActive, Is.True, "the giant ended before the last picture");
+                yield return ReadHud("snap-20-fist-regrown");
+            }
+            finally
+            {
+                EndHudOverlay(overlay, document, original, copy);
+            }
+        }
+
+        // Songs-v2 W: every giant move throws a burst of red wasps off the limb that strikes, on its hit, in its own shape; and a
+        // flying fist burns red too. Each from the giant's side, close, a moment after the hit, when the burst is widest; the
+        // rings and the spiral from higher up, so their round shape shows.
+        [UnityTest]
+        public IEnumerator Snapshot23_Throws()
+        {
+            yield return Stage(GiantCore, GiantBeekeepers);
+            HiveDefenseSession session = _root.Session;
+            var landed = new List<ColossusAttack>();
+            session.ColossusAttackLanded += attack => landed.Add(attack);
+            session.Fury.AddDamage(FuryDamage);
+            yield return Play(KeysOf<ColossusSong>());
+            float waited = 0f;
+            while (!session.IsColossusActive && waited < MaxColossusWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.IsColossusActive, Is.True, "The Colossus keys at full Fury did not form the Colossus.");
+            yield return Wait(GiantSettleSeconds + GiantSettleSeconds);
+
+            yield return Throw(landed, ColossusAttack.Punch, PressOnce(PunchHole), ThrowSidePitch, "snap-23-throw-punch");
+            yield return Throw(landed, ColossusAttack.Kick, PressOnce(KickHole), ThrowSidePitch, "snap-23-throw-kick");
+            yield return Throw(landed, ColossusAttack.Roar, PressOnce(RoarHole), ThrowSidePitch, "snap-23-throw-roar");
+            yield return Throw(landed, ColossusAttack.Slam, PressOnce(SlamHole), ThrowHighPitch, "snap-23-throw-slam");
+            yield return Throw(landed, ColossusAttack.SpinKick, PressTwice(KickHole), ThrowHighPitch, "snap-23-throw-spin");
+            while (session.SlamCooldown01 > 0f)
+            {
+                yield return null;
+            }
+
+            yield return Throw(landed, ColossusAttack.LeapSlam, PressTwice(SlamHole), ThrowHighPitch, "snap-23-throw-leap");
+
+            ColossusConfig giant = LoadColossus();
+            _root.PressHand(ColossusHand.Right);
+            yield return WaitForFist(session, FistPhase.Flight);
+            yield return Wait(session.FistFlightSeconds(ColossusHand.Right) * FistFlightShotShare);
+            Vector3 middle = (session.ColossusPosition + session.FistTarget(ColossusHand.Right)) * 0.5f;
+            yield return CapturePosed(
+                "snap-23-throw-fist", middle + (Vector3.up * ColossusFocusHeight), ThrowViewDistance, ThrowSidePitch, SideYaw(session));
+            Assert.That(giant, Is.Not.Null);
+            Assert.That(session.IsColossusActive, Is.True, "the giant ended before the last picture");
+        }
+
+        // Presses the move's keys, waits for its hit, a moment more, and takes the picture from the giant's right side.
+        private IEnumerator Throw(List<ColossusAttack> landed, ColossusAttack move, IEnumerator press, float pitch, string name)
+        {
+            HiveDefenseSession session = _root.Session;
+            landed.Clear();
+            yield return press;
+            float waited = 0f;
+            while (!landed.Contains(move) && waited < MaxMoveWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(landed.Contains(move), Is.True, move + " did not land");
+            yield return Wait(ThrowShotSeconds);
+            Vector3 facing = session.ColossusFacing;
+            facing.y = 0f;
+            Vector3 focus = session.ColossusPosition + (facing.normalized * ThrowFocusAhead) + (Vector3.up * ColossusFocusHeight);
+            yield return CapturePosed(name, focus, ThrowViewDistance, pitch, SideYaw(session));
+            yield return Wait(GiantBetweenMovesSeconds);
+        }
+
+        private IEnumerator PressOnce(int hole)
+        {
+            _root.PressHole(hole);
+            yield return null;
+        }
+
+        // A phrase: the second press a frame after the first, as a player's quickest double tap.
+        private IEnumerator PressTwice(int hole)
+        {
+            _root.PressHole(hole);
+            yield return null;
+            _root.PressHole(hole);
+            yield return null;
+        }
+
+        // Looking at the giant from its left, away from the hive behind its right, so what it throws ahead flies across the
+        // picture, right to left.
+        private static float SideYaw(HiveDefenseSession session)
+        {
+            Vector3 facing = session.ColossusFacing;
+            float yaw = Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg;
+            return yaw + QuarterTurnDegrees;
+        }
+
+        // Plan section U, from the game camera with the HUD over it: a nest's combo as the core steps into the ring, empty;
+        // then with its first half played; then the same named with the controller's diamonds, as after the pad was used.
+        [UnityTest]
+        public IEnumerator Snapshot22_NestCombo()
+        {
+            Nest nest = _root.Session.Nests[0];
+            var input = UnityEngine.Object.FindAnyObjectByType<HiveDefenseInput>();
+            var hud = UnityEngine.Object.FindAnyObjectByType<HiveDefenseHudView>();
+            Assert.That(input, Is.Not.Null);
+            Assert.That(hud, Is.Not.Null);
+            _core.PlaceAt(nest.Position + (Vector3.back * OutsideNestRingMetres), true);
+            yield return Wait(SettleCameraSeconds);
+
+            RenderTexture overlay = BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy);
+            try
+            {
+                _core.PlaceAt(nest.Position + (Vector3.back * BesideNestMetres), true);
+                yield return Wait(NestComboReadSeconds);
+                Assert.That(hud.NestCombo.IsShown, Is.True, "the combo is not shown in the ring");
+                Assert.That(hud.NestCombo.FilledCount, Is.EqualTo(0));
+                yield return ReadHud("snap-22-nestcombo-empty");
+
+                IReadOnlyList<int> half = HalfOf(nest.Combo);
+                yield return Play(half);
+                yield return Wait(NestComboPopSettleSeconds);
+                Assert.That(hud.NestCombo.FilledCount, Is.EqualTo(half.Count));
+                yield return ReadHud("snap-22-nestcombo-half");
+
+                input.RecordUse(false, true);
+                yield return Wait(NestComboPopSettleSeconds);
+                Assert.That(hud.ShownDevice, Is.EqualTo(ControlDevice.Gamepad));
+                yield return ReadHud("snap-22-nestcombo-pad");
+            }
+            finally
+            {
+                input.RecordUse(true, false);
+                EndHudOverlay(overlay, document, original, copy);
+            }
+        }
+
+        // The first half of a combo, rounded down: two notes of four or five.
+        private static IReadOnlyList<int> HalfOf(IReadOnlyList<int> combo)
+        {
+            var half = new List<int>();
+            for (int index = 0; index < combo.Count / 2; index++)
+            {
+                half.Add(combo[index]);
+            }
+
+            return half;
+        }
+
+        private static IEnumerator WaitForFist(HiveDefenseSession session, FistPhase phase)
+        {
+            float waited = 0f;
+            while (session.FistPhaseOf(ColossusHand.Right) != phase && waited < MaxMoveWaitSeconds * 2f)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.FistPhaseOf(ColossusHand.Right), Is.EqualTo(phase), "the right fist never reached " + phase);
+        }
+
+        private static ColossusConfig LoadColossus()
+        {
+            var config = UnityEditor.AssetDatabase.LoadAssetAtPath<ColossusConfig>("Assets/_Project/GameData/F010/ColossusConfig.asset");
+            Assert.That(config, Is.Not.Null, "No ColossusConfig asset.");
+            return config;
         }
 
         // Presses one of the giant's keys, waits for its move to start and then for the moment of the picture.
@@ -1439,6 +1707,20 @@ namespace DigitalStory.Tests.PlayMode
 
             yield return CollectNests(LevelFiveNests);
             Assert.That(_root.Session.Level, Is.EqualTo(1 + LevelFiveNests));
+
+            // Plan section U: four combos take a few seconds, not the eight they took by standing, so the song may still be
+            // cooling down from its level-1 cast.
+            SwarmSongCaster caster = _root.Session.Caster;
+            for (int song = 0; song < caster.Count; song++)
+            {
+                float waited = 0f;
+                while (caster[song] is T && caster.CooldownFraction(song) > 0f && waited < MaxCooldownWaitSeconds)
+                {
+                    waited += Time.deltaTime;
+                    yield return null;
+                }
+            }
+
             _core.PlaceAt(spot, true);
             yield return Wait(StandSeconds);
             Assert.That(_root.Session.Forms.Slot(slot).IsActive, Is.False, "the level-1 song still runs");
@@ -1475,7 +1757,8 @@ namespace DigitalStory.Tests.PlayMode
 
                 Assert.That(nests[index].IsOpen, Is.True, "nest " + index + " never opened");
                 _core.PlaceAt(nests[index].Position + (Vector3.back * BesideNestMetres), true);
-                yield return Wait(config.CollectSeconds + NestStayMarginSeconds);
+                yield return Wait(NestStayMarginSeconds);
+                yield return Play(nests[index].Combo);
                 Assert.That(nests[index].IsCollected, Is.True, "nest " + index + " was not collected");
             }
         }

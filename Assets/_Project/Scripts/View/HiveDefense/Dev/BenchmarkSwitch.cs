@@ -53,5 +53,8 @@ namespace DigitalStory.View
 
         /// <summary>No hit raises a damage number. A first-cast switch.</summary>
         NoDamageNumbers = 16,
+
+        /// <summary>The giant's chase view does not lock the mouse cursor (plan section Z: is the lock the long frame at the giant's start and end?).</summary>
+        NoCursorLock = 17,
     }
 }

@@ -68,7 +68,8 @@ namespace DigitalStory.Tests.EditMode
             bool withSongs = false,
             bool withAllSongs = false,
             float firstFarmSeconds = ShortFirstFarmSeconds,
-            bool withNewSongs = false)
+            bool withNewSongs = false,
+            IRandomSource random = null)
         {
             Core = core;
             Swarm = Make<SwarmConfig>();
@@ -125,7 +126,7 @@ namespace DigitalStory.Tests.EditMode
                 NestPositions,
                 spawns ?? new[] { new Vector3(30f, 0f, -30f), new Vector3(-30f, 0f, -30f) },
                 Core,
-                new FixedRandomSource());
+                random ?? new FixedRandomSource());
         }
 
         public SwarmConfig Swarm { get; }
@@ -160,15 +161,15 @@ namespace DigitalStory.Tests.EditMode
         public HiveDefenseFrame Frame(
             Vector2 move = default,
             int holes = 0,
-            bool punch = false,
-            bool kick = false,
+            bool rightHand = false,
+            bool leftHand = false,
             Vector3? aim = null,
             bool isMouseLive = false,
             bool give = false,
             bool callWave = false,
             Vector3 cameraForward = default)
         {
-            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, punch, kick, isMouseLive, give, callWave, cameraForward);
+            return new HiveDefenseFrame(Core, aim ?? Core, move, holes, rightHand, leftHand, isMouseLive, give, callWave, cameraForward);
         }
 
         /// <summary>Ticks with idle frames for the given seconds.</summary>
@@ -219,13 +220,14 @@ namespace DigitalStory.Tests.EditMode
         }
 
         /// <summary>
-        /// Flies the core to nest <paramref name="index"/> and stays until it is collected, or for the time it takes and a
-        /// little more. Returns whether it was collected.
+        /// Flies the core to nest <paramref name="index"/> and plays its combo (plan section U), one note a tick. Returns
+        /// whether it was collected.
         /// </summary>
         public bool CollectNest(int index)
         {
             MoveCoreTo(NestPositions[index]);
-            return RunUntil(() => Session.Nests[index].IsCollected, Nests.CollectSeconds + 0.5f);
+            Play(Session.Nests[index].Combo);
+            return Session.Nests[index].IsCollected;
         }
 
         /// <summary>Kills every living beekeeper on the field.</summary>
@@ -245,8 +247,8 @@ namespace DigitalStory.Tests.EditMode
                 frame.AimPoint,
                 frame.Move,
                 frame.PressedHoleMask,
-                frame.Punch,
-                frame.Kick,
+                frame.RightHand,
+                frame.LeftHand,
                 frame.IsMouseLive,
                 frame.Give,
                 frame.CallWave,

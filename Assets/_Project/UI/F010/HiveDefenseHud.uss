@@ -663,34 +663,73 @@
     -unity-font-style: bold;
 }
 
-/* The collecting bar sits at the bottom centre, above the notes. */
-.collect-box {
-    display: none;
+/* A nest's combo (NestComboView.cs, plan section U): large, near the top centre, while the core stands in an open nest's
+   ring. Each slot wears its note's colour from the hole classes, dim until played; a played slot is bright and ringed.
+   The pop, the shake and the burst are driven from code, on scale, translate and opacity. */
+.combo-box {
+    position: absolute;
+    top: 92px;
+    left: 0;
+    right: 0;
     align-items: center;
-    width: 160px;
-    margin-bottom: 4px;
-    padding: 2px 8px;
-    border-radius: 6px;
-    background-color: var(--panel);
+    display: none;
 }
 
-.collect--shown {
+.combo--shown {
     display: flex;
 }
 
-.collect-label {
+.combo-title {
+    font-size: 13px;
+    -unity-font-style: bold;
     color: var(--nest);
-    font-size: 12px;
+    background-color: var(--panel);
+    border-radius: 6px;
+    padding: 1px 10px;
+    margin-bottom: 6px;
+}
+
+.combo-slots {
+    flex-direction: row;
+    justify-content: center;
+    padding: 6px 8px;
+    border-radius: 12px;
+    background-color: var(--panel);
+}
+
+.combo-slot {
+    width: 44px;
+    height: 44px;
+    margin: 0 5px;
+    border-radius: 10px;
+    font-size: 24px;
+    -unity-font-style: bold;
+    color: var(--key-text);
+    -unity-text-align: middle-center;
     padding: 0;
+    opacity: 0.38;
+    border-width: 3px;
+    border-color: rgba(0, 0, 0, 0);
 }
 
-.collect-track {
-    align-self: stretch;
-    height: 6px;
+.combo-slot--filled {
+    opacity: 1;
+    border-color: var(--text);
 }
 
-.collect-fill {
-    background-color: var(--nest);
+.combo-slot--hidden {
+    display: none;
+}
+
+.combo-slots .pad-diamond--cell {
+    width: 24px;
+    height: 24px;
+}
+
+.combo-slots .pad-diamond--cell .pad-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
 }
 
 /* Arrows to open nests, off screen. Smaller and quieter than the hive alarm arrows. */
@@ -758,13 +797,28 @@
     color: rgb(110, 175, 255);
 }
 
-/* The giant's hint: one line of its moves and, the first times, a smaller line of its phrases. Near the top, in the night sky
-   above the chase camera's giant, so it never covers the body. It fades out on its own after a few seconds. */
+/* Plan section Y: a kill chain's milestone (x3, x6, x10) stamps high in the middle, lands from a larger scale and fades. */
+.chain-stamp {
+    position: absolute;
+    left: 50%;
+    top: 20%;
+    translate: -50% -50%;
+    font-size: 46px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(255, 205, 70);
+    text-shadow: 2px 2px 3px rgba(0, 0, 0, 0.9);
+    white-space: nowrap;
+}
+
+/* The giant's hint: one line of its moves, one of its two hand launches and, the first times, a smaller line of its phrases.
+   Near the top, in the night sky above the chase camera's giant, so it never covers its head. It fades out on its own after a
+   few seconds. */
 .giant-hint {
     position: absolute;
     left: 0;
     right: 0;
-    top: 19%;
+    top: 11%;
     align-items: center;
 }
 
@@ -786,20 +840,34 @@
     color: var(--text);
 }
 
+.giant-line--hands {
+    font-size: 16px;
+    color: var(--text);
+}
+
+/* While the giant stands, the lines at the bottom (the "New song" toast among them) move to the bottom left corner, clear
+   of the chase view's giant (songs-v2 R). */
+.bottom--giant {
+    left: 16px;
+    right: auto;
+    bottom: 16px;
+    align-items: flex-start;
+}
+
 .giant-line--shown {
     opacity: 1;
 }
 
-/* The giant strip, bottom middle and below the giant's feet: a ring of the seconds left and the two cooldown marks. Shown
-   only while the giant stands. */
+/* The giant strip: a ring of the seconds left and the cooldown marks of the slam, the roar and the two hands. Shown only
+   while the giant stands, in the bottom right corner, where the songbook stands aside for it, so it never covers the giant's
+   legs in the chase view (songs-v2 R). */
 .giant-strip {
     display: none;
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 64px;
+    right: 16px;
+    bottom: 16px;
     flex-direction: row;
-    justify-content: center;
+    justify-content: flex-end;
     align-items: center;
 }
 
@@ -837,7 +905,7 @@
 }
 
 .giant-mark-label {
-    width: 46px;
+    width: 58px;
     font-size: 12px;
     color: var(--caption);
     margin: 0 4px 0 0;

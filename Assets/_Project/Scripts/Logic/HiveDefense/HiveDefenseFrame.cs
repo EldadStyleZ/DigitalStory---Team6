@@ -17,9 +17,9 @@ namespace DigitalStory.Logic
             Vector3 aimPoint,
             Vector2 move,
             int pressedHoleMask,
-            bool punch,
-            bool kick)
-            : this(corePosition, aimPoint, move, pressedHoleMask, punch, kick, false)
+            bool rightHand,
+            bool leftHand)
+            : this(corePosition, aimPoint, move, pressedHoleMask, rightHand, leftHand, false)
         {
         }
 
@@ -32,10 +32,10 @@ namespace DigitalStory.Logic
             Vector3 aimPoint,
             Vector2 move,
             int pressedHoleMask,
-            bool punch,
-            bool kick,
+            bool rightHand,
+            bool leftHand,
             bool isMouseLive)
-            : this(corePosition, aimPoint, move, pressedHoleMask, punch, kick, isMouseLive, false, false)
+            : this(corePosition, aimPoint, move, pressedHoleMask, rightHand, leftHand, isMouseLive, false, false)
         {
         }
 
@@ -50,12 +50,12 @@ namespace DigitalStory.Logic
             Vector3 aimPoint,
             Vector2 move,
             int pressedHoleMask,
-            bool punch,
-            bool kick,
+            bool rightHand,
+            bool leftHand,
             bool isMouseLive,
             bool give,
             bool callWave)
-            : this(corePosition, aimPoint, move, pressedHoleMask, punch, kick, isMouseLive, give, callWave, Vector3.zero)
+            : this(corePosition, aimPoint, move, pressedHoleMask, rightHand, leftHand, isMouseLive, give, callWave, Vector3.zero)
         {
         }
 
@@ -71,8 +71,8 @@ namespace DigitalStory.Logic
             Vector3 aimPoint,
             Vector2 move,
             int pressedHoleMask,
-            bool punch,
-            bool kick,
+            bool rightHand,
+            bool leftHand,
             bool isMouseLive,
             bool give,
             bool callWave,
@@ -82,8 +82,8 @@ namespace DigitalStory.Logic
             AimPoint = aimPoint;
             Move = move;
             PressedHoleMask = pressedHoleMask;
-            Punch = punch;
-            Kick = kick;
+            RightHand = rightHand;
+            LeftHand = leftHand;
             IsMouseLive = isMouseLive;
             Give = give;
             CallWave = callWave;
@@ -122,11 +122,17 @@ namespace DigitalStory.Logic
         /// </summary>
         public int PressedHoleMask { get; }
 
-        /// <summary>True when the punch was pressed this tick.</summary>
-        public bool Punch { get; }
+        /// <summary>
+        /// True on the tick the right hand's launch was pressed (R2, the right mouse button or Space). Only the giant uses it: it
+        /// launches its right fist.
+        /// </summary>
+        public bool RightHand { get; }
 
-        /// <summary>True when the kick was pressed this tick.</summary>
-        public bool Kick { get; }
+        /// <summary>
+        /// True on the tick the left hand's launch was pressed (L2, the left mouse button or Left Shift). Only the giant uses it:
+        /// it launches its left fist.
+        /// </summary>
+        public bool LeftHand { get; }
 
         /// <summary>True while Give is held: beside a hurt hive the swarm pays wasps into its health, and the hive hands out nothing.</summary>
         public bool Give { get; }

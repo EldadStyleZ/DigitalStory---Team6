@@ -196,6 +196,16 @@ namespace DigitalStory.View
             _isGiving = isGiving;
         }
 
+        /// <summary>
+        /// Measures the hive model's box in the world, without its bars and rings, for the swarm to flow round (plan section
+        /// X). False when the hive has no model.
+        /// </summary>
+        public bool TryMeasureModel(out Bounds bounds)
+        {
+            bounds = default;
+            return _model != null && MeshBounds.TryMeasure(_model, out bounds);
+        }
+
         /// <summary>Supplies the hive to show, the camera the bars face and the hive config (collect radius). Call once, before this object starts.</summary>
         public void Initialize(Hive hive, Camera camera, HiveConfig config)
         {
@@ -224,6 +234,11 @@ namespace DigitalStory.View
             _config = config;
             _block = new MaterialPropertyBlock();
 
+            // First, before any child is placed: the rings and the bar are children placed at the hive's world position,
+            // and moving this object after them would carry them by the move, off the hive, on every map but the one the
+            // scene was saved with (plan section T).
+            transform.position = hive.Position;
+
             if (_model != null)
             {
                 _modelStartScale = _model.localScale;
@@ -238,7 +253,6 @@ namespace DigitalStory.View
             BuildCollectRing(material);
             BuildMotes(material);
 
-            transform.position = hive.Position;
             _hive.Destroyed += OnDestroyed;
 
             // The bars over the hive give way to the hive's emblem, drawn on the HUD by HiveBadgesView.

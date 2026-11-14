@@ -1,8 +1,8 @@
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// Plays as <see cref="MixedPlan"/>, and in each farm phase first flies to every open nest, nearest first, and stays
-    /// until it is collected. Its chores and the early call come after the nests.
+    /// Plays as <see cref="MixedPlan"/>, and in each farm phase first flies to every open nest, nearest first, and plays its
+    /// combo once it shows (plan section U). Its chores and the early call come after the nests.
     /// </summary>
     internal sealed class MixedWithNestsPlan : IPlaytestPlan
     {
@@ -16,6 +16,7 @@ namespace DigitalStory.Tests.EditMode
             if (nest >= 0)
             {
                 bot.FlyTo(bot.Session.Nests[nest].Position);
+                bot.PlayNestCombo();
                 return;
             }
 

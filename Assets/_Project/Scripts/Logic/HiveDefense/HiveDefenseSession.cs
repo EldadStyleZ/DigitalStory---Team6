@@ -39,8 +39,9 @@ namespace DigitalStory.Logic
     /// for the feel of each; the Sting asks it for one target a sting (<see cref="ISongAim.ChooseThreats"/>); and
     /// <see cref="ShowsDomeHint"/> says when the HUD names the Dome's use.
     /// The giant, version 2 (plan section I): while it stands the holes are its moves and no note reaches the songs (H roars,
-    /// J or the punch button punches, K or the kick button kicks, L slams, and K K and L L are the spin kick and the leap
-    /// slam), and the move steers it relative to the camera's way on the ground (<see cref="HiveDefenseFrame.CameraForward"/>).
+    /// J punches, K kicks, L slams, and K K and L L are the spin kick and the leap slam), each hand launches as a fist on its
+    /// own button (<see cref="HiveDefenseFrame.RightHand"/>, <see cref="HiveDefenseFrame.LeftHand"/>), and the move steers it
+    /// relative to the camera's way on the ground (<see cref="HiveDefenseFrame.CameraForward"/>).
     /// Each kill adds to its time (<see cref="ColossusSecondsLeft"/>), and the leap slam flies to this tick's aim, pulled in
     /// to its range, and lands before its time can end it. Every blow is reported through <see cref="SongLanded"/>; the slam,
     /// the leap and the third punch are the heavy ones.
@@ -64,12 +65,16 @@ namespace DigitalStory.Logic
 
         private readonly HiveDefenseRules _rules;
         private readonly IReadOnlyList<Vector3> _spawnPoints;
+        private readonly int[] _spawnHomes;
         private readonly IRandomSource _random;
         private readonly BeekeeperBrain[] _pool;
         private readonly bool[] _isActive;
         private readonly ISwarmTarget[] _enemies;
         private readonly int _stickPoolSize;
         private readonly ColossusAttackChain _chain;
+        private readonly ColossusFist[] _fists;
+        private readonly ISwarmTarget[] _fistTargets;
+        private readonly Vector3[] _fistPoints;
         private readonly IReadOnlyList<SwarmSongEffect> _songs;
         private readonly AutoAim _autoAim;
         private readonly SlotSongEffect _markerSong;
@@ -129,6 +134,8 @@ namespace DigitalStory.Logic
                 throw new ArgumentException("At least one spawn point is needed.", nameof(spawnPoints));
             }
 
+            _spawnHomes = SpawnHomes(spawnPoints, hivePositions);
+
             if (rules.HoleCount < 1 || rules.HoleCount > MaxHoleBits)
             {
                 throw new ArgumentOutOfRangeException(nameof(rules), "HoleCount must be from 1 to " + MaxHoleBits + ".");
@@ -152,7 +159,7 @@ namespace DigitalStory.Logic
             }
 
             Hives = new HiveSet(hives);
-            Nests = new NestField(rules.Nests, nestPositions);
+            Nests = new NestField(rules.Nests, nestPositions, DrawCombos(rules, nestPositions, _random));
             _exchange = new HiveExchange(rules.Hive, Hives, Swarm);
             Waves = new WaveDirector(rules.Waves, spawnPoints.Count);
             Caster = new SwarmSongCaster(rules.Songs, rules.SongConfig, rules.HoleCount);
@@ -197,6 +204,9 @@ namespace DigitalStory.Logic
             _chain = new ColossusAttackChain(rules.Colossus);
             _chain.Started += OnColossusStarted;
             _chain.Landed += OnColossusLanded;
+            _fists = new[] { new ColossusFist(rules.Colossus), new ColossusFist(rules.Colossus) };
+            _fistTargets = new ISwarmTarget[_fists.Length];
+            _fistPoints = new Vector3[_fists.Length];
 
             _autoAim = new AutoAim(rules.Aim, _enemies, Hives);
             Waves.SpawnRequested += OnSpawnRequested;
@@ -444,8 +454,35 @@ namespace DigitalStory.Logic
         /// <summary>Raised when a giant attack starts, for the animation.</summary>
         public event Action<ColossusAttack> ColossusAttackStarted;
 
+        /// <summary>Raised when one of the giant's arms starts to thrust for a hand launch, for the animation.</summary>
+        public event Action<ColossusHand> ColossusFistThrown;
+
+        /// <summary>Raised when a fist leaves its arm at the end of the thrust, flying to <see cref="FistTarget"/>.</summary>
+        public event Action<ColossusHand> ColossusFistLaunched;
+
+        /// <summary>Raised when a fist hits at <see cref="FistTarget"/>, after its hit checks, whether or not it hurt anyone.</summary>
+        public event Action<ColossusHand> ColossusFistLanded;
+
         /// <summary>Raised when a giant attack lands, after its hit checks.</summary>
         public event Action<ColossusAttack> ColossusAttackLanded;
+
+        /// <summary>Where the hand is in its launch; Ready while no giant stands.</summary>
+        public FistPhase FistPhaseOf(ColossusHand hand) => FistOf(hand).Phase;
+
+        /// <summary>How much of the hand's wait is left, for the HUD: 0 ready, 1 from the thrust until the hit, then falling as the arm grows back.</summary>
+        public float FistCooldown01(ColossusHand hand) => FistOf(hand).Cooldown01;
+
+        /// <summary>Seconds since the hand's fist left its arm, while it flies and while the arm grows back; -1 otherwise.</summary>
+        public float FistSecondsSinceLaunch(ColossusHand hand) => FistOf(hand).SecondsSinceLaunch;
+
+        /// <summary>Seconds the hand's current fist flies, from its launch to its hit.</summary>
+        public float FistFlightSeconds(ColossusHand hand) => FistOf(hand).FlightSeconds;
+
+        /// <summary>
+        /// Where the hand's fist flies, on the ground: the beekeeper it chose, as that one moves, or the point it was aimed at.
+        /// Kept after the hit, so the View knows where the wasps stream back from.
+        /// </summary>
+        public Vector3 FistTarget(ColossusHand hand) => _fistPoints[(int)FistIndex(hand)];
 
         /// <summary>Advances the match. Does nothing after Won or Lost. <paramref name="deltaTime"/> is clamped to the swarm's maximum.</summary>
         public void Tick(in HiveDefenseFrame frame, float deltaTime)
@@ -460,6 +497,10 @@ namespace DigitalStory.Logic
             ReadCore(in frame);
             Forms.SetCore(_corePosition);
 
+            // The ring the core stands in is found before the notes, so a note pressed on the tick the core steps in counts.
+            // A collapsed swarm has nothing to take a nest with, and while the giant stands the keys are its moves.
+            Nests.Tick(_corePosition, !Swarm.IsCollapsed && !_isColossusActive);
+
             Caster.Tick(dt);
             _isMouseLive = frame.IsMouseLive;
             _mousePoint = frame.AimPoint;
@@ -472,8 +513,6 @@ namespace DigitalStory.Logic
 
             TickColossus(frame, dt);
 
-            // A collapsed swarm has nothing to take a nest with, so its stay starts again.
-            Nests.Tick(dt, _corePosition, !Swarm.IsCollapsed);
             _exchange.Tick(dt, _corePosition, frame.Give, Forms.Current == SwarmForm.HiveCall);
             TickLesson();
             Smoke.Tick(dt, Hives, Swarm, _corePosition, Forms);
@@ -538,10 +577,32 @@ namespace DigitalStory.Logic
             Tutorial.Complete(TutorialStep.CollectNest);
         }
 
-        // The song table fills in from every note the flute hears, before the note can cast a song and use the notes up.
+        // The song table fills in from every note the flute hears, before the note can cast a song and use the notes up. The
+        // nest whose ring the core stands in hears it too (plan section U), and a note its combo uses (one that fills a slot,
+        // restarts it or breaks it) is the combo's alone: the songs forget what they heard and do not hear it, so a mistyped
+        // combo note never casts a song. Notes the combo ignores still reach the songs.
         private void OnNotePlayed(int hole)
         {
             Discovery.RecordNotes(Caster);
+            if (Nests.PlayNote(hole) != NestComboStep.Ignored)
+            {
+                Caster.TakeNote();
+            }
+        }
+
+        // Plan section U: each nest's combo, drawn from the match's random source when the match starts, so a match's seed
+        // replays its combos (the scene seeds that source from the map's seed). Missing positions are the nest field's to report.
+        private static int[][] DrawCombos(HiveDefenseRules rules, IReadOnlyList<Vector3> nestPositions, IRandomSource random)
+        {
+            int count = nestPositions != null ? nestPositions.Count : 0;
+            var combos = new int[count][];
+            IReadOnlyList<IReadOnlyList<int>> songs = NestComboRule.KeysOf(rules.Songs);
+            for (int index = 0; index < count; index++)
+            {
+                combos[index] = NestComboRule.Draw(random, songs, rules.HoleCount, rules.Nests.ComboShortest, rules.Nests.ComboLongest);
+            }
+
+            return combos;
         }
 
         // The running songs hear of every change of phase, so a tower that guards a wave knows when the wave is over.
@@ -763,6 +824,13 @@ namespace DigitalStory.Logic
             _aimPoint = _autoAim.AimPoint;
         }
 
+        private void ChooseIgnoringMouse(AimRule rule, float range)
+        {
+            _autoAim.Select(rule, range, _corePosition, _coreFacing, false, _mousePoint);
+            _aimTarget = _autoAim.Target;
+            _aimPoint = _autoAim.AimPoint;
+        }
+
         private void PressHoles(int mask)
         {
             if (mask == 0)
@@ -833,6 +901,8 @@ namespace DigitalStory.Logic
             {
                 PressColossusMoves(in frame, isFormingNow ? 0 : frame.PressedHoleMask);
             }
+
+            TickFists(dt);
         }
 
         // A new giant starts afresh: where the core is, facing forward, at the level the swarm has now, and with every move
@@ -847,6 +917,7 @@ namespace DigitalStory.Logic
             _isLeaping = false;
             _leapTarget = _colossusPosition;
             _chain.Reset();
+            ResetFists();
         }
 
         // The giant ends from its time or a collapse, in the air too. Nothing of it lingers: a move under way never lands
@@ -857,6 +928,7 @@ namespace DigitalStory.Logic
             _isCoreSettling = true;
             _isLeaping = false;
             _chain.Reset();
+            ResetFists();
         }
 
         // W walks along the camera's way on the ground and D to its right; with no camera way the move is the world's x and z.
@@ -874,16 +946,16 @@ namespace DigitalStory.Logic
             _coreFacing = _colossusFacing;
         }
 
-        // Plan section I: J or Space punches, K or Left Shift kicks, L slams and H roars. A hole and its button pressed on one
-        // tick are one press, so they cannot make a phrase by themselves.
+        // Plan section I: J punches, K kicks, L slams and H roars. Each hand's button launches that hand as a fist (songs-v2
+        // R), on its own and beside any move; a fist pressed while standing still turns the giant to its target.
         private void PressColossusMoves(in HiveDefenseFrame frame, int holes)
         {
-            if (frame.Punch || IsPressed(holes, PunchHole))
+            if (IsPressed(holes, PunchHole))
             {
                 _chain.TryPunch();
             }
 
-            if (frame.Kick || IsPressed(holes, KickHole))
+            if (IsPressed(holes, KickHole))
             {
                 _chain.TryKick();
             }
@@ -896,6 +968,17 @@ namespace DigitalStory.Logic
             if (IsPressed(holes, RoarHole))
             {
                 _chain.TryRoar();
+            }
+
+            bool isWalking = frame.Move.sqrMagnitude > 0f;
+            if (frame.RightHand)
+            {
+                ThrowFist(ColossusHand.Right, isWalking, frame.CameraForward);
+            }
+
+            if (frame.LeftHand)
+            {
+                ThrowFist(ColossusHand.Left, isWalking, frame.CameraForward);
             }
         }
 
@@ -994,6 +1077,32 @@ namespace DigitalStory.Logic
             return push;
         }
 
+        /// <summary>The hive the beekeepers from spawn point <paramref name="spawnPointIndex"/> walk to while it stands.</summary>
+        public int SpawnHome(int spawnPointIndex) => _spawnHomes[spawnPointIndex];
+
+        // Plan section T: each spawn point serves the hive nearest it when the match starts, and its beekeepers walk to that
+        // hive while it stands, wherever they are led off. The map gives each hive two spawn points (LayoutGenerator), so
+        // the waves, which take them in turn, split evenly between the hives on every map.
+        private static int[] SpawnHomes(IReadOnlyList<Vector3> spawnPoints, IReadOnlyList<Vector3> hivePositions)
+        {
+            var homes = new int[spawnPoints.Count];
+            for (int spawn = 0; spawn < homes.Length; spawn++)
+            {
+                float best = float.PositiveInfinity;
+                for (int hive = 0; hive < hivePositions.Count; hive++)
+                {
+                    float distance = GroundMath.DistanceSquared(spawnPoints[spawn], hivePositions[hive]);
+                    if (distance < best)
+                    {
+                        best = distance;
+                        homes[spawn] = hive;
+                    }
+                }
+            }
+
+            return homes;
+        }
+
         private void OnSpawnRequested(BeekeeperKind kind, int spawnPointIndex)
         {
             int first = kind == BeekeeperKind.Stick ? 0 : _stickPoolSize;
@@ -1007,7 +1116,7 @@ namespace DigitalStory.Logic
 
                 _isActive[slot] = true;
                 _activeCount++;
-                _pool[slot].Spawn(_spawnPoints[spawnPointIndex]);
+                _pool[slot].Spawn(_spawnPoints[spawnPointIndex], _spawnHomes[spawnPointIndex]);
                 BeekeeperSpawned?.Invoke(_pool[slot]);
                 return;
             }
@@ -1056,7 +1165,6 @@ namespace DigitalStory.Logic
             Swarm.Lose(harm, fraction);
             ReportBlocked(core, harm, fraction, shield);
             Forms.NotifyHit(brain.Position);
-            Nests.NotifyCoreHit();
             _lastHitPoint = _corePosition;
         }
 
@@ -1139,12 +1247,12 @@ namespace DigitalStory.Logic
         private void HitAhead(float damage, float radius, float reach, float knockback, bool isHeavy)
         {
             Vector3 center = _colossusPosition + (_colossusFacing * (reach * _colossusSizeScale));
-            Hit(center, damage, radius, knockback, false, isHeavy);
+            Hit(center, damage, radius, knockback, false, isHeavy, _rules.Colossus.StunSeconds);
         }
 
         private void HitAround(Vector3 center, float damage, float radius, float knockback, bool isHeavy)
         {
-            Hit(center, damage, radius, knockback, true, isHeavy);
+            Hit(center, damage, radius, knockback, true, isHeavy, _rules.Colossus.StunSeconds);
         }
 
         // Every living beekeeper on the ground within the radius of the centre takes the damage, as hard and as far as the
@@ -1152,12 +1260,11 @@ namespace DigitalStory.Logic
         // knockback, thrown: away from the centre for a hit all around, along the giant's facing for a blow ahead. Only
         // FuryConfig.ColossusDamageShare of the damage fills Fury (none by default, so a giant cannot fill the meter again by
         // itself), and each kill adds to the giant's time.
-        private void Hit(Vector3 center, float damage, float radius, float knockback, bool isAround, bool isHeavy)
+        private void Hit(Vector3 center, float damage, float radius, float knockback, bool isAround, bool isHeavy, float stunSeconds)
         {
             damage *= _colossusDamageScale;
             radius *= _colossusSizeScale;
             float radiusSqr = radius * radius;
-            float stunSeconds = _rules.Colossus.StunSeconds;
             float dealt = 0f;
             int kills = 0;
             for (int slot = 0; slot < _pool.Length; slot++)
@@ -1183,7 +1290,11 @@ namespace DigitalStory.Logic
                     continue;
                 }
 
-                brain.Stun(stunSeconds);
+                if (stunSeconds > 0f)
+                {
+                    brain.Stun(stunSeconds);
+                }
+
                 if (knockback > 0f)
                 {
                     Vector3 away = isAround ? GroundMath.Direction(center, brain.Position) : _colossusFacing;
@@ -1201,6 +1312,181 @@ namespace DigitalStory.Logic
             {
                 Forms.AddColossusKills(kills);
             }
+        }
+
+        private ColossusFist FistOf(ColossusHand hand) => _fists[FistIndex(hand)];
+
+        private static int FistIndex(ColossusHand hand)
+        {
+            int index = (int)hand;
+            if (index < 0 || index > 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(hand), hand, "The giant has a right hand and a left hand.");
+            }
+
+            return index;
+        }
+
+        private void ResetFists()
+        {
+            for (int hand = 0; hand < _fists.Length; hand++)
+            {
+                _fists[hand].Reset();
+                _fistTargets[hand] = null;
+            }
+        }
+
+        // Songs-v2 R: the arm thrusts, and the target is chosen now, so a giant standing still turns to face it as it thrusts.
+        private void ThrowFist(ColossusHand hand, bool isWalking, Vector3 cameraForward)
+        {
+            int index = FistIndex(hand);
+            if (!_fists[index].TryThrust())
+            {
+                return;
+            }
+
+            ChooseFistTarget(index, cameraForward);
+            Vector3 target = _fistPoints[index];
+            if (!isWalking && GroundMath.DistanceSquared(target, _colossusPosition) > TurnSqrMetres)
+            {
+                _colossusFacing = GroundMath.Direction(_colossusPosition, target);
+                _coreFacing = _colossusFacing;
+            }
+
+            ColossusFistThrown?.Invoke(hand);
+        }
+
+        // Where a fist flies (songs-v2 R, after review): the giant stands in the chase view, where the mouse and the right
+        // stick turn the camera, so the way the camera looks is the aim and the mouse's point never moves a fist. A click
+        // aims as Space and R2 do. First the beekeeper within the fist's range nearest that way, within FistAimConeDegrees of
+        // it; otherwise auto-aim's most threatening beekeeper in range; otherwise along the camera's way (or ahead, with no
+        // camera) to the range, which grows with the giant's level, kept on the ground inside the play area.
+        private void ChooseFistTarget(int index, Vector3 cameraForward)
+        {
+            ColossusConfig config = _rules.Colossus;
+            float range = config.FistRange * _colossusSizeScale;
+            var giant = new Vector3(_colossusPosition.x, 0f, _colossusPosition.z);
+            var way = new Vector3(cameraForward.x, 0f, cameraForward.z);
+            bool hasWay = way.sqrMagnitude > TurnSqrMetres;
+            if (hasWay)
+            {
+                way.Normalize();
+            }
+
+            ISwarmTarget target = hasWay ? LookedAt(giant, way, range, config.FistAimConeDegrees) : null;
+            Vector3 ahead = giant + (way * range);
+            if (target == null)
+            {
+                ChooseIgnoringMouse(AimRule.Threat, range);
+                target = AimTarget;
+                if (!hasWay)
+                {
+                    ahead = _aimPoint;
+                }
+            }
+
+            _fistTargets[index] = target;
+            Vector3 point = target != null ? target.Position : ahead;
+            point.y = 0f;
+            _fistPoints[index] = target != null ? point : KeepInPlayArea(GroundMath.PullIn(point, giant, range));
+        }
+
+        // The living beekeeper within the range whose way from the giant is nearest the camera's, within the cone; or none.
+        private BeekeeperBrain LookedAt(Vector3 giant, Vector3 way, float range, float coneDegrees)
+        {
+            if (!(coneDegrees > 0f))
+            {
+                return null;
+            }
+
+            float leastCosine = Mathf.Cos(Mathf.Min(coneDegrees, 90f) * Mathf.Deg2Rad);
+            float rangeSqr = range * range;
+            BeekeeperBrain best = null;
+            float bestCosine = leastCosine;
+            for (int slot = 0; slot < _pool.Length; slot++)
+            {
+                if (!_isActive[slot] || !_pool[slot].IsAlive)
+                {
+                    continue;
+                }
+
+                Vector3 position = _pool[slot].Position;
+                float distanceSqr = GroundMath.DistanceSquared(position, giant);
+                if (distanceSqr > rangeSqr || distanceSqr <= TurnSqrMetres)
+                {
+                    continue;
+                }
+
+                float cosine = Vector3.Dot(GroundMath.Direction(giant, position), way);
+                if (cosine >= bestCosine)
+                {
+                    best = _pool[slot];
+                    bestCosine = cosine;
+                }
+            }
+
+            return best;
+        }
+
+        // Each hand on its own: the fist leaves at the end of the thrust and flies at the fist's speed, homing on its beekeeper
+        // while that one lives, then hits where it reaches.
+        private void TickFists(float dt)
+        {
+            for (int index = 0; index < _fists.Length; index++)
+            {
+                ColossusFist fist = _fists[index];
+                if (fist.Phase == FistPhase.Thrust || fist.Phase == FistPhase.Flight)
+                {
+                    FollowFistTarget(index);
+                }
+
+                FistStep step = fist.Tick(dt);
+                if (step == FistStep.Launch)
+                {
+                    LaunchFist(index);
+                }
+                else if (step == FistStep.Impact)
+                {
+                    LandFist(index);
+                }
+            }
+        }
+
+        private void FollowFistTarget(int index)
+        {
+            ISwarmTarget target = _fistTargets[index];
+            if (target == null)
+            {
+                return;
+            }
+
+            if (!target.IsAlive)
+            {
+                _fistTargets[index] = null;
+                return;
+            }
+
+            Vector3 point = target.Position;
+            point.y = 0f;
+            _fistPoints[index] = point;
+        }
+
+        private void LaunchFist(int index)
+        {
+            ColossusConfig config = _rules.Colossus;
+            float metres = Mathf.Sqrt(GroundMath.DistanceSquared(_fistPoints[index], _colossusPosition));
+            _fists[index].Fly(metres / config.FistSpeed);
+            ColossusFistLaunched?.Invoke((ColossusHand)index);
+        }
+
+        // Songs-v2 R: a heavy blow all around where the fist reaches, as hard and as wide as the level the giant stood up at.
+        // Like the giant's other blows it fills no Fury, and each kill adds to the giant's time.
+        private void LandFist(int index)
+        {
+            ColossusConfig config = _rules.Colossus;
+            _fistTargets[index] = null;
+            Hit(_fistPoints[index], config.FistDamage, config.FistRadius, config.FistKnockback, true, true, config.FistStunSeconds);
+            ColossusFistLanded?.Invoke((ColossusHand)index);
         }
 
         // The roar stuns every living beekeeper within its radius of the giant, and hurts none.

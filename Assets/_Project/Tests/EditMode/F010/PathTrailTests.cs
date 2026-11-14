@@ -270,5 +270,36 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.That(() => trail.CopyTo(null), Throws.TypeOf<System.ArgumentNullException>());
         }
+
+        // The river is measured from the core, which runs ahead of the newest point by up to one spacing. Without the lead
+        // the river's places would jump a spacing forward each time a point is stored, instead of gliding with the core.
+        [Test]
+        public void Lead_AfterSteps_IsTheMetresFromTheNewestPointToTheCore()
+        {
+            var trail = new PathTrail(8, 1f);
+            trail.Reset(Vector3.zero);
+            Assert.That(trail.Lead, Is.EqualTo(0f).Within(Tolerance));
+
+            trail.Push(new Vector3(0.4f, 0f, 0f));
+            Assert.That(trail.Lead, Is.EqualTo(0.4f).Within(Tolerance));
+
+            trail.Push(new Vector3(2.3f, 0f, 0f));
+            Assert.That(trail.Lead, Is.EqualTo(0.3f).Within(Tolerance));
+        }
+
+        [Test]
+        public void Travelled_AddsUpEveryStepAndStartsAgainOnReset()
+        {
+            var trail = new PathTrail(4, 1f);
+            trail.Reset(Vector3.zero);
+
+            trail.Push(new Vector3(3f, 0f, 0f));
+            trail.Push(new Vector3(3f, 0f, 4f));
+            trail.Push(new Vector3(3f, 0f, 4f));
+            Assert.That(trail.Travelled, Is.EqualTo(7.0).Within(Tolerance));
+
+            trail.Reset(new Vector3(1f, 0f, 1f));
+            Assert.That(trail.Travelled, Is.EqualTo(0.0).Within(Tolerance));
+        }
     }
 }

@@ -32,6 +32,10 @@ MonoBehaviour:
     _low: 0.9
     _high: 0.6
     _seconds: 0.3
+  <FistPulse>k__BackingField:
+    _low: 0.6
+    _high: 0.5
+    _seconds: 0.12
   <LossPulse>k__BackingField:
     _low: 0.7
     _high: 0.1

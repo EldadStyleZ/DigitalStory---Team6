@@ -50,6 +50,9 @@ namespace DigitalStory.Logic
 
         public bool IsCoolingDown(int song) => _cooldowns[song] > 0f;
 
+        /// <summary>Forgets every note it heard, so none of them can finish a song. Cooldowns run on.</summary>
+        public void ForgetNotes() => _noteCount = 0;
+
         /// <summary>Advances note ages and cooldowns by one step of game time.</summary>
         public void Tick(float deltaTime)
         {

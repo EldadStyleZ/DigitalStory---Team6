@@ -13,15 +13,24 @@ MonoBehaviour:
   m_Name: NestConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.NestConfig
   <CollectRadius>k__BackingField: 2.5
-  <CollectSeconds>k__BackingField: 2
+  <ComboShortest>k__BackingField: 4
+  <ComboLongest>k__BackingField: 5
   <CapacityPerNest>k__BackingField: 400
   <WaspsPerNest>k__BackingField: 400
   <HummedNotes>k__BackingField: 2
+  <PromptPopSeconds>k__BackingField: 0.18
+  <PromptPopScale>k__BackingField: 0.35
+  <PromptShakeSeconds>k__BackingField: 0.3
+  <PromptShakePixels>k__BackingField: 12
+  <PromptShakeHertz>k__BackingField: 22
+  <PromptBurstSeconds>k__BackingField: 0.45
+  <PromptBurstScale>k__BackingField: 0.6
+  <LiftSemitonesPerNote>k__BackingField: 2
   <OpenAtStart>k__BackingField: 2
   _openAfterWave: 02000000020000000100000001000000i
   <HiveClearance>k__BackingField: 12
   <FirstNestsNearest>k__BackingField: 10
   <FirstNestsFarthest>k__BackingField: 14
-  <LaterNestsNearest>k__BackingField: 45
-  <LaterNestsFarthest>k__BackingField: 90
+  <LaterNestsNearest>k__BackingField: 16
+  <LaterNestsFarthest>k__BackingField: 34
   <LaterNestsWidestGapDegrees>k__BackingField: 90

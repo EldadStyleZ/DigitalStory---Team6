@@ -14,6 +14,7 @@ namespace DigitalStory.Logic
         private int _count;
         private Vector3 _cursor;
         private float _carry;
+        private double _travelled;
 
         public PathTrail(int capacity, float spacing)
         {
@@ -38,6 +39,12 @@ namespace DigitalStory.Logic
         /// <summary>Metres along the path from the newest point to the oldest.</summary>
         public float Length => _count > 0 ? (_count - 1) * _spacing : 0f;
 
+        /// <summary>Metres along the path from the newest point to the last position pushed: the core runs ahead of it.</summary>
+        public float Lead => _carry;
+
+        /// <summary>Metres travelled since the last <see cref="Reset"/>, for every push: the core's odometer.</summary>
+        public double Travelled => _travelled;
+
         /// <summary>Forgets the path and starts it at <paramref name="position"/>.</summary>
         public void Reset(Vector3 position)
         {
@@ -46,6 +53,7 @@ namespace DigitalStory.Logic
             _points[0] = position;
             _cursor = position;
             _carry = 0f;
+            _travelled = 0.0;
         }
 
         /// <summary>Stores a point each spacing metres of travel (several if the step was long) and drops the oldest when full.</summary>
@@ -64,6 +72,7 @@ namespace DigitalStory.Logic
                 return;
             }
 
+            _travelled += distance;
             Vector3 direction = delta / distance;
             float along = _spacing - _carry;
             while (along <= distance)

@@ -46,3 +46,13 @@ MonoBehaviour:
   <LeapDamage>k__BackingField: 70
   <LeapRadius>k__BackingField: 4
   <LeapKnockback>k__BackingField: 6
+  <FistThrustSeconds>k__BackingField: 0.25
+  <FistDamage>k__BackingField: 20
+  <FistRadius>k__BackingField: 1.2
+  <FistKnockback>k__BackingField: 0
+  <FistStunSeconds>k__BackingField: 0
+  <FistSpeed>k__BackingField: 24
+  <FistLeastFlightSeconds>k__BackingField: 0.2
+  <FistRange>k__BackingField: 14
+  <FistAimConeDegrees>k__BackingField: 25
+  <FistRegrowSeconds>k__BackingField: 2

@@ -39,12 +39,27 @@ namespace DigitalStory.View
             _input = input != null ? input : throw new ArgumentNullException(nameof(input));
         }
 
-        /// <summary>Sounds a hole, replacing any note now sounding. The hole counts from 0.</summary>
+        /// <summary>The semitones the note now sounding is raised by, for tests and debugging.</summary>
+        public float Lift { get; private set; }
+
+        /// <summary>Sounds a hole at its own pitch, replacing any note now sounding. The hole counts from 0.</summary>
         public void PlayNote(int hole)
         {
             HolePlaying = hole;
             _secondsSounding = 0f;
+            Lift = 0f;
+            _synth?.Lift(0f);
             _synth?.Play(hole);
+        }
+
+        /// <summary>
+        /// Raises the note now sounding by <paramref name="semitones"/>, as a nest's combo climbs (plan section U). The next
+        /// <see cref="PlayNote"/> plays at the hole's own pitch again.
+        /// </summary>
+        public void LiftNote(float semitones)
+        {
+            Lift = semitones;
+            _synth?.Lift(semitones);
         }
 
         private void Awake()
@@ -109,6 +124,7 @@ namespace DigitalStory.View
             }
 
             FluteSynth synth = new FluteSynth(_sound, sampleRate, _sound.HoleCount);
+            synth.Lift(Lift);
             synth.Play(HolePlaying);
             Volatile.Write(ref _synth, synth);
             _source.Play();

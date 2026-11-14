@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: CoreMoveConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.CoreMoveConfig
   <Speed>k__BackingField: 4.5
-  <PlayAreaHalfSize>k__BackingField: 100
-  <SprintSpeedMultiplier>k__BackingField: 1.8
+  <PlayAreaHalfSize>k__BackingField: 42
   <SmokeSpeedMultiplier>k__BackingField: 0.6
   <NoteSeconds>k__BackingField: 0.3

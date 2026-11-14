@@ -211,6 +211,45 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
         }
 
+        // Plan section T: the waves split between the hives by rule, so a beekeeper keeps to its own hive wherever it is.
+        [Test]
+        public void Tick_WithAHomeHive_WalksToItEvenWhenAnotherHiveIsNearer()
+        {
+            var config = StickConfig();
+            var brain = new BeekeeperBrain(config);
+            brain.Spawn(Vector3.zero, 1);
+            var hives = HivesAt(new Vector3(0f, 0f, 30f), new Vector3(0f, 0f, -90f));
+
+            Advance(brain, Senses(hives, CoreFar), 1f);
+
+            Assert.That(brain.HomeHive, Is.EqualTo(1));
+            Assert.That(brain.Position.z, Is.EqualTo(-config.Speed).Within(0.05f), "it walked to the nearer hive, not its own");
+            Assert.That(brain.State, Is.EqualTo(BeekeeperState.GoToHive));
+        }
+
+        [Test]
+        public void Tick_OnceItsHomeHiveFalls_WalksToTheNearestStandingHive()
+        {
+            var config = StickConfig();
+            var brain = new BeekeeperBrain(config);
+            brain.Spawn(Vector3.zero, 1);
+            var hives = HivesAt(new Vector3(0f, 0f, 30f), new Vector3(0f, 0f, -90f));
+            hives[1].Damage(float.MaxValue);
+
+            Advance(brain, Senses(hives, CoreFar), 1f);
+
+            Assert.That(brain.Position.z, Is.EqualTo(config.Speed).Within(0.05f));
+        }
+
+        [Test]
+        public void Spawn_WithoutAHomeHive_HasNone()
+        {
+            var brain = SpawnAt(StickConfig(), Vector3.zero);
+
+            Assert.That(brain.HomeHive, Is.EqualTo(-1));
+            Assert.That(() => brain.Spawn(Vector3.zero, -2), Throws.TypeOf<System.ArgumentOutOfRangeException>());
+        }
+
         [Test]
         public void Tick_Walking_FacesTheWayItGoesWithAUnitVector()
         {

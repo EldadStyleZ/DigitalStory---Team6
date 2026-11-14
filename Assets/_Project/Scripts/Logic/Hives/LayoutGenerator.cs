@@ -1,0 +1,454 @@
+using System;
+using System.Collections.Generic;
+using DigitalStory.Data;
+using UnityEngine;
+
+namespace DigitalStory.Logic
+{
+    /// <summary>
+    /// Draws a match's map from a seed (plan sections S and T): random within <see cref="LayoutConfig"/>'s and
+    /// <see cref="NestConfig"/>'s rules, so every map is fair. The same seed and configs always draw the same map.
+    /// </summary>
+    /// <remarks>
+    /// The order follows what each part must keep away from. The hives come first: the first at any bearing in a wide band,
+    /// the second across the middle from it. The line between them sets the map's turn. Each hive then gets two spawn
+    /// points of its own (<see cref="HiveOfSpawn"/>), out beyond it to either side and as far from it as the other hive's
+    /// are from that one, so the waves, which take the spawn points in turn, alternate between the hives on every map. The
+    /// nests follow, the ones open at the start ahead to either side and the rest one in each slice of the circle, turned
+    /// the same way; then the scenery around the edge, clear of the hives' rings, the nest trees, the start, the spawn
+    /// points and the lanes from each spawn point to each hive. Each part has a bounded number of tries. When a whole map fails <see cref="LayoutConfig.LayoutAttempts"/>
+    /// times the config's fixed fallback map stands instead, and a prop that finds no place is left out. It runs once a
+    /// match, not each frame, so it may allocate.
+    /// </remarks>
+    public static class LayoutGenerator
+    {
+        /// <summary>
+        /// Optional: true where the ground can take nothing of the given radius, such as in or beside a river. The scene sets
+        /// it; null blocks nothing. Hives, spawn points, nest trees and scenery all keep off blocked ground.
+        /// </summary>
+        public static Func<Vector3, float, bool> IsBlocked { get; set; }
+
+        private const float HiveRoom = 3f;
+        private const float SpawnRoom = 2f;
+        private const float NestRoom = 3f;
+
+        private static bool IsFree(Vector3 point, float radius) => IsBlocked == null || !IsBlocked(point, radius);
+
+        /// <summary>Hives on every map: the first anywhere in its band, the second across the middle from it.</summary>
+        public const int HiveCount = 2;
+
+        /// <summary>Spawn points on every map: two for each hive, in the order the waves take them, the hives in turn.</summary>
+        public const int SpawnCount = 4;
+
+        private const float FullTurnDegrees = 360f;
+        private const float HalfTurnDegrees = 180f;
+        private const float QuarterTurnDegrees = 90f;
+        private const float EastBearing = 90f;
+
+        /// <summary>
+        /// The hive spawn point <paramref name="spawnIndex"/> belongs to: 0 and 2 the first hive's, 1 and 3 the second's.
+        /// The waves take the spawn points in turn, so they alternate between the hives.
+        /// </summary>
+        public static int HiveOfSpawn(int spawnIndex) => spawnIndex % HiveCount;
+
+        /// <summary>Draws the map for <paramref name="seed"/>.</summary>
+        /// <param name="seed">Any number. The same seed draws the same map.</param>
+        /// <param name="start">Where the swarm's core starts, which the nests and the scenery keep away from.</param>
+        /// <param name="layout">The map's rules.</param>
+        /// <param name="nests">How many nests there are, how many open at the start, and where they may stand.</param>
+        /// <param name="sceneryFootprints">
+        /// One entry per prop of the scenery, in the order to place them: metres on the ground from the prop's pivot to the
+        /// farthest point of it, whichever way it turns.
+        /// </param>
+        public static ArenaLayout Generate(
+            int seed, Vector3 start, LayoutConfig layout, NestConfig nests, IReadOnlyList<float> sceneryFootprints)
+        {
+            CheckArguments(layout, nests, sceneryFootprints);
+
+            var random = new Mulberry32Random(unchecked((uint)seed));
+            var hives = new Vector3[HiveCount];
+            var spawns = new Vector3[SpawnCount];
+            var nestPositions = new Vector3[nests.NestCount];
+            bool isDrawn = false;
+            for (int attempt = 0; attempt < layout.LayoutAttempts && !isDrawn; attempt++)
+            {
+                isDrawn = TryHives(random, layout, hives)
+                    && TrySpawns(random, layout, start, hives, spawns)
+                    && TryNests(random, layout, nests, start, hives, spawns, nestPositions);
+            }
+
+            if (!isDrawn)
+            {
+                CopyInto(layout.FallbackHives, hives);
+                CopyInto(layout.FallbackSpawns, spawns);
+                CopyInto(layout.FallbackNests, nestPositions);
+            }
+
+            SceneryPlacement[] scenery = PlaceScenery(random, layout, start, hives, spawns, nestPositions, sceneryFootprints);
+            return new ArenaLayout(seed, !isDrawn, hives, spawns, nestPositions, scenery);
+        }
+
+        private static void CheckArguments(LayoutConfig layout, NestConfig nests, IReadOnlyList<float> sceneryFootprints)
+        {
+            if (layout == null)
+            {
+                throw new ArgumentNullException(nameof(layout));
+            }
+
+            if (nests == null)
+            {
+                throw new ArgumentNullException(nameof(nests));
+            }
+
+            if (sceneryFootprints == null)
+            {
+                throw new ArgumentNullException(nameof(sceneryFootprints), "Pass an empty list for a map with no scenery.");
+            }
+
+            for (int index = 0; index < sceneryFootprints.Count; index++)
+            {
+                if (!(sceneryFootprints[index] >= 0f))
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(sceneryFootprints), $"Prop {index}'s footprint is {sceneryFootprints[index]}; it must be 0 or more.");
+                }
+            }
+
+            if (layout.FallbackHives.Count != HiveCount || layout.FallbackSpawns.Count != SpawnCount
+                || layout.FallbackNests.Count != nests.NestCount)
+            {
+                throw new ArgumentException(
+                    $"LayoutConfig's fallback map needs {HiveCount} hives, {SpawnCount} spawn points and NestConfig's {nests.NestCount} nests; "
+                    + $"it has {layout.FallbackHives.Count}, {layout.FallbackSpawns.Count} and {layout.FallbackNests.Count}.",
+                    nameof(layout));
+            }
+        }
+
+        private static bool TryHives(IRandomSource random, LayoutConfig layout, Vector3[] hives)
+        {
+            for (int attempt = 0; attempt < layout.PlaceAttempts; attempt++)
+            {
+                float bearing = Between(random, 0f, FullTurnDegrees);
+                Vector3 first = Polar(bearing, Between(random, layout.HiveNearest, layout.HiveFarthest));
+                Vector3 second = Polar(
+                    bearing + HalfTurnDegrees + Spread(random, layout.HiveAcrossSpreadDegrees),
+                    Between(random, layout.HiveNearest, layout.HiveFarthest));
+                if (GroundMath.DistanceSquared(first, second) >= layout.HiveLeastSeparation * layout.HiveLeastSeparation
+                    && IsFree(first, HiveRoom) && IsFree(second, HiveRoom))
+                {
+                    hives[0] = first;
+                    hives[1] = second;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // Each spawn point stands out beyond its own hive, turned to one side of the line from the middle through the hive:
+        // a hive's first spawn point anticlockwise, its second clockwise.
+        private static bool TrySpawns(IRandomSource random, LayoutConfig layout, Vector3 start, Vector3[] hives, Vector3[] spawns)
+        {
+            for (int index = 0; index < SpawnCount; index++)
+            {
+                int hive = HiveOfSpawn(index);
+                Vector3 own = hives[hive];
+                Vector3 other = hives[(hive + 1) % HiveCount];
+                float outward = Bearing(own);
+                float side = index < HiveCount ? -1f : 1f;
+                bool isPlaced = false;
+                for (int attempt = 0; attempt < layout.PlaceAttempts && !isPlaced; attempt++)
+                {
+                    float walk = Between(random, layout.SpawnFromHiveNearest, layout.SpawnFromHiveFarthest);
+                    float turn = side * Between(random, layout.SpawnSideNarrowestDegrees, layout.SpawnSideWidestDegrees);
+                    Vector3 spawn = own + Polar(outward + turn, walk);
+                    float lead = walk + layout.SpawnOwnHiveLeadMetres;
+                    if (IsInside(spawn, layout.ArenaHalfSize)
+                        && IsClearOf(spawn, start, layout.SpawnStartClearance)
+                        && IsClearOf(spawn, other, lead)
+                        && IsClearOf(spawn, spawns, index, layout.SpawnLeastSpacing)
+                        && IsFree(spawn, SpawnRoom))
+                    {
+                        spawns[index] = spawn;
+                        isPlaced = true;
+                    }
+                }
+
+                if (!isPlaced)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // The ones open at the start stand ahead, one to each side: square to the hives' line, on the side the opening camera
+        // looks. The rest stand one in each equal slice of the circle, and the nearer ones open first, so each wave's nests
+        // are a longer trip than the last.
+        private static bool TryNests(
+            IRandomSource random, LayoutConfig layout, NestConfig nests, Vector3 start, Vector3[] hives, Vector3[] spawns, Vector3[] result)
+        {
+            float turn = Turn(hives);
+            float ahead = Ahead(hives);
+            var rules = new NestRules(layout, nests, start, hives, spawns, new List<Vector3>(result.Length));
+            for (int index = 0; index < nests.OpenAtStart; index++)
+            {
+                float side = index % 2 == 0 ? -1f : 1f;
+                float from = ahead + (side * layout.FirstNestsNarrowestBearing);
+                float to = ahead + (side * layout.FirstNestsWidestBearing);
+                if (!TryNest(random, rules, from, to, nests.FirstNestsNearest, nests.FirstNestsFarthest))
+                {
+                    return false;
+                }
+            }
+
+            int later = result.Length - nests.OpenAtStart;
+            for (int index = 0; index < later; index++)
+            {
+                float slice = turn + (index * FullTurnDegrees / later);
+                float jitter = layout.LaterNestJitterDegrees;
+                if (!TryNest(random, rules, slice - jitter, slice + jitter, nests.LaterNestsNearest, nests.LaterNestsFarthest))
+                {
+                    return false;
+                }
+            }
+
+            rules.Placed.Sort(nests.OpenAtStart, later, NearerFirst.Instance);
+            rules.Placed.CopyTo(result);
+            return true;
+        }
+
+        private static bool TryNest(IRandomSource random, NestRules rules, float fromBearing, float toBearing, float nearest, float farthest)
+        {
+            LayoutConfig layout = rules.Layout;
+            float hiveClearance = rules.Nests.HiveClearance + layout.NestHiveMargin;
+            for (int attempt = 0; attempt < layout.PlaceAttempts; attempt++)
+            {
+                Vector3 point = Polar(Between(random, fromBearing, toBearing), Between(random, nearest, farthest));
+
+                // Rounding can put a point a hair outside the band that NestLayout.Check holds it to.
+                float fromMiddle = Mathf.Sqrt(GroundMath.DistanceSquared(point, Vector3.zero));
+                if (fromMiddle >= nearest && fromMiddle <= farthest
+                    && IsInside(point, layout.NestInsideHalfSize)
+                    && IsClearOf(point, rules.Start, layout.NestStartClearance)
+                    && IsClearOf(point, rules.Hives, hiveClearance)
+                    && IsClearOf(point, rules.Spawns, layout.NestSpawnClearance)
+                    && IsClearOf(point, rules.Placed, layout.NestLeastSpacing)
+                    && IsFree(point, NestRoom))
+                {
+                    rules.Placed.Add(point);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static SceneryPlacement[] PlaceScenery(
+            IRandomSource random,
+            LayoutConfig layout,
+            Vector3 start,
+            Vector3[] hives,
+            Vector3[] spawns,
+            Vector3[] nests,
+            IReadOnlyList<float> footprints)
+        {
+            var result = new SceneryPlacement[footprints.Count];
+            var placed = new List<Vector3>(footprints.Count);
+            var placedRadii = new List<float>(footprints.Count);
+            for (int index = 0; index < footprints.Count; index++)
+            {
+                float radius = footprints[index];
+                for (int attempt = 0; attempt < layout.SceneryAttempts; attempt++)
+                {
+                    var point = new Vector3(Spread(random, layout.ArenaHalfSize), 0f, Spread(random, layout.ArenaHalfSize));
+                    if (IsAroundTheEdge(point, layout)
+                        && IsClearOf(point, start, layout.SceneryStartClearance + radius)
+                        && IsClearOf(point, hives, layout.SceneryHiveClearance + radius)
+                        && IsClearOf(point, nests, layout.SceneryNestClearance + radius)
+                        && IsClearOf(point, spawns, layout.ScenerySpawnClearance + radius)
+                        && IsClearOfLanes(point, spawns, hives, layout.LaneHalfWidth + radius)
+                        && IsClearOfProps(point, radius, placed, placedRadii, layout)
+                        && IsFree(point, radius))
+                    {
+                        result[index] = new SceneryPlacement(point, Between(random, 0f, FullTurnDegrees));
+                        placed.Add(point);
+                        placedRadii.Add(radius);
+                        break;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private static bool IsAroundTheEdge(Vector3 point, LayoutConfig layout)
+        {
+            return Mathf.Max(Mathf.Abs(point.x), Mathf.Abs(point.z)) >= layout.SceneryInnerHalfSize;
+        }
+
+        private static bool IsClearOfLanes(Vector3 point, Vector3[] spawns, Vector3[] hives, float distance)
+        {
+            float squared = distance * distance;
+            for (int spawn = 0; spawn < spawns.Length; spawn++)
+            {
+                for (int hive = 0; hive < hives.Length; hive++)
+                {
+                    if (SquaredDistanceToSegment(point, spawns[spawn], hives[hive]) < squared)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsClearOfProps(Vector3 point, float radius, List<Vector3> placed, List<float> placedRadii, LayoutConfig layout)
+        {
+            for (int index = 0; index < placed.Count; index++)
+            {
+                float least = Mathf.Max(layout.SceneryLeastSpacing, layout.SceneryFootprintShare * (radius + placedRadii[index]));
+                if (GroundMath.DistanceSquared(point, placed[index]) < least * least)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsClearOf(Vector3 point, Vector3 other, float distance)
+        {
+            return GroundMath.DistanceSquared(point, other) >= distance * distance;
+        }
+
+        private static bool IsClearOf(Vector3 point, IReadOnlyList<Vector3> others, float distance)
+        {
+            for (int index = 0; index < others.Count; index++)
+            {
+                if (!IsClearOf(point, others[index], distance))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // Clear of the first `count` points of others.
+        private static bool IsClearOf(Vector3 point, Vector3[] others, int count, float distance)
+        {
+            for (int index = 0; index < count; index++)
+            {
+                if (!IsClearOf(point, others[index], distance))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsInside(Vector3 point, float halfSize)
+        {
+            return Mathf.Abs(point.x) <= halfSize && Mathf.Abs(point.z) <= halfSize;
+        }
+
+        private static float SquaredDistanceToSegment(Vector3 point, Vector3 from, Vector3 to)
+        {
+            float alongX = to.x - from.x;
+            float alongZ = to.z - from.z;
+            float lengthSquared = (alongX * alongX) + (alongZ * alongZ);
+            float share = 0f;
+            if (lengthSquared > 0f)
+            {
+                share = Mathf.Clamp01((((point.x - from.x) * alongX) + ((point.z - from.z) * alongZ)) / lengthSquared);
+            }
+
+            float offX = point.x - (from.x + (alongX * share));
+            float offZ = point.z - (from.z + (alongZ * share));
+            return (offX * offX) + (offZ * offZ);
+        }
+
+        // Degrees the line from the first hive to the second turns off due east.
+        private static float Turn(Vector3[] hives)
+        {
+            return Bearing(hives[1] - hives[0]) - EastBearing;
+        }
+
+        /// <summary>
+        /// The bearing nests open at the start stand either side of: square to the line between the hives, on the side the
+        /// opening camera looks (north, bearing 0), so they are in or near the first view whichever way the hives lie.
+        /// </summary>
+        public static float Ahead(IReadOnlyList<Vector3> hives)
+        {
+            Vector3 line = hives[1] - hives[0];
+            float turn = (Mathf.Atan2(line.x, line.z) * Mathf.Rad2Deg) - EastBearing;
+            return Mathf.Abs(Mathf.DeltaAngle(0f, turn)) <= QuarterTurnDegrees ? turn : turn + HalfTurnDegrees;
+        }
+
+        // Degrees clockwise from +Z, seen from above.
+        private static float Bearing(Vector3 point)
+        {
+            return Mathf.Atan2(point.x, point.z) * Mathf.Rad2Deg;
+        }
+
+        // A point on the ground, bearingDegrees clockwise from +Z seen from above, radius metres from the middle.
+        private static Vector3 Polar(float bearingDegrees, float radius)
+        {
+            float radians = bearingDegrees * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Sin(radians) * radius, 0f, Mathf.Cos(radians) * radius);
+        }
+
+        private static float Between(IRandomSource random, float from, float to)
+        {
+            return from + ((to - from) * (float)random.NextDouble());
+        }
+
+        private static float Spread(IRandomSource random, float half)
+        {
+            return Between(random, -half, half);
+        }
+
+        private static void CopyInto(IReadOnlyList<Vector3> from, Vector3[] to)
+        {
+            for (int index = 0; index < to.Length; index++)
+            {
+                to[index] = from[index];
+            }
+        }
+
+        // What every nest keeps away from, and the nests placed so far.
+        private sealed class NestRules
+        {
+            public NestRules(LayoutConfig layout, NestConfig nests, Vector3 start, Vector3[] hives, Vector3[] spawns, List<Vector3> placed)
+            {
+                Layout = layout;
+                Nests = nests;
+                Start = start;
+                Hives = hives;
+                Spawns = spawns;
+                Placed = placed;
+            }
+
+            public LayoutConfig Layout { get; }
+            public NestConfig Nests { get; }
+            public Vector3 Start { get; }
+            public Vector3[] Hives { get; }
+            public Vector3[] Spawns { get; }
+            public List<Vector3> Placed { get; }
+        }
+
+        private sealed class NearerFirst : IComparer<Vector3>
+        {
+            public static readonly NearerFirst Instance = new NearerFirst();
+
+            public int Compare(Vector3 left, Vector3 right)
+            {
+                return GroundMath.DistanceSquared(left, Vector3.zero).CompareTo(GroundMath.DistanceSquared(right, Vector3.zero));
+            }
+        }
+    }
+}

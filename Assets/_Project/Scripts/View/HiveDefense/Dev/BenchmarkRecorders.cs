@@ -34,6 +34,9 @@ namespace DigitalStory.View
             ("vertices", ProfilerCategory.Render, "Vertices Count"),
             ("shadow_casters", ProfilerCategory.Render, "Shadow Casters Count"),
             ("skinned_visible", ProfilerCategory.Render, "Visible Skinned Meshes Count"),
+
+            // Counted in a release player too: a drop on a long frame shows the garbage collector ran in it.
+            ("gc_used_bytes", ProfilerCategory.Memory, "GC Used Memory"),
         };
 
         // Markers worth a column in a development player: first-use work (shader programs, pipeline states), the big

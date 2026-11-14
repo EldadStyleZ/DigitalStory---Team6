@@ -34,6 +34,7 @@ namespace DigitalStory.Logic
         private float _windUpElapsed;
         private float _provokedLeft;
         private int _windUpHive = NoHive;
+        private int _homeHive = NoHive;
         private bool _isTargetingHive;
         private bool _hasAggro;
         private bool _isMoving;
@@ -58,6 +59,12 @@ namespace DigitalStory.Logic
 
         /// <summary>Health left, from 0 to the configured health.</summary>
         public float Health => _health;
+
+        /// <summary>
+        /// The hive it walks to while that hive stands, set when it spawns (plan section T); -1 for none, when it goes for
+        /// the nearest standing hive. Once its own hive falls it goes for the nearest standing one.
+        /// </summary>
+        public int HomeHive => _homeHive;
 
         /// <summary>False until it spawns, and once it is dead.</summary>
         public bool IsAlive => _state != BeekeeperState.Dead;
@@ -103,9 +110,24 @@ namespace DigitalStory.Logic
         /// <summary>Raised once, when health reaches 0.</summary>
         public event Action<BeekeeperBrain> Died;
 
-        /// <summary>Resets everything, for pooling.</summary>
+        /// <summary>Resets everything, for pooling. It goes for the nearest standing hive.</summary>
         public void Spawn(Vector3 position)
         {
+            Spawn(position, NoHive);
+        }
+
+        /// <summary>
+        /// Resets everything, for pooling. It walks to hive <paramref name="homeHive"/> while that hive stands, wherever
+        /// another hive is, and to the nearest standing hive once it falls; -1 always goes for the nearest standing hive.
+        /// </summary>
+        public void Spawn(Vector3 position, int homeHive)
+        {
+            if (homeHive < NoHive)
+            {
+                throw new ArgumentOutOfRangeException(nameof(homeHive), homeHive, "A home hive is a hive index, or -1 for none.");
+            }
+
+            _homeHive = homeHive;
             _position = position;
             _facing = Vector3.forward;
             _knockback = Vector3.zero;
@@ -346,7 +368,7 @@ namespace DigitalStory.Logic
             }
 
             _state = BeekeeperState.GoToHive;
-            if (!senses.Hives.TryGetNearestStanding(_position, out int hive))
+            if (!TryGetTargetHive(senses.Hives, out int hive))
             {
                 return;
             }
@@ -360,6 +382,18 @@ namespace DigitalStory.Logic
             {
                 WalkToward(hivePosition, deltaTime);
             }
+        }
+
+        // Its own hive while that stands, else the nearest standing one.
+        private bool TryGetTargetHive(HiveSet hives, out int hive)
+        {
+            if (_homeHive >= 0 && _homeHive < hives.Count && !hives[_homeHive].IsDestroyed)
+            {
+                hive = _homeHive;
+                return true;
+            }
+
+            return hives.TryGetNearestStanding(_position, out hive);
         }
 
         // A stick goes for the core only while provoked, a smoker while it hunts, and neither while the swarm is collapsed.

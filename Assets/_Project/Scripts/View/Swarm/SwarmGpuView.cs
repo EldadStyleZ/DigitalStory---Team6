@@ -63,6 +63,27 @@ namespace DigitalStory.View
         // LateUpdates a cast flash lasts: one bright frame or two, then the squad cools back to its song's heat.
         private const int FlashFrames = 2;
 
+        // The giant's two hands (DigitalStory.Logic.ColossusHand), three float4s each. Match FIST_COUNT and FIST_VECTORS in
+        // WaspSwarm.compute. NoFist is "no fist out" in a launch's w and "not dropped" in the drop.
+        private const int FistCount = 2;
+        private const int VectorsPerFist = 3;
+        private const int FistHitOffset = 1;
+        private const int FistGrowOffset = 2;
+        private const float NoFist = -1f;
+
+        // The giant's thrown wasps (songs-v2 W): a ring of the latest throws, four float4s each, and each bone's limb bits,
+        // four bones to a float4. Match THROW_COUNT, THROW_VECTORS and BONE_LIMB_VECTORS in WaspSwarm.compute.
+        private const int ThrowCount = 4;
+        private const int VectorsPerThrow = 4;
+        private const int ThrowAimOffset = 1;
+        private const int ThrowBandOffset = 2;
+        private const int ThrowNumbersOffset = 3;
+        private const int BonesPerVector = 4;
+        private const float NoThrow = -1f;
+
+        // Each throw's band of wasps starts this share of the seeds on from the last, so quick blows throw fresh wasps.
+        private const float GoldenShare = 0.618034f;
+
         // The figure-eight round the standing core turns this fast about it, so it never looks frozen. Once the core walks
         // on, it swings back across the walk at up to EightAlignSpeed, so the river forming behind the core unwinds from
         // its sides instead of through the core.
@@ -71,6 +92,12 @@ namespace DigitalStory.View
         private const float HalfTurn = Mathf.PI;
         private const float QuarterTurn = Mathf.PI * 0.5f;
         private const float MinimumTrailMeters = 0.0001f;
+
+        // The core's past that the free swarm reads with its delays (plan section Q): 128 samples at 60 a second, a little
+        // over two seconds, more than SwarmConfig.FollowDelaySeconds may ask for. HistorySamples matches HISTORY_SIZE in
+        // WaspSwarm.compute.
+        private const int HistorySamples = 128;
+        private const float HistoryStepSeconds = 1f / 60f;
 
         // Bytes per element. Each matches a struct in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.
         private const int StaticStride = sizeof(float) * 12;
@@ -103,6 +130,12 @@ namespace DigitalStory.View
         private static readonly int SlotFlashId = Shader.PropertyToID("_SlotFlash");
         private static readonly int StingTargetsId = Shader.PropertyToID("_StingTargets");
         private static readonly int StingTargetCountId = Shader.PropertyToID("_StingTargetCount");
+        private static readonly int FistsId = Shader.PropertyToID("_Fists");
+        private static readonly int FistBonesId = Shader.PropertyToID("_FistBones");
+        private static readonly int ThrowsId = Shader.PropertyToID("_Throws");
+        private static readonly int BoneLimbsId = Shader.PropertyToID("_BoneLimbs");
+        private static readonly int ThrowColorId = Shader.PropertyToID("_ThrowColor");
+        private static readonly int ThrowRedSecondsId = Shader.PropertyToID("_ThrowRedSeconds");
         private static readonly int PulseId = Shader.PropertyToID("_Pulse");
         private static readonly int RiverColorId = Shader.PropertyToID("_RiverColor");
         private static readonly int CastColorId = Shader.PropertyToID("_CastColor");
@@ -126,12 +159,30 @@ namespace DigitalStory.View
         private static readonly int EightLapSecondsId = Shader.PropertyToID("_EightLapSeconds");
         private static readonly int EightYawId = Shader.PropertyToID("_EightYaw");
         private static readonly int EightSecondsId = Shader.PropertyToID("_EightSeconds");
+        private static readonly int HistoryId = Shader.PropertyToID("_History");
+        private static readonly int HistoryStepId = Shader.PropertyToID("_HistoryStep");
+        private static readonly int TrailLeadId = Shader.PropertyToID("_TrailLead");
+        private static readonly int RiverReachId = Shader.PropertyToID("_RiverReach");
+        private static readonly int EarlierFormId = Shader.PropertyToID("_EarlierForm");
+        private static readonly int FollowDelayId = Shader.PropertyToID("_FollowDelay");
+        private static readonly int FollowDelayPowerId = Shader.PropertyToID("_FollowDelayPower");
+        private static readonly int WaveJitterId = Shader.PropertyToID("_WaveJitter");
+        private static readonly int TailWidthId = Shader.PropertyToID("_TailWidth");
+        private static readonly int FormBlendSecondsId = Shader.PropertyToID("_FormBlendSeconds");
+        private static readonly int SpringStepId = Shader.PropertyToID("_SpringStep");
         private static readonly int DyingSecondsId = Shader.PropertyToID("_DyingSeconds");
         private static readonly int WaspLengthId = Shader.PropertyToID("_WaspLength");
         private static readonly int BuzzAmplitudeId = Shader.PropertyToID("_BuzzAmplitude");
         private static readonly int BuzzFrequencyId = Shader.PropertyToID("_BuzzFrequency");
         private static readonly int GlowSizeId = Shader.PropertyToID("_GlowSize");
         private static readonly int GlowStrengthId = Shader.PropertyToID("_GlowStrength");
+        private static readonly int ObstaclesId = Shader.PropertyToID("_Obstacles");
+        private static readonly int ObstacleCountId = Shader.PropertyToID("_ObstacleCount");
+        private static readonly int ObstacleMarginId = Shader.PropertyToID("_ObstacleMargin");
+        private static readonly int ObstacleLeadId = Shader.PropertyToID("_ObstacleLead");
+        private static readonly int ObstacleCloseId = Shader.PropertyToID("_ObstacleClose");
+        private static readonly int ObstacleStrengthId = Shader.PropertyToID("_ObstacleStrength");
+        private static readonly int ObstacleSpeedUpId = Shader.PropertyToID("_ObstacleSpeedUp");
 
         [SerializeField, Tooltip("WaspSwarm.compute, which moves the wasps.")]
         private ComputeShader _swarmCompute;
@@ -180,6 +231,10 @@ namespace DigitalStory.View
         private SwarmForm _previousForm = SwarmForm.River;
         private float _formStartTime;
         private float _previousFormStartTime;
+
+        // The form before _previousForm. A quick second change (Hive Call ending as the stores run dry) finds wasps the
+        // first change's wave has not yet reached; they ease out of this one instead of jumping.
+        private SwarmForm _earlierForm = SwarmForm.River;
         private Vector3 _corePosition;
         private Vector3 _coreForward = Vector3.forward;
         private Vector3 _standingAnchor;
@@ -193,6 +248,20 @@ namespace DigitalStory.View
         private float _eightShare = 1f;
         private float _eightYaw;
         private float _eightSeconds;
+
+        // The core's past, sent each frame as _History. The swing is every turn of the eight but its slow precession, added
+        // up, so a wasp that is still wound into the eight its delay ago turns as the eight turned then. The eight's clock
+        // starts over only once even the most delayed wasp has unwound.
+        private readonly CoreHistory _history = new CoreHistory(HistorySamples, HistoryStepSeconds);
+        private readonly Vector4[] _historySamples = new Vector4[HistorySamples];
+        private float _swing;
+        private float _unwoundSeconds;
+        private double _lastTravelled;
+
+        // Metres the core has walked since the swarm was last wound into the eight, which the river is drawn out of. It
+        // starts over only once even the most delayed wasp has wound in.
+        private float _riverReach;
+        private float _woundSeconds;
         private Vector4 _firstHive;
         private Vector4 _secondHive;
         private Vector3 _spawnSource;
@@ -217,12 +286,34 @@ namespace DigitalStory.View
         private readonly Vector4[] _stingTargetVectors = new Vector4[MostStings];
         private int _stingTargetCount;
 
+        // The giant's fists as WaspSwarm.compute reads them (_Fists and _FistBones). SetFist keeps the rules' clocks until
+        // LateUpdate has stepped this view's clock, as SetSlot does, and only then turns them into its times.
+        private readonly Vector4[] _fistVectors = new Vector4[FistCount * VectorsPerFist];
+        private readonly float[] _fistSinceLaunch = new float[FistCount];
+        private readonly float[] _fistFlight = new float[FistCount];
+        private readonly float[] _fistRegrow = new float[FistCount];
+        private readonly bool[] _isFistFresh = new bool[FistCount];
+        private Vector4 _fistBones = new Vector4(NoFist, NoFist, NoFist, NoFist);
+
+        // The giant's thrown wasps as WaspSwarm.compute reads them (_Throws, _BoneLimbs, _ThrowColor, _ThrowRedSeconds).
+        private readonly Vector4[] _throwVectors = new Vector4[ThrowCount * VectorsPerThrow];
+        private readonly Vector4[] _boneLimbVectors = new Vector4[MostBones / BonesPerVector];
+        private int _nextThrow;
+        private int _throwsStarted;
+        private Color _throwColor = Color.red;
+        private float _throwRedSeconds;
+
         // The Gust pulse, kept the same way: the rules' seconds since the Gust until LateUpdate turns them into a start.
         private Vector3 _gustCenter;
         private float _gustRadius;
         private float _gustSeconds;
         private float _gustStartTime;
         private bool _isGustFresh;
+
+        // Plan section X: the tall props, nest trees and hives the free swarm flows round, as SwarmObstacles makes them. Sent
+        // to the compute shader when they change, once a match, never per frame.
+        private readonly Vector4[] _obstacleVectors = new Vector4[SwarmObstacles.MostObstacles];
+        private int _obstacleCount;
 
         /// <summary>True while the buffers exist and the swarm is moved and drawn each frame, for tests and debugging.</summary>
         public bool IsRunning => _staticBuffer != null;
@@ -240,8 +331,37 @@ namespace DigitalStory.View
         /// </summary>
         public float EightShare => _eightShare;
 
+        /// <summary>
+        /// The wasps' state on the GPU (WaspDynamic in WaspSwarm.compute), or null while the view is not running, for tests
+        /// that read the swarm back. The game never reads it on the CPU: a read stalls the GPU.
+        /// </summary>
+        public GraphicsBuffer WaspStates => _dynamicBuffer;
+
+        /// <summary>How many obstacles the free swarm flows round (<see cref="SetObstacles"/>), for tests and debugging.</summary>
+        public int ObstacleCount => _obstacleCount;
+
+        /// <summary>
+        /// One obstacle the free swarm flows round: x and z of its middle on the ground, its radius and the height of its top,
+        /// for tests and debugging.
+        /// </summary>
+        public Vector4 Obstacle(int index)
+        {
+            if (index < 0 || index >= _obstacleCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index), index, $"There are {_obstacleCount} obstacles.");
+            }
+
+            return _obstacleVectors[index];
+        }
+
         /// <summary>True while <see cref="Freeze"/> holds the swarm still, for tests and debugging.</summary>
         public bool IsFrozen => _freezeSeconds > 0f;
+
+        /// <summary>True while the hand's fist is out, from its launch until its wasps are all home, for tests and debugging.</summary>
+        /// <summary>How many throws (songs-v2 W) have started since the swarm last started over. For tests.</summary>
+        public int ThrowsStarted => _throwsStarted;
+
+        public bool IsFistOut(int hand) => _fistVectors[FistIndex(hand) * VectorsPerFist].w >= 0f && _simTime < _fistVectors[(hand * VectorsPerFist) + FistGrowOffset].x;
 
         /// <summary>How many sting targets the last <see cref="SetStingTargets"/> gave, for tests and debugging.</summary>
         public int StingTargetCount => _stingTargetCount;
@@ -277,6 +397,7 @@ namespace DigitalStory.View
             _simTime += stepSeconds;
             TrackStanding(deltaTime);
             TimeSlots();
+            TimeFists();
             TimeGust();
 
             int trailCount = _trail.CopyTo(_trailPoints);
@@ -286,6 +407,7 @@ namespace DigitalStory.View
             }
 
             TrackEight(stepSeconds, trailCount);
+            RecordThePast(stepSeconds);
             LatchFormColors();
             BindComputeBuffers();
             PushFrame(stepSeconds, trailCount);
@@ -382,13 +504,44 @@ namespace DigitalStory.View
             _castColor = config.RiverColor;
             _formColor = config.RiverColor;
             _previousFormColor = config.RiverColor;
+            ForgetThePast();
             ClearSongs();
             _config = config;
+
+            // The shader keeps its obstacles between scenes, so a match that sends none never flows round the last one's.
+            _obstacleCount = 0;
+            PushObstacles();
 
             if (isActiveAndEnabled)
             {
                 CreateBuffers();
             }
+        }
+
+        /// <summary>
+        /// The tall props, nest trees and hives the free swarm flows round (plan section X), each as x and z of its middle on
+        /// the ground, its radius and the height of its top (DigitalStory.Logic.SwarmObstacles). Call once a match, after the
+        /// map stands and after <see cref="Initialize"/>; the shader keeps them until the next call.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">The obstacles are missing.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The count is below 0, above the most obstacles, or more than the array holds.</exception>
+        public void SetObstacles(Vector4[] obstacles, int count)
+        {
+            if (obstacles == null)
+            {
+                throw new ArgumentNullException(nameof(obstacles));
+            }
+
+            if (count < 0 || count > SwarmObstacles.MostObstacles || count > obstacles.Length)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(count), count, $"The swarm flows round 0 to {SwarmObstacles.MostObstacles} obstacles, and the array must hold that many.");
+            }
+
+            Array.Clear(_obstacleVectors, 0, _obstacleVectors.Length);
+            Array.Copy(obstacles, _obstacleVectors, count);
+            _obstacleCount = count;
+            PushObstacles();
         }
 
         /// <summary>How many wasps are alive. Wasps above it die where they are, and dead ones below it come back at a hive.</summary>
@@ -413,6 +566,7 @@ namespace DigitalStory.View
                 return;
             }
 
+            _earlierForm = _previousForm;
             _previousForm = _form;
             _previousFormStartTime = _formStartTime;
             _form = form;
@@ -605,6 +759,133 @@ namespace DigitalStory.View
         {
             _firstHive = new Vector4(first.x, first.y, first.z, firstStands ? StandsFlag : FallenFlag);
             _secondHive = new Vector4(second.x, second.y, second.z, secondStands ? StandsFlag : FallenFlag);
+        }
+
+        /// <summary>
+        /// Which Colossus bones each hand's fist is made of, its forearm, hand and fingers (ColossusArmBones), as indices into the
+        /// bones of <see cref="SetColossusBones"/>; -1 first and last for a hand that has none. Call once with the samples.
+        /// </summary>
+        public void SetFistBones(int rightFirst, int rightLast, int leftFirst, int leftLast)
+        {
+            _fistBones = new Vector4(rightFirst, rightLast, leftFirst, leftLast);
+        }
+
+        /// <summary>
+        /// The hand's fist this frame (songs-v2 R), in the rules' clock: call it every frame the giant stands. While the fist is
+        /// not out (<paramref name="secondsSinceLaunch"/> below 0) its wasps keep their places on the arm. Once it is, they leave
+        /// the arm, fly from <paramref name="origin"/> to <paramref name="target"/> to hit after <paramref name="flightSeconds"/>,
+        /// burst to <paramref name="hitRadius"/> and stream home over <paramref name="regrowSeconds"/>.
+        /// </summary>
+        /// <param name="hand">The hand: (int)ColossusHand.Right or Left.</param>
+        /// <param name="origin">Where the fist left the arm: the hand as it launched.</param>
+        /// <param name="target">Where it flies, on the ground; the shader aims at the chest above it.</param>
+        /// <param name="secondsSinceLaunch">Seconds since the fist left, or below 0 while it is not out.</param>
+        /// <param name="flightSeconds">Seconds from the launch to the hit.</param>
+        /// <param name="regrowSeconds">Seconds from the hit until the arm is whole again.</param>
+        /// <param name="hitRadius">The hit's radius in metres, which the fist bursts to.</param>
+        /// <exception cref="ArgumentOutOfRangeException">The hand is not 0 or 1.</exception>
+        public void SetFist(int hand, Vector3 origin, Vector3 target, float secondsSinceLaunch, float flightSeconds, float regrowSeconds, float hitRadius)
+        {
+            int at = FistIndex(hand) * VectorsPerFist;
+            if (!(secondsSinceLaunch >= 0f))
+            {
+                _fistVectors[at].w = NoFist;
+                _isFistFresh[hand] = false;
+                return;
+            }
+
+            _fistVectors[at] = new Vector4(origin.x, origin.y, origin.z, _fistVectors[at].w);
+            _fistVectors[at + FistHitOffset] = new Vector4(target.x, target.y, target.z, _fistVectors[at + FistHitOffset].w);
+            _fistVectors[at + FistGrowOffset] = new Vector4(_fistVectors[at + FistGrowOffset].x, NoFist, Mathf.Max(hitRadius, 0f), 0f);
+            _fistSinceLaunch[hand] = secondsSinceLaunch;
+            _fistFlight[hand] = Mathf.Max(flightSeconds, 0f);
+            _fistRegrow[hand] = Mathf.Max(regrowSeconds, 0f);
+            _isFistFresh[hand] = true;
+        }
+
+        /// <summary>
+        /// The giant has ended: a fist still flying never hits, and its wasps ease back into the swarm from where it was. A fist
+        /// that has hit streams home as it would have. Nothing more need be fed for either.
+        /// </summary>
+        public void DropFists()
+        {
+            for (int hand = 0; hand < FistCount; hand++)
+            {
+                int at = hand * VectorsPerFist;
+                _isFistFresh[hand] = false;
+                if (_fistVectors[at].w >= 0f && _simTime < _fistVectors[at + FistHitOffset].w)
+                {
+                    _fistVectors[at + FistGrowOffset].y = _simTime;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Each Colossus bone's limb (songs-v2 W, DigitalStory.Logic.ColossusThrows.FindLimbs), in the order of
+        /// <see cref="SetColossusBones"/>, so a throw knows which wasps stand on the limbs it throws. Call once with the samples.
+        /// </summary>
+        /// <param name="limbs">Each bone's limb.</param>
+        /// <param name="count">How many of them to use; bones past it, and past the most bones, throw nothing.</param>
+        /// <exception cref="ArgumentNullException">The limbs are missing.</exception>
+        public void SetBoneLimbs(ColossusLimb[] limbs, int count)
+        {
+            if (limbs == null)
+            {
+                throw new ArgumentNullException(nameof(limbs));
+            }
+
+            Array.Clear(_boneLimbVectors, 0, _boneLimbVectors.Length);
+            int used = Mathf.Clamp(count, 0, Mathf.Min(limbs.Length, MostBones));
+            for (int bone = 0; bone < used; bone++)
+            {
+                Vector4 four = _boneLimbVectors[bone / BonesPerVector];
+                four[bone % BonesPerVector] = (int)limbs[bone];
+                _boneLimbVectors[bone / BonesPerVector] = four;
+            }
+        }
+
+        /// <summary>The colour thrown wasps and flying fists burn, and the seconds they take to turn to it as they leave.</summary>
+        public void SetThrowLook(Color color, float redSeconds)
+        {
+            _throwColor = color;
+            _throwRedSeconds = Mathf.Max(redSeconds, 0f);
+        }
+
+        /// <summary>
+        /// Throws a share of the wasps on <paramref name="limbs"/> off the giant (songs-v2 W), from this frame: they fly out in
+        /// <paramref name="shape"/>, hold a moment and stream home, all back after <paramref name="backSeconds"/>. A look only.
+        /// The latest four throws fly at once; a wasp two of them claim flies the later one, and a flying fist keeps its own.
+        /// </summary>
+        /// <param name="shape">How they fly.</param>
+        /// <param name="limbs">The limbs they leave from.</param>
+        /// <param name="center">The move's centre on the ground: the giant's feet, or where the leap landed.</param>
+        /// <param name="facing">The giant's facing; flattened here.</param>
+        /// <param name="share">The share of the limbs' wasps that leave, 0 to 1.</param>
+        /// <param name="spreadDegrees">Degrees either side of the facing the burst spreads.</param>
+        /// <param name="reachMetres">Metres the wasps fly out.</param>
+        /// <param name="outSeconds">Seconds they fly out.</param>
+        /// <param name="backSeconds">Seconds until every one is back.</param>
+        /// <param name="shapeNumber">The spiral's spin in radians a second, or the crater's second ring share; 0 otherwise.</param>
+        public void Throw(
+            ColossusThrowShape shape, ColossusLimb limbs, Vector3 center, Vector3 facing, float share, float spreadDegrees,
+            float reachMetres, float outSeconds, float backSeconds, float shapeNumber)
+        {
+            if (shape == ColossusThrowShape.None || limbs == ColossusLimb.None || !(share > 0f) || !(backSeconds > 0f))
+            {
+                return;
+            }
+
+            facing.y = 0f;
+            facing = facing.sqrMagnitude > 0f ? facing.normalized : Vector3.forward;
+            float bandStart = Mathf.Repeat(_throwsStarted * GoldenShare, 1f);
+            int at = _nextThrow * VectorsPerThrow;
+            _throwVectors[at] = new Vector4(center.x, center.y, center.z, _simTime);
+            _throwVectors[at + ThrowAimOffset] = new Vector4(facing.x, facing.y, facing.z, (int)shape);
+            _throwVectors[at + ThrowBandOffset] = new Vector4((int)limbs, Mathf.Clamp01(share), bandStart, backSeconds);
+            _throwVectors[at + ThrowNumbersOffset] = new Vector4(
+                spreadDegrees * Mathf.Deg2Rad, Mathf.Max(reachMetres, 0f), Mathf.Clamp(outSeconds, 0.01f, backSeconds), shapeNumber);
+            _nextThrow = (_nextThrow + 1) % ThrowCount;
+            _throwsStarted++;
         }
 
         /// <summary>Where the swarm was last hit. Lost wasps scatter away from it.</summary>
@@ -860,6 +1141,7 @@ namespace DigitalStory.View
             _previousForm = SwarmForm.River;
             _formStartTime = 0f;
             _previousFormStartTime = 0f;
+            _earlierForm = SwarmForm.River;
             _standingSeconds = 0f;
             _standingShare = 0f;
             _sizeScale = 1f;
@@ -868,7 +1150,19 @@ namespace DigitalStory.View
             _eightYaw = 0f;
             _eightSeconds = 0f;
             _hasFormChanged = false;
+            ForgetThePast();
             ClearSongs();
+        }
+
+        // A new run's swarm starts wound into the eight round a core that has always stood where it is.
+        private void ForgetThePast()
+        {
+            _swing = 0f;
+            _unwoundSeconds = 0f;
+            _lastTravelled = 0.0;
+            _riverReach = 0f;
+            _woundSeconds = 0f;
+            _history.Reset(_eightShare, _swing);
         }
 
         // Empties every slot and forgets the Sting's targets, the cast flashes and the Gust, as at the start of a run.
@@ -891,6 +1185,26 @@ namespace DigitalStory.View
             }
 
             _stingTargetCount = 0;
+            for (int hand = 0; hand < FistCount; hand++)
+            {
+                int at = hand * VectorsPerFist;
+                _fistVectors[at] = new Vector4(0f, 0f, 0f, NoFist);
+                _fistVectors[at + FistHitOffset] = Vector4.zero;
+                _fistVectors[at + FistGrowOffset] = new Vector4(0f, NoFist, 0f, 0f);
+                _isFistFresh[hand] = false;
+            }
+
+            for (int index = 0; index < ThrowCount; index++)
+            {
+                int at = index * VectorsPerThrow;
+                _throwVectors[at] = new Vector4(0f, 0f, 0f, NoThrow);
+                _throwVectors[at + ThrowAimOffset] = Vector4.zero;
+                _throwVectors[at + ThrowBandOffset] = Vector4.zero;
+                _throwVectors[at + ThrowNumbersOffset] = Vector4.zero;
+            }
+
+            _nextThrow = 0;
+            _throwsStarted = 0;
             _gustRadius = 0f;
             _gustStartTime = 0f;
             _isGustFresh = false;
@@ -945,6 +1259,36 @@ namespace DigitalStory.View
             _slotVectors[header + ParamBOffset].w = released < 0f ? NotReleased : Mathf.Max(_simTime - released, 0f);
         }
 
+        // The fists' launches, hits and regrows into this view's times, as for the slots.
+        private void TimeFists()
+        {
+            for (int hand = 0; hand < FistCount; hand++)
+            {
+                if (!_isFistFresh[hand])
+                {
+                    continue;
+                }
+
+                int at = hand * VectorsPerFist;
+                float launch = _simTime - _fistSinceLaunch[hand];
+                float hit = launch + _fistFlight[hand];
+                _fistVectors[at].w = launch;
+                _fistVectors[at + FistHitOffset].w = hit;
+                _fistVectors[at + FistGrowOffset].x = hit + _fistRegrow[hand];
+                _isFistFresh[hand] = false;
+            }
+        }
+
+        private static int FistIndex(int hand)
+        {
+            if (hand < 0 || hand >= FistCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(hand), hand, "A hand is 0 (right) or 1 (left).");
+            }
+
+            return hand;
+        }
+
         // The same for the Gust. A Gust that is over keeps its start, so the shader's pulse finishes on its own.
         private void TimeGust()
         {
@@ -991,16 +1335,26 @@ namespace DigitalStory.View
             float trailLength = trailCount > 0 ? _trailPoints[trailCount - 1].w : 0f;
             float trailShare = Mathf.Clamp01(trailLength / Mathf.Max(_config.StandingTrailMeters, MinimumTrailMeters));
             _eightShare = 1f - (trailShare * (1f - _standingShare));
+            float mostDelay = _config.FollowDelaySeconds + HistoryStepSeconds;
+            _woundSeconds = _eightShare >= 1f ? _woundSeconds + stepSeconds : 0f;
+            if (_woundSeconds > mostDelay)
+            {
+                _riverReach = 0f;
+            }
 
             // Across the walk: the core's facing turned a quarter turn, cross(up, forward), as an angle on the ground.
             float acrossYaw = Mathf.Atan2(-_coreForward.x, _coreForward.z);
             if (_eightShare <= 0f)
             {
-                _eightYaw = acrossYaw;
-                _eightSeconds = 0f;
+                // The river's tail may still be wound into the eight its delay ago, so the eight's clock runs on until even
+                // it has unwound.
+                _unwoundSeconds += stepSeconds;
+                _eightSeconds = _unwoundSeconds > mostDelay ? 0f : _eightSeconds + stepSeconds;
+                Swing(acrossYaw);
                 return;
             }
 
+            _unwoundSeconds = 0f;
             _eightSeconds += stepSeconds;
             if (_standingSeconds >= _config.StandDelaySeconds)
             {
@@ -1020,7 +1374,35 @@ namespace DigitalStory.View
             }
 
             float most = EightAlignSpeed * stepSeconds;
-            _eightYaw = Mathf.Repeat(_eightYaw + Mathf.Clamp(toAcross, -most, most), FullTurn);
+            Swing(_eightYaw + Mathf.Clamp(toAcross, -most, most));
+        }
+
+        // Turns the eight to a new yaw and adds the turn to the swing the free swarm reads with its delays.
+        private void Swing(float yaw)
+        {
+            _swing += Mathf.DeltaAngle(_eightYaw * Mathf.Rad2Deg, yaw * Mathf.Rad2Deg) * Mathf.Deg2Rad;
+            _eightYaw = Mathf.Repeat(yaw, FullTurn);
+        }
+
+        // Adds this frame to the core's past: how far it went (the trail's odometer), how far the swarm is wound into the
+        // eight and how far the eight has swung. On the swarm's own clock, so a freeze holds the past still too. A trail
+        // that started over (a new run) starts the past over with it.
+        private void RecordThePast(float stepSeconds)
+        {
+            double travelled = _trail.Travelled;
+            if (travelled < _lastTravelled)
+            {
+                _history.Reset(_eightShare, _swing);
+                _riverReach = 0f;
+            }
+            else
+            {
+                _riverReach += (float)(travelled - _lastTravelled);
+            }
+
+            _lastTravelled = travelled;
+            _history.Record(stepSeconds, travelled, _eightShare, _swing);
+            _history.CopyTo(_historySamples);
         }
 
         private void DestroyOwnedAssets()
@@ -1071,6 +1453,18 @@ namespace DigitalStory.View
             _swarmCompute.SetBuffer(_resetKernel, DynamicId, _dynamicBuffer);
         }
 
+        // Once a match, not per frame: the compute shader keeps the values it was given.
+        private void PushObstacles()
+        {
+            if (_swarmCompute == null)
+            {
+                return;
+            }
+
+            _swarmCompute.SetVectorArray(ObstaclesId, _obstacleVectors);
+            _swarmCompute.SetInt(ObstacleCountId, _obstacleCount);
+        }
+
         private void PushFrame(float deltaTime, int trailCount)
         {
             ComputeShader compute = _swarmCompute;
@@ -1080,6 +1474,7 @@ namespace DigitalStory.View
             compute.SetInt(BoneCountId, _hasColossusSamples ? _boneCount : 0);
             compute.SetInt(FormId, (int)_form);
             compute.SetInt(PreviousFormId, (int)_previousForm);
+            compute.SetInt(EarlierFormId, (int)_earlierForm);
             compute.SetFloat(SimTimeId, _simTime);
             compute.SetFloat(DeltaTimeId, deltaTime);
             compute.SetFloat(FormStartTimeId, _formStartTime);
@@ -1089,6 +1484,10 @@ namespace DigitalStory.View
             compute.SetFloat(EightShareId, _eightShare);
             compute.SetFloat(EightYawId, _eightYaw);
             compute.SetFloat(EightSecondsId, _eightSeconds);
+            compute.SetVectorArray(HistoryId, _historySamples);
+            compute.SetFloat(HistoryStepId, HistoryStepSeconds);
+            compute.SetFloat(TrailLeadId, _trail.Lead);
+            compute.SetFloat(RiverReachId, _riverReach);
             compute.SetVector(HiveAId, _firstHive);
             compute.SetVector(HiveBId, _secondHive);
             bool hasSource = _simTime < _spawnSourceUntil;
@@ -1098,6 +1497,11 @@ namespace DigitalStory.View
             compute.SetVector(SlotFlashId, new Vector4(FlashOf((int)SongSlot.Post), FlashOf((int)SongSlot.Guard), FlashOf((int)SongSlot.Strike), 0f));
             compute.SetVectorArray(StingTargetsId, _stingTargetVectors);
             compute.SetInt(StingTargetCountId, _stingTargetCount);
+            compute.SetVectorArray(FistsId, _fistVectors);
+            compute.SetVector(FistBonesId, _fistBones);
+            compute.SetVectorArray(ThrowsId, _throwVectors);
+            compute.SetVectorArray(BoneLimbsId, _boneLimbVectors);
+            compute.SetFloat(ThrowRedSecondsId, _throwRedSeconds);
             compute.SetVector(PulseId, new Vector4(_gustCenter.x, _gustCenter.z, _gustStartTime, _gustRadius));
         }
 
@@ -1121,7 +1525,18 @@ namespace DigitalStory.View
             compute.SetFloat(EightTiltId, _config.EightTilt);
             compute.SetFloat(EightThicknessId, _config.EightThickness * _sizeScale);
             compute.SetFloat(EightLapSecondsId, _config.EightLapSeconds);
+            compute.SetFloat(FollowDelayId, _config.FollowDelaySeconds);
+            compute.SetFloat(FollowDelayPowerId, _config.FollowDelayPower);
+            compute.SetFloat(WaveJitterId, _config.WaveJitter);
+            compute.SetFloat(TailWidthId, _config.TailWidthShare);
+            compute.SetFloat(FormBlendSecondsId, _config.FormBlendSeconds);
+            compute.SetFloat(SpringStepId, _config.SpringStepSeconds);
             compute.SetFloat(DyingSecondsId, _config.DyingSeconds);
+            compute.SetFloat(ObstacleMarginId, _config.ObstacleMargin);
+            compute.SetFloat(ObstacleLeadId, _config.ObstacleLeadMeters);
+            compute.SetFloat(ObstacleCloseId, _config.ObstacleCloseMeters);
+            compute.SetFloat(ObstacleStrengthId, _config.ObstacleStrength);
+            compute.SetFloat(ObstacleSpeedUpId, _config.ObstacleSpeedUp);
 
             _material.SetFloat(WaspLengthId, _config.WaspLength);
             _material.SetFloat(DyingSecondsId, _config.DyingSeconds);
@@ -1167,6 +1582,7 @@ namespace DigitalStory.View
             }
 
             compute.SetVectorArray(SlotColorsId, _slotColorVectors);
+            compute.SetVector(ThrowColorId, ShaderColor(_throwColor, isLinear));
         }
 
         // 48 bytes, the same layout as WaspStatic in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.

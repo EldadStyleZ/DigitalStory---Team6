@@ -28,6 +28,7 @@ namespace DigitalStory.View
 
         private readonly SwarmGpuView _swarmView;
         private readonly HitFeedbackView _feedback;
+        private readonly HiveDefenseRoot _root;
         private readonly HitSoundView _sound;
         private readonly DamageNumbersView _numbers;
         private readonly Light _attackLight;
@@ -67,6 +68,7 @@ namespace DigitalStory.View
             }
 
             _swarmView = swarmView != null ? swarmView : throw new ArgumentNullException(nameof(swarmView));
+            _root = root;
             _feedback = Found(UnityEngine.Object.FindAnyObjectByType<HitFeedbackView>(), nameof(HitFeedbackView));
             _sound = Found(UnityEngine.Object.FindAnyObjectByType<HitSoundView>(), nameof(HitSoundView));
             _numbers = Found(UnityEngine.Object.FindAnyObjectByType<DamageNumbersView>(), nameof(DamageNumbersView));
@@ -178,6 +180,10 @@ namespace DigitalStory.View
                 case BenchmarkSwitch.NoCameraKick:
                     _savedCastKick = (float)_castKickField.GetValue(_feedback);
                     _castKickField.SetValue(_feedback, 0f);
+                    break;
+                case BenchmarkSwitch.NoCursorLock:
+                    // Not restored, as the run holds it to the end.
+                    FieldOf(typeof(HiveDefenseRoot), "_isCursorLockedInChase").SetValue(_root, false);
                     break;
                 case BenchmarkSwitch.NoDamageNumbers:
                     // Its private Release stops it listening for hits. Not restored, as the run holds it to the end.

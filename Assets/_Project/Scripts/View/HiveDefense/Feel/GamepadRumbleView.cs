@@ -9,9 +9,11 @@ namespace DigitalStory.View
     /// <summary>
     /// The felt hit on a controller. Its motors tick lightly for each note, thump when a song is cast and when the swarm's or the
     /// giant's attack hits beekeepers (at most once per gap, so a stream of hits does not buzz the whole time), rumble hard when
-    /// the giant's slam or its leap lands, and long and low when a hive is destroyed or the swarm collapses. The pulses mix in a
-    /// <see cref="RumbleMixer"/>. It rumbles only while the controller is the device in use, and stops the motors whenever it is
-    /// disabled or destroyed (a scene unload), the game is paused or loses focus, and when the match ends.
+    /// the giant's slam or its leap lands, firmly as a giant's fist leaves its arm and as it hits, and long and low when a hive is
+    /// destroyed or the swarm collapses. The pulses mix in a <see cref="RumbleMixer"/>. It rumbles only while the controller is
+    /// the device in use, and stops the motors at once whenever it is disabled or destroyed (a scene unload) and the game is
+    /// paused or loses focus. When the match ends no new pulse starts, and the one running plays out (the long rumble of the
+    /// last hive falling ends the match on its own tick).
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("DigitalStory/Gamepad Rumble View")]
@@ -41,11 +43,14 @@ namespace DigitalStory.View
             _config = config != null ? config : throw new ArgumentNullException(nameof(config));
             _hitLimiter = new RateLimiter(config.HitGapSeconds);
             _isOver = session.State != HiveDefenseState.Playing;
+            _mixer.Open();
 
             _input.HolePressed += HandleHolePressed;
             _session.SongCastNow += HandleSongCastNow;
             _session.SongLanded += HandleSongLanded;
             _session.ColossusAttackLanded += HandleColossusAttackLanded;
+            _session.ColossusFistLaunched += HandleColossusFist;
+            _session.ColossusFistLanded += HandleColossusFist;
             _session.Hives.HiveDestroyed += HandleHiveDestroyed;
             _session.Swarm.Collapsed += HandleSwarmCollapsed;
             _session.StateChanged += HandleStateChanged;
@@ -62,7 +67,7 @@ namespace DigitalStory.View
 
             float deltaTime = Time.unscaledDeltaTime;
             _hitLimiter.Tick(deltaTime);
-            if (_isOver || Time.timeScale <= 0f || _input.LastDevice != ControlDevice.Gamepad)
+            if (Time.timeScale <= 0f || _input.LastDevice != ControlDevice.Gamepad)
             {
                 _mixer.Clear();
             }
@@ -110,6 +115,8 @@ namespace DigitalStory.View
                 _session.SongCastNow -= HandleSongCastNow;
                 _session.SongLanded -= HandleSongLanded;
                 _session.ColossusAttackLanded -= HandleColossusAttackLanded;
+                _session.ColossusFistLaunched -= HandleColossusFist;
+                _session.ColossusFistLanded -= HandleColossusFist;
                 _session.Hives.HiveDestroyed -= HandleHiveDestroyed;
                 _session.Swarm.Collapsed -= HandleSwarmCollapsed;
                 _session.StateChanged -= HandleStateChanged;
@@ -137,6 +144,8 @@ namespace DigitalStory.View
             }
         }
 
+        private void HandleColossusFist(ColossusHand hand) => Pulse(_config.FistPulse);
+
         private void HandleHiveDestroyed(int hive) => Pulse(_config.LossPulse);
 
         private void HandleSwarmCollapsed() => Pulse(_config.LossPulse);
@@ -146,7 +155,7 @@ namespace DigitalStory.View
             if (state != HiveDefenseState.Playing)
             {
                 _isOver = true;
-                Stop();
+                _mixer.Close();
             }
         }
 

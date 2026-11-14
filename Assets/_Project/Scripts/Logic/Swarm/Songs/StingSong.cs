@@ -33,9 +33,12 @@ namespace DigitalStory.Logic
         [field: SerializeField, Min(0f), Tooltip("Seconds the wasps fly before they reach their targets. The damage starts when they arrive.")]
         public float ArriveSeconds { get; private set; } = 0.35f;
 
-        // 20 (was 25), set by the playtest bot after plan section O, since one cast now sends several stings.
-        [field: SerializeField, Min(0f), Tooltip("Damage each sting's target takes each second once the wasps arrive, dealt in pulses on the squeezes. Stings that share a target add up.")]
-        public float DamagePerSecond { get; private set; } = 20f;
+        // The whole cast's damage a second, shared evenly by its stings (songs-v2 V). The owner, 2026-11-14: "I want the Sting
+        // to be less effective than the other attacks." 12, so a cast deals 43.8 from the arrival to the end at the first
+        // level, less than any other attack deals three beekeepers (the Tornado 90). It was 20 for each sting (25 before plan
+        // section O), so a cast at 4,000 wasps dealt ten times that.
+        [field: SerializeField, Min(0f), Tooltip("Damage the whole cast deals each second once the wasps arrive, shared evenly by its stings and dealt in pulses on the squeezes. More wasps send more stings but never more damage. Stings that share a target add up.")]
+        public float DamagePerSecond { get; private set; } = 12f;
 
         [field: SerializeField, Min(0f), Tooltip("Furthest metres from the core the wasps fly. A target further away is out of reach, and the wasps wrap the air this far toward it.")]
         public float MaxRange { get; private set; } = 12f;

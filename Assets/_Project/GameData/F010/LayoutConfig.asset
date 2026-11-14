@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8fe2728629eb94b529c56b69b29e3dc6, type: 3}
+  m_Name: LayoutConfig
+  m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.LayoutConfig
+  <ArenaHalfSize>k__BackingField: 42
+  <HiveNearest>k__BackingField: 8
+  <HiveFarthest>k__BackingField: 20
+  <HiveAcrossSpreadDegrees>k__BackingField: 60
+  <HiveLeastSeparation>k__BackingField: 18
+  <SpawnFromHiveNearest>k__BackingField: 18
+  <SpawnFromHiveFarthest>k__BackingField: 22
+  <SpawnSideNarrowestDegrees>k__BackingField: 20
+  <SpawnSideWidestDegrees>k__BackingField: 70
+  <SpawnOwnHiveLeadMetres>k__BackingField: 4
+  <SpawnStartClearance>k__BackingField: 20
+  <SpawnLeastSpacing>k__BackingField: 10
+  <NestInsideHalfSize>k__BackingField: 34
+  <NestLeastSpacing>k__BackingField: 8
+  <NestSpawnClearance>k__BackingField: 8
+  <NestHiveMargin>k__BackingField: 0.5
+  <NestStartClearance>k__BackingField: 8
+  <FirstNestsNarrowestBearing>k__BackingField: 15
+  <FirstNestsWidestBearing>k__BackingField: 40
+  <LaterNestJitterDegrees>k__BackingField: 10
+  <SceneryInnerHalfSize>k__BackingField: 22
+  <SceneryLeastSpacing>k__BackingField: 2
+  <SceneryFootprintShare>k__BackingField: 0.5
+  <SceneryHiveClearance>k__BackingField: 6
+  <SceneryNestClearance>k__BackingField: 3
+  <ScenerySpawnClearance>k__BackingField: 4
+  <SceneryStartClearance>k__BackingField: 10
+  <LaneHalfWidth>k__BackingField: 2
+  <LayoutAttempts>k__BackingField: 30
+  <PlaceAttempts>k__BackingField: 200
+  <SceneryAttempts>k__BackingField: 40
+  _fallbackHives:
+  - {x: -12.5, y: 0, z: 0}
+  - {x: 12.5, y: 0, z: 0}
+  _fallbackSpawns:
+  - {x: -29.82, y: 0, z: -10}
+  - {x: 29.82, y: 0, z: 10}
+  - {x: -29.82, y: 0, z: 10}
+  - {x: 22.5, y: 0, z: -17.32}
+  _fallbackNests:
+  - {x: -4.2303505, y: 0, z: 9.91818}
+  - {x: 6.0840244, y: 0, z: 12.559615}
+  - {x: -1.1644772, y: 0, z: -17.937988}
+  - {x: -0.48996973, y: 0, z: 18.718933}
+  - {x: 16.543379, y: 0, z: 13.702695}
+  - {x: -18.956007, y: 0, z: -12.818432}
+  - {x: -19.761074, y: 0, z: 11.611771}
+  - {x: 23.381496, y: 0, z: -8.659761}

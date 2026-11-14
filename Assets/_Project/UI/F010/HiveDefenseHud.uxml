@@ -33,20 +33,19 @@
             <ui:Label name="dome-line" text="" class="dome-line line" picking-mode="Ignore" />
             <ui:Label name="level-line" text="" class="level-line line" picking-mode="Ignore" />
         </ui:VisualElement>
+        <ui:VisualElement name="combo-box" class="combo-box" picking-mode="Ignore">
+            <ui:Label name="combo-title" text="Play the nest's notes" class="combo-title" picking-mode="Ignore" />
+            <ui:VisualElement name="combo-slots" class="combo-slots" picking-mode="Ignore" />
+        </ui:VisualElement>
         <ui:VisualElement name="bottom" class="bottom" picking-mode="Ignore">
             <ui:Label name="hum-line" text="" class="line hum-line" picking-mode="Ignore" />
-            <ui:VisualElement name="collect-box" class="collect-box" picking-mode="Ignore">
-                <ui:Label text="Collecting" class="collect-label" picking-mode="Ignore" />
-                <ui:VisualElement class="bar-track collect-track" picking-mode="Ignore">
-                    <ui:VisualElement name="collect-fill" class="bar-fill collect-fill" picking-mode="Ignore" />
-                </ui:VisualElement>
-            </ui:VisualElement>
             <ui:Label name="message-line" text="" class="line message-line" picking-mode="Ignore" />
             <ui:Label name="prompt-line" text="" class="line prompt-line" picking-mode="Ignore" />
             <ui:VisualElement name="notes" class="notes" picking-mode="Ignore" />
         </ui:VisualElement>
         <ui:VisualElement name="giant-hint" class="giant-hint" picking-mode="Ignore">
             <ui:Label name="giant-moves-line" text="" class="giant-line" picking-mode="Ignore" />
+            <ui:Label name="giant-hands-line" text="" class="giant-line giant-line--hands" picking-mode="Ignore" />
             <ui:Label name="giant-phrases-line" text="" class="giant-line giant-line--small" picking-mode="Ignore" />
         </ui:VisualElement>
         <ui:VisualElement name="giant-strip" class="giant-strip" picking-mode="Ignore">
@@ -64,6 +63,18 @@
                     <ui:Label text="H roar" class="giant-mark-label" picking-mode="Ignore" />
                     <ui:VisualElement class="giant-mark" picking-mode="Ignore">
                         <ui:VisualElement name="giant-roar-fill" class="giant-mark-fill" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="giant-mark-row" picking-mode="Ignore">
+                    <ui:Label name="giant-left-label" text="LMB fist" class="giant-mark-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="giant-mark" picking-mode="Ignore">
+                        <ui:VisualElement name="giant-left-fill" class="giant-mark-fill" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="giant-mark-row" picking-mode="Ignore">
+                    <ui:Label name="giant-right-label" text="RMB fist" class="giant-mark-label" picking-mode="Ignore" />
+                    <ui:VisualElement class="giant-mark" picking-mode="Ignore">
+                        <ui:VisualElement name="giant-right-fill" class="giant-mark-fill" picking-mode="Ignore" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

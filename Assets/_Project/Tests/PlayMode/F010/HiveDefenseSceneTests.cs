@@ -42,7 +42,8 @@ namespace DigitalStory.Tests.PlayMode
         private const float WatchSeconds = 0.7f;
         private const float SmallestSwingDegrees = 10f;
         private const int SoundedHole = 3;
-        private const float FullFuryDamage = 1000f;
+        // Fills Fury at any rate up to 20 damage a point (11.5 since songs-v2 V, when 1,000 stopped filling it).
+        private const float FullFuryDamage = 2000f;
         private const float MaxColossusWaitSeconds = 2f;
         private const float PushSeconds = 0.5f;
         private const float SamePlaceMetres = 0.01f;
@@ -63,7 +64,7 @@ namespace DigitalStory.Tests.PlayMode
         private const float CollectSeconds = 0.3f;
         private const float GiveSeconds = 0.5f;
         private const float BesideNestMetres = 1.5f;
-        private const float NestStayMarginSeconds = 0.5f;
+        private const float StandWithoutPlayingSeconds = 2.5f;
         private const float NestBurstSeconds = 1.2f; // NestView's burst, 0.9 s, and a little more.
         private const string NestObjectName = "WaspNest";
         private const int StartingLevel = 1;
@@ -518,10 +519,10 @@ namespace DigitalStory.Tests.PlayMode
             }
         }
 
-        // Plan section H: staying beside an open nest for the collect time takes it: the capacity, the count and the level
-        // rise, and once its burst has played the nest is gone from its tree.
+        // Plan sections H and U: beside an open nest its combo shows; standing collects nothing, and playing the combo takes
+        // the nest: the capacity, the count and the level rise, and once its burst has played the nest is gone from its tree.
         [UnityTest]
-        public IEnumerator Core_StayingAtAnOpenNest_CollectsItAndGrowsTheSwarm()
+        public IEnumerator Core_PlayingAnOpenNestsCombo_CollectsItAndGrowsTheSwarm()
         {
             var motor = Object.FindAnyObjectByType<SwarmCoreMotor>();
             HiveDefenseSession session = _root.Session;
@@ -535,7 +536,11 @@ namespace DigitalStory.Tests.PlayMode
             motor.PlaceAt(BesideNest(nest.Position), true);
             yield return null;
             Assert.That(GroundDistance(motor.Position, nest.Position), Is.LessThan(nests.CollectRadius), "the core is not within the nest's collect radius");
-            yield return WaitGameSeconds(nests.CollectSeconds + NestStayMarginSeconds);
+            yield return WaitGameSeconds(StandWithoutPlayingSeconds);
+            Assert.That(nest.IsCollected, Is.False, "standing alone collected the nest");
+            Assert.That(session.Nests.ActiveNest, Is.EqualTo(0), "the nest's combo is not shown");
+            Assert.That(Object.FindAnyObjectByType<HiveDefenseHudView>().NestCombo.IsShown, Is.True, "the HUD shows no combo");
+            yield return Play(nest.Combo);
 
             Assert.That(nest.IsCollected, Is.True);
             Assert.That(session.Nests.CollectedCount, Is.EqualTo(1));
@@ -551,7 +556,7 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(shown.gameObject.activeInHierarchy, Is.False, "the collected nest is still in its tree");
         }
 
-        // Plan section H: a nest that is not open yet cannot be collected, however long the core stays.
+        // Plan section H: a nest that is not open yet cannot be collected, however long the core stays or whatever it plays.
         [UnityTest]
         public IEnumerator Core_AtAClosedNest_CannotCollectIt()
         {
@@ -565,7 +570,9 @@ namespace DigitalStory.Tests.PlayMode
             motor.PlaceAt(BesideNest(nest.Position), true);
             yield return null;
             Assert.That(GroundDistance(motor.Position, nest.Position), Is.LessThan(nests.CollectRadius), "the core is not within the nest's collect radius");
-            yield return WaitGameSeconds((nests.CollectSeconds * 2f) + NestStayMarginSeconds);
+            yield return WaitGameSeconds(StandWithoutPlayingSeconds);
+            Assert.That(session.Nests.ActiveNest, Is.EqualTo(NestField.NoNest), "a closed nest shows a combo");
+            yield return Play(nest.Combo);
 
             Assert.That(nest.IsCollected, Is.False);
             Assert.That(nest.Progress01, Is.EqualTo(0f));

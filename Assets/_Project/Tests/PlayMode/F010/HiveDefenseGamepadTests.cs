@@ -31,6 +31,11 @@ namespace DigitalStory.Tests.PlayMode
         private const float SameWayDot = 0.9f;
         private const int MaxFramesToEnd = 60;
         private const int MaxFramesToRestart = 120;
+        private const float BesideNestMetres = 1.5f;
+
+        // The loss rumble lasts 0.9 s (GamepadConfig.LossPulse): it must still run well into that, and be over a while after.
+        private const float LeastLossRumbleSeconds = 0.6f;
+        private const float LongestLossRumbleSeconds = 1.6f;
 
         private Gamepad _pad;
         private HiveDefenseRoot _root;
@@ -176,6 +181,158 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(restarted, Is.Not.Null, "Start on the end screen did not play again");
             Assert.That(restarted.Session.State, Is.EqualTo(HiveDefenseState.Playing));
             Assert.That(restarted.Session.Phase, Is.EqualTo(MatchPhase.Farm), "the held Start also called the wave early");
+        }
+
+        // Songs-v2 R, small fix 3: a match restarted from the pad still names the pad's buttons before it is touched again.
+        [UnityTest]
+        public IEnumerator Restart_FromThePad_TheNewMatchStillNamesThePad()
+        {
+            yield return LoadSceneWithPad();
+            yield return PressAndRelease(_pad.buttonSouth);
+            Assert.That(_input.LastDevice, Is.EqualTo(ControlDevice.Gamepad));
+            yield return LoseTheMatch();
+
+            HiveDefenseRoot ended = _root;
+            Press(_pad.startButton);
+            yield return null;
+            Release(_pad.startButton);
+            HiveDefenseRoot restarted = null;
+            for (int frame = 0; frame < MaxFramesToRestart && restarted == null; frame++)
+            {
+                yield return null;
+                HiveDefenseRoot found = Object.FindAnyObjectByType<HiveDefenseRoot>();
+                restarted = found != null && found != ended && found.Session != null ? found : null;
+            }
+
+            yield return null;
+            yield return null;
+            var input = Object.FindAnyObjectByType<HiveDefenseInput>();
+            var hud = Object.FindAnyObjectByType<HiveDefenseHudView>();
+
+            Assert.That(restarted, Is.Not.Null, "Start on the end screen did not play again");
+            Assert.That(input.LastDevice, Is.EqualTo(ControlDevice.Gamepad), "the new match forgot the pad");
+            Assert.That(hud.ShownDevice, Is.EqualTo(ControlDevice.Gamepad), "the new match's HUD names the keys");
+        }
+
+        // Songs-v2 R, small fix 4: the last hive's long, low rumble starts on the tick the match ends, and plays out.
+        [UnityTest]
+        public IEnumerator LastHiveFalling_ItsRumblePlaysOutAfterTheMatchEnds_ThenStops()
+        {
+            yield return LoadSceneWithPad();
+            yield return PressAndRelease(_pad.buttonSouth);
+            var rumble = Object.FindAnyObjectByType<GamepadRumbleView>();
+            Assert.That(rumble, Is.Not.Null, "the scene has no GamepadRumbleView");
+            yield return LoseTheMatch();
+            yield return null;
+            float lowAtTheEnd = rumble.Speeds.Low;
+
+            float started = Time.realtimeSinceStartup;
+            float stillAt = -1f;
+            while (Time.realtimeSinceStartup - started < LongestLossRumbleSeconds)
+            {
+                yield return null;
+                if (stillAt < 0f && rumble.Speeds.IsStill)
+                {
+                    stillAt = Time.realtimeSinceStartup - started;
+                }
+            }
+
+            Assert.That(lowAtTheEnd, Is.GreaterThan(0.5f), "the last hive's rumble was cut as the match ended");
+            Assert.That(stillAt, Is.GreaterThan(LeastLossRumbleSeconds), "the rumble stopped before it played out");
+            Assert.That(rumble.Speeds.IsStill, Is.True, "the rumble did not stop after it played out");
+        }
+
+        // Destroys every hive at once, on one tick, and waits for the match to end.
+        private IEnumerator LoseTheMatch()
+        {
+            HiveDefenseSession session = _root.Session;
+            for (int index = 0; index < session.Hives.Count; index++)
+            {
+                session.Hives[index].Damage(session.Hives[index].MaxHealth);
+            }
+
+            for (int frame = 0; frame < MaxFramesToEnd && session.State == HiveDefenseState.Playing; frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(session.State, Is.EqualTo(HiveDefenseState.Lost), "the match did not end");
+        }
+
+        // Plan section U: in an open nest's ring its combo shows, and the pad's face buttons play it: the nest is collected and
+        // the prompt bursts. A wrong button first empties what was played, and the combo is played again from its start.
+        [UnityTest]
+        public IEnumerator NestCombo_PlayedOnThePadAfterAWrongNote_CollectsTheNest()
+        {
+            yield return LoadSceneWithPad();
+            Nest nest = _root.Session.Nests[0];
+            NestComboView prompt = Object.FindAnyObjectByType<HiveDefenseHudView>().NestCombo;
+            yield return StepIntoRing(nest);
+            Assert.That(prompt.IsShown, Is.True, "the prompt is not shown in the ring");
+
+            IReadOnlyList<int> combo = nest.Combo;
+            yield return PressAndRelease(ButtonFor(combo[0]));
+            yield return PressAndRelease(ButtonFor(combo[1]));
+            Assert.That(nest.NotesPlayed, Is.EqualTo(2), "two right buttons did not fill two slots");
+            Assert.That(prompt.FilledCount, Is.EqualTo(2));
+            yield return PressAndRelease(ButtonFor(WrongAfter(combo, 2)));
+            Assert.That(nest.NotesPlayed, Is.LessThanOrEqualTo(1), "a wrong button kept the combo");
+            Assert.That(prompt.IsShaking, Is.True, "a wrong button did not shake the prompt");
+
+            for (int index = nest.NotesPlayed; index < combo.Count; index++)
+            {
+                yield return PressAndRelease(ButtonFor(combo[index]));
+            }
+
+            yield return null;
+            Assert.That(nest.IsCollected, Is.True, "the pad's combo did not collect the nest");
+            Assert.That(_root.Session.Level, Is.EqualTo(2));
+            Assert.That(_input.LastDevice, Is.EqualTo(ControlDevice.Gamepad));
+        }
+
+        // The same on the keyboard: the Input Manager cannot fake a key, so each note goes in where a key's note does, the
+        // root's PressHole, and the key's use is recorded as a key's would be.
+        [UnityTest]
+        public IEnumerator NestCombo_PlayedOnTheKeys_CollectsTheNest()
+        {
+            yield return LoadSceneWithPad();
+            Nest nest = _root.Session.Nests[0];
+            _input.RecordUse(true, false);
+            yield return StepIntoRing(nest);
+            Assert.That(_root.Session.Nests.ActiveNest, Is.EqualTo(0));
+
+            IReadOnlyList<int> combo = nest.Combo;
+            for (int index = 0; index < combo.Count; index++)
+            {
+                _root.PressHole(combo[index]);
+                yield return null;
+                yield return null;
+            }
+
+            yield return null;
+            Assert.That(nest.IsCollected, Is.True, "the keys' combo did not collect the nest");
+            Assert.That(_input.LastDevice, Is.EqualTo(ControlDevice.KeyboardMouse));
+        }
+
+        private IEnumerator StepIntoRing(Nest nest)
+        {
+            Object.FindAnyObjectByType<SwarmCoreMotor>().PlaceAt(nest.Position + (Vector3.back * BesideNestMetres), true);
+            yield return null;
+            yield return null;
+        }
+
+        // A hole that is not the combo's next note there, nor its first, so it empties the combo outright.
+        private static int WrongAfter(IReadOnlyList<int> combo, int played)
+        {
+            for (int hole = 0; hole < 4; hole++)
+            {
+                if (hole != combo[played] && hole != combo[0])
+                {
+                    return hole;
+                }
+            }
+
+            return combo[played];
         }
 
         private IEnumerator LoadSceneWithPad()

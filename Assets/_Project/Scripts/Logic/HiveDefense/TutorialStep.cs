@@ -13,7 +13,7 @@ namespace DigitalStory.Logic
         PlaySting = 1,
 
         /// <summary>
-        /// Fly to the glowing nest and stay until it is yours. The session ends it when a nest is collected, or at once if
+        /// Fly to the glowing nest and play the notes shown. The session ends it when a nest is collected, or at once if
         /// one was collected before this step.
         /// </summary>
         CollectNest = 2,

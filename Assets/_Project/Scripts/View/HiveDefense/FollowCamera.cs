@@ -1,3 +1,5 @@
+using DigitalStory.Data;
+using DigitalStory.Logic;
 using UnityEngine;
 
 namespace DigitalStory.View
@@ -5,7 +7,9 @@ namespace DigitalStory.View
     /// <summary>
     /// A three-quarter view from above that follows a target with smoothing, and a third-person chase view behind a target (the giant)
     /// that the player can orbit. Shake, kick, push-in, wave pull-back and lean are offsets added when the camera is placed, so they
-    /// never move the followed target or the follow itself.
+    /// never move the followed target or the follow itself. The shake is trauma-based (plan section Y): events add trauma, the
+    /// view turns and moves by its square through smooth noise, and a field-of-view punch and a sprung directional kick ride on
+    /// top. All of them are short offsets, so the player keeps steering and the view ends where the plain follow puts it.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("DigitalStory/Follow Camera")]
@@ -32,14 +36,8 @@ namespace DigitalStory.View
         private float _distanceSmoothSeconds = 0.6f;
 
         [Header("Shake and kick")]
-        [SerializeField, Min(0f), Tooltip("The most a shake moves the camera, in metres, however hard the hit.")]
-        private float _maxShakeMetres = 0.6f;
-
-        [SerializeField, Min(1f), Tooltip("How fast a shake wobbles, in cycles per second.")]
-        private float _shakeHertz = 28f;
-
-        [SerializeField, Min(0.01f), Tooltip("Seconds a shake takes to die away.")]
-        private float _shakeSeconds = 0.25f;
+        [SerializeField, Tooltip("The feel numbers: the shake, the punches and the master scale. Without one the camera uses the defaults in code.")]
+        private FeelConfig _feel;
 
         [SerializeField, Min(0f), Tooltip("The most a kick pushes the camera along its view, in metres.")]
         private float _maxKickMetres = 0.5f;
@@ -136,10 +134,25 @@ namespace DigitalStory.View
         // Not game tuning: room for every collider a sweep can meet at once.
         private readonly RaycastHit[] _obstacleHits = new RaycastHit[ObstacleHitCapacity];
 
+        // Not game tuning: where each axis reads the shake's noise, so the axes never move together.
+        private static readonly Vector4 NoiseSeeds = new Vector4(13.1f, 47.7f, 91.3f, 3.3f);
+        private const float NoiseSeedShiftY = 61.9f;
+
         private Transform _target;
-        private float _shake;
+        private TraumaShake _trauma;
+        private bool _ownsFeel;
+        private Camera _view;
+        private float _baseFieldOfView;
+        private float _shakeScale = 1f;
         private float _kick;
         private float _shakeClock;
+        private Quaternion _shakeTurn = Quaternion.identity;
+        private float _punch;
+        private bool _isPunchRising;
+        private float _punchFovShare;
+        private float _punchRollDegrees;
+        private Vector3 _nudge;
+        private Vector3 _nudgeVelocity;
         private Vector3 _offset;
         private Vector3 _localOffset;
         private Vector3 _focus;
@@ -173,6 +186,25 @@ namespace DigitalStory.View
         private float _leanWant;
         private Vector3 _leanPoint;
 
+        /// <summary>The shake's trauma now, 0 to 1.</summary>
+        public float ShakeStrength => _trauma != null ? _trauma.Trauma : 0f;
+
+        /// <summary>
+        /// Scales every shake, kick, punch and nudge, 0 to 1; 0 leaves the camera still (a reduced-motion setting). Starts at the
+        /// FeelConfig's master scale.
+        /// </summary>
+        public float ShakeScale
+        {
+            get => _shakeScale;
+            set => _shakeScale = Mathf.Clamp01(value);
+        }
+
+        /// <summary>How far the field-of-view punch narrows the view now, as a share. 0 at rest.</summary>
+        public float PunchShare => _punchFovShare * Ease(_punch) * _shakeScale;
+
+        /// <summary>The sprung directional kick's offset now, in world metres. Zero at rest.</summary>
+        public Vector3 NudgeOffset => _nudge * _shakeScale;
+
         /// <summary>The distance the camera returns to after SetDistance.</summary>
         public float DefaultDistance => _distance;
 
@@ -182,9 +214,6 @@ namespace DigitalStory.View
         /// <summary>The distance the camera is blending to: the default, or the last one SetDistance asked for.</summary>
         public float WantedDistance => _wantedDistance;
 
-        /// <summary>The shake's current strength, 0 to 1, falling to 0 as it dies away. A test reads it to see a shake happened.</summary>
-        public float ShakeStrength => _shake;
-
         /// <summary>The kick's current strength, 0 to 1, falling to 0 as it settles.</summary>
         public float KickStrength => _kick;
 
@@ -193,6 +222,9 @@ namespace DigitalStory.View
 
         /// <summary>How far the swoop has gone: 0 is the top view, 1 is the chase view.</summary>
         public float ChaseBlend => _chaseBlend;
+
+        /// <summary>The boxes the chase camera never looks through, for tests and debugging.</summary>
+        public System.Collections.Generic.IReadOnlyList<Bounds> ChaseBlockers => _chaseBlockers;
 
         /// <summary>
         /// What the camera's forward is on the ground, unit length, in both views. The root puts it in the frame so walking is
@@ -220,12 +252,63 @@ namespace DigitalStory.View
         public Vector3 CurrentOffset => _offset;
 
         /// <summary>
-        /// Shakes the camera: strength 0 to 1 (more is clamped). A new shake never lowers one still running, so several hits in a frame
-        /// give one shake of the hardest.
+        /// Adds trauma to the shake: 0 to 1, capped at 1 in all. The view shakes by the trauma's square, so small amounts barely
+        /// show and several events build up. A caller merges the hits of one frame before it calls (plan section Y).
         /// </summary>
         public void Shake(float strength)
         {
-            _shake = Mathf.Max(_shake, Mathf.Clamp01(strength));
+            _trauma.Add(strength);
+        }
+
+        /// <summary>
+        /// A quick zoom punch: the field of view narrows by fovShare (0 to 0.2) and the view rolls by rollDegrees (either sign) over
+        /// the FeelConfig's punch-in time, then both ease back. A stronger punch replaces a weaker one still showing.
+        /// </summary>
+        public void Punch(float fovShare, float rollDegrees)
+        {
+            float share = Mathf.Clamp(fovShare, 0f, 0.2f);
+            if (share < _punchFovShare * Ease(_punch))
+            {
+                return;
+            }
+
+            _punchFovShare = share;
+            _punchRollDegrees = Mathf.Clamp(rollDegrees, -3f, 3f);
+            _isPunchRising = true;
+        }
+
+        /// <summary>
+        /// Kicks the camera the given metres along a direction on the ground (a blow's direction) and lets it spring back, so the
+        /// view itself feels the hit. A kick never lowers a stronger one still showing.
+        /// </summary>
+        public void Nudge(Vector3 direction, float metres)
+        {
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 1e-6f || !(metres > 0f))
+            {
+                return;
+            }
+
+            Vector3 kick = direction.normalized * Mathf.Min(metres, 1f);
+            if (kick.sqrMagnitude >= _nudge.sqrMagnitude)
+            {
+                _nudge = kick;
+                _nudgeVelocity = Vector3.zero;
+            }
+        }
+
+        /// <summary>Uses these feel numbers from now on: the shake, the punches and the master scale. Never null.</summary>
+        public void Configure(FeelConfig feel)
+        {
+            if (feel == null)
+            {
+                throw new System.ArgumentNullException(nameof(feel), "FollowCamera.Configure needs a FeelConfig.");
+            }
+
+            ReleaseOwnedFeel();
+            _feel = feel;
+            _trauma = new TraumaShake(feel.TraumaDecayPerSecond, feel.TraumaExponent);
+            _shakeScale = feel.MasterScale;
         }
 
         /// <summary>Kicks the camera forward along its view and lets it settle back: strength 0 to 1. Used the frame a song is cast.</summary>
@@ -360,10 +443,35 @@ namespace DigitalStory.View
 
         private void Awake()
         {
+            _view = GetComponent<Camera>();
+            _baseFieldOfView = _view != null ? _view.fieldOfView : 60f;
+            if (_feel == null)
+            {
+                _feel = ScriptableObject.CreateInstance<FeelConfig>();
+                _ownsFeel = true;
+            }
+
+            _trauma = new TraumaShake(_feel.TraumaDecayPerSecond, _feel.TraumaExponent);
+            _shakeScale = _feel.MasterScale;
             _wantedDistance = _distance;
             _currentDistance = _distance;
             _chasePitch = _chasePitchDegrees;
             _groundForward = FlatForward(Quaternion.Euler(_pitchDegrees, _yawDegrees, 0f));
+        }
+
+        private void OnDestroy()
+        {
+            ReleaseOwnedFeel();
+        }
+
+        private void ReleaseOwnedFeel()
+        {
+            if (_ownsFeel && _feel != null)
+            {
+                Destroy(_feel);
+            }
+
+            _ownsFeel = false;
         }
 
         private void LateUpdate()
@@ -497,18 +605,76 @@ namespace DigitalStory.View
             _leanWant = 0f;
         }
 
-        // The shake and the kick are only an offset added when the camera is placed, never to the followed focus, so they cannot fight it.
+        // The shake, the kick, the punch and the nudge are only offsets added when the camera is placed, never to the followed
+        // focus, so they cannot fight it. The shake reads smooth noise per axis (never random jumps) and turns the view more than
+        // it moves it, as a turn reads better in 3D; all of it scales by the trauma's square and the master scale.
         private void StepOffset(float deltaTime)
         {
-            _shake = Mathf.Max(0f, _shake - (deltaTime / _shakeSeconds));
+            _trauma.Step(deltaTime);
             _kick = Mathf.Max(0f, _kick - (deltaTime / _kickSeconds));
-            _shakeClock += deltaTime * _shakeHertz;
+            _shakeClock += deltaTime * _feel.NoiseSpeed;
+            StepPunch(deltaTime);
+            StepNudge(deltaTime);
 
-            float amount = _shake * _shake * _maxShakeMetres;
-            float x = Mathf.Sin(_shakeClock * 2.1f) * amount;
-            float y = Mathf.Sin((_shakeClock * 1.7f) + 1.3f) * amount;
-            float push = _kick * _kick * _maxKickMetres;
+            float strength = _trauma.Strength * _shakeScale;
+            float roll = (Noise(NoiseSeeds.x) * _feel.MaxRollDegrees * strength) + (_punchRollDegrees * Ease(_punch) * _shakeScale);
+            float tiltX = Noise(NoiseSeeds.y) * _feel.MaxTiltDegrees * strength;
+            float tiltY = Noise(NoiseSeeds.z) * _feel.MaxTiltDegrees * strength;
+            _shakeTurn = Quaternion.Euler(tiltX, tiltY, roll);
+
+            float shift = _feel.MaxShakeMetres * strength;
+            float x = Noise(NoiseSeeds.w) * shift;
+            float y = Noise(NoiseSeeds.w + NoiseSeedShiftY) * shift;
+            float push = _kick * _kick * _maxKickMetres * _shakeScale;
             _localOffset = new Vector3(x, y, push);
+
+            if (_view != null)
+            {
+                _view.fieldOfView = _baseFieldOfView * (1f - PunchShare);
+            }
+        }
+
+        private float Noise(float seed)
+        {
+            return (Mathf.PerlinNoise(seed, _shakeClock) * 2f) - 1f;
+        }
+
+        private void StepPunch(float deltaTime)
+        {
+            if (_isPunchRising)
+            {
+                _punch = Mathf.MoveTowards(_punch, 1f, deltaTime / _feel.PunchInSeconds);
+                _isPunchRising = _punch < 1f;
+                return;
+            }
+
+            _punch = Mathf.Max(0f, _punch - (deltaTime / _feel.PunchOutSeconds));
+        }
+
+        // A damped spring back to rest: the stiffness and damping come from the frequency and the damping ratio. Below 1e-4 m
+        // and still, it rests at exactly zero so the view ends where the plain follow puts it.
+        private void StepNudge(float deltaTime)
+        {
+            if (_nudge == Vector3.zero && _nudgeVelocity == Vector3.zero)
+            {
+                return;
+            }
+
+            float omega = 2f * Mathf.PI * _feel.KickSpringHertz;
+            float step = Mathf.Min(deltaTime, 1f / 30f);
+            _nudgeVelocity += ((-omega * omega * _nudge) - (2f * _feel.KickSpringDamping * omega * _nudgeVelocity)) * step;
+            _nudge += _nudgeVelocity * step;
+            if (_nudge.sqrMagnitude < 1e-8f && _nudgeVelocity.sqrMagnitude < 1e-6f)
+            {
+                _nudge = Vector3.zero;
+                _nudgeVelocity = Vector3.zero;
+            }
+        }
+
+        // Ease-out for the punch's shape: quick to its peak, soft at its tail.
+        private static float Ease(float t)
+        {
+            return 1f - ((1f - t) * (1f - t));
         }
 
         private Vector3 FocusOf(Transform target)
@@ -570,9 +736,9 @@ namespace DigitalStory.View
                 rotation = Quaternion.Slerp(rotation, chaseRotation, t);
             }
 
-            _offset = rotation * _localOffset;
+            _offset = (rotation * _localOffset) + (_nudge * _shakeScale);
             _groundForward = FlatForward(rotation);
-            transform.SetPositionAndRotation(position + _offset, rotation);
+            transform.SetPositionAndRotation(position + _offset, rotation * _shakeTurn);
         }
 
         private void PlaceChase(float pull, out Vector3 position, out Quaternion rotation)

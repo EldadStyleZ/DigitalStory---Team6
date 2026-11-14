@@ -30,6 +30,8 @@ namespace DigitalStory.Tests.EditMode
         private StingSong _song;
         private List<SongHit> _hits;
 
+        private int _wasps;
+
         private SlotState Strike => _forms.Slot(SongSlot.Strike);
 
         [SetUp]
@@ -55,6 +57,54 @@ namespace DigitalStory.Tests.EditMode
             }
 
             _assets.Clear();
+        }
+
+        // ---- The weakest attack ----
+
+        // The owner, 2026-11-14: "I want the Sting to be less effective than the other attacks." Measured against a
+        // standard group: three beekeepers in reach of every song, who outlive the cast. Whatever the swarm, one Sting cast
+        // deals less than one cast of any other attack, and less for each wasp it sends (its squad), while it stays the
+        // quickest to play. The count still spreads it over one sting for every 400 wasps; it no longer multiplies it.
+        [TestCase(400)]
+        [TestCase(800)]
+        [TestCase(1200)]
+        [TestCase(4000)]
+        public void Cast_DealsLessThanEveryOtherAttack_PerCastAndPerWaspSent(int wasps)
+        {
+            Build(wasps);
+            FakeSwarmTarget[] group = { Threat(2f, 0f), Threat(0f, 3f), Threat(-4f, 0f) };
+
+            Cast();
+            for (int step = 0; step < 200; step++)
+            {
+                _forms.Tick(0.05f, _hives);
+            }
+
+            float sting = 0f;
+            foreach (FakeSwarmTarget beekeeper in group)
+            {
+                sting += beekeeper.DamageTaken;
+            }
+
+            Assert.That(sting, Is.GreaterThan(0f), "the Sting hurt nobody");
+            float stingPerWasp = sting / (_song.Share * wasps);
+            foreach (SlotSongEffect other in OtherAttacks())
+            {
+                float cast = GroupDamage(other, group.Length);
+                Assert.Less(sting, cast, $"{other.Song.Title} deals {cast} to three, the Sting at {wasps} wasps {sting}");
+                float perWasp = cast / (other.Share * wasps);
+                Assert.Less(stingPerWasp, perWasp, $"for each wasp sent: {other.Song.Title} {perWasp}, the Sting {stingPerWasp}");
+            }
+        }
+
+        [Test]
+        public void Song_IsTheQuickestAttackToPlay()
+        {
+            foreach (SlotSongEffect other in OtherAttacks())
+            {
+                Assert.Less(_song.Song.CooldownSeconds, other.Song.CooldownSeconds, other.Song.Title);
+                Assert.LessOrEqual(_song.Song.Keys.Count, other.Song.Keys.Count, other.Song.Title);
+            }
         }
 
         // ---- How many ----
@@ -177,8 +227,25 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(only.DamageTaken, Is.EqualTo(3f * 2f * Pulse()).Within(1e-3f), "three stings, each on the arrival and the next squeeze");
         }
 
+        // The owner, 2026-11-14: the Sting is the weakest attack. More wasps send more stings, which share the cast's damage,
+        // so a lone beekeeper takes the same from a cast at 4,000 wasps as from one at 400.
+        [TestCase(400)]
+        [TestCase(1200)]
+        [TestCase(4000)]
+        public void Tick_MoreWaspsSpreadTheCastsDamage_NeverMultiplyIt(int wasps)
+        {
+            Build(wasps);
+            FakeSwarmTarget only = Threat(2f, 0f);
+            Cast();
+
+            _forms.Tick(_song.ArriveSeconds, _hives);
+            _forms.Tick(_song.SqueezeSeconds * 1.5f, _hives);
+
+            Assert.That(only.DamageTaken, Is.EqualTo(2f * _song.DamagePerSecond * _song.SqueezeSeconds).Within(1e-3f));
+        }
+
         [Test]
-        public void Tick_DamagePerStingGrowsWithTheLevel_NotWithTheCount()
+        public void Tick_TheCastsDamageGrowsWithTheLevel_SharedByItsStings()
         {
             Build(800);
             FakeSwarmTarget first = Threat(2f, 0f);
@@ -230,7 +297,7 @@ namespace DigitalStory.Tests.EditMode
             // It hurts on its arrival, for the time from there to the next squeeze, and then on the squeezes.
             float arrival = _song.ArriveSeconds + 0.1f + _song.ReaimSeconds;
             float nextSqueeze = _song.ArriveSeconds + (2f * _song.SqueezeSeconds);
-            Assert.That(third.DamageTaken, Is.EqualTo(_song.DamagePerSecond * (nextSqueeze - arrival)).Within(1e-3f));
+            Assert.That(third.DamageTaken, Is.EqualTo(StingDamagePerSecond() * (nextSqueeze - arrival)).Within(1e-3f));
         }
 
         [Test]
@@ -254,7 +321,7 @@ namespace DigitalStory.Tests.EditMode
         public void Tick_AStingWhoseOwnDamageKills_TakesTheNextThreatInTheSameStep()
         {
             FakeSwarmTarget weak = Threat(2f, 0f);
-            weak.DiesAfter = 5f;
+            weak.DiesAfter = Pulse() * 0.5f;
             Threat(0f, 3f);
             FakeSwarmTarget third = Threat(-4f, 0f);
             Cast();
@@ -475,6 +542,7 @@ namespace DigitalStory.Tests.EditMode
 
         private void Build(int wasps)
         {
+            _wasps = wasps;
             JsonUtility.FromJsonOverwrite(
                 "{\"<StartingCapacity>k__BackingField\":" + Mathf.Max(wasps, 1).ToString(CultureInfo.InvariantCulture)
                 + ",\"<StartingWasps>k__BackingField\":" + wasps.ToString(CultureInfo.InvariantCulture) + "}",
@@ -507,10 +575,42 @@ namespace DigitalStory.Tests.EditMode
                 Vector3.zero, null, _aim.Point, _body, _forms, _fury, _hives, _enemies, null, _aim, false, 1f, damageScale);
         }
 
-        // A whole pulse: one squeeze's damage at the level of the cast.
+        private SlotSongEffect[] OtherAttacks()
+        {
+            return new SlotSongEffect[] { Make<TornadoSong>(), Make<MeteorSong>(), Make<HydraSong>(), Make<ScytheSong>(), Make<LanceSong>() };
+        }
+
+        // What one cast of a big attack deals a group of `beekeepers` in its reach: each takes its one hit, and the Hydra bites
+        // one a head, with the heads of the first level.
+        private static float GroupDamage(SlotSongEffect song, int beekeepers)
+        {
+            switch (song)
+            {
+                case TornadoSong tornado:
+                    return tornado.Damage * beekeepers;
+                case MeteorSong meteor:
+                    return meteor.Damage * beekeepers;
+                case HydraSong hydra:
+                    return hydra.Damage * Mathf.Min(hydra.HeadCount(1), beekeepers);
+                case ScytheSong scythe:
+                    return scythe.Damage * beekeepers;
+                case LanceSong lance:
+                    return lance.Damage * beekeepers;
+                default:
+                    throw new System.ArgumentException(song.name);
+            }
+        }
+
+        // A whole pulse of one sting: one squeeze's damage at the level of the cast, its even part of the cast's.
         private float Pulse()
         {
-            return _song.DamagePerSecond * _song.SqueezeSeconds;
+            return StingDamagePerSecond() * _song.SqueezeSeconds;
+        }
+
+        // One sting's damage a second: the cast's, shared evenly by the stings the built swarm sends.
+        private float StingDamagePerSecond()
+        {
+            return _song.DamagePerSecond / _song.StingCount(_wasps);
         }
 
         // How many of the picture's squeezes (every SqueezeSeconds from the arrival, before the end) fall after `from` and

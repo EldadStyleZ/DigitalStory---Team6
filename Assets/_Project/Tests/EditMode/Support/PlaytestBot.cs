@@ -29,6 +29,11 @@ namespace DigitalStory.Tests.EditMode
         private const float FastestNoteSeconds = 0.09f;
         private const float SlowestNoteSeconds = 0.18f;
         private const float BoldestStandOffMetres = 6f;
+
+        // Plan section U: a nest's combo is read for this long once it shows, then played at this steady pace, slower than
+        // a song the player knows by heart.
+        private const float NestComboReadSeconds = 0.6f;
+        private const float NestComboNoteSeconds = 0.3f;
         private const float WariestStandOffMetres = 9f;
 
         // Running from a stick: how far ahead it aims, how much it bends sideways so it circles instead of running into the
@@ -104,7 +109,10 @@ namespace DigitalStory.Tests.EditMode
         private bool _callWave;
         private int _typingCount;
         private int _typingNext;
+        private float _typingGap;
         private float _nextNoteAt;
+        private int _comboNest = NestField.NoNest;
+        private float _comboReadAt;
         private float _nextSongAt;
         private int _lastCount;
         private int _knownCapacity;
@@ -117,6 +125,8 @@ namespace DigitalStory.Tests.EditMode
         // still to press, the move under way (from its start until it lands), the last move that landed, and when the kick
         // has cooled down.
         private int _giantHoles;
+        private bool _isRightHand;
+        private bool _isLeftHand;
         private float _nextGiantPressAt;
         private int _phraseHole = NoHole;
         private ColossusAttack _giantMove;
@@ -179,6 +189,7 @@ namespace DigitalStory.Tests.EditMode
             _session.Forms.Landed += OnSongLanded;
             _session.ColossusAttackStarted += OnColossusStarted;
             _session.ColossusAttackLanded += OnColossusLanded;
+            _session.ColossusFistLanded += OnColossusFistLanded;
         }
 
         /// <summary>The match being played.</summary>
@@ -202,6 +213,7 @@ namespace DigitalStory.Tests.EditMode
         /// <summary>How far from the beekeeper it attacks this player stands: inside the Sting's reach, near a stick's notice.</summary>
         public float StandOffMetres => _standOffMetres;
 
+
         /// <summary>
         /// Plays the match with <paramref name="plan"/> until it is won or lost, or <paramref name="maxSeconds"/> of game time
         /// have passed, and returns what it measured.
@@ -220,6 +232,8 @@ namespace DigitalStory.Tests.EditMode
                 _give = false;
                 _callWave = false;
                 _giantHoles = 0;
+                _isRightHand = false;
+                _isLeftHand = false;
                 plan.Decide(this);
                 TickOnce();
             }
@@ -283,6 +297,46 @@ namespace DigitalStory.Tests.EditMode
 
             _typingCount = keys.Count;
             _typingNext = 0;
+            _typingGap = _noteSeconds;
+            _nextNoteAt = Time;
+            return true;
+        }
+
+        /// <summary>
+        /// Plays the combo of the nest whose ring the core stands in (plan section U), as a person would: it reads the combo
+        /// first, then presses the notes still to play one at a steady pace. It waits for a song's notes under way to end.
+        /// Returns true while the core stands in a ring, reading or playing.
+        /// </summary>
+        public bool PlayNestCombo()
+        {
+            int active = _session.Nests.ActiveNest;
+            if (active != _comboNest)
+            {
+                _comboNest = active;
+                _comboReadAt = Time + NestComboReadSeconds;
+            }
+
+            if (active == NestField.NoNest)
+            {
+                return false;
+            }
+
+            if (IsTyping || Time < _comboReadAt || _session.IsColossusActive)
+            {
+                return true;
+            }
+
+            Nest nest = _session.Nests[active];
+            IReadOnlyList<int> combo = nest.Combo;
+            _typingCount = 0;
+            for (int index = nest.NotesPlayed; index < combo.Count; index++)
+            {
+                _typing[_typingCount] = combo[index];
+                _typingCount++;
+            }
+
+            _typingNext = 0;
+            _typingGap = NestComboNoteSeconds;
             _nextNoteAt = Time;
             return true;
         }
@@ -334,7 +388,10 @@ namespace DigitalStory.Tests.EditMode
         /// about to hit a hive, slams (L) when two or more are in the slam's reach, and leaps (L L) onto a pack beyond the
         /// slam where the leap would land: auto-aim's pick, as it plays from the keyboard. With two or more close while the
         /// slam cools down it spins (K K); otherwise it punches the beekeeper in front of it (J), three in a row, then kicks
-        /// (K). Does nothing while the giant does not stand or is in the air.
+        /// (K). It launches a hand (songs-v2 R), the right one first and the left while the right regrows, at a beekeeper
+        /// beyond the leap's range, hive under attack or not, as a player does at one too far to reach soon: the fist flies to
+        /// auto-aim's pick, the most threatening beekeeper within the fist's range. Does nothing while the giant does not
+        /// stand or is in the air.
         /// </summary>
         public void FightAsGiant()
         {
@@ -352,6 +409,8 @@ namespace DigitalStory.Tests.EditMode
 
                 return;
             }
+
+            LaunchHandAtFarTarget();
 
             BeekeeperBrain target = GiantTarget();
             if (target == null)
@@ -887,6 +946,34 @@ namespace DigitalStory.Tests.EditMode
             return true;
         }
 
+        // A hand launch when auto-aim's pick within the fist's range stands beyond the leap's range, whether or not a hive is
+        // under attack: a player throws a fist at a beekeeper too far to reach soon, the one swinging at a far hive included.
+        // At this player's pace and the same as a key press, so the giant's moves and its hands take turns as a player's
+        // fingers do; the right hand first, the left while the right one regrows.
+        private void LaunchHandAtFarTarget()
+        {
+            ColossusConfig giant = _match.Colossus;
+            float scale = _session.ColossusSizeScale;
+            bool isRightReady = _session.FistPhaseOf(ColossusHand.Right) == FistPhase.Ready;
+            bool isLeftReady = _session.FistPhaseOf(ColossusHand.Left) == FistPhase.Ready;
+            if ((!isRightReady && !isLeftReady) || Time < _nextGiantPressAt)
+            {
+                return;
+            }
+
+            // Beyond the leap's range, where neither a leap nor a walk reaches it soon: the fist's own work.
+            BeekeeperBrain aimed = MostThreatening(giant.FistRange * scale);
+            float far = giant.LeapRange * scale;
+            if (aimed == null || Flat(aimed.Position - _core).sqrMagnitude <= far * far)
+            {
+                return;
+            }
+
+            _isRightHand = isRightReady;
+            _isLeftHand = !isRightReady;
+            _nextGiantPressAt = Time + _noteSeconds;
+        }
+
         // How many living beekeepers within <paramref name="metres"/> of the giant are about to hit a standing hive.
         private int CountAboutToHitHive(float metres)
         {
@@ -961,7 +1048,7 @@ namespace DigitalStory.Tests.EditMode
             {
                 holes = HiveDefenseFrame.HoleBit(_typing[_typingNext]);
                 _typingNext++;
-                _nextNoteAt = Time + _noteSeconds;
+                _nextNoteAt = Time + _typingGap;
                 if (!IsTyping)
                 {
                     // Mostly quick, now and then slow: the square leans the hesitation toward 0.
@@ -998,7 +1085,7 @@ namespace DigitalStory.Tests.EditMode
             }
 
             var frame = new HiveDefenseFrame(
-                _core, _core, new Vector2(direction.x, direction.z), holes | _giantHoles, false, false, false, _give, _callWave);
+                _core, _core, new Vector2(direction.x, direction.z), holes | _giantHoles, _isRightHand, _isLeftHand, false, _give, _callWave);
             _session.Tick(in frame, Step);
             _core = _session.CorePosition;
             _ticks++;
@@ -1142,6 +1229,13 @@ namespace DigitalStory.Tests.EditMode
             _lastLanded = attack;
         }
 
+        // A fist's hit is the giant's damage, as its other blows are, and is also counted on its own.
+        private void OnColossusFistLanded(ColossusHand hand)
+        {
+            _run.FistDamage += MeasureDamage(_colossusSong, null);
+            _run.FistsLanded++;
+        }
+
         private void OnHiveHit(BeekeeperBrain brain, int hive)
         {
             SlotState post = _session.Forms.Slot(SongSlot.Post);
@@ -1159,9 +1253,10 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // Gives every beekeeper's health lost since it was last measured (only <paramref name="only"/>'s when given) to song
-        // number <paramref name="song"/>, or to nobody when it is -1.
-        private void MeasureDamage(int song, BeekeeperBrain only)
+        // number <paramref name="song"/>, or to nobody when it is -1, and returns how much that was.
+        private float MeasureDamage(int song, BeekeeperBrain only)
         {
+            float measured = 0f;
             for (int index = 0; index < _brains.Count; index++)
             {
                 BeekeeperBrain brain = _brains[index];
@@ -1172,6 +1267,7 @@ namespace DigitalStory.Tests.EditMode
                 }
 
                 _brainHealth[index] = brain.Health;
+                measured += lost;
                 if (song >= 0)
                 {
                     _run.DamageBySong[song] += lost;
@@ -1181,6 +1277,8 @@ namespace DigitalStory.Tests.EditMode
                     _run.UnattributedDamage += lost;
                 }
             }
+
+            return measured;
         }
 
         private PlaytestRun Finish()

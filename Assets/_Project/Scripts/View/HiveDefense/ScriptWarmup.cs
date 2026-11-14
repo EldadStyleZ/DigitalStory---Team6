@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace DigitalStory.View
 {
@@ -13,6 +12,11 @@ namespace DigitalStory.View
     /// the cast sound and the cast flash each switched off in turn making no difference (the benchmark's first-cast runs).
     /// Methods that cannot be compiled ahead (abstract ones, open generics) are left for their first call, as before.
     /// </summary>
+    /// <remarks>
+    /// Mono does not compile a method for RuntimeHelpers.PrepareMethod, which only checks its arguments there: 3,610 methods
+    /// took 0.1 ms in all, and the first Sting still paid for its code (plan section Q). Asking for a method's native code
+    /// with GetFunctionPointer makes Mono compile it, so the warm-up does that.
+    /// </remarks>
     public sealed class ScriptWarmup
     {
         private const BindingFlags Declared =
@@ -60,6 +64,9 @@ namespace DigitalStory.View
         /// <summary>True once every method has been compiled.</summary>
         public bool IsDone => _next >= _methods.Count;
 
+        /// <summary>Milliseconds spent compiling so far, over every frame, so a test can tell real compiling from none.</summary>
+        public double SpentMilliseconds { get; private set; }
+
         /// <summary>
         /// Compiles methods until this frame's budget, in milliseconds, is spent, or none is left. Allocates nothing of its
         /// own; a method already compiled costs almost nothing, so a restart's warm-up ends at once.
@@ -78,7 +85,7 @@ namespace DigitalStory.View
                 _next++;
                 try
                 {
-                    RuntimeHelpers.PrepareMethod(method);
+                    method.GetFunctionPointer();
                 }
                 catch (Exception)
                 {
@@ -88,6 +95,8 @@ namespace DigitalStory.View
                 }
             }
             while (!IsDone && _clock.Elapsed.TotalMilliseconds < budgetMilliseconds);
+
+            SpentMilliseconds += _clock.Elapsed.TotalMilliseconds;
         }
 
         private void Collect(Type type)

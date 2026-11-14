@@ -7,10 +7,11 @@ namespace DigitalStory.View
 {
     /// <summary>
     /// The HUD's giant strip (plan section I). While the Colossus stands it shows a ring of the seconds left, which glows for a
-    /// moment when a kill adds time, and two small marks for the slam's and the roar's cooldowns. Each time the giant forms, a
-    /// line names its moves for a few seconds and then fades, with a smaller line of its two phrases the first times only.
-    /// Hidden otherwise. No song can be cast while the giant stands, so the songbook steps aside then and leaves the right of
-    /// the chase view to what the giant fights.
+    /// moment when a kill adds time, and small marks for the slam's, the roar's and each hand's cooldown (songs-v2 R). Each time
+    /// the giant forms, a line names its moves and a second its two hand launches for a few seconds and then fade, with a smaller
+    /// line of its two phrases the first times only. The hands are named by the device in use: RT and LT on a controller, the
+    /// mouse buttons and keys otherwise. Hidden otherwise. No song can be cast while the giant stands, so the songbook steps
+    /// aside then and the strip takes its corner, and the lines at the bottom move to the left corner, clear of the giant.
     /// </summary>
     /// <remarks>Lives on the same GameObject as the HUD's UIDocument. The HUD view adds it and calls Initialize.</remarks>
     [DisallowMultipleComponent]
@@ -21,6 +22,7 @@ namespace DigitalStory.View
         private const string LineShownClass = "giant-line--shown";
         private const string ReadyClass = "giant-mark--ready";
         private const string SongbookHiddenClass = "songbook--hidden";
+        private const string BottomGiantClass = "bottom--giant";
         private const float PercentScale = 100f;
         private const float FullTurnDegrees = 360f;
         private const float TopDegrees = -90f;
@@ -34,6 +36,15 @@ namespace DigitalStory.View
 
         [SerializeField, Tooltip("The second, smaller line: the two phrases. Shown only the first times the giant forms in a match.")]
         private string _phrasesText = "K K spin kick · L L leap";
+
+        [SerializeField, Tooltip("The line of the two hand launches, as the keyboard and mouse play them. A controller player reads RT and LT for the keys.")]
+        private string _handsText = "Right click or Space: right fist · Left click or Shift: left fist";
+
+        [SerializeField, Tooltip("The right hand's cooldown mark, as the mouse plays it. A controller player reads RT.")]
+        private string _rightMarkText = "RMB fist";
+
+        [SerializeField, Tooltip("The left hand's cooldown mark, as the mouse plays it. A controller player reads LT.")]
+        private string _leftMarkText = "LMB fist";
 
         [SerializeField, Min(0.5f), Tooltip("Seconds the lines stay before they fade.")]
         private float _lineSeconds = 6f;
@@ -63,6 +74,12 @@ namespace DigitalStory.View
         private Label _secondsLabel;
         private VisualElement _slamFill;
         private VisualElement _roarFill;
+        private VisualElement _rightFill;
+        private VisualElement _leftFill;
+        private Label _rightLabel;
+        private Label _leftLabel;
+        private Label _handsLine;
+        private VisualElement _bottom;
         private Label _movesLine;
         private Label _phrasesLine;
         private VisualElement _songbook;
@@ -77,6 +94,8 @@ namespace DigitalStory.View
         private int _shownRing = -1;
         private int _shownSlam = -1;
         private int _shownRoar = -1;
+        private int _shownRight = -1;
+        private int _shownLeft = -1;
         private ControlDevice _device;
 
         /// <summary>True while the strip shows, for tests and debugging.</summary>
@@ -87,6 +106,18 @@ namespace DigitalStory.View
 
         /// <summary>True while the phrases' line shows with the moves' line, for tests and debugging.</summary>
         public bool IsPhrasesHintShowing => _phrasesLine != null && _phrasesLine.ClassListContains(LineShownClass);
+
+        /// <summary>True while the line of the hand launches shows with the moves' line, for tests and debugging.</summary>
+        public bool IsHandsHintShowing => _handsLine != null && _handsLine.ClassListContains(LineShownClass);
+
+        /// <summary>The line of the hand launches as it reads now, for tests.</summary>
+        public string HandsText => _handsLine != null ? _handsLine.text : string.Empty;
+
+        /// <summary>The right hand's mark as it reads now, for tests.</summary>
+        public string RightMarkText => _rightLabel != null ? _rightLabel.text : string.Empty;
+
+        /// <summary>True while the lines at the bottom stand in their corner because the giant stands, for tests.</summary>
+        public bool IsBottomMoved => _bottom != null && _bottom.ClassListContains(BottomGiantClass);
 
         /// <summary>True while the songbook is hidden because the giant stands, for tests and debugging.</summary>
         public bool IsSongbookHidden => _songbook != null && _songbook.ClassListContains(SongbookHiddenClass);
@@ -101,7 +132,8 @@ namespace DigitalStory.View
         {
             _isReady = false;
             _session = session ?? throw new ArgumentNullException(nameof(session));
-            if (string.IsNullOrWhiteSpace(_movesText) || string.IsNullOrWhiteSpace(_phrasesText))
+            if (string.IsNullOrWhiteSpace(_movesText) || string.IsNullOrWhiteSpace(_phrasesText) || string.IsNullOrWhiteSpace(_handsText)
+                || string.IsNullOrWhiteSpace(_rightMarkText) || string.IsNullOrWhiteSpace(_leftMarkText))
             {
                 throw new InvalidOperationException($"{name}: the giant's lines are empty. Set them on the GiantHudView.");
             }
@@ -119,11 +151,16 @@ namespace DigitalStory.View
             _secondsLabel = Require<Label>(root, "giant-seconds");
             _slamFill = Require<VisualElement>(root, "giant-slam-fill");
             _roarFill = Require<VisualElement>(root, "giant-roar-fill");
+            _rightFill = Require<VisualElement>(root, "giant-right-fill");
+            _leftFill = Require<VisualElement>(root, "giant-left-fill");
+            _rightLabel = Require<Label>(root, "giant-right-label");
+            _leftLabel = Require<Label>(root, "giant-left-label");
             _movesLine = Require<Label>(root, "giant-moves-line");
+            _handsLine = Require<Label>(root, "giant-hands-line");
             _phrasesLine = Require<Label>(root, "giant-phrases-line");
             _songbook = Require<VisualElement>(root, "songbook");
-            ControlSymbols.ShowPrompt(_movesLine, _movesText, _device);
-            ControlSymbols.ShowPrompt(_phrasesLine, _phrasesText, _device);
+            _bottom = Require<VisualElement>(root, "bottom");
+            NameControls();
             _ring.generateVisualContent += DrawRing;
 
             _isShowing = false;
@@ -137,10 +174,14 @@ namespace DigitalStory.View
             _shownRing = -1;
             _shownSlam = -1;
             _shownRoar = -1;
+            _shownRight = -1;
+            _shownLeft = -1;
             _strip.RemoveFromClassList(ShownClass);
             _movesLine.RemoveFromClassList(LineShownClass);
+            _handsLine.RemoveFromClassList(LineShownClass);
             _phrasesLine.RemoveFromClassList(LineShownClass);
             _songbook.RemoveFromClassList(SongbookHiddenClass);
+            _bottom.RemoveFromClassList(BottomGiantClass);
             _isReady = true;
         }
 
@@ -150,9 +191,17 @@ namespace DigitalStory.View
             _device = device;
             if (_movesLine != null)
             {
-                ControlSymbols.ShowPrompt(_movesLine, _movesText, device);
-                ControlSymbols.ShowPrompt(_phrasesLine, _phrasesText, device);
+                NameControls();
             }
+        }
+
+        private void NameControls()
+        {
+            ControlSymbols.ShowPrompt(_movesLine, _movesText, _device);
+            ControlSymbols.ShowPrompt(_handsLine, _handsText, _device);
+            ControlSymbols.ShowPrompt(_phrasesLine, _phrasesText, _device);
+            ControlSymbols.ShowPrompt(_rightLabel, _rightMarkText, _device);
+            ControlSymbols.ShowPrompt(_leftLabel, _leftMarkText, _device);
         }
 
         private void Update()
@@ -208,10 +257,14 @@ namespace DigitalStory.View
             _shownRing = -1;
             _shownSlam = -1;
             _shownRoar = -1;
+            _shownRight = -1;
+            _shownLeft = -1;
             _strip.AddToClassList(ShownClass);
             _movesLine.AddToClassList(LineShownClass);
+            _handsLine.AddToClassList(LineShownClass);
             _phrasesLine.EnableInClassList(LineShownClass, _formations <= _phraseFormations);
             _songbook.AddToClassList(SongbookHiddenClass);
+            _bottom.AddToClassList(BottomGiantClass);
         }
 
         private void Hide()
@@ -220,8 +273,10 @@ namespace DigitalStory.View
             _lineLeft = 0f;
             _strip.RemoveFromClassList(ShownClass);
             _movesLine.RemoveFromClassList(LineShownClass);
+            _handsLine.RemoveFromClassList(LineShownClass);
             _phrasesLine.RemoveFromClassList(LineShownClass);
             _songbook.RemoveFromClassList(SongbookHiddenClass);
+            _bottom.RemoveFromClassList(BottomGiantClass);
         }
 
         // The ring is the share of the giant's whole time still left. A kill that adds seconds makes it glow for a moment.
@@ -297,6 +352,8 @@ namespace DigitalStory.View
         {
             ShowMark(_slamFill, _session.SlamCooldown01, ref _shownSlam);
             ShowMark(_roarFill, _session.RoarCooldown01, ref _shownRoar);
+            ShowMark(_rightFill, _session.FistCooldown01(ColossusHand.Right), ref _shownRight);
+            ShowMark(_leftFill, _session.FistCooldown01(ColossusHand.Left), ref _shownLeft);
         }
 
         private static void ShowMark(VisualElement fill, float cooldown01, ref int shown)
@@ -324,6 +381,7 @@ namespace DigitalStory.View
             {
                 // The style sheet's transition fades them out.
                 _movesLine.RemoveFromClassList(LineShownClass);
+                _handsLine.RemoveFromClassList(LineShownClass);
                 _phrasesLine.RemoveFromClassList(LineShownClass);
             }
         }

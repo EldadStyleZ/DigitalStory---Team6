@@ -18,12 +18,11 @@ namespace DigitalStory.Tests.EditMode
         // As EconomyPlaytestTests: a match neither won nor lost by then has stalled.
         private const float MatchSeconds = 20f * 60f;
 
-        // PlaytestMatch's hives: west at x = -12.5 and east at x = 12.5, the core between them.
+        // PlaytestMatch's hives stand wherever the seed's map puts them, at least 18 m apart (plan section T), so a spot 4 m
+        // from one hive toward the other is nearer that one. The names are the old fixed map's.
         private const int West = 0;
         private const int East = 1;
-
-        private static readonly Vector3 NearWest = new Vector3(-6f, 0f, 0f);
-        private static readonly Vector3 NearEast = new Vector3(6f, 0f, 0f);
+        private const float NearMetres = 4f;
 
         [Test]
         public void ShellHive_OneHiveHitASecondAgoAndTheOtherNeverHit_IsTheHitHive()
@@ -33,7 +32,7 @@ namespace DigitalStory.Tests.EditMode
                 var bot = new PlaytestBot(match, Seed);
                 float westHealth = match.Session.Hives[West].Health;
 
-                bot.Play(new HitOncePlan(NearWest, East, 1f), 2f);
+                bot.Play(new HitOncePlan(Near(match, West), East, 1f), 2f);
 
                 Assert.That(match.Session.Hives[West].Health, Is.EqualTo(westHealth), "the west hive was never hit");
                 Assert.That(bot.ShellHive(), Is.EqualTo(East), "the hive hit within the last 3 s, though the core stands nearer the other");
@@ -47,9 +46,13 @@ namespace DigitalStory.Tests.EditMode
             {
                 var bot = new PlaytestBot(match, Seed);
 
-                bot.Play(new HitOncePlan(NearEast, -1, 0f), 2f);
+                bot.Play(new HitOncePlan(Near(match, East), -1, 0f), 2f);
 
-                Assert.That(bot.Core.x, Is.GreaterThan(0f), "the core stands nearer the east hive");
+                Vector3 core = bot.Core;
+                Assert.That(
+                    (core - match.Session.Hives[East].Position).sqrMagnitude,
+                    Is.LessThan((core - match.Session.Hives[West].Position).sqrMagnitude),
+                    "the core stands nearer the east hive");
                 Assert.That(bot.ShellHive(), Is.EqualTo(East));
             }
         }
@@ -61,34 +64,66 @@ namespace DigitalStory.Tests.EditMode
             {
                 var bot = new PlaytestBot(match, Seed);
 
-                bot.Play(new HitOncePlan(NearWest, East, 0.5f), 0.5f + match.Aim.HiveRecentSeconds + 1f);
+                bot.Play(new HitOncePlan(Near(match, West), East, 0.5f), 0.5f + match.Aim.HiveRecentSeconds + 1f);
 
                 Assert.That(bot.ShellHive(), Is.EqualTo(West));
             }
         }
 
-        // Plan section I: over a whole match without nests the bot, pressing the giant's keys, roars, punches, kicks and
-        // slams, and plays both phrases, the spin kick and the leap slam.
+        // Plan section I: over whole matches the bot, pressing the giant's keys, roars, punches, kicks and slams, and plays
+        // both phrases, the spin kick and the leap slam. Since songs-v2 V Fury fills at 1 point per 11.5 damage, so a match
+        // without nests stands the giant about twice, and with nests the giant fells most beekeepers before a third punch; so
+        // the moves are gathered over five matches without nests and three with them.
         [Test]
         public void FightAsGiant_OverAMatch_UsesEveryMoveAndBothPhrases()
         {
+            var started = new HashSet<ColossusAttack>();
+            for (uint seed = Seed; seed < Seed + 8; seed++)
+            {
+                using (var match = new PlaytestMatch(seed))
+                {
+                    match.Session.ColossusAttackStarted += attack => started.Add(attack);
+                    IPlaytestPlan plan = seed < Seed + 5 ? new MixedPlan() : (IPlaytestPlan)new MixedWithNestsPlan();
+                    new PlaytestBot(match, seed).Play(plan, MatchSeconds);
+                }
+            }
+
+            var moves = new[]
+            {
+                ColossusAttack.Roar, ColossusAttack.Punch, ColossusAttack.Kick, ColossusAttack.Slam, ColossusAttack.SpinKick,
+                ColossusAttack.LeapSlam,
+            };
+            Assert.That(started, Is.SupersetOf(moves));
+        }
+
+        // Songs-v2 R: as a player at a beekeeper too far to reach soon, the bot launches the giant's hands, both of them, and
+        // the fists hit.
+        [Test]
+        public void FightAsGiant_OverAMatch_LaunchesItsHandsAtFarBeekeepers()
+        {
             using (var match = new PlaytestMatch(Seed))
             {
-                var started = new HashSet<ColossusAttack>();
-                match.Session.ColossusAttackStarted += attack => started.Add(attack);
+                var thrown = new List<ColossusHand>();
+                int landed = 0;
+                match.Session.ColossusFistThrown += thrown.Add;
+                match.Session.ColossusFistLanded += _ => landed++;
 
                 new PlaytestBot(match, Seed).Play(new MixedPlan(), MatchSeconds);
 
-                var moves = new[]
-                {
-                    ColossusAttack.Roar, ColossusAttack.Punch, ColossusAttack.Kick, ColossusAttack.Slam, ColossusAttack.SpinKick,
-                    ColossusAttack.LeapSlam,
-                };
-                Assert.That(started, Is.SupersetOf(moves));
+                Assert.That(thrown, Does.Contain(ColossusHand.Right));
+                Assert.That(thrown, Does.Contain(ColossusHand.Left), "a player uses both hands, the other while one regrows");
+                Assert.That(landed, Is.GreaterThan(0));
             }
         }
 
         // Flies the core toward a point, and hits one hive once, by a point of health, at the first tick from a given time.
+        private static Vector3 Near(PlaytestMatch match, int hive)
+        {
+            Vector3 own = match.Session.Hives[hive].Position;
+            Vector3 other = match.Session.Hives[1 - hive].Position;
+            return own + ((other - own).normalized * NearMetres);
+        }
+
         private sealed class HitOncePlan : IPlaytestPlan
         {
             private readonly Vector3 _standAt;

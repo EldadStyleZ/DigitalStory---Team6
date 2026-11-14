@@ -22,4 +22,4 @@ MonoBehaviour:
   <CollectRadius>k__BackingField: 3
   <CollectPerSecond>k__BackingField: 150
   <HealWaspsPerSecond>k__BackingField: 60
-  <WaspsPerHealthPoint>k__BackingField: 3
+  <WaspsPerHealthPoint>k__BackingField: 4

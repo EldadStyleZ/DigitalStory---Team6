@@ -37,9 +37,12 @@ namespace DigitalStory.View
 
         // Written by the main thread and read by the audio thread.
         private volatile int _requestedHole = Silent;
+        private volatile float _requestedLift;
 
         // Everything below belongs to the audio thread.
         private int _hole = Silent;
+        private float _lift;
+        private float _liftRatio = 1f;
         private float _targetHertz;
         private float _hertz;
         private float _gain;
@@ -90,6 +93,12 @@ namespace DigitalStory.View
         /// <summary>Sounds a hole, or fades out with <see cref="Silent"/>.</summary>
         public void Play(int hole) => _requestedHole = hole;
 
+        /// <summary>
+        /// Raises every note by <paramref name="semitones"/> until it is set again, gliding there from the pitch now
+        /// sounding. 0 plays the holes' own pitches.
+        /// </summary>
+        public void Lift(float semitones) => _requestedLift = semitones;
+
         /// <summary>Writes the next samples over a buffer.</summary>
         /// <param name="buffer">Samples, with each channel next to the others.</param>
         /// <param name="channels">How many channels the buffer holds.</param>
@@ -116,9 +125,21 @@ namespace DigitalStory.View
         private void FollowTheRequest()
         {
             int requested = _requestedHole;
+            float lift = _requestedLift;
+            bool isNewLift = lift != _lift;
+            if (isNewLift)
+            {
+                _lift = lift;
+                _liftRatio = (float)Math.Pow(2d, lift / 12d);
+            }
 
             if (requested == _hole)
             {
+                if (isNewLift && _hole != Silent)
+                {
+                    _targetHertz = _holeHertz[_hole] * _liftRatio;
+                }
+
                 return;
             }
 
@@ -129,7 +150,7 @@ namespace DigitalStory.View
                 return;
             }
 
-            _targetHertz = _holeHertz[requested];
+            _targetHertz = _holeHertz[requested] * _liftRatio;
             _noteStartLeft = _noteStartSamples;
 
             // Starting from silence, a slide up from the last note would sound like a mistake.

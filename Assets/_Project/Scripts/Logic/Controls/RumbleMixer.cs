@@ -17,10 +17,10 @@ namespace DigitalStory.Logic
         private readonly float[] _high = new float[Capacity];
         private readonly float[] _secondsLeft = new float[Capacity];
 
-        /// <summary>Starts a pulse. A pulse with no speed or no length is ignored.</summary>
+        /// <summary>Starts a pulse. A pulse with no speed or no length is ignored, and so is every pulse while closed.</summary>
         public void Add(in RumblePulse pulse)
         {
-            if (!(pulse.Seconds > 0f) || (!(pulse.Low > 0f) && !(pulse.High > 0f)))
+            if (IsClosed || !(pulse.Seconds > 0f) || (!(pulse.Low > 0f) && !(pulse.High > 0f)))
             {
                 return;
             }
@@ -62,6 +62,24 @@ namespace DigitalStory.Logic
             }
 
             return new MotorSpeeds(low, high);
+        }
+
+        /// <summary>True after <see cref="Close"/>: no new pulse starts, and those already running play out.</summary>
+        public bool IsClosed { get; private set; }
+
+        /// <summary>
+        /// Lets the pulses already running play out and refuses every new one, as when the match ends on the tick its last pulse
+        /// started (the long rumble of the last hive falling). <see cref="Open"/> takes pulses again.
+        /// </summary>
+        public void Close()
+        {
+            IsClosed = true;
+        }
+
+        /// <summary>Takes new pulses again after <see cref="Close"/>.</summary>
+        public void Open()
+        {
+            IsClosed = false;
         }
 
         /// <summary>Stops every pulse at once, so the next tick is still.</summary>
