@@ -26,8 +26,33 @@ namespace DigitalStory.Editor
                 ("SpawnLeastSpacing", 20f),
                 ("NestInsideHalfSize", 90f),
                 ("NestLeastSpacing", 12f),
-                ("SceneryInnerHalfSize", 30f));
+                ("SceneryInnerHalfSize", 12f),
+                ("SceneryFootprintShare", 1f),
+                ("SceneryLeastSpacing", 3f));
             Set<NestConfig>(("LaterNestsNearest", 20f), ("LaterNestsFarthest", 85f));
+
+            // Raz's swarm: the looser, organic springs and the longer body of his own commit.
+            Set<SwarmConfig>(
+                ("RiverSpring", 40f),
+                ("RiverDamping", 0.6f),
+                ("WobbleDamping", 0.3f),
+                ("RiverLengthMeters", 11f),
+                ("StandBlendSeconds", 0.75f));
+
+            // Grass well past the arena's edge.
+            foreach (MonoBehaviour field in Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (field == null || field.GetType().Name != "GrassField")
+                {
+                    continue;
+                }
+
+                var grass = new SerializedObject(field);
+                grass.FindProperty("_coverHalfSize").floatValue = 200f;
+                grass.ApplyModifiedProperties();
+                field.SendMessage("MarkDirty", SendMessageOptions.DontRequireReceiver);
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(field.gameObject.scene);
+            }
             AssetDatabase.SaveAssets();
             Debug.Log("The random map now opens to 100 m from the middle.");
         }

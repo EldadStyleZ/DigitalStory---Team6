@@ -1012,6 +1012,9 @@ float EightCrossingHeat(float3 goal)
 float3 RiverPoint(WaspStatic wasp, float flowLane, float back, out float2 flow)
 {
     float crowd = smoothstep(CrowdFrom, CrowdFull, (float)_ActiveCount);
+    // The wasps still flow head to tail at one pace, but they slow through the belly, so more of them are in it at once.
+    float bellyPhase = FullTurn * RiverBellyAt;
+    flowLane = saturate(flowLane - RiverBellyCrowd * (sin(FullTurn * flowLane - bellyPhase) + sin(bellyPhase)) / FullTurn);
     float trailLength = TrailLength() + _TrailLead;
     float span = max(min(_RiverLength * lerp(1.0, CrowdLength, crowd), trailLength), RiverHeadGap) - RiverHeadGap;
     float lanePlace = RiverHeadGap + span * flowLane;

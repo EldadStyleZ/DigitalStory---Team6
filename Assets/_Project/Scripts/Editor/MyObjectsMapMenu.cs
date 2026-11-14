@@ -16,7 +16,7 @@ namespace DigitalStory.Editor
     {
         private const string ModelFolder = "Assets/_Project/Art/prefabs/";
         private const string KitFolder = "Assets/_Project/Art/Generated/Prefabs/";
-        private const int Count = 90;
+        private const int Count = 160;
         private const float BlockerLeastHeight = 2f;
 
         // Name, height in metres, and how often it is picked.

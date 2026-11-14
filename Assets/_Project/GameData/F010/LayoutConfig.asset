@@ -32,9 +32,9 @@ MonoBehaviour:
   <FirstNestsNarrowestBearing>k__BackingField: 15
   <FirstNestsWidestBearing>k__BackingField: 40
   <LaterNestJitterDegrees>k__BackingField: 10
-  <SceneryInnerHalfSize>k__BackingField: 30
-  <SceneryLeastSpacing>k__BackingField: 2
-  <SceneryFootprintShare>k__BackingField: 0.5
+  <SceneryInnerHalfSize>k__BackingField: 12
+  <SceneryLeastSpacing>k__BackingField: 3
+  <SceneryFootprintShare>k__BackingField: 1
   <SceneryHiveClearance>k__BackingField: 6
   <SceneryNestClearance>k__BackingField: 3
   <ScenerySpawnClearance>k__BackingField: 4
