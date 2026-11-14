@@ -264,12 +264,12 @@ static const float RiverBellyCrowd = 0.7;        // 0 spreads the wasps evenly a
                                                  // belly, so it is the densest part and the head and tail thin out
 // A big swarm reads as a snake if it only gets longer, so as it grows it gets shorter, much fatter and looser instead:
 // a rounded cloud of wasps with a short tail, each wasp drifting round its place on its own.
-static const float CrowdFrom = 300.0;            // wasps at which the swarm starts to bunch up
-static const float CrowdFull = 1800.0;           // wasps at which it is fully a cloud
-static const float CrowdLength = 0.55;           // share of the river's length left at full crowd
-static const float CrowdRadius = 2.6;            // times the river's radius at full crowd
-static const float CrowdEnds = 0.55;             // how far the thin head and tail fill out toward the belly at full crowd
-static const float CrowdScatter = 1.1;           // metres each wasp wanders round its place at full crowd
+static const float CrowdFrom = 0.0;             // wasps at which the swarm starts to bunch up
+static const float CrowdFull = 700.0;            // wasps at which it is fully a cloud
+static const float CrowdLength = 0.4;            // share of the river's length left at full crowd
+static const float CrowdRadius = 3.0;            // times the river's radius at full crowd
+static const float CrowdEnds = 0.85;             // how far the thin head and tail fill out toward the belly at full crowd
+static const float CrowdScatter = 1.6;           // metres each wasp wanders round its place at full crowd
 static const float CrowdLift = 1.4;             // metres the fat cloud rises, so its lower half stays above the grass
 static const float CrowdScatterSpeed = 0.9;      // how fast that wander turns
 static const float RiverHeadGap = 0.5;           // metres behind the core where the river starts, so its head shows where
@@ -1011,7 +1011,8 @@ float EightCrossingHeat(float3 goal)
 // never lays it back along the way the core came. The ribbon thins toward its tail (_TailWidth).
 float3 RiverPoint(WaspStatic wasp, float flowLane, float back, out float2 flow)
 {
-    float crowd = smoothstep(CrowdFrom, CrowdFull, (float)_ActiveCount);
+    // Even a small swarm is already partly a cloud, so it never reads as a snake.
+    float crowd = max(smoothstep(CrowdFrom, CrowdFull, (float)_ActiveCount), 0.45);
     // The wasps still flow head to tail at one pace, but they slow through the belly, so more of them are in it at once.
     float bellyPhase = FullTurn * RiverBellyAt;
     flowLane = saturate(flowLane - RiverBellyCrowd * (sin(FullTurn * flowLane - bellyPhase) + sin(bellyPhase)) / FullTurn);
@@ -1039,7 +1040,8 @@ float3 RiverPoint(WaspStatic wasp, float flowLane, float back, out float2 flow)
     float angle = wasp.ringAngle + _SimTime * RiverSwirl * (1.0 + RiverBellySwirl * belly);
     float packed = lerp(wasp.ringRadius, wasp.ringRadius * wasp.ringRadius, RiverBellyPack * belly);
     float radius = packed * _RiverRadius * lerp(1.0, CrowdRadius, crowd) * width * bulge * breath;
-    float meander = _MeanderAmplitude * sin(lanePlace * MeanderWaveNumber - _SimTime * MeanderSpeed);
+    // A cloud does not slither: the side-to-side sway fades as the swarm bunches up.
+    float meander = _MeanderAmplitude * (1.0 - 0.85 * crowd) * sin(lanePlace * MeanderWaveNumber - _SimTime * MeanderSpeed);
     float3 river = center + Up * (FlyHeight + sin(angle) * radius * CrossSectionHeight) + side * (cos(angle) * radius + meander);
     float wander = _SimTime * CrowdScatterSpeed * (0.6 + wasp.phase01) + wasp.seed * 40.0;
     float3 scatter = float3(sin(wander), 0.5 * sin(wander * 1.37 + 2.0), cos(wander * 0.83 + wasp.squad * FullTurn));

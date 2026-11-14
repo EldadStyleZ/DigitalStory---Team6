@@ -22,7 +22,7 @@ namespace DigitalStory.GrassBrush.Editor
         private const float PathHalfWidth = 4.5f;
         private const float ForestFrom = 86f;
         private const float ForestSpacing = 7.5f;
-        private const float MapEdge = 116f;
+        private const float MapEdge = 135f;
 
         private static readonly List<(Vector2 Point, float Radius)> Placed = new List<(Vector2, float)>();
         private static readonly List<Vector2> Spots = new List<Vector2>();
@@ -207,7 +207,7 @@ namespace DigitalStory.GrassBrush.Editor
 
         // ---- The clearing ----
 
-        private const float ClearingRadius = 104f;
+        private const float ClearingRadius = 106f;
         private static float _clearingPhase;
 
         // The clearing's edge wanders in and out, so it reads as grown rather than drawn.
@@ -382,7 +382,8 @@ namespace DigitalStory.GrassBrush.Editor
             {
                 Vector2 dir = Dir(angle + Jitter(0.8f));
                 float rim = ClearingAt(dir * 100f);
-                Vector2 point = dir * (rim + Mathf.Lerp(-1.5f, 5f, Chance()));
+                // The play area is a square, so the rim follows the square: a wall of wood on every side.
+                Vector2 point = dir * ((rim + Mathf.Lerp(-1.5f, 5f, Chance())) / Mathf.Max(Mathf.Abs(dir.x), Mathf.Abs(dir.y)));
                 float pick = Chance();
                 string kind = pick < 0.3f ? "Bush_Round" : pick < 0.5f ? "Bush_Cone" : pick < 0.7f ? "Kit_Fern" : pick < 0.78f ? "Kit_Stump" : pick < 0.86f ? "Kit_Log" : pick < 0.93f ? "Kit_Rock_B" : "Tree_Dead";
                 if (Put(parent, kind, point, RandomYaw(), Mathf.Lerp(0.8f, 1.3f, Chance())))
@@ -398,13 +399,13 @@ namespace DigitalStory.GrassBrush.Editor
         private static int Woods(Transform parent)
         {
             int count = 0;
-            const float Spacing = 5.5f;
+            const float Spacing = 4.5f;
             for (float x = -_edge; x <= _edge; x += Spacing)
             {
                 for (float z = -_edge; z <= _edge; z += Spacing)
                 {
                     var point = new Vector2(x, z) + (Jitter2() * (Spacing * 0.45f));
-                    float into = point.magnitude - ClearingAt(point);
+                    float into = Mathf.Max(Mathf.Abs(point.x), Mathf.Abs(point.y)) - ClearingAt(point);
                     if (into < 3f || Chance() > Mathf.Lerp(0.55f, 0.95f, Mathf.InverseLerp(3f, 15f, into)))
                     {
                         continue;
