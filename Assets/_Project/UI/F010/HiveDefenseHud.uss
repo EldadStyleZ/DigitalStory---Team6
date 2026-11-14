@@ -923,3 +923,82 @@
 .songbook--hidden {
     display: none;
 }
+
+/* The settings panel (SettingsPanelView.cs, plan section AC): Esc or the controller's Select opens it over everything and
+   pauses the match. Three volume rows; the chosen row wears a gold ring. It takes the mouse, so a slider can be dragged. */
+.settings-panel {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--overlay);
+    align-items: center;
+    justify-content: center;
+    display: none;
+}
+
+.settings-panel--shown {
+    display: flex;
+}
+
+.settings-card {
+    width: 460px;
+    max-width: 92%;
+    padding: 18px 24px;
+    background-color: rgba(18, 20, 34, 0.92);
+    border-radius: 12px;
+    border-width: 3px;
+    border-color: var(--gold);
+}
+
+.settings-title {
+    font-size: 26px;
+    -unity-font-style: bold;
+    color: var(--gold);
+    -unity-text-align: middle-center;
+    margin-bottom: 10px;
+    padding: 0;
+}
+
+.settings-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 10px;
+    margin: 3px 0;
+    border-radius: 8px;
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+}
+
+.settings-row--focused {
+    border-color: var(--gold);
+    background-color: var(--track);
+}
+
+.settings-name {
+    width: 84px;
+    font-size: 16px;
+    padding: 0;
+}
+
+.settings-slider {
+    flex-grow: 1;
+    margin: 0 10px;
+}
+
+.settings-percent {
+    width: 54px;
+    font-size: 16px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    padding: 0;
+}
+
+.settings-hint {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--caption);
+    -unity-text-align: middle-center;
+    white-space: normal;
+}

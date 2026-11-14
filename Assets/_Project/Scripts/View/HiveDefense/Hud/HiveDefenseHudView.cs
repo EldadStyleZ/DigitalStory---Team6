@@ -27,6 +27,9 @@ namespace DigitalStory.View
         private const int HoleColours = 6;
         private const float BarScale = 1000f;
 
+        // Seconds a short notice ('Voice: Kalimba') stays on the message line.
+        private const float NoticeSeconds = 1.5f;
+
         [SerializeField, Tooltip("The swarm's look: the category colours.")]
         private SwarmConfig _swarmConfig;
 
@@ -116,6 +119,8 @@ namespace DigitalStory.View
         private Label _domeLine;
         private DamageNumbersView _damageNumbers;
         private HitSoundView _hitSound;
+        private VisualElement _uiRoot;
+        private SettingsPanelView _settings;
         private int _shownReturnSeconds = -1;
         private bool _isDomeLineShown;
         private int _colossusSong = -1;
@@ -156,6 +161,7 @@ namespace DigitalStory.View
             VisualElement root = GetComponent<UIDocument>().rootVisualElement
                 ?? throw new InvalidOperationException("The UIDocument has no Visual Tree Asset. Set HiveDefenseHud.uxml.");
 
+            _uiRoot = root;
             _waspCount = Require<Label>(root, "wasp-count");
             _waspFill = Require<VisualElement>(root, "wasp-fill");
             if (_swarmConfig == null)
@@ -262,6 +268,25 @@ namespace DigitalStory.View
             _hives.ShowControls(device);
             _endScreen.ShowControls(device);
             _giantHud.ShowControls(device);
+            _settings?.ShowControls(device);
+        }
+
+        /// <summary>
+        /// Builds the settings panel (plan section AC) over the HUD, hidden, showing these volumes. Call once, after
+        /// Initialize; the root opens and closes it.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Initialize has not run.</exception>
+        public SettingsPanelView MakeSettings(VolumeSettings volumes)
+        {
+            if (_uiRoot == null)
+            {
+                throw new InvalidOperationException("Call HiveDefenseHudView.Initialize before MakeSettings.");
+            }
+
+            _settings?.Dispose();
+            _settings = new SettingsPanelView(_uiRoot, volumes);
+            _settings.ShowControls(_device);
+            return _settings;
         }
 
         private void Update()
@@ -288,6 +313,7 @@ namespace DigitalStory.View
         private void OnDestroy()
         {
             ReleaseSongs();
+            _settings?.Dispose();
         }
 
         private void ReleaseSongs()
@@ -322,6 +348,30 @@ namespace DigitalStory.View
                 _session.Caster.SongNotReady -= OnSongNotReady;
             }
         }
+
+        /// <summary>Shows a short notice on the message line, such as the note voice F6 chose. Call after Initialize.</summary>
+        public void ShowNotice(string text)
+        {
+            if (_isReady)
+            {
+                ShowMessage(text, Color.clear, NoticeSeconds);
+            }
+        }
+
+        /// <summary>The text on the message line, for tests and debugging.</summary>
+        public string MessageText => _messageLine?.text;
+
+        /// <summary>
+        /// Lets the optional recorded sounds of plan section AC replace the HUD's synthesised hit and cast sounds where they
+        /// have one; null gives them all back. Call after Initialize.
+        /// </summary>
+        public void UseRecordedSounds(GameSoundPlayer recorded)
+        {
+            _hitSound.UseRecorded(recorded);
+        }
+
+        /// <summary>The synthesised hit and cast sounds, for the volume settings and tests.</summary>
+        public HitSoundView HitSound => _hitSound;
 
         /// <summary>Lets the hit numbers stamp and the kill pop climb from the feel director's kill chain. Call after Initialize.</summary>
         public void ListenToKillChain(HitFeedbackView feedback)

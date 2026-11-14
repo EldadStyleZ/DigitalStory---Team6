@@ -35,6 +35,15 @@ namespace DigitalStory.View
         // is lit.
         private const float LanceLightShare = 0.5f;
 
+        // The settings panel (plan section AC): the hole its music sample plays, the fewest real seconds between two samples,
+        // and the step of Left and Right when no SoundConfig is set.
+        private const int SampleHole = 2;
+        private const float SampleGapSeconds = 0.15f;
+        private const int VolumeStepPercent = 5;
+
+        // Mixed into the map's seed for the recorded sounds' own random stream (plan section AC).
+        private const uint SoundSeedSalt = 0x50D5EEDu;
+
         // Every slot, in the order the view numbers them.
         private static readonly SongSlot[] Slots = { SongSlot.Post, SongSlot.Guard, SongSlot.Strike };
 
@@ -224,10 +233,15 @@ namespace DigitalStory.View
         private CursorLockMode _savedLockMode;
         private bool _wasCursorVisible;
         private bool _wasWaveRunning;
-        private bool _isSlowingTime;
-        private float _slowSecondsLeft;
-        private float _timeScaleBeforeSlow;
-        private float _slowTimeScale;
+        private readonly TimeScaleRule _clock = new TimeScaleRule();
+        private VolumeSettings _volumes;
+        private IVolumeStore _volumeStore;
+        private SettingsPanelView _settings;
+        private bool _areVolumesUnsaved;
+        private float _lastSampleAt = float.NegativeInfinity;
+        private bool _isRelockingAfterSettings;
+        private CursorLockMode _lockBeforeSettings;
+        private bool _wasCursorVisibleBeforeSettings;
         private bool _isRestarting;
         private List<Bounds> _mapBoxes = new List<Bounds>();
         private bool _isReady;
@@ -236,6 +250,7 @@ namespace DigitalStory.View
         private bool _isRightHandPressed;
         private bool _isLeftHandPressed;
         private Vector2 _heldMove;
+        private GameSoundPlayer _gameSound;
 
         /// <summary>The running match, for the views, tests and debugging.</summary>
         public HiveDefenseSession Session { get; private set; }
@@ -249,7 +264,7 @@ namespace DigitalStory.View
         /// </summary>
         public void PressHole(int hole)
         {
-            if (!_isReady || hole < 0 || hole >= _holeCount)
+            if (!_isReady || hole < 0 || hole >= _holeCount || IsSettingsOpen)
             {
                 return;
             }
@@ -318,14 +333,77 @@ namespace DigitalStory.View
         public bool IsChasingGiant => _isChasing;
 
         /// <summary>True while the brief slow-down of time runs, for tests and debugging.</summary>
-        public bool IsSlowingTime => _isSlowingTime;
+        public bool IsSlowingTime => _clock.IsSlowing;
+
+        /// <summary>The player's volumes (plan section AC), for the settings panel and tests.</summary>
+        public VolumeSettings Volumes => _volumes;
+
+        /// <summary>True while the settings panel is open and the match paused.</summary>
+        public bool IsSettingsOpen => _settings != null && _settings.IsOpen;
+
+        /// <summary>The settings panel, for tests.</summary>
+        public SettingsPanelView Settings => _settings;
+
+        /// <summary>
+        /// Opens the settings panel and pauses the match, or closes it, saves the volumes and lets the match run, as Esc and the
+        /// controller's Select do. For tests and the benchmark; the keys work either way.
+        /// </summary>
+        public void ShowSettings(bool isOpen)
+        {
+            if (!_isReady || _settings == null || isOpen == _settings.IsOpen)
+            {
+                return;
+            }
+
+            if (isOpen)
+            {
+                OpenSettings();
+            }
+            else
+            {
+                CloseSettings();
+            }
+        }
+
+        /// <summary>
+        /// Keeps the volumes in this store from now on and takes them from it (plan section AC). The game keeps them in
+        /// PlayerPrefs; tests give a store in memory, so they never touch the player's own.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">The store is missing.</exception>
+        public void UseVolumeStore(IVolumeStore store)
+        {
+            _volumeStore = store ?? throw new ArgumentNullException(nameof(store));
+            _volumes.Load(store);
+            _areVolumesUnsaved = false;
+            ApplyVolumes();
+        }
 
         /// <summary>The compiling of the game's code ahead of its first call, for tests and the benchmark.</summary>
         public ScriptWarmup ScriptWarmup => _scriptWarmup;
 
+        /// <summary>The optional recorded sounds of plan section AC, or null when no local library has any. For tests.</summary>
+        public GameSoundPlayer GameSound => _gameSound;
+
+        /// <summary>
+        /// Plays the optional recorded sounds of plan section AC from this library from now on, or none (null): the player is
+        /// made again, every voice at once, and the HUD's synthesised sounds give way where the library has one. The match
+        /// loads the local library by itself; this is for tests. Call after Start.
+        /// </summary>
+        public void UseRecordedSounds(GameSoundLibrary library)
+        {
+            MakeGameSound(library);
+            _hud.UseRecordedSounds(_gameSound);
+        }
+
         private void Awake()
         {
             CheckReferences();
+            _volumes = _sound != null
+                ? new VolumeSettings(_sound.DefaultMasterPercent, _sound.DefaultMusicPercent, _sound.DefaultEffectsPercent)
+                : new VolumeSettings(VolumeCurve.Full, VolumeCurve.Full, VolumeCurve.Full);
+            _volumeStore = new PlayerPrefsVolumeStore();
+            _volumes.Load(_volumeStore);
+            _volumes.Changed += HandleVolumeChanged;
             Layout = DrawMap();
 
             var rules = new HiveDefenseRules(
@@ -369,6 +447,11 @@ namespace DigitalStory.View
             // scene; loading it by name from a Resources folder is the one way to keep every committed file the same with or
             // without the pack. Without it (a teammate without the pack) this is null and the game's own effects run alone.
             _hitFeedback.UseImpactFx(Resources.Load<ImpactFxLibrary>(ImpactFxLibrary.ResourceName));
+
+            // Plan section AC: the optional recorded sounds come from paid packs the same way, so their library is found by name
+            // in the untracked local folder too. Every voice is made and every clip loaded here, at load. Without it the game's
+            // synthesised sounds play, as before.
+            MakeGameSound(Resources.Load<GameSoundLibrary>(GameSoundLibrary.ResourceName));
             _rumble.Initialize(Session, _input, _gamepad);
             SetSceneShadows();
 
@@ -378,6 +461,8 @@ namespace DigitalStory.View
                 _fluteVoice.Initialize(_sound, _coreMove);
                 _fluteVoice.Connect(_input);
             }
+
+            ApplyVolumes();
 
             _followCamera.SetTarget(_coreMotor.transform);
             _lastAimPoint = _coreMotor.Position;
@@ -398,13 +483,36 @@ namespace DigitalStory.View
             // The HUD reads the UIDocument's tree, which exists only once every object has been enabled.
             _hud.Initialize(Session);
             _hud.ListenToKillChain(_hitFeedback);
+            _hud.UseRecordedSounds(_gameSound);
+            _settings = _hud.MakeSettings(_volumes);
+            ApplyVolumes();
             _hud.ShowControls(_input.LastDevice);
             _input.LastDeviceChanged += HandleLastDeviceChanged;
+        }
+
+        /// <summary>
+        /// Moves the notes to the next synthesised voice (plan section AC), as F6 does, and names it on the HUD for a moment.
+        /// Does nothing without a flute voice.
+        /// </summary>
+        public void NextNoteVoice()
+        {
+            if (!_isReady || _fluteVoice == null)
+            {
+                return;
+            }
+
+            NoteVoiceKind voice = _fluteVoice.NextVoice();
+            _hud.ShowNotice("Voice: " + SwarmFluteVoice.TitleOf(voice));
         }
 
         private void Restart()
         {
             HiveDefenseInput.CarryOverRestart(_input.LastDevice);
+            if (_fluteVoice != null)
+            {
+                SwarmFluteVoice.CarryOverRestart(_fluteVoice.Voice);
+            }
+
             Scene scene = SceneManager.GetActiveScene();
             if (scene.buildIndex >= 0)
             {
@@ -433,6 +541,11 @@ namespace DigitalStory.View
                 _input.LastDeviceChanged -= HandleLastDeviceChanged;
             }
 
+            if (_volumes != null)
+            {
+                _volumes.Changed -= HandleVolumeChanged;
+            }
+
             if (Session != null)
             {
                 Session.Forms.FormChanged -= HandleFormChanged;
@@ -440,8 +553,15 @@ namespace DigitalStory.View
                 Session.Nests.ComboNote -= HandleComboNote;
             }
 
-            // A scene unloaded during the slow-down or the chase leaves time and the cursor as it found them.
-            EndSlowMotion();
+            if (_gameSound != null)
+            {
+                _gameSound.Shutdown();
+            }
+
+            // A scene unloaded during the slow-down, the pause or the chase leaves time and the cursor as it found them, and
+            // keeps volumes changed in a panel left open.
+            EndTimeRequests();
+            SaveVolumes();
             UnlockCursor();
             RestoreShadows();
         }
@@ -488,6 +608,25 @@ namespace DigitalStory.View
             }
 
             StepSlowMotion();
+            // The press that opens or closes the panel does nothing else: Start closing it neither calls the wave nor restarts.
+            if (_input.SettingsPressed || (IsSettingsOpen && _input.SettingsBackPressed))
+            {
+                ShowSettings(!IsSettingsOpen);
+                return;
+            }
+
+            // While the panel is open the match stands still: no note, move or call reaches it; the panel takes the keys.
+            if (IsSettingsOpen)
+            {
+                StepSettings();
+                return;
+            }
+
+            if (_input.NextVoicePressed)
+            {
+                NextNoteVoice();
+            }
+
             if (_warmupMillisecondsPerFrame > 0f)
             {
                 _scriptWarmup.Step(_warmupMillisecondsPerFrame);
@@ -940,6 +1079,8 @@ namespace DigitalStory.View
         // Time runs at the slow-down's scale for its real seconds and then goes back to what it was. When something else
         // changed the time scale meanwhile (a test, a pause), that change is kept. The camera's Liveliness scales how deep
         // it goes, and 0 turns it off.
+        // The time scale is written here only, from the clock's requests (plan section AC): the settings panel's pause over
+        // the slow-down over the scale it found.
         private void StartSlowMotion()
         {
             float depth = Mathf.Clamp01(_followCamera.Liveliness);
@@ -948,42 +1089,33 @@ namespace DigitalStory.View
                 return;
             }
 
-            if (!_isSlowingTime)
-            {
-                _timeScaleBeforeSlow = Time.timeScale;
-                _isSlowingTime = true;
-            }
-
-            _slowSecondsLeft = _slowMotionSeconds;
-            _slowTimeScale = _timeScaleBeforeSlow * Mathf.Lerp(1f, _slowMotionScale, depth);
-            Time.timeScale = _slowTimeScale;
+            _clock.StartSlow(Mathf.Lerp(1f, _slowMotionScale, depth), _slowMotionSeconds, Time.timeScale);
+            ApplyTime();
         }
 
         private void StepSlowMotion()
         {
-            if (!_isSlowingTime)
-            {
-                return;
-            }
-
-            _slowSecondsLeft -= Time.unscaledDeltaTime;
-            if (_slowSecondsLeft <= 0f)
-            {
-                EndSlowMotion();
-            }
+            _clock.Step(Time.unscaledDeltaTime, Time.timeScale);
+            ApplyTime();
         }
 
-        private void EndSlowMotion()
+        private void ApplyTime()
         {
-            if (!_isSlowingTime)
+            float scale = _clock.Scale;
+            if (!Mathf.Approximately(Time.timeScale, scale))
             {
-                return;
+                Time.timeScale = scale;
             }
 
-            _isSlowingTime = false;
-            if (Mathf.Approximately(Time.timeScale, _slowTimeScale))
+            _clock.Wrote(Time.timeScale);
+        }
+
+        // A scene unloaded during the slow-down or the pause leaves time as it found it.
+        private void EndTimeRequests()
+        {
+            if (_clock.IsSlowing || _clock.IsPaused)
             {
-                Time.timeScale = _timeScaleBeforeSlow;
+                Time.timeScale = _clock.EndAll(Time.timeScale);
             }
         }
 
@@ -1011,6 +1143,131 @@ namespace DigitalStory.View
             _hasLockedCursor = false;
             Cursor.lockState = _savedLockMode;
             Cursor.visible = _wasCursorVisible;
+        }
+
+        // Plan section AC: the panel pauses the match through the clock and frees the cursor; closing gives back the giant's
+        // locked cursor if it still stands, and keeps the volumes.
+        private void OpenSettings()
+        {
+            _settings.Open();
+            _clock.Pause(true, Time.timeScale);
+            ApplyTime();
+            _isRelockingAfterSettings = _hasLockedCursor;
+            UnlockCursor();
+            _lockBeforeSettings = Cursor.lockState;
+            _wasCursorVisibleBeforeSettings = Cursor.visible;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        private void CloseSettings()
+        {
+            _settings.Close();
+            _clock.Pause(false, Time.timeScale);
+            ApplyTime();
+            Cursor.lockState = _lockBeforeSettings;
+            Cursor.visible = _wasCursorVisibleBeforeSettings;
+            if (_isRelockingAfterSettings && _isChasing)
+            {
+                LockCursor();
+            }
+
+            _isRelockingAfterSettings = false;
+            SaveVolumes();
+        }
+
+        // Up and Down choose a row; Left and Right change it, by the config's step.
+        private void StepSettings()
+        {
+            if (_input.SettingsRowStep != 0)
+            {
+                _settings.MoveFocus(_input.SettingsRowStep);
+            }
+
+            if (_input.SettingsValueStep != 0)
+            {
+                int step = _sound != null ? _sound.VolumeStepPercent : VolumeStepPercent;
+                _volumes.Step(_settings.Focused, _input.SettingsValueStep * step);
+            }
+        }
+
+        // Every volume reaches what it scales at once: the note voice, the recorded sounds and the HUD's synthesised ones.
+        private void ApplyVolumes()
+        {
+            float effects = _volumes.GainOf(VolumeGroup.Effects);
+            if (_fluteVoice != null)
+            {
+                _fluteVoice.SetMusicGain(_volumes.GainOf(VolumeGroup.Music));
+            }
+
+            if (_gameSound != null)
+            {
+                _gameSound.SetEffectsGain(effects);
+            }
+
+            if (_hud != null && _hud.HitSound != null)
+            {
+                _hud.HitSound.SetEffectsGain(effects);
+            }
+        }
+
+        // A change is heard at once: a note for the music (and the master), a hit for the effects, at most every so often.
+        private void HandleVolumeChanged(VolumeGroup group)
+        {
+            ApplyVolumes();
+            _areVolumesUnsaved = true;
+            if (!_isReady || Time.unscaledTime - _lastSampleAt < SampleGapSeconds)
+            {
+                return;
+            }
+
+            _lastSampleAt = Time.unscaledTime;
+            if (group == VolumeGroup.Effects)
+            {
+                bool isRecorded = _gameSound != null && _gameSound.Play(GameSoundEvent.BeekeeperHit);
+                if (!isRecorded && _hud.HitSound != null)
+                {
+                    _hud.HitSound.PlaySample();
+                }
+            }
+            else if (_fluteVoice != null)
+            {
+                _fluteVoice.PlayNote(SampleHole);
+            }
+        }
+
+        private void SaveVolumes()
+        {
+            if (_areVolumesUnsaved && _volumes != null)
+            {
+                _volumes.Save(_volumeStore);
+                _areVolumesUnsaved = false;
+            }
+        }
+
+        // The recorded sounds' player, made afresh for a library with sounds, or none. The old one stops at once and goes.
+        private void MakeGameSound(GameSoundLibrary library)
+        {
+            if (_gameSound != null)
+            {
+                _gameSound.Shutdown();
+                Destroy(_gameSound.gameObject);
+                _gameSound = null;
+            }
+
+            if (library == null || !library.HasAnySound)
+            {
+                return;
+            }
+
+            var holder = new GameObject("Game Sound");
+            holder.transform.SetParent(transform, false);
+            _gameSound = holder.AddComponent<GameSoundPlayer>();
+
+            // Its own stream of chance from the map's seed, so the sounds never move the match's draws.
+            _gameSound.Initialize(Session, _hitFeedback, library, new Mulberry32Random(unchecked((uint)Layout.Seed ^ SoundSeedSalt)));
+            _gameSound.SetEffectsGain(_volumes.GainOf(VolumeGroup.Effects));
+            Debug.Log($"[F010] Recorded sounds from the local library {library.name}: {_gameSound.SoundCount} sounds, {_gameSound.ClipCount} clips, {_gameSound.SourceCount} voices made.", this);
         }
 
         // Plan section S: a new map each match. The scenery, the spawn points and the nest trees move here, once, and the

@@ -90,5 +90,6 @@
                 <ui:Label name="end-hint" text="" class="end-hint" />
             </ui:VisualElement>
         </ui:VisualElement>
+        <ui:VisualElement name="settings-panel" class="settings-panel" />
     </ui:VisualElement>
 </ui:UXML>

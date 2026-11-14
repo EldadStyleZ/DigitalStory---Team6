@@ -27,6 +27,19 @@ namespace DigitalStory.View
         private const int StartBit = 1 << 5;
         private const int RightHandBit = 1 << 6;
         private const int LeftHandBit = 1 << 7;
+        private const int SelectBit = 1 << 8;
+        private const int UpBit = 1 << 9;
+        private const int DownBit = 1 << 10;
+        private const int LeftBit = 1 << 11;
+        private const int RightBit = 1 << 12;
+        private const int EastBit = 1 << 2; // East (B, Circle): hole 2 in play, and Back in the settings panel.
+
+        // The settings panel's Left and Right repeat while held: after this long, then this often (real seconds).
+        private const float MenuRepeatDelaySeconds = 0.35f;
+        private const float MenuRepeatSeconds = 0.06f;
+
+        // How far the left stick leans before it counts as a press of the D-pad in the settings panel.
+        private const float MenuStickLean = 0.6f;
 
         // Holes 0 to 3, lowest first: H J K L, then the top row, then the keypad.
         private static readonly KeyCode[] LetterKeys = { KeyCode.H, KeyCode.J, KeyCode.K, KeyCode.L };
@@ -66,6 +79,9 @@ namespace DigitalStory.View
         private Vector2 _padMove;
         private Vector2 _aimStick;
         private bool _isStickAiming;
+        private int _menuHeldX;
+        private float _menuRepeatLeft;
+        private bool _wasMenuRowHeld;
 
         /// <summary>Raised for each hole pressed this frame, by a key or a face button, lowest hole first. The hole counts from 0.</summary>
         public event Action<int> HolePressed;
@@ -99,6 +115,27 @@ namespace DigitalStory.View
 
         /// <summary>True only on the frame the call-wave key was pressed (Return, keypad Enter or Start).</summary>
         public bool CallWavePressed { get; private set; }
+
+        /// <summary>True only on the frame F6 was pressed: the next note voice (plan section AC).</summary>
+        public bool NextVoicePressed { get; private set; }
+
+        /// <summary>
+        /// True only on the frame the settings panel's own key was pressed (plan section AC): Esc, or the controller's Select
+        /// (View, Share), since Start already calls the wave and restarts the match. It opens the panel, and closes it.
+        /// </summary>
+        public bool SettingsPressed { get; private set; }
+
+        /// <summary>True only on the frame the controller's East button (B, Circle) or Start was pressed: closes an open panel.</summary>
+        public bool SettingsBackPressed { get; private set; }
+
+        /// <summary>The settings panel's move between rows this frame: -1 up, 1 down, 0 none (Up/Down, W/S, the D-pad, the left stick).</summary>
+        public int SettingsRowStep { get; private set; }
+
+        /// <summary>
+        /// The settings panel's change of the chosen volume this frame: -1 down, 1 up, 0 none (Left/Right, A/D, the D-pad, the
+        /// left stick), repeating while held.
+        /// </summary>
+        public int SettingsValueStep { get; private set; }
 
         /// <summary>
         /// The mouse's movement this frame, in the Input Manager's Mouse X and Mouse Y units (x to the right, y up). The root scales it
@@ -229,6 +266,8 @@ namespace DigitalStory.View
             bool isRestartKey = Input.GetKeyDown(KeyCode.R);
             bool isGiveKey = Input.GetKey(KeyCode.E);
             bool isCallWaveKey = Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
+            bool isNextVoiceKey = Input.GetKeyDown(KeyCode.F6);
+            bool isSettingsKey = Input.GetKeyDown(KeyCode.Escape);
             bool isMouseHeld = Input.GetMouseButton(0) || Input.GetMouseButton(1);
             LookDelta = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y"));
             bool hasMouseMoved = UpdateMouseLive(isMouseHeld);
@@ -241,10 +280,14 @@ namespace DigitalStory.View
             RestartPressed = isRestartKey || (padPressed & StartBit) != 0;
             GiveHeld = isGiveKey || (_padHeld & GiveBit) != 0;
             CallWavePressed = isCallWaveKey || (padPressed & StartBit) != 0;
+            NextVoicePressed = isNextVoiceKey;
+            SettingsPressed = isSettingsKey || (padPressed & SelectBit) != 0;
+            SettingsBackPressed = (padPressed & (EastBit | StartBit)) != 0;
+            ReadMenu(padPressed);
             IsMouseLive = _isMouseLive || _isStickAiming;
 
             bool isKeyboardUsed = keysMove.sqrMagnitude > 0f || isRightHandKey || isLeftHandKey || isRestartKey || isGiveKey
-                || isCallWaveKey || isMouseHeld || hasMouseMoved || holeKeys != 0;
+                || isCallWaveKey || isNextVoiceKey || isSettingsKey || isMouseHeld || hasMouseMoved || holeKeys != 0;
             bool isGamepadUsed = _padHeld != 0 || _padMove.sqrMagnitude > 0f || _isStickAiming;
             RecordUse(isKeyboardUsed, isGamepadUsed);
 
@@ -353,7 +396,50 @@ namespace DigitalStory.View
             bits |= pad.startButton.isPressed ? StartBit : 0;
             bits |= pad.rightTrigger.isPressed ? RightHandBit : 0;
             bits |= pad.leftTrigger.isPressed ? LeftHandBit : 0;
+            bits |= pad.selectButton.isPressed ? SelectBit : 0;
+            bits |= pad.dpad.up.isPressed ? UpBit : 0;
+            bits |= pad.dpad.down.isPressed ? DownBit : 0;
+            bits |= pad.dpad.left.isPressed ? LeftBit : 0;
+            bits |= pad.dpad.right.isPressed ? RightBit : 0;
             return bits;
+        }
+
+        // The settings panel's moves: a row on each press, and a change on each press of Left or Right, repeating while held.
+        // Real time, since the panel pauses the game.
+        private void ReadMenu(int padPressed)
+        {
+            int rows = (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S) || (padPressed & DownBit) != 0 ? 1 : 0)
+                - (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || (padPressed & UpBit) != 0 ? 1 : 0);
+            float stickY = _padMove.y;
+            bool isStickRow = Mathf.Abs(stickY) >= MenuStickLean;
+            if (isStickRow && !_wasMenuRowHeld && rows == 0)
+            {
+                rows = stickY > 0f ? -1 : 1;
+            }
+
+            _wasMenuRowHeld = isStickRow;
+            SettingsRowStep = rows;
+
+            int heldX = (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D) || (_padHeld & RightBit) != 0 || _padMove.x >= MenuStickLean ? 1 : 0)
+                - (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A) || (_padHeld & LeftBit) != 0 || _padMove.x <= -MenuStickLean ? 1 : 0);
+            int step = 0;
+            if (heldX != _menuHeldX)
+            {
+                step = heldX;
+                _menuRepeatLeft = MenuRepeatDelaySeconds;
+            }
+            else if (heldX != 0)
+            {
+                _menuRepeatLeft -= Time.unscaledDeltaTime;
+                if (_menuRepeatLeft <= 0f)
+                {
+                    step = heldX;
+                    _menuRepeatLeft = MenuRepeatSeconds;
+                }
+            }
+
+            _menuHeldX = heldX;
+            SettingsValueStep = step;
         }
 
         // Only the keys, not turned by the camera: the root turns the move once, so the core and the giant agree.
