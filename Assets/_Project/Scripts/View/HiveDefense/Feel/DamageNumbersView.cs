@@ -17,7 +17,6 @@ namespace DigitalStory.View
         private const string HitClass = "dmg--hit";
         private const string KillClass = "dmg--kill";
         private const string BlockedClass = "dmg--blocked";
-        private const int CachedNumbers = 1000;
         private const string BlockedText = "blocked";
 
         [SerializeField, Min(1), Tooltip("How many numbers can show at once. The oldest is reused when all are busy.")]
@@ -35,8 +34,6 @@ namespace DigitalStory.View
         [SerializeField, Min(0f), Tooltip("Pixels a number may drift sideways, so numbers from one burst do not sit on each other.")]
         private float _spreadPixels = 18f;
 
-        private static string[] _numberTable;
-
         private HiveDefenseSession _session;
         private Camera _camera;
         private VisualElement _layer;
@@ -48,12 +45,13 @@ namespace DigitalStory.View
         private int _next;
         private bool _isReady;
 
-        // Plan section Y: each number pops in (0.6, up past 1, settles at 1), and a kill chain's milestones stamp x3 / x6 / x10.
-        private const float PopStartScale = 0.6f;
-        private const float KillPopExtra = 1.33f;
+        // Plan section Y: each number pops in (from its start scale, up past 1, settles at 1), and a kill chain's milestones
+        // stamp x3 / x6 / x10. The pop's numbers come from FeelConfig.
         private const string StampClass = "chain-stamp";
         private float _popSeconds = 0.15f;
         private float _popScale = 1.2f;
+        private float _popStartScale = 0.6f;
+        private float _killPopExtra = 1.33f;
         private HitFeedbackView _chain;
         private Label _stamp;
         private string[] _stampTexts;
@@ -93,7 +91,7 @@ namespace DigitalStory.View
                 throw new ArgumentNullException(nameof(root));
             }
 
-            BuildTable();
+            HitNumberText.Of(1f); // Its strings are made here, once, not on the first hit.
             if (_layer == null || _layer.parent != root)
             {
                 _layer?.RemoveFromHierarchy();
@@ -148,6 +146,8 @@ namespace DigitalStory.View
             _chain = feedback;
             _popSeconds = feedback.Feel.NumberPopSeconds;
             _popScale = feedback.Feel.NumberPopScale;
+            _popStartScale = feedback.Feel.NumberPopStartScale;
+            _killPopExtra = feedback.Feel.KillPopExtra;
             int[] milestones = feedback.Feel.ChainMilestones;
             _stampCounts = milestones;
             _stampTexts = new string[milestones.Length];
@@ -218,9 +218,9 @@ namespace DigitalStory.View
                 return 1f;
             }
 
-            float peak = isKill ? 1f + ((_popScale - 1f) * KillPopExtra) : _popScale;
+            float peak = isKill ? 1f + ((_popScale - 1f) * _killPopExtra) : _popScale;
             float t = age / _popSeconds;
-            return t < 0.5f ? Mathf.Lerp(PopStartScale, peak, t * 2f) : Mathf.Lerp(peak, 1f, (t - 0.5f) * 2f);
+            return t < 0.5f ? Mathf.Lerp(_popStartScale, peak, t * 2f) : Mathf.Lerp(peak, 1f, (t - 0.5f) * 2f);
         }
 
         private void LateUpdate()
@@ -305,7 +305,7 @@ namespace DigitalStory.View
                 _kinds[slot] = kind;
             }
 
-            label.text = kind == 2 ? BlockedText : TextOf(hit.Damage);
+            label.text = kind == 2 ? BlockedText : HitNumberText.Of(hit.Damage);
             _origins[slot] = hit.Position + (Vector3.up * _startHeight);
             _ages[slot] = 0f;
             _drift[slot] = (((slot * 7) % 5) - 2) * (_spreadPixels / 2f);
@@ -322,27 +322,5 @@ namespace DigitalStory.View
             label.EnableInClassList(BlockedClass, kind == 2);
         }
 
-        private static string TextOf(float damage)
-        {
-            int whole = Mathf.Max(1, Mathf.RoundToInt(damage));
-            return whole < CachedNumbers ? _numberTable[whole] : _numberTable[CachedNumbers - 1];
-        }
-
-        // The table is made once for the whole game: one string for each whole number a hit can show. The last one reads "999+".
-        private static void BuildTable()
-        {
-            if (_numberTable != null)
-            {
-                return;
-            }
-
-            _numberTable = new string[CachedNumbers];
-            for (int number = 0; number < CachedNumbers - 1; number++)
-            {
-                _numberTable[number] = number.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            }
-
-            _numberTable[CachedNumbers - 1] = (CachedNumbers - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "+";
-        }
     }
 }

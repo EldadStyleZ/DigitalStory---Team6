@@ -130,7 +130,13 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0.01f), Tooltip("Seconds a hit number takes to pop up to its peak and settle.")]
         public float NumberPopSeconds { get; private set; } = 0.15f;
 
-        [field: SerializeField, Range(1f, 2f), Tooltip("The scale a hit number pops to before it settles at 1. A kill's number pops a third further.")]
+        [field: SerializeField, Range(1f, 2f), Tooltip("The scale a hit number pops to before it settles at 1. A kill's number pops further (KillPopExtra).")]
         public float NumberPopScale { get; private set; } = 1.2f;
+
+        [field: SerializeField, Range(0.1f, 1f), Tooltip("The scale a hit number starts at before it pops up past 1.")]
+        public float NumberPopStartScale { get; private set; } = 0.6f;
+
+        [field: SerializeField, Range(1f, 3f), Tooltip("How much further a kill's number pops than a hit's: its pop above 1 is this many times a hit's. 1.33 is a third further.")]
+        public float KillPopExtra { get; private set; } = 1.33f;
     }
 }

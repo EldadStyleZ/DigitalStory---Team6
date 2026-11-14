@@ -1,5 +1,7 @@
 using DigitalStory.Logic;
 using NUnit.Framework;
+using UnityEngine.TestTools.Constraints;
+using Is = UnityEngine.TestTools.Constraints.Is;
 
 namespace DigitalStory.Tests.EditMode
 {
@@ -139,6 +141,29 @@ namespace DigitalStory.Tests.EditMode
         {
             Assert.Throws<System.ArgumentOutOfRangeException>(() => new KillChain(0f, 12, new[] { 3 }));
             Assert.Throws<System.ArgumentNullException>(() => new KillChain(0.5f, 12, null));
+        }
+
+        // Plan section V: one sting's squeeze deals 0.3 to 0.6, so a hit below 1 shows its tenths instead of reading 1.
+        [TestCase(0.3f, "0.3")]
+        [TestCase(0.6f, "0.6")]
+        [TestCase(0.04f, "0.1")]
+        [TestCase(0f, "0.1")]
+        [TestCase(0.96f, "1")]
+        [TestCase(1.4f, "1")]
+        [TestCase(12.4f, "12")]
+        [TestCase(73f, "73")]
+        [TestCase(5000f, "999+")]
+        public void HitNumberText_ShowsTenthsBelowOneAndWholeNumbersAbove(float damage, string expected)
+        {
+            Assert.That(HitNumberText.Of(damage), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void HitNumberText_AllocatesNothingOnceMade()
+        {
+            HitNumberText.Of(0.3f);
+            Assert.That(() => { HitNumberText.Of(0.3f); }, Is.Not.AllocatingGCMemory());
+            Assert.That(() => { HitNumberText.Of(42f); }, Is.Not.AllocatingGCMemory());
         }
     }
 }
