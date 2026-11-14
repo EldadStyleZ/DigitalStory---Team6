@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac8bb6a26ffae8243ab261db873227e5, type: 3}
+  m_Name: MysteryBoxSettings
+  m_EditorClassIdentifier: SpacePartyGame::SpacePartyGame.MysteryBoxSettings
+  _averageSecondsBetweenSpawns: 5
+  _minimumSecondsBetweenSpawns: 2
+  _poolSize: 4
+  _idleSeconds: 6
+  _flashSeconds: 2
+  _flashesPerSecond: 5
+  _spinDegreesPerSecond: 120
+  _bobHeight: 0.06
+  _bobSeconds: 1.8
+  _collectSound: {fileID: 8300000, guid: 07bcb28ce09fa564cbacc4981fd13e57, type: 3}
+  _collectVolume: 0.8

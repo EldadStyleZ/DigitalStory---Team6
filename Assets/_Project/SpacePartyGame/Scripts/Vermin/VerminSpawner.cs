@@ -121,9 +121,16 @@ namespace SpacePartyGame
             }
         }
 
+        /// <summary>
+        /// Picks a random spot where something may appear: on the floor away from its rim, out of the cages and away
+        /// from the players. Mystery boxes use it too. False if no spot was found in the tries allowed.
+        /// </summary>
+        public bool TryPickSpot(out Vector2 spot) =>
+            SpawnPicker.TryPick(_map.Rect, IsGoodSpot, () => Random.value, TriesPerSpot, out spot);
+
         private void SpawnOne()
         {
-            if (!SpawnPicker.TryPick(_map.Rect, IsGoodSpot, () => Random.value, TriesPerSpot, out Vector2 spot))
+            if (!TryPickSpot(out Vector2 spot))
             {
                 return;
             }

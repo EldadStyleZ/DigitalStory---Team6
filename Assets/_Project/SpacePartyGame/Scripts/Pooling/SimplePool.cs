@@ -21,6 +21,7 @@ namespace SpacePartyGame
         private readonly Stack<T> _pool = new Stack<T>();
         private readonly List<T> _active = new List<T>();
         private bool _isFilled;
+        private int _made;
 
         /// <summary>How many objects are waiting in the pool.</summary>
         public int Available => _pool.Count;
@@ -31,6 +32,9 @@ namespace SpacePartyGame
         /// <summary>How many copies to make. A subclass may take it from its settings instead.</summary>
         protected virtual int Size => _size;
 
+        /// <summary>Whether to make one more copy when every one is out, instead of returning null. Off by default.</summary>
+        protected virtual bool GrowsWhenEmpty => false;
+
         /// <summary>Sets the prefab and size and fills the pool, for tests and pools built from code.</summary>
         public void Initialize(T prefab, int size)
         {
@@ -39,10 +43,18 @@ namespace SpacePartyGame
             Fill();
         }
 
-        /// <summary>Takes an object from the pool, puts it at a position and activates it. Returns null if the pool is empty.</summary>
+        /// <summary>
+        /// Takes an object from the pool, puts it at a position and activates it. If the pool is empty it returns
+        /// null, or first makes one more when the pool grows.
+        /// </summary>
         public T Spawn(Vector3 position)
         {
             Fill();
+
+            if (_pool.Count == 0 && GrowsWhenEmpty && _prefab != null)
+            {
+                _pool.Push(CreateOne());
+            }
 
             if (_pool.Count == 0)
             {
@@ -116,12 +128,17 @@ namespace SpacePartyGame
 
             for (int i = 0; i < Size; i++)
             {
-                T item = Instantiate(_prefab, transform);
-                item.name = $"{_prefab.name} {i + 1}";
-                item.gameObject.SetActive(false);
-                OnCreated(item);
-                _pool.Push(item);
+                _pool.Push(CreateOne());
             }
+        }
+
+        private T CreateOne()
+        {
+            T item = Instantiate(_prefab, transform);
+            item.name = $"{_prefab.name} {++_made}";
+            item.gameObject.SetActive(false);
+            OnCreated(item);
+            return item;
         }
     }
 }

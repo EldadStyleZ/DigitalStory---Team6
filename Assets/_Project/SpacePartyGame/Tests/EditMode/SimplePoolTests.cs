@@ -10,6 +10,39 @@ namespace SpacePartyGame.Tests
         {
         }
 
+        // A pool that makes one more copy when it runs out, as the mystery box pool does.
+        private sealed class GrowingTransformPool : SimplePool<Transform>
+        {
+            protected override bool GrowsWhenEmpty => true;
+        }
+
+        [Test]
+        public void AFixedPool_ReturnsNullWhenEmpty()
+        {
+            _pool.Spawn(Vector3.zero);
+            _pool.Spawn(Vector3.zero);
+            _pool.Spawn(Vector3.zero);
+
+            Assert.That(_pool.Spawn(Vector3.zero), Is.Null);
+        }
+
+        [Test]
+        public void AGrowingPool_MakesAnotherWhenEmpty()
+        {
+            var poolObject = new GameObject("Growing Pool");
+            GrowingTransformPool pool = poolObject.AddComponent<GrowingTransformPool>();
+            pool.Initialize(_template.transform, 1);
+
+            Transform first = pool.Spawn(Vector3.zero);
+            Transform second = pool.Spawn(Vector3.one);
+
+            Assert.That(second, Is.Not.Null);
+            Assert.That(second, Is.Not.SameAs(first));
+            Assert.That(second.parent, Is.EqualTo(poolObject.transform));
+            Assert.That(pool.Active.Count, Is.EqualTo(2));
+            Object.DestroyImmediate(poolObject);
+        }
+
         private GameObject _poolObject;
         private GameObject _template;
         private TransformPool _pool;
