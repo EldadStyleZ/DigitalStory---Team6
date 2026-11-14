@@ -25,10 +25,10 @@ MonoBehaviour:
   <TornadoTrauma>k__BackingField: 0.15
   <HydraTrauma>k__BackingField: 0.2
   <LanceTrauma>k__BackingField: 0.25
-  <MeteorTrauma>k__BackingField: 0.45
+  <MeteorTrauma>k__BackingField: 0.6
   <MultiKillTrauma>k__BackingField: 0.15
   <GiantBlowTrauma>k__BackingField: 0.3
-  <GiantHeavyTrauma>k__BackingField: 0.55
+  <GiantHeavyTrauma>k__BackingField: 0.65
   <GiantFormedTrauma>k__BackingField: 0.5
   <HiveHitTrauma>k__BackingField: 0.2
   <HiveHitGapSeconds>k__BackingField: 0.4
@@ -37,6 +37,7 @@ MonoBehaviour:
   <CastFovPunch>k__BackingField: 0.04
   <GiantFovPunch>k__BackingField: 0.08
   <CastRollDegrees>k__BackingField: 1
+  <LightCastShare>k__BackingField: 0.5
   <PunchInSeconds>k__BackingField: 0.06
   <PunchOutSeconds>k__BackingField: 0.3
   <GiantKickMetres>k__BackingField: 0.4

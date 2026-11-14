@@ -25,6 +25,7 @@ namespace DigitalStory.Editor
     {
         private const string Root = "Assets/_Project";
         private const string DataFolder = Root + "/GameData/F010";
+        private const string ResetConfigArgument = "-f010ResetConfig";
         private const string ArtFolder = Root + "/Art/F010";
         private const string PrefabFolder = Root + "/Prefabs/F010";
         private const string ScenePath = Root + "/Scenes/eldad-lab-2-scene.unity";
@@ -226,6 +227,44 @@ namespace DigitalStory.Editor
             }
 
             Debug.Log("[F010] Config assets deleted; they are made again from the defaults.");
+            Build();
+        }
+
+        /// <summary>
+        /// Deletes only the config named by "-f010ResetConfig &lt;Name&gt;" (one of the F-010 config assets, such as FeelConfig),
+        /// so it is made again from the defaults in code, then builds as <see cref="Build"/> does. Every other config keeps its
+        /// tuned values. Batch mode only.
+        /// </summary>
+        public static void ResetOneConfigAndBuild()
+        {
+            string name = null;
+            string[] arguments = Environment.GetCommandLineArgs();
+            for (int index = 0; index < arguments.Length - 1; index++)
+            {
+                if (arguments[index] == ResetConfigArgument)
+                {
+                    name = arguments[index + 1];
+                }
+            }
+
+            if (Array.IndexOf(ConfigAssetNames, name) < 0)
+            {
+                Debug.LogError($"[F010] {ResetConfigArgument} takes one of: {string.Join(", ", ConfigAssetNames)}.");
+                if (Application.isBatchMode)
+                {
+                    EditorApplication.Exit(1);
+                }
+
+                return;
+            }
+
+            string path = $"{DataFolder}/{name}.asset";
+            if (AssetDatabase.LoadAssetAtPath<ScriptableObject>(path) != null && !AssetDatabase.DeleteAsset(path))
+            {
+                Debug.LogError($"[F010] Could not delete {path}, so it keeps its old values.");
+            }
+
+            Debug.Log($"[F010] {name} deleted; it is made again from the defaults.");
             Build();
         }
 

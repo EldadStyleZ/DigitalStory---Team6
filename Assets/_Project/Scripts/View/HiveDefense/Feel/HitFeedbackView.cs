@@ -411,13 +411,16 @@ namespace DigitalStory.View
             _camera.PushIn(_fistPushIn);
         }
 
-        // The cast's punch rolls the view to alternate sides, so a run of casts rocks the view instead of leaning it.
+        // The cast's punch rolls the view to alternate sides, so a run of casts rocks the view instead of leaning it. Its
+        // strength follows the song's weight (plan section Z): the Sting, the quick jab, punches lightly.
         private void OnSongCastNow(int song)
         {
-            _camera.Kick(_castKick);
-            _camera.Punch(_feel.CastFovPunch, _feel.CastRollDegrees * _castRollSign);
+            var slotSong = _session.Caster[song] as SlotSongEffect;
+            float share = slotSong != null ? CastWeight.PunchShare(slotSong.Form, _feel.LightCastShare) : 1f;
+            _camera.Kick(_castKick * share);
+            _camera.Punch(_feel.CastFovPunch * share, _feel.CastRollDegrees * share * _castRollSign);
             _castRollSign = -_castRollSign;
-            if (AreFlashesOn && _session.Caster[song] is SlotSongEffect slotSong)
+            if (AreFlashesOn && slotSong != null)
             {
                 _swarm.FlashSlot((int)slotSong.Slot);
             }

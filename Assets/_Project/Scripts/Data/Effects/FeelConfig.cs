@@ -52,8 +52,8 @@ namespace DigitalStory.Data
         [field: SerializeField, Range(0f, 1f), Tooltip("Trauma when the Lance strikes.")]
         public float LanceTrauma { get; private set; } = 0.25f;
 
-        [field: SerializeField, Range(0f, 1f), Tooltip("Trauma when the Meteor lands.")]
-        public float MeteorTrauma { get; private set; } = 0.45f;
+        [field: SerializeField, Range(0f, 1f), Tooltip("Trauma when the Meteor lands. 0.6 since plan section Z, so the heaviest song shakes clearly: 0.36 of the full shake.")]
+        public float MeteorTrauma { get; private set; } = 0.6f;
 
         [field: SerializeField, Range(0f, 1f), Tooltip("Trauma when a chain reaches a milestone (x3, x6, x10).")]
         public float MultiKillTrauma { get; private set; } = 0.15f;
@@ -61,8 +61,8 @@ namespace DigitalStory.Data
         [field: SerializeField, Range(0f, 1f), Tooltip("Trauma when the giant's punch, kick or thrown fist lands.")]
         public float GiantBlowTrauma { get; private set; } = 0.3f;
 
-        [field: SerializeField, Range(0f, 1f), Tooltip("Trauma when the giant's slam, leap landing or third punch lands.")]
-        public float GiantHeavyTrauma { get; private set; } = 0.55f;
+        [field: SerializeField, Range(0f, 1f), Tooltip("Trauma when the giant's slam, leap landing or third punch lands. 0.65 since plan section Z, between the Meteor and a lost hive.")]
+        public float GiantHeavyTrauma { get; private set; } = 0.65f;
 
         [field: SerializeField, Range(0f, 1f), Tooltip("Trauma the moment the swarm becomes the giant.")]
         public float GiantFormedTrauma { get; private set; } = 0.5f;
@@ -88,6 +88,9 @@ namespace DigitalStory.Data
 
         [field: SerializeField, Range(0f, 3f), Tooltip("Degrees the view rolls with a cast's punch, alternating sides each cast.")]
         public float CastRollDegrees { get; private set; } = 1f;
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("The share of the cast's zoom punch, roll and kick a light song gets (the Sting, the quick jab), so a run of Stings does not rock the view like a Meteor. Plan section Z.")]
+        public float LightCastShare { get; private set; } = 0.5f;
 
         [field: SerializeField, Min(0.01f), Tooltip("Seconds a punch takes to reach its peak.")]
         public float PunchInSeconds { get; private set; } = 0.06f;
