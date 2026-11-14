@@ -142,7 +142,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(11)]
         public void Press_EachSongsKeysFromSilence_CastExactlyThatSong(int song)
         {
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(FillingDamage);
 
             int result = PlayAll(SongKeys[song]);
 
@@ -165,7 +165,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(11)]
         public void Press_EachSongsKeysBeforeTheLastNote_CastNothing(int song)
         {
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(FillingDamage);
             int[] keys = SongKeys[song];
 
             for (int note = 0; note < keys.Length - 1; note++)
@@ -179,7 +179,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void Press_ColossusKeysPlayedWhole_DoNotCastAnythingElseOnTheWay()
         {
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(FillingDamage);
 
             PlayAll(SongKeys[5]);
 
@@ -198,7 +198,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(11)]
         public void Press_WhileTheColossusStands_CastsNothingAndStartsNoCooldown(int song)
         {
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(FillingDamage);
             _forms.StartColossus(12f);
 
             int result = PlayAll(SongKeys[song]);
@@ -258,7 +258,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void CooldownFraction_ColossusHasNoCooldown_IsAlwaysZero()
         {
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(FillingDamage);
             PlayAll(SongKeys[5]);
 
             Assert.That(_caster.CooldownFraction(5), Is.EqualTo(0f));
@@ -431,7 +431,7 @@ namespace DigitalStory.Tests.EditMode
         [Test]
         public void SongNotReady_NotesCompletedWhileTheColossusStands_IsRaisedAndTheNotesAreUsedUp()
         {
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(FillingDamage);
             _forms.StartColossus(12f);
 
             PlayAll(SongKeys[0]);
@@ -526,7 +526,7 @@ namespace DigitalStory.Tests.EditMode
         [TestCase(11)]
         public void Press_TheFirstCastOfEachSongInASurvivePhase_IsFree(int song)
         {
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(FillingDamage);
             int countAtTheCast = -1;
             _caster.SongCast += _ => countAtTheCast = _body.Count;
 

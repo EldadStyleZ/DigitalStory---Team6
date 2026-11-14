@@ -716,8 +716,9 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(enemy.DamageTaken, Is.EqualTo(_tornado.Damage + StingDamageBy(_sting.Seconds) + _meteor.Damage).Within(1e-3f));
         }
 
-        // The owner's one exception: the Sting sends one sting for every 400 living wasps, and each hurts as hard, so twice
-        // the wasps hurt one target twice as hard; the squad stays the same share, shared between the stings.
+        // The owner's one exception: the Sting sends one sting for every 400 living wasps. Since songs-v2 V the stings share
+        // the cast's damage (the Sting is the weakest attack), so twice the wasps hurt one target as hard as half; the squad
+        // stays the same share, shared between the stings.
         [Test]
         public void Sting_TwiceTheWasps_SendsTwiceTheStingsFromTheSameSquad()
         {
@@ -731,7 +732,7 @@ namespace DigitalStory.Tests.EditMode
             Tick(4f);
 
             Assert.That(Strike.ParamB.x, Is.EqualTo(2f));
-            Assert.That(enemy.DamageTaken, Is.EqualTo(2f * StingDamageBy(_sting.Seconds)).Within(1e-3f));
+            Assert.That(enemy.DamageTaken, Is.EqualTo(StingDamageBy(_sting.Seconds)).Within(1e-3f));
         }
 
         // The numbers each song gives its picture (plan section B, the "CPU:" lines)

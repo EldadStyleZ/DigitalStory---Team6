@@ -7,8 +7,10 @@ namespace DigitalStory.Logic
     /// The stings (plan section O). One cast sends <see cref="StingSong.StingCount"/> stings for the wasps alive as its notes
     /// completed. Each takes its own target among the most threatening beekeepers within reach (the aim chooser's Threat
     /// rule); when there are fewer targets than stings, the spare ones double up, most threatening first, and their damage
-    /// adds. Each sting arcs to its target and wraps it, and hurts it from the arrival until the time is up, at
-    /// <see cref="StingSong.DamagePerSecond"/>, in pulses on the picture's squeezes. A sting whose target dies takes the
+    /// adds. Each sting arcs to its target and wraps it, and hurts it from the arrival until the time is up, at its even
+    /// part of <see cref="StingSong.DamagePerSecond"/>, the whole cast's, in pulses on the picture's squeezes: more wasps
+    /// spread the Sting over more beekeepers but never multiply it (the owner, 2026-11-14: the Sting is the weakest attack,
+    /// so its strength comes from the level, like every other song's). A sting whose target dies takes the
     /// most threatening beekeeper in reach that no other sting wraps, or the most threatening one when every one is wrapped,
     /// or else doubles up on what another sting still wraps, and hurts again once it has flown there
     /// (<see cref="StingSong.ReaimSeconds"/>); with nothing left it ends, and once every sting has ended the song lets go.
@@ -78,8 +80,8 @@ namespace DigitalStory.Logic
             _fury = context.Fury ?? throw new ArgumentException("The song context has no Fury meter.", nameof(context));
             _aim = context.Aim;
             _range = _song.MaxRange * context.SizeScale;
-            _damagePerSecond = _song.DamagePerSecond * context.DamageScale;
             _count = _song.StingCount(context.LivingWasps);
+            _damagePerSecond = _song.DamagePerSecond * context.DamageScale / _count;
             int found = ChooseFirstTargets(in context, out Vector3 aim);
             _isAir = found == 0;
             _endSeconds = _isAir ? _song.AirSeconds : _song.Seconds;

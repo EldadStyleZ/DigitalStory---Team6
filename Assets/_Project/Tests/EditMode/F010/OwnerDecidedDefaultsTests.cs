@@ -157,7 +157,7 @@ namespace DigitalStory.Tests.EditMode
             var config = ScriptableObject.CreateInstance<FuryConfig>();
 
             Assert.AreEqual(100f, config.Max);
-            Assert.AreEqual(8.5f, config.DamagePerFuryPoint);
+            Assert.AreEqual(11.5f, config.DamagePerFuryPoint, "the playtest bot once the Sting became the weakest attack (songs-v2 V): was 8.5");
             Assert.AreEqual(0f, config.ColossusDamageShare);
 
             Object.DestroyImmediate(config);
@@ -176,7 +176,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.AreEqual(3f, config.CollectRadius);
             Assert.AreEqual(150f, config.CollectPerSecond);
             Assert.AreEqual(60f, config.HealWaspsPerSecond);
-            Assert.AreEqual(3.5f, config.WaspsPerHealthPoint, "the playtest bot raised it from 2.5 once the Sting hit from its arrival, and from 3 once the giant had hands");
+            Assert.AreEqual(4f, config.WaspsPerHealthPoint, "the playtest bot raised it from 2.5 once the Sting hit from its arrival, from 3 once the giant had hands, and from 3.5 once the Sting became the weakest attack");
             Assert.AreEqual(0.8f, config.DamagedStartFraction, 0.0001f);
 
             Object.DestroyImmediate(config);

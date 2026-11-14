@@ -39,7 +39,8 @@ namespace DigitalStory.Tests.PlayMode
         // The hands: the giant forms 4 m north of the middle, where the chase camera behind it has no scenery or nest tree to
         // pull in for, with three stunned sticks 8 to 12 m ahead; the right hand launches, then the left, and the take runs
         // until the left arm has grown back. The side take watches the same from a fixed camera off the giant's right.
-        private const float FuryDamage = 1000f;
+        // Fills Fury at any rate up to 20 damage a point (11.5 since songs-v2 V, when 1,000 stopped filling it).
+        private const float FuryDamage = 2000f;
         private const float StunSeconds = 60f;
         private const float MaxWaitSeconds = 60f;
         private const float SwoopTolerance = 0.001f;

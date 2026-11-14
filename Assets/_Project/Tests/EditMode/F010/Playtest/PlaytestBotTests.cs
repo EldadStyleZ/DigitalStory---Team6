@@ -70,25 +70,30 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        // Plan section I: over a whole match without nests the bot, pressing the giant's keys, roars, punches, kicks and
-        // slams, and plays both phrases, the spin kick and the leap slam.
+        // Plan section I: over whole matches the bot, pressing the giant's keys, roars, punches, kicks and slams, and plays
+        // both phrases, the spin kick and the leap slam. Since songs-v2 V Fury fills at 1 point per 11.5 damage, so a match
+        // without nests stands the giant about twice, and with nests the giant fells most beekeepers before a third punch; so
+        // the moves are gathered over five matches without nests and three with them.
         [Test]
         public void FightAsGiant_OverAMatch_UsesEveryMoveAndBothPhrases()
         {
-            using (var match = new PlaytestMatch(Seed))
+            var started = new HashSet<ColossusAttack>();
+            for (uint seed = Seed; seed < Seed + 8; seed++)
             {
-                var started = new HashSet<ColossusAttack>();
-                match.Session.ColossusAttackStarted += attack => started.Add(attack);
-
-                new PlaytestBot(match, Seed).Play(new MixedPlan(), MatchSeconds);
-
-                var moves = new[]
+                using (var match = new PlaytestMatch(seed))
                 {
-                    ColossusAttack.Roar, ColossusAttack.Punch, ColossusAttack.Kick, ColossusAttack.Slam, ColossusAttack.SpinKick,
-                    ColossusAttack.LeapSlam,
-                };
-                Assert.That(started, Is.SupersetOf(moves));
+                    match.Session.ColossusAttackStarted += attack => started.Add(attack);
+                    IPlaytestPlan plan = seed < Seed + 5 ? new MixedPlan() : (IPlaytestPlan)new MixedWithNestsPlan();
+                    new PlaytestBot(match, seed).Play(plan, MatchSeconds);
+                }
             }
+
+            var moves = new[]
+            {
+                ColossusAttack.Roar, ColossusAttack.Punch, ColossusAttack.Kick, ColossusAttack.Slam, ColossusAttack.SpinKick,
+                ColossusAttack.LeapSlam,
+            };
+            Assert.That(started, Is.SupersetOf(moves));
         }
 
         // Songs-v2 R: as a player at a beekeeper too far to reach soon, the bot launches the giant's hands, both of them, and

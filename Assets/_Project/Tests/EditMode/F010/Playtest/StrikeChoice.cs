@@ -11,7 +11,8 @@ namespace DigitalStory.Tests.EditMode
     /// Sting sends one sting for every <see cref="StingSong.WaspsPerSting"/> living wasps, so two beekeepers or more in its
     /// reach are a shape for it, each with its own sting, as long as it lasts. Of the songs whose shape is there, that are
     /// ready and that the plan can pay for while keeping <c>reserve</c> wasps, it plays the one that would deal the most
-    /// damage (each beekeeper it reaches, times its damage; the Hydra reaches one a head, the Sting one a sting), the first in
+    /// damage (each beekeeper it reaches, times its damage; the Hydra reaches one a head; the Sting deals its cast's damage,
+    /// shared by its stings, so it seldom beats a big song that fits), the first in
     /// that order on a tie, the Sting last. A plan rich enough (<c>richInCasts</c> more casts above its reserve) also spends
     /// the Meteor on one beekeeper in its reach and the Tornado on one close by, once no shape is there. The Sting on a lone
     /// beekeeper, the cheap move for everything else, is the plan's own call. With the Scythe ready, a plan steps in on a
@@ -69,11 +70,12 @@ namespace DigitalStory.Tests.EditMode
             Consider(bot, PlaytestMatch.LanceIndex, isLanceShape ? Mathf.Max(line, 1) * lance.Damage : 0f, reserve, ref best, ref most);
             Consider(bot, PlaytestMatch.HydraIndex, inReach >= Several ? inReach * hydra.Damage : 0f, reserve, ref best, ref most);
 
-            // A running Sting is not cut for another, and a lone beekeeper is the plan's own call.
+            // A running Sting is not cut for another, and a lone beekeeper is the plan's own call. Its stings share the cast's
+            // damage (the owner made it the weakest attack, 2026-11-14), so however many it sends it deals the same.
             int stung = Mathf.Min(sting.StingCount(session.Swarm.Count), bot.CountWithin(bot.Core, sting.MaxRange * size));
-            float perSting = sting.DamagePerSecond * Mathf.Max(0f, sting.Seconds - sting.ArriveSeconds);
+            float perCast = sting.DamagePerSecond * Mathf.Max(0f, sting.Seconds - sting.ArriveSeconds);
             bool isStingShape = stung >= Several && !bot.IsRunning(SongSlot.Strike);
-            Consider(bot, PlaytestMatch.StingIndex, isStingShape ? stung * perSting : 0f, reserve, ref best, ref most);
+            Consider(bot, PlaytestMatch.StingIndex, isStingShape ? perCast : 0f, reserve, ref best, ref most);
             if (best >= 0)
             {
                 return bot.TryPlay(best);

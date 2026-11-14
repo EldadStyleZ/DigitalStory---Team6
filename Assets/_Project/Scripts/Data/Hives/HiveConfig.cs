@@ -43,8 +43,9 @@ namespace DigitalStory.Data
 
         // 3.5 (was 2.5, then 3), set by the playtest bot: first once the Sting's damage came in pulses from its arrival, then
         // once the giant's hands came (songs-v2 R). Each time kills came sooner, so the hives took fewer hits and a win healed
-        // with less than 15% of its wasps.
+        // with less than 15% of its wasps. 4 once the Sting became the weakest attack (songs-v2 V): the big songs that do
+        // its work cost more wasps, so healing became a smaller share of the spending.
         [field: SerializeField, Min(0.01f), Tooltip("Wasps given for each point of health healed.")]
-        public float WaspsPerHealthPoint { get; private set; } = 3.5f;
+        public float WaspsPerHealthPoint { get; private set; } = 4f;
     }
 }

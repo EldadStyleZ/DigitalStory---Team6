@@ -12,8 +12,9 @@ namespace DigitalStory.Tests.EditMode
     /// section H's "lost without nests, winnable with them" and section M's "none of the three always wins and doing
     /// nothing always loses": no single-minded plan wins a match in five, the careful player who never fetches a nest wins
     /// at most two, and the same player fetching the nests wins all five and ends clearly better off. The bot also checks
-    /// that every sink of wasps matters (healing and the towers), that a won match lasts six to nine minutes, that no one
-    /// song deals most of the damage in the wins, and that the giant, its hands included, stays under 45% of it. Each seed
+    /// that every sink of wasps matters (healing and the towers), that a won match lasts six to nine minutes, that no song
+    /// but the giant deals more than 40% of the damage in the wins, that the Sting deals at most 25% and is not the top song,
+    /// and that the giant, its hands included, stays under 45% of it. Each seed
     /// plays its own map (plan section S). <see cref="WideSweep_ThirtySeeds_HoldsTheRates"/> plays thirty seeds; it is
     /// explicit, so only a person asks for it.
     /// </summary>
@@ -31,7 +32,10 @@ namespace DigitalStory.Tests.EditMode
         private const float FewestHealingShare = 0.15f;
         private const float MostHealingShare = 0.45f;
         private const float FewestTowerShare = 0.08f;
-        private const float MostDamageShare = 0.5f;
+        // Songs-v2 V: no song but the giant deals more than 40% of the damage in the wins (was half), and the Sting, the
+        // weakest attack by the owner's wish, at most 25% and less than some other song.
+        private const float MostDamageShare = 0.4f;
+        private const float MostStingShare = 0.25f;
 
         // Plan section O: the giant was near half the damage, so it must stay clearly below it. The giant of section I, 20 s
         // and more, dealt 82% while its own blows filled Fury; with that stopped, and with its hands (songs-v2 R), it deals 40%
@@ -138,10 +142,11 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        // The songs differ, so none carries the wins: across every match won, no one song (the giant included) deals more
-        // than half the damage, and the giant less than 45%.
+        // The songs differ, so none carries the wins: across every match won, no song but the giant deals more than 40% of
+        // the damage, the Sting (the weakest attack, songs-v2 V) at most 25% and less than the top song, and the giant less
+        // than 45%.
         [Test]
-        public void Wins_NoSongDealsMoreThanHalfTheDamage_AndTheGiantUnderFortyFivePercent()
+        public void Wins_NoSongCarriesTheDamage_TheStingIsNotTheTop_AndTheGiantUnderFortyFivePercent()
         {
             AssertNoSongCarriesTheWins(_runs);
         }
@@ -218,11 +223,24 @@ namespace DigitalStory.Tests.EditMode
 
             Assert.IsNotEmpty(wins, "no match was won");
             float[] shares = PlaytestReport.DamageShares(wins);
+            float topOther = 0f;
             for (int song = 0; song < shares.Length; song++)
             {
+                if (song == PlaytestMatch.ColossusIndex)
+                {
+                    continue;
+                }
+
                 Assert.LessOrEqual(shares[song], MostDamageShare, $"{wins[0].SongNames[song]} dealt {shares[song]:P1} of the damage in the wins");
+                if (song != PlaytestMatch.StingIndex)
+                {
+                    topOther = Mathf.Max(topOther, shares[song]);
+                }
             }
 
+            float sting = shares[PlaytestMatch.StingIndex];
+            Assert.LessOrEqual(sting, MostStingShare, $"the Sting dealt {sting:P1} of the damage in the wins");
+            Assert.Less(sting, topOther, $"the Sting dealt {sting:P1}, the most of the songs; the next {topOther:P1}");
             float giant = shares[PlaytestMatch.ColossusIndex];
             Assert.Less(giant, MostColossusShare, $"the giant dealt {giant:P1} of the damage in the wins");
         }

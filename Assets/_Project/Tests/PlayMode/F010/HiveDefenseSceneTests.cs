@@ -42,7 +42,8 @@ namespace DigitalStory.Tests.PlayMode
         private const float WatchSeconds = 0.7f;
         private const float SmallestSwingDegrees = 10f;
         private const int SoundedHole = 3;
-        private const float FullFuryDamage = 1000f;
+        // Fills Fury at any rate up to 20 damage a point (11.5 since songs-v2 V, when 1,000 stopped filling it).
+        private const float FullFuryDamage = 2000f;
         private const float MaxColossusWaitSeconds = 2f;
         private const float PushSeconds = 0.5f;
         private const float SamePlaceMetres = 0.01f;

@@ -24,7 +24,7 @@ MonoBehaviour:
   _share: 0.3
   <Seconds>k__BackingField: 4
   <ArriveSeconds>k__BackingField: 0.35
-  <DamagePerSecond>k__BackingField: 20
+  <DamagePerSecond>k__BackingField: 12
   <MaxRange>k__BackingField: 12
   <AirSeconds>k__BackingField: 1
   <WaspsPerSting>k__BackingField: 400

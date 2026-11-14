@@ -88,7 +88,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(sting.Seconds, Is.EqualTo(4f));
             Assert.That(sting.Share, Is.EqualTo(0.3f));
             Assert.That(sting.ArriveSeconds, Is.EqualTo(0.35f), "plan section O: was 0.6");
-            Assert.That(sting.DamagePerSecond, Is.EqualTo(20f), "the playtest bot after plan section O: was 25");
+            Assert.That(sting.DamagePerSecond, Is.EqualTo(12f), "the whole cast's since songs-v2 V, the weakest attack: was 20 a sting, 25 before plan section O");
             Assert.That(sting.MaxRange, Is.EqualTo(12f));
             Assert.That(sting.AirSeconds, Is.EqualTo(1f));
             Assert.That(tornado.Seconds, Is.EqualTo(1.5f));
@@ -851,7 +851,7 @@ namespace DigitalStory.Tests.EditMode
         public void Colossus_Cast_UsesAllFuryAndLastsItsSeconds()
         {
             var song = Make<ColossusSong>();
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(_furyConfig.Max * _furyConfig.DamagePerFuryPoint);
             SwarmSongContext context = Context();
 
             song.Cast(in context);
@@ -869,7 +869,7 @@ namespace DigitalStory.Tests.EditMode
         public void Colossus_Cast_EachKillAddsItsSecondsUpToItsMost()
         {
             var song = Make<ColossusSong>();
-            _fury.AddDamage(1000f);
+            _fury.AddDamage(_furyConfig.Max * _furyConfig.DamagePerFuryPoint);
             SwarmSongContext context = Context();
             song.Cast(in context);
 

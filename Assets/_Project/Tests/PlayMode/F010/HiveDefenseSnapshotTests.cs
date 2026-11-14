@@ -45,7 +45,8 @@ namespace DigitalStory.Tests.PlayMode
         private const float TornadoSeconds = 0.8f;
         private const float ColossusSeconds = 2.5f;
         private const float MaxColossusWaitSeconds = 2f;
-        private const float FuryDamage = 1000f;
+        // Fills Fury at any rate up to 20 damage a point (11.5 since songs-v2 V, when 1,000 stopped filling it).
+        private const float FuryDamage = 2000f;
         private const float MaxWaveSeconds = 60f;
         private const float MaxWalkSeconds = 15f;
         private const float NearBeekeeperMeters = 6f;
