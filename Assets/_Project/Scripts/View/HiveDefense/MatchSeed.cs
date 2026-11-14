@@ -14,6 +14,13 @@ namespace DigitalStory.View
     /// </remarks>
     public static class MatchSeed
     {
+        /// <summary>
+        /// The seed of the map the scene builder saves into the scene, so the Editor shows a real map before Play. Every match
+        /// draws its own map over it when it starts. The PlayMode tests play another seed, whose map stands clearly elsewhere,
+        /// so nothing left where the scene put it can pass them (plan section T).
+        /// </summary>
+        public const int SavedSceneSeed = 1010;
+
         /// <summary>The command-line option that names the first match's seed.</summary>
         public const string CommandLineOption = "-f010Seed";
 

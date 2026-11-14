@@ -192,6 +192,11 @@ namespace DigitalStory.View
             _config = config;
             _block = new MaterialPropertyBlock();
 
+            // First, before any child is placed: the rings and the bar are children placed at the hive's world position,
+            // and moving this object after them would carry them by the move, off the hive, on every map but the one the
+            // scene was saved with (plan section T).
+            transform.position = hive.Position;
+
             if (_model != null)
             {
                 _modelStartScale = _model.localScale;
@@ -205,7 +210,6 @@ namespace DigitalStory.View
             BuildCollectRing(material);
             BuildMotes(material);
 
-            transform.position = hive.Position;
             _hive.Destroyed += OnDestroyed;
 
             if (_hive.IsDestroyed)
