@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace DigitalStory.GrassBrush
@@ -9,10 +10,28 @@ namespace DigitalStory.GrassBrush
     /// otherwise from the settings below. It also moves in the Editor; turn on the Scene view's
     /// "Always Refresh" to see it there.
     /// </summary>
+    /// <remarks>
+    /// Plan section AD. The clumps live on the GPU: the field is cut into small square cells, and the first time a cell
+    /// comes within reach its painted and covering clumps go into a buffer of their own, once. Each frame only the cells
+    /// in view and in reach are drawn, one draw call each, and nothing is uploaded. It used to send every clump's matrix in
+    /// view of 64 m cells to the GPU each frame (up to about 800,000 clumps and 21 million triangles), which held the game
+    /// near 40 frames a second and kept four processor cores busy.
+    /// </remarks>
     [ExecuteAlways]
     public sealed class GrassField : MonoBehaviour
     {
-        private const int MaxBatch = 1023;
+        private const int ClumpStride = 20;   // GpuClump: the root's three floats, the size and the turn
+        private const float BoundsPadding = 1f;
+        private const float ChecksumHeightWeight = 17f;
+        private const float ChecksumDepthWeight = 31f;
+        private const float ChecksumSizeWeight = 7f;
+
+        private static readonly int ClumpsId = Shader.PropertyToID("_GrassClumps");
+        private static readonly int CountId = Shader.PropertyToID("_GrassCount");
+        private static readonly int ThinStartId = Shader.PropertyToID("_GrassThinStart");
+        private static readonly int ThinEndId = Shader.PropertyToID("_GrassThinEnd");
+        private static readonly int ThinKeepId = Shader.PropertyToID("_GrassThinKeep");
+        private static readonly int ThinFadeId = Shader.PropertyToID("_GrassThinFade");
 
         private static readonly int WindDirId = Shader.PropertyToID("_GrassWindDir");
         private static readonly int WindStrengthId = Shader.PropertyToID("_GrassWindStrength");
@@ -64,8 +83,23 @@ namespace DigitalStory.GrassBrush
         [Header("Performance")]
         [Tooltip("Grass farther than this from the camera is not drawn, in metres.")]
         [SerializeField, Range(10f, 400f)] private float _drawDistance = 80f;
-        [Tooltip("The grass is drawn in square cells this wide, so the cells out of view or out of reach are skipped.")]
-        [SerializeField, Range(4f, 64f)] private float _cellSize = 16f;
+
+        // Was "_cellSize" (64 in the forest-clearing scene). Renamed without FormerlySerializedAs on purpose, so the scene's
+        // 64 m no longer applies: a 64 m cell drew far more grass than the view shows (plan section AD).
+        [Tooltip("The grass is drawn in square cells this wide, one draw call each, so the cells out of view or out of reach are skipped. Smaller cells skip more grass and cost more draw calls.")]
+        [SerializeField, Range(4f, 64f)] private float _drawCellSize = 8f;
+        [Tooltip("How many new cells may be filled in one frame once the field is drawing, so walking into new ground never stalls a frame. The first frame fills every cell in reach.")]
+        [SerializeField, Range(1, 256)] private int _cellBuildsPerFrame = 12;
+
+        [Header("Distance")]
+        [Tooltip("Metres from the camera where the grass starts to thin out.")]
+        [SerializeField, Range(0f, 400f)] private float _thinStart = 35f;
+        [Tooltip("Metres from the camera where it has thinned to the far share.")]
+        [SerializeField, Range(0f, 400f)] private float _thinEnd = 90f;
+        [Tooltip("The share of clumps kept from the end of the thinning on. 1 keeps every clump at every distance.")]
+        [SerializeField, Range(0.05f, 1f)] private float _farKeep = 1f;
+        [Tooltip("The share of clumps over which a clump past the kept share shrinks away, so thinning never pops.")]
+        [SerializeField, Range(0.01f, 0.5f)] private float _thinFade = 0.1f;
 
         [Header("Wind")]
         [Tooltip("Optional. When set, its direction, Main and Turbulence drive the grass.")]
@@ -78,16 +112,19 @@ namespace DigitalStory.GrassBrush
         [Tooltip("How close together the gusts are. Higher means smaller, busier waves.")]
         [SerializeField, Range(0.05f, 2f)] private float _gustSize = 0.35f;
 
-        private readonly List<Cell> _cells = new List<Cell>();
+        private const float MaskCell = 0.5f;
+
         private readonly Plane[] _frustum = new Plane[6];
+        private readonly Dictionary<Vector2Int, DrawCell> _drawCells = new Dictionary<Vector2Int, DrawCell>();
+        private readonly List<GpuClump> _scratch = new List<GpuClump>();
+        private Dictionary<Vector2Int, PaintedBucket> _painted = new Dictionary<Vector2Int, PaintedBucket>();
         private int _builtVersion = -1;
         private GrassData _builtData;
         private Mesh _clumpMesh;
-        private readonly Dictionary<Vector2Int, Cell> _coverCells = new Dictionary<Vector2Int, Cell>();
         private int _coverSettingsHash;
         private int _builtMaskVersion = -1;
-        private const float MaskCell = 0.5f;
         private bool _meshDirty;
+        private bool _cellsDirty;
 
         public GrassData Data
         {
@@ -124,7 +161,7 @@ namespace DigitalStory.GrassBrush
         public void SetNoGrassBelow(float height)
         {
             _noGrassBelow = height;
-            _coverCells.Clear();
+            ReleaseCells();
         }
 
         public void SetCover(bool cover, float density, Vector2 centre, float halfSize)
@@ -133,7 +170,7 @@ namespace DigitalStory.GrassBrush
             _coverDensity = Mathf.Clamp(density, 0.5f, 40f);
             _coverCentre = centre;
             _coverHalfSize = Mathf.Clamp(halfSize, 10f, 500f);
-            _coverCells.Clear();
+            ReleaseCells();
         }
 
         /// <summary>
@@ -159,6 +196,8 @@ namespace DigitalStory.GrassBrush
         /// <summary>True for the field whose wind settings move all the grass.</summary>
         public bool DrivesWind => _windOwner == this;
 
+        private float DrawCellSize => Mathf.Max(1f, _drawCellSize);
+
         private void OnEnable()
         {
             Camera.onPreCull += DrawForCamera;
@@ -169,6 +208,7 @@ namespace DigitalStory.GrassBrush
         {
             Camera.onPreCull -= DrawForCamera;
             TerrainCallbacks.heightmapChanged -= OnHeightmapChanged;
+            ReleaseCells();
             DestroyMesh();
             if (_windOwner == this)
             {
@@ -178,9 +218,11 @@ namespace DigitalStory.GrassBrush
 
         private void OnValidate()
         {
-            // The look settings change the clump's shape, and the cell size the cells, so both are rebuilt on the next draw.
+            // The look settings change the clump's shape, and the cell size and the thinning the cells, so both are rebuilt
+            // on the next draw.
             _meshDirty = true;
             _builtVersion = -1;
+            _cellsDirty = true;
         }
 
         private void Update()
@@ -320,47 +362,88 @@ namespace DigitalStory.GrassBrush
             Rebuild();
             GeometryUtility.CalculateFrustumPlanes(camera, _frustum);
             var eye = camera.transform.position;
-            var reachSquared = _drawDistance * _drawDistance;
+            var reach = _drawDistance;
+            var reachSquared = reach * reach;
             var mesh = GetClumpMesh();
-
-            if (_coverTerrain)
+            var cell = DrawCellSize;
+            var builds = _drawCells.Count == 0 ? int.MaxValue : _cellBuildsPerFrame;
+            var renderParams = new RenderParams(_material)
             {
-                DrawCover(camera, mesh, eye, reachSquared);
-            }
+                camera = camera,
+                layer = gameObject.layer,
+                shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off,
+                receiveShadows = false,
+            };
 
-            foreach (var cell in _cells)
+            var minX = Mathf.FloorToInt((eye.x - reach) / cell);
+            var maxX = Mathf.FloorToInt((eye.x + reach) / cell);
+            var minZ = Mathf.FloorToInt((eye.z - reach) / cell);
+            var maxZ = Mathf.FloorToInt((eye.z + reach) / cell);
+            for (var cx = minX; cx <= maxX; cx++)
             {
-                if (cell.Bounds.SqrDistance(eye) > reachSquared || !GeometryUtility.TestPlanesAABB(_frustum, cell.Bounds))
+                for (var cz = minZ; cz <= maxZ; cz++)
                 {
-                    continue;
-                }
+                    var key = new Vector2Int(cx, cz);
+                    if (!_drawCells.TryGetValue(key, out var drawCell))
+                    {
+                        // A cell is filled once, when it first comes within reach, never for a corner of the square out of it.
+                        if (builds <= 0 || GroundSqrDistance(key, eye) > reachSquared)
+                        {
+                            continue;
+                        }
 
-                var renderParams = new RenderParams(_material)
-                {
-                    camera = camera,
-                    layer = gameObject.layer,
-                    worldBounds = cell.Bounds,
-                    shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off,
-                    receiveShadows = false,
-                };
+                        builds--;
+                        drawCell = BuildCell(key);
+                        _drawCells.Add(key, drawCell);
+                    }
 
-                for (var start = 0; start < cell.Count; start += MaxBatch)
-                {
-                    var count = Mathf.Min(MaxBatch, cell.Count - start);
-                    Graphics.RenderMeshInstanced(renderParams, mesh, 0, cell.Matrices, count, start);
+                    if (drawCell.Count == 0 || drawCell.Bounds.SqrDistance(eye) > reachSquared || !GeometryUtility.TestPlanesAABB(_frustum, drawCell.Bounds))
+                    {
+                        continue;
+                    }
+
+                    renderParams.worldBounds = drawCell.Bounds;
+                    renderParams.matProps = drawCell.Block;
+                    Graphics.RenderMeshPrimitives(renderParams, mesh, 0, InstancesToDraw(drawCell, eye));
                 }
             }
         }
 
+        // Far cells draw only the share of their shuffled clumps the thinning keeps at their nearest point, and the fade
+        // past it; the shader shrinks away the rest of what is drawn clump by clump.
+        private int InstancesToDraw(DrawCell drawCell, Vector3 eye)
+        {
+            if (_farKeep >= 1f)
+            {
+                return drawCell.Count;
+            }
+
+            var nearest = Mathf.Sqrt(drawCell.Bounds.SqrDistance(eye));
+            var far = Mathf.Clamp01((nearest - _thinStart) / Mathf.Max(_thinEnd - _thinStart, 0.001f));
+            var keep = Mathf.Lerp(1f, _farKeep, far) + _thinFade;
+            return Mathf.Clamp(Mathf.CeilToInt(drawCell.Count * keep), 1, drawCell.Count);
+        }
+
+        private float GroundSqrDistance(Vector2Int key, Vector3 eye)
+        {
+            var cell = DrawCellSize;
+            var dx = Mathf.Max(0f, Mathf.Max((key.x * cell) - eye.x, eye.x - ((key.x + 1) * cell)));
+            var dz = Mathf.Max(0f, Mathf.Max((key.y * cell) - eye.z, eye.z - ((key.y + 1) * cell)));
+            return (dx * dx) + (dz * dz);
+        }
+
+        // Brings the draw cells up to date with the data and the settings: a change to the painted clumps rebuilds only the
+        // cells whose clumps changed; a change to the covering grass, its erase mask or the look rebuilds them all.
         private void Rebuild()
         {
             // The covering grass regrows when its settings change, or when undo or redo replace the erase mask.
-            var settings = (_coverDensity, _coverCentre, _coverHalfSize, _cellSize, _paintMinSize, _paintMaxSize, _coverTerrain, _noGrassBelow).GetHashCode();
-            if (settings != _coverSettingsHash || _builtMaskVersion != _data.MaskVersion || _builtData != _data)
+            var settings = (_coverDensity, _coverCentre, _coverHalfSize, _drawCellSize, _paintMinSize, _paintMaxSize, _coverTerrain, _noGrassBelow).GetHashCode();
+            if (_cellsDirty || settings != _coverSettingsHash || _builtMaskVersion != _data.MaskVersion || _builtData != _data)
             {
+                _cellsDirty = false;
                 _coverSettingsHash = settings;
                 _builtMaskVersion = _data.MaskVersion;
-                _coverCells.Clear();
+                ReleaseCells();
             }
 
             if (_builtData == _data && _builtVersion == _data.Version)
@@ -368,109 +451,115 @@ namespace DigitalStory.GrassBrush
                 return;
             }
 
-            // Sort the clumps into square cells, each with its own bounds, so whole cells can be skipped.
-            var buckets = new Dictionary<Vector2Int, List<int>>();
-            for (var i = 0; i < _data.Count; i++)
-            {
-                var position = _data.GetPosition(i);
-                var key = new Vector2Int(Mathf.FloorToInt(position.x / _cellSize), Mathf.FloorToInt(position.z / _cellSize));
-                if (!buckets.TryGetValue(key, out var list))
-                {
-                    list = new List<int>();
-                    buckets.Add(key, list);
-                }
-
-                list.Add(i);
-            }
-
-            _cells.Clear();
-            foreach (var bucket in buckets.Values)
-            {
-                var matrices = new Matrix4x4[bucket.Count];
-                var min = Vector3.positiveInfinity;
-                var max = Vector3.negativeInfinity;
-                for (var j = 0; j < bucket.Count; j++)
-                {
-                    var i = bucket[j];
-                    var position = _data.GetPosition(i);
-                    var size = _data.GetSize(i);
-                    matrices[j] = Matrix4x4.TRS(position, Quaternion.Euler(0f, _data.GetTurn(i), 0f), Vector3.one * size);
-                    min = Vector3.Min(min, position);
-                    max = Vector3.Max(max, position + Vector3.up * size);
-                }
-
-                var bounds = new Bounds();
-                bounds.SetMinMax(min - Vector3.one, max + Vector3.one);
-                _cells.Add(new Cell(matrices, bounds));
-            }
-
+            BucketPainted();
             _builtData = _data;
             _builtVersion = _data.Version;
         }
 
-        // Grows each cover cell in reach the first time it is needed, then draws the ones in view.
-        private void DrawCover(Camera camera, Mesh mesh, Vector3 eye, float reachSquared)
+        // Sorts the painted clumps into the draw cells, and lets go of every cell whose painted clumps changed.
+        private void BucketPainted()
         {
-            var reach = Mathf.Sqrt(reachSquared);
-            var min = new Vector2(Mathf.Max(eye.x - reach, _coverCentre.x - _coverHalfSize), Mathf.Max(eye.z - reach, _coverCentre.y - _coverHalfSize));
-            var max = new Vector2(Mathf.Min(eye.x + reach, _coverCentre.x + _coverHalfSize), Mathf.Min(eye.z + reach, _coverCentre.y + _coverHalfSize));
-            if (min.x > max.x || min.y > max.y)
+            var cell = DrawCellSize;
+            var buckets = new Dictionary<Vector2Int, PaintedBucket>();
+            for (var i = 0; i < _data.Count; i++)
             {
-                return;
+                var position = _data.GetPosition(i);
+                var key = new Vector2Int(Mathf.FloorToInt(position.x / cell), Mathf.FloorToInt(position.z / cell));
+                if (!buckets.TryGetValue(key, out var bucket))
+                {
+                    bucket = new PaintedBucket();
+                    buckets.Add(key, bucket);
+                }
+
+                bucket.Add(new GpuClump(position, _data.GetSize(i), _data.GetTurn(i)));
             }
 
-            var terrain = Terrain.activeTerrain;
-            for (var cx = Mathf.FloorToInt(min.x / _cellSize); cx <= Mathf.FloorToInt(max.x / _cellSize); cx++)
+            foreach (var pair in _painted)
             {
-                for (var cz = Mathf.FloorToInt(min.y / _cellSize); cz <= Mathf.FloorToInt(max.y / _cellSize); cz++)
+                if (!buckets.TryGetValue(pair.Key, out var now) || !now.IsSameAs(pair.Value))
                 {
-                    var key = new Vector2Int(cx, cz);
-                    if (!_coverCells.TryGetValue(key, out var cell))
-                    {
-                        cell = BuildCoverCell(key, terrain);
-                        _coverCells.Add(key, cell);
-                    }
-
-                    if (cell.Count == 0 || cell.Bounds.SqrDistance(eye) > reachSquared || !GeometryUtility.TestPlanesAABB(_frustum, cell.Bounds))
-                    {
-                        continue;
-                    }
-
-                    var renderParams = new RenderParams(_material)
-                    {
-                        camera = camera,
-                        layer = gameObject.layer,
-                        worldBounds = cell.Bounds,
-                        shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off,
-                        receiveShadows = false,
-                    };
-
-                    for (var start = 0; start < cell.Count; start += MaxBatch)
-                    {
-                        Graphics.RenderMeshInstanced(renderParams, mesh, 0, cell.Matrices, Mathf.Min(MaxBatch, cell.Count - start), start);
-                    }
+                    ReleaseCell(pair.Key);
                 }
             }
+
+            foreach (var key in buckets.Keys)
+            {
+                if (!_painted.ContainsKey(key))
+                {
+                    ReleaseCell(key);
+                }
+            }
+
+            _painted = buckets;
+        }
+
+        // A cell's painted clumps and its covering grass in one buffer, shuffled so any first share of them is an even
+        // sample for the thinning, with the bounds they fill.
+        private DrawCell BuildCell(Vector2Int key)
+        {
+            _scratch.Clear();
+            if (_painted.TryGetValue(key, out var bucket))
+            {
+                _scratch.AddRange(bucket.Clumps);
+            }
+
+            if (_coverTerrain)
+            {
+                AddCover(key, Terrain.activeTerrain, _scratch);
+            }
+
+            if (_scratch.Count == 0)
+            {
+                return DrawCell.Empty;
+            }
+
+            var random = new System.Random(unchecked((key.x * 92837111) ^ (key.y * 689287499) ^ 0x2545f491));
+            var min = Vector3.positiveInfinity;
+            var max = Vector3.negativeInfinity;
+            for (var i = _scratch.Count - 1; i >= 0; i--)
+            {
+                var swap = random.Next(i + 1);
+                var clump = _scratch[swap];
+                _scratch[swap] = _scratch[i];
+                _scratch[i] = clump;
+                min = Vector3.Min(min, clump.Position);
+                max = Vector3.Max(max, clump.Position + (Vector3.up * clump.Size));
+            }
+
+            var bounds = new Bounds();
+            bounds.SetMinMax(min - (Vector3.one * BoundsPadding), max + (Vector3.one * BoundsPadding));
+            var buffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, _scratch.Count, ClumpStride);
+            buffer.SetData(_scratch);
+            var block = new MaterialPropertyBlock();
+            block.SetBuffer(ClumpsId, buffer);
+            block.SetFloat(CountId, _scratch.Count);
+            block.SetFloat(ThinStartId, _thinStart);
+            block.SetFloat(ThinEndId, _thinEnd);
+            block.SetFloat(ThinKeepId, _farKeep);
+            block.SetFloat(ThinFadeId, _thinFade);
+            return new DrawCell(buffer, block, bounds, _scratch.Count);
         }
 
         // The covering grass of one cell: a jittered grid at the cover density, the same every time for the same cell,
         // standing on the terrain, inside the covered square and not where the brush erased it.
-        private Cell BuildCoverCell(Vector2Int key, Terrain terrain)
+        private void AddCover(Vector2Int key, Terrain terrain, List<GpuClump> clumps)
         {
+            var cell = DrawCellSize;
             var random = new System.Random(unchecked((key.x * 73856093) ^ (key.y * 19349663) ^ 0x5bd1e995));
             var spacing = 1f / Mathf.Sqrt(Mathf.Max(0.05f, _coverDensity));
-            var cellMin = new Vector2(key.x * _cellSize, key.y * _cellSize);
+            var cellMin = new Vector2(key.x * cell, key.y * cell);
             var area = new Rect(_coverCentre - (Vector2.one * _coverHalfSize), Vector2.one * (_coverHalfSize * 2f));
+            if (!area.Overlaps(new Rect(cellMin, Vector2.one * cell)))
+            {
+                return;
+            }
+
             var origin = terrain != null ? terrain.GetPosition() : Vector3.zero;
             var minSize = PaintMinSize;
             var maxSize = PaintMaxSize;
-
-            var matrices = new List<Matrix4x4>();
-            var min = Vector3.positiveInfinity;
-            var max = Vector3.negativeInfinity;
-            for (var x = 0f; x < _cellSize; x += spacing)
+            for (var x = 0f; x < cell; x += spacing)
             {
-                for (var z = 0f; z < _cellSize; z += spacing)
+                for (var z = 0f; z < cell; z += spacing)
                 {
                     var px = cellMin.x + x + ((float)random.NextDouble() * spacing);
                     var pz = cellMin.y + z + ((float)random.NextDouble() * spacing);
@@ -488,30 +577,40 @@ namespace DigitalStory.GrassBrush
                         continue;
                     }
 
-                    matrices.Add(Matrix4x4.TRS(position, Quaternion.Euler(0f, turn, 0f), Vector3.one * size));
-                    min = Vector3.Min(min, position);
-                    max = Vector3.Max(max, position + (Vector3.up * size));
+                    clumps.Add(new GpuClump(position, size, turn));
                 }
             }
-
-            var bounds = new Bounds();
-            if (matrices.Count > 0)
-            {
-                bounds.SetMinMax(min - Vector3.one, max + Vector3.one);
-            }
-
-            return new Cell(matrices.ToArray(), bounds);
         }
 
         private void ForgetCoverCells(float minX, float maxX, float minZ, float maxZ)
         {
-            for (var cx = Mathf.FloorToInt(minX / _cellSize); cx <= Mathf.FloorToInt(maxX / _cellSize); cx++)
+            var cell = DrawCellSize;
+            for (var cx = Mathf.FloorToInt(minX / cell); cx <= Mathf.FloorToInt(maxX / cell); cx++)
             {
-                for (var cz = Mathf.FloorToInt(minZ / _cellSize); cz <= Mathf.FloorToInt(maxZ / _cellSize); cz++)
+                for (var cz = Mathf.FloorToInt(minZ / cell); cz <= Mathf.FloorToInt(maxZ / cell); cz++)
                 {
-                    _coverCells.Remove(new Vector2Int(cx, cz));
+                    ReleaseCell(new Vector2Int(cx, cz));
                 }
             }
+        }
+
+        private void ReleaseCell(Vector2Int key)
+        {
+            if (_drawCells.TryGetValue(key, out var drawCell))
+            {
+                drawCell.Release();
+                _drawCells.Remove(key);
+            }
+        }
+
+        private void ReleaseCells()
+        {
+            foreach (var drawCell in _drawCells.Values)
+            {
+                drawCell.Release();
+            }
+
+            _drawCells.Clear();
         }
 
         /// <summary>
@@ -609,19 +708,63 @@ namespace DigitalStory.GrassBrush
             _clumpMesh = null;
         }
 
-        private readonly struct Cell
+        // One clump as the shader reads it (WindGrass.shader's GrassClump): the turn is in radians there.
+        [StructLayout(LayoutKind.Sequential)]
+        private readonly struct GpuClump
         {
-            public Cell(Matrix4x4[] matrices, Bounds bounds)
+            public GpuClump(Vector3 position, float size, float turnDegrees)
             {
-                Matrices = matrices;
-                Bounds = bounds;
+                Position = position;
+                Size = size;
+                Turn = turnDegrees * Mathf.Deg2Rad;
             }
 
-            public Matrix4x4[] Matrices { get; }
+            public Vector3 Position { get; }
+
+            public float Size { get; }
+
+            public float Turn { get; }
+        }
+
+        // The painted clumps of one draw cell, with a sum that changes when any of them moves, grows or turns.
+        private sealed class PaintedBucket
+        {
+            public List<GpuClump> Clumps { get; } = new List<GpuClump>();
+
+            public double Sum { get; private set; }
+
+            public void Add(GpuClump clump)
+            {
+                Clumps.Add(clump);
+                Vector3 position = clump.Position;
+                Sum += position.x + (position.y * ChecksumHeightWeight) + (position.z * ChecksumDepthWeight) + (clump.Size * ChecksumSizeWeight) + clump.Turn;
+            }
+
+            public bool IsSameAs(PaintedBucket other) => other.Clumps.Count == Clumps.Count && other.Sum == Sum;
+        }
+
+        // One square cell's clumps on the GPU: their buffer, the property block that hands it to the shader, their bounds.
+        private sealed class DrawCell
+        {
+            public static readonly DrawCell Empty = new DrawCell(null, null, default, 0);
+
+            public DrawCell(GraphicsBuffer clumps, MaterialPropertyBlock block, Bounds bounds, int count)
+            {
+                Clumps = clumps;
+                Block = block;
+                Bounds = bounds;
+                Count = count;
+            }
+
+            public GraphicsBuffer Clumps { get; }
+
+            public MaterialPropertyBlock Block { get; }
 
             public Bounds Bounds { get; }
 
-            public int Count => Matrices.Length;
+            public int Count { get; }
+
+            public void Release() => Clumps?.Release();
         }
     }
 }

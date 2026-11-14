@@ -1,6 +1,9 @@
-// Low poly grass blades for the Grass Brush. GrassField draws every clump with GPU instancing,
-// and this shader bends each blade with the wind: slow waves travel across the field in the
-// wind's direction, and a quick flutter shakes each clump on its own.
+// Low poly grass blades for the Grass Brush. GrassField keeps every clump on the GPU, in one buffer per square cell
+// (_GrassClumps: the clump's root, size and turn), and draws a cell's clumps as instances of one clump mesh; this
+// shader places each instance from the buffer (plan section AD: nothing is uploaded per frame), and bends each blade
+// with the wind: slow waves travel across the field in the wind's direction, and a quick flutter shakes each clump on
+// its own. Far away the field may thin out: a cell's clumps are shuffled, so the first share of them is an even
+// sample, and clumps past the share kept at their distance shrink away (_GrassThin*; off when the far share is 1).
 // The blade's height (uv.y, 0 at the root and 1 at the tip) decides how far it bends, so roots stay put.
 // Each face is lit flat, so the blades read as facets. GrassField sets the _GrassWind* globals every frame.
 // The second pass adds every pixel point light, such as the swarm's glow and attack lights, so the grass
@@ -32,6 +35,22 @@ Shader "DigitalStory/WindGrass"
     float _GlowResponse;
     float _GlowWrap;
 
+    // One clump: its root on the ground, its size in metres and its turn about the up axis in radians. GrassField's
+    // GpuClump has the same layout.
+    struct GrassClump
+    {
+        float3 position;
+        float size;
+        float turn;
+    };
+
+    StructuredBuffer<GrassClump> _GrassClumps;
+    float _GrassCount;          // this cell's clumps, for each clump's place in the shuffled order
+    float _GrassThinStart;      // metres from the camera where the field starts to thin
+    float _GrassThinEnd;        // metres where it has thinned to _GrassThinKeep
+    float _GrassThinKeep;       // the share of clumps kept from _GrassThinEnd on (1 keeps all)
+    float _GrassThinFade;       // the share of clumps over which a clump past the kept share shrinks away
+
     float4 _GrassWindDir;
     float _GrassWindStrength;
     float _GrassWindSpeed;
@@ -42,7 +61,6 @@ Shader "DigitalStory/WindGrass"
     {
         float4 vertex : POSITION;
         float2 uv : TEXCOORD0;
-        UNITY_VERTEX_INPUT_INSTANCE_ID
     };
 
     float Hash(float2 p)
@@ -50,12 +68,30 @@ Shader "DigitalStory/WindGrass"
         return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
     }
 
-    // Bends the blade with the wind and returns its world position. Also gives the blade's shade.
-    float3 WindBlade(Attributes input, out float tint)
+    // The share of a clump that shows at its distance: 1 near, 0 for a clump past the share kept there, and in between
+    // for the few at the edge of that share, so the field thins smoothly as the camera moves.
+    float ThinGrowth(float3 root, uint instance)
     {
-        float3 world = mul(unity_ObjectToWorld, input.vertex).xyz;
-        float3 root = float3(unity_ObjectToWorld._m03, unity_ObjectToWorld._m13, unity_ObjectToWorld._m23);
-        float size = length(float3(unity_ObjectToWorld._m01, unity_ObjectToWorld._m11, unity_ObjectToWorld._m21));
+        float away = length(root - _WorldSpaceCameraPos);
+        float far = saturate((away - _GrassThinStart) / max(_GrassThinEnd - _GrassThinStart, 0.001));
+        float keep = lerp(1.0, _GrassThinKeep, far);
+        float rank = (instance + 0.5) / max(_GrassCount, 1.0);
+        float fade = max(_GrassThinFade, 0.001);
+        return saturate((keep + fade - rank) / fade);
+    }
+
+    // Bends the blade with the wind and returns its world position. Also gives the blade's shade.
+    float3 WindBlade(Attributes input, uint instance, out float tint)
+    {
+        GrassClump clump = _GrassClumps[instance];
+        float3 root = clump.position;
+        float size = clump.size * ThinGrowth(root, instance);
+        float turnSin;
+        float turnCos;
+        sincos(clump.turn, turnSin, turnCos);
+        // Unity's turn about y (Quaternion.Euler(0, turn, 0)), then the clump's size, then its root.
+        float3 local = input.vertex.xyz * size;
+        float3 world = root + float3((local.x * turnCos) + (local.z * turnSin), local.y, (local.z * turnCos) - (local.x * turnSin));
         float h = input.uv.y;
         float random = Hash(root.xz);
 
@@ -112,7 +148,7 @@ Shader "DigitalStory/WindGrass"
             CGPROGRAM
             #pragma vertex Vertex
             #pragma fragment Fragment
-            #pragma multi_compile_instancing
+            #pragma target 4.5
             #pragma multi_compile_fog
 
             struct Varyings
@@ -124,12 +160,11 @@ Shader "DigitalStory/WindGrass"
                 UNITY_FOG_COORDS(2)
             };
 
-            Varyings Vertex(Attributes input)
+            Varyings Vertex(Attributes input, uint instance : SV_InstanceID)
             {
-                UNITY_SETUP_INSTANCE_ID(input);
                 Varyings output;
                 float tint;
-                float3 world = WindBlade(input, tint);
+                float3 world = WindBlade(input, instance, tint);
                 output.pos = UnityWorldToClipPos(world);
                 output.height = input.uv.y;
                 output.tint = tint;
@@ -162,7 +197,7 @@ Shader "DigitalStory/WindGrass"
             CGPROGRAM
             #pragma vertex Vertex
             #pragma fragment Fragment
-            #pragma multi_compile_instancing
+            #pragma target 4.5
             #pragma multi_compile_fog
             #pragma multi_compile_fwdadd
             #include "AutoLight.cginc"
@@ -176,12 +211,11 @@ Shader "DigitalStory/WindGrass"
                 UNITY_FOG_COORDS(2)
             };
 
-            Varyings Vertex(Attributes input)
+            Varyings Vertex(Attributes input, uint instance : SV_InstanceID)
             {
-                UNITY_SETUP_INSTANCE_ID(input);
                 Varyings output;
                 float tint;
-                float3 world = WindBlade(input, tint);
+                float3 world = WindBlade(input, instance, tint);
                 output.pos = UnityWorldToClipPos(world);
                 output.height = input.uv.y;
                 output.tint = tint;
