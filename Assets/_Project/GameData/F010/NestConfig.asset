@@ -31,6 +31,6 @@ MonoBehaviour:
   <HiveClearance>k__BackingField: 12
   <FirstNestsNearest>k__BackingField: 10
   <FirstNestsFarthest>k__BackingField: 14
-  <LaterNestsNearest>k__BackingField: 16
-  <LaterNestsFarthest>k__BackingField: 34
+  <LaterNestsNearest>k__BackingField: 20
+  <LaterNestsFarthest>k__BackingField: 85
   <LaterNestsWidestGapDegrees>k__BackingField: 90

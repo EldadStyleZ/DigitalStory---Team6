@@ -73,9 +73,8 @@ namespace DigitalStory.GrassBrush.Editor
             // trails into the trees to every nest and spawn, and a dense wood all round with an undergrowth at its rim.
             _clearingPhase = Chance() * 10f;
             int count = 0;
-            count += GatherScenery();
-            count += Camps(Child(root, "Beekeeper Camps"));
-            count += InTheClearing(Child(root, "Clearing"));
+            // The random map places the objects inside the arena now (the programmer's SceneryView); the dressing only
+            // frames it with the wood beyond its edge and the reeds along the rivers.
             count += Treeline(Child(root, "Treeline"));
             count += Woods(Child(root, "Forest"));
             count += Reeds(Child(root, "Riverside"));
@@ -208,7 +207,7 @@ namespace DigitalStory.GrassBrush.Editor
 
         // ---- The clearing ----
 
-        private const float ClearingRadius = 50f;
+        private const float ClearingRadius = 104f;
         private static float _clearingPhase;
 
         // The clearing's edge wanders in and out, so it reads as grown rather than drawn.

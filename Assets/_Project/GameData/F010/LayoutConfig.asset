@@ -12,27 +12,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8fe2728629eb94b529c56b69b29e3dc6, type: 3}
   m_Name: LayoutConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.LayoutConfig
-  <ArenaHalfSize>k__BackingField: 42
-  <HiveNearest>k__BackingField: 8
-  <HiveFarthest>k__BackingField: 20
+  <ArenaHalfSize>k__BackingField: 100
+  <HiveNearest>k__BackingField: 15
+  <HiveFarthest>k__BackingField: 40
   <HiveAcrossSpreadDegrees>k__BackingField: 60
-  <HiveLeastSeparation>k__BackingField: 18
-  <SpawnFromHiveNearest>k__BackingField: 18
-  <SpawnFromHiveFarthest>k__BackingField: 22
+  <HiveLeastSeparation>k__BackingField: 30
+  <SpawnFromHiveNearest>k__BackingField: 35
+  <SpawnFromHiveFarthest>k__BackingField: 50
   <SpawnSideNarrowestDegrees>k__BackingField: 20
   <SpawnSideWidestDegrees>k__BackingField: 70
   <SpawnOwnHiveLeadMetres>k__BackingField: 4
-  <SpawnStartClearance>k__BackingField: 20
-  <SpawnLeastSpacing>k__BackingField: 10
-  <NestInsideHalfSize>k__BackingField: 34
-  <NestLeastSpacing>k__BackingField: 8
+  <SpawnStartClearance>k__BackingField: 40
+  <SpawnLeastSpacing>k__BackingField: 20
+  <NestInsideHalfSize>k__BackingField: 90
+  <NestLeastSpacing>k__BackingField: 12
   <NestSpawnClearance>k__BackingField: 8
   <NestHiveMargin>k__BackingField: 0.5
   <NestStartClearance>k__BackingField: 8
   <FirstNestsNarrowestBearing>k__BackingField: 15
   <FirstNestsWidestBearing>k__BackingField: 40
   <LaterNestJitterDegrees>k__BackingField: 10
-  <SceneryInnerHalfSize>k__BackingField: 22
+  <SceneryInnerHalfSize>k__BackingField: 30
   <SceneryLeastSpacing>k__BackingField: 2
   <SceneryFootprintShare>k__BackingField: 0.5
   <SceneryHiveClearance>k__BackingField: 6
