@@ -47,6 +47,8 @@ namespace DigitalStory.View
         private const int SampleHole = 2;
         private const float SampleGapSeconds = 0.15f;
         private const int VolumeStepPercent = 5;
+        private const string FrameRateOption = "-f010FrameRate";
+        private const string RenderScaleOption = "-f010RenderScale";
 
         // Mixed into the map's seed for the recorded sounds' own random stream (plan section AC).
         private const uint SoundSeedSalt = 0x50D5EEDu;
@@ -186,6 +188,10 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The felt hit: the camera's shake and kick, the beekeeper's flash and recoil, the swarm's freeze and the shield's blue flash.")]
         private HitFeedbackView _hitFeedback;
 
+        [Header("Display")]
+        [SerializeField, Tooltip("The frame rate and render scale a player starts with (plan section AD). Without one, the code defaults: the display's own frame rate and Auto render scale.")]
+        private DisplayConfig _displayConfig;
+
         [Header("Shadows")]
         [SerializeField, Min(1f), Tooltip("Metres the moon's shadows reach while this scene is loaded. Set at runtime for this scene only, and the quality level's own value is put back when the scene unloads.")]
         private float _shadowDistance = 45f;
@@ -258,6 +264,10 @@ namespace DigitalStory.View
         private IVolumeStore _volumeStore;
         private SettingsPanelView _settings;
         private bool _areVolumesUnsaved;
+        private DisplaySettings _display;
+        private DisplaySettingsApplier _displayApplier;
+        private DisplayConfig _defaultDisplayConfig;
+        private bool _isDisplayUnsaved;
         private float _lastSampleAt = float.NegativeInfinity;
         private bool _isRelockingAfterSettings;
         private CursorLockMode _lockBeforeSettings;
@@ -364,6 +374,12 @@ namespace DigitalStory.View
         /// <summary>The settings panel, for tests.</summary>
         public SettingsPanelView Settings => _settings;
 
+        /// <summary>The player's frame-rate and render-scale choices (plan section AD), for the settings panel and tests.</summary>
+        public DisplaySettings Display => _display;
+
+        /// <summary>What the display choices come to on this machine, for tests and the benchmark's notes.</summary>
+        public DisplaySettingsApplier DisplayApplier => _displayApplier;
+
         /// <summary>
         /// Opens the settings panel and pauses the match, or closes it, saves the volumes and lets the match run, as Esc and the
         /// controller's Select do. For tests and the benchmark; the keys work either way.
@@ -396,6 +412,8 @@ namespace DigitalStory.View
             _volumes.Load(store);
             _areVolumesUnsaved = false;
             ApplyVolumes();
+            _display.Load(store);
+            _isDisplayUnsaved = false;
         }
 
         /// <summary>The compiling of the game's code ahead of its first call, for tests and the benchmark.</summary>
@@ -424,6 +442,7 @@ namespace DigitalStory.View
             _volumeStore = new PlayerPrefsVolumeStore();
             _volumes.Load(_volumeStore);
             _volumes.Changed += HandleVolumeChanged;
+            MakeDisplaySettings();
             _ambience = new GameObject("Ambience", typeof(AudioSource), typeof(AmbienceVoice)).GetComponent<AmbienceVoice>();
             _ambience.transform.SetParent(transform, false);
 
@@ -510,7 +529,7 @@ namespace DigitalStory.View
             _hud.Initialize(Session);
             _hud.ListenToKillChain(_hitFeedback);
             _hud.UseRecordedSounds(_gameSound);
-            _settings = _hud.MakeSettings(_volumes);
+            _settings = _hud.MakeSettings(_volumes, _display, _displayApplier);
             ApplyVolumes();
             _hud.ShowControls(_input.LastDevice);
             _minimap = new HiveMinimapView(
@@ -588,6 +607,16 @@ namespace DigitalStory.View
             if (_volumes != null)
             {
                 _volumes.Changed -= HandleVolumeChanged;
+            }
+
+            if (_display != null)
+            {
+                _display.Changed -= HandleDisplayChanged;
+            }
+
+            if (_defaultDisplayConfig != null)
+            {
+                Destroy(_defaultDisplayConfig);
             }
 
             _minimap?.Dispose();
@@ -1289,10 +1318,24 @@ namespace DigitalStory.View
                 _settings.MoveFocus(_input.SettingsRowStep);
             }
 
-            if (_input.SettingsValueStep != 0)
+            if (_input.SettingsValueStep == 0)
+            {
+                return;
+            }
+
+            SettingsRow row = _settings.FocusedRow;
+            if (row == SettingsRow.FrameRate)
+            {
+                _display.StepFrameRate(_input.SettingsValueStep);
+            }
+            else if (row == SettingsRow.RenderScale)
+            {
+                _display.StepRenderScale(_input.SettingsValueStep);
+            }
+            else
             {
                 int step = _sound != null ? _sound.VolumeStepPercent : VolumeStepPercent;
-                _volumes.Step(_settings.Focused, _input.SettingsValueStep * step);
+                _volumes.Step((VolumeGroup)row, _input.SettingsValueStep * step);
             }
         }
 
@@ -1348,6 +1391,54 @@ namespace DigitalStory.View
                 _volumes.Save(_volumeStore);
                 _areVolumesUnsaved = false;
             }
+
+            if (_isDisplayUnsaved && _display != null)
+            {
+                _display.Save(_volumeStore);
+                _isDisplayUnsaved = false;
+            }
+        }
+
+        // Plan section AD: the frame rate and render scale from the store (or the config's defaults), then from the command line
+        // ("-f010FrameRate display|120|60", "-f010RenderScale auto|native|75|50") for this run only, never saved unless the
+        // player changes them in the panel; applied at once.
+        private void MakeDisplaySettings()
+        {
+            DisplayConfig config = _displayConfig;
+            if (config == null)
+            {
+                _defaultDisplayConfig = ScriptableObject.CreateInstance<DisplayConfig>();
+                config = _defaultDisplayConfig;
+            }
+
+            _displayApplier = new DisplaySettingsApplier(config);
+            _display = new DisplaySettings(config.DefaultFrameRate, config.DefaultRenderScale);
+            _display.Load(_volumeStore);
+            string[] arguments = Environment.GetCommandLineArgs();
+            if (DisplaySettings.TryParseFrameRate(ArgumentAfter(arguments, FrameRateOption), out FrameRateChoice frameRate))
+            {
+                _display.SetFrameRate(frameRate);
+            }
+
+            if (DisplaySettings.TryParseRenderScale(ArgumentAfter(arguments, RenderScaleOption), out RenderScaleChoice renderScale))
+            {
+                _display.SetRenderScale(renderScale);
+            }
+
+            _display.Changed += HandleDisplayChanged;
+            _displayApplier.Apply(_display);
+        }
+
+        private void HandleDisplayChanged()
+        {
+            _displayApplier.Apply(_display);
+            _isDisplayUnsaved = true;
+        }
+
+        private static string ArgumentAfter(string[] arguments, string option)
+        {
+            int index = Array.IndexOf(arguments, option);
+            return index >= 0 && index < arguments.Length - 1 ? arguments[index + 1] : null;
         }
 
         // The recorded sounds' player, made afresh for a library with sounds, or none. The old one stops at once and goes.

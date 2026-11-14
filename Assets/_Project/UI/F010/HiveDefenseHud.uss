@@ -954,7 +954,7 @@
 }
 
 .settings-card {
-    width: 460px;
+    width: 520px;
     max-width: 92%;
     padding: 18px 24px;
     background-color: rgba(18, 20, 34, 0.92);
@@ -988,7 +988,7 @@
 }
 
 .settings-name {
-    width: 84px;
+    width: 112px;
     font-size: 16px;
     padding: 0;
 }
@@ -1003,6 +1003,16 @@
     font-size: 16px;
     -unity-font-style: bold;
     -unity-text-align: middle-right;
+    padding: 0;
+}
+
+/* Plan section AD: a choice row (frame rate, render scale) shows its value between arrows; Left and Right change it. */
+.settings-choice {
+    flex-grow: 1;
+    margin: 0 10px;
+    font-size: 16px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
     padding: 0;
 }
 

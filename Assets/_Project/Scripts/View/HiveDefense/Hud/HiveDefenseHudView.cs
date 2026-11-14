@@ -277,15 +277,20 @@ namespace DigitalStory.View
         /// Initialize; the root opens and closes it.
         /// </summary>
         /// <exception cref="InvalidOperationException">Initialize has not run.</exception>
-        public SettingsPanelView MakeSettings(VolumeSettings volumes)
+        public SettingsPanelView MakeSettings(VolumeSettings volumes, DisplaySettings display, DisplaySettingsApplier applier)
         {
             if (_uiRoot == null)
             {
                 throw new InvalidOperationException("Call HiveDefenseHudView.Initialize before MakeSettings.");
             }
 
+            if (applier == null)
+            {
+                throw new ArgumentNullException(nameof(applier));
+            }
+
             _settings?.Dispose();
-            _settings = new SettingsPanelView(_uiRoot, volumes);
+            _settings = new SettingsPanelView(_uiRoot, volumes, display, applier.FrameRateText, applier.RenderScaleText);
             _settings.ShowControls(_device);
             return _settings;
         }

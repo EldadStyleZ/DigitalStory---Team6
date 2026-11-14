@@ -21205,6 +21205,7 @@ MonoBehaviour:
   _colossusMotor: {fileID: 1563261951}
   _hud: {fileID: 510164804}
   _hitFeedback: {fileID: 730302616}
+  _displayConfig: {fileID: 0}
   _shadowDistance: 45
   _shadowCascades: 2
   _lookDegreesPerUnit: 2.5

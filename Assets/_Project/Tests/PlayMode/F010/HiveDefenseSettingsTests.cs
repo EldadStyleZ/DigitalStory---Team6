@@ -131,6 +131,38 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(voice.MusicGain, Is.EqualTo(0.09f).Within(1e-5f), "the reloaded volume did not reach the voice");
         }
 
+        // Plan section AD: the frame-rate and render-scale rows under the volumes. In the Editor nothing reaches the screen, so
+        // what would be applied is read from the root's applier.
+        [UnityTest]
+        public IEnumerator TheDisplayChoices_ShowInThePanel_AreApplied_AndComeBackAfterAReload()
+        {
+            var store = new MemoryStore();
+            HiveDefenseRoot root = null;
+            yield return LoadScene(found => root = found);
+            root.UseVolumeStore(store);
+            root.ShowSettings(true);
+
+            root.Settings.MoveFocus(10);
+            Assert.That(root.Settings.FocusedRow, Is.EqualTo(SettingsRow.RenderScale), "the render scale is the last row");
+            root.Display.StepFrameRate(2);
+            root.Display.StepRenderScale(2);
+
+            Assert.That(root.Settings.ValueText(SettingsRow.FrameRate), Does.Contain("60 fps"));
+            Assert.That(root.Settings.ValueText(SettingsRow.RenderScale), Does.Contain("75%"));
+            FramePacing pacing = root.DisplayApplier.LastPacing;
+            Assert.That(pacing.VSyncCount > 0 || pacing.TargetFrameRate == 60, Is.True, "60 fps is neither vsync pacing nor a 60 cap");
+            Assert.That(root.DisplayApplier.LastScale, Is.EqualTo(0.75f).Within(1e-5f));
+            root.ShowSettings(false);
+            Assert.That(store.Saves, Is.EqualTo(1), "closing the panel did not save the display choices");
+
+            yield return LoadScene(found => root = found);
+            root.UseVolumeStore(store);
+
+            Assert.That(root.Display.FrameRate, Is.EqualTo(FrameRateChoice.Rate60));
+            Assert.That(root.Display.RenderScale, Is.EqualTo(RenderScaleChoice.ThreeQuarters));
+            Assert.That(root.Settings.ValueText(SettingsRow.RenderScale), Does.Contain("75%"));
+        }
+
         private static IEnumerator LoadScene(System.Action<HiveDefenseRoot> found)
         {
             yield return EditorSceneManager.LoadSceneAsyncInPlayMode(ScenePath, new LoadSceneParameters(LoadSceneMode.Single));
