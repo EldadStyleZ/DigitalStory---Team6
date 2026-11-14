@@ -16,8 +16,14 @@ namespace SpacePartyGame
             _chargeSeconds = Mathf.Max(0.01f, chargeSeconds);
         }
 
-        /// <summary>The note that charges the blow: Left (Left arrow on the keyboard, X on a gamepad).</summary>
-        public static bool Charges(Note note) => note == Note.Left;
+        /// <summary>The note that charges the blow: RT (Right Shift on the keyboard, RT on a gamepad).</summary>
+        public static bool Charges(Note note) => note == Note.RT;
+
+        /// <summary>
+        /// The colour of a charge's bar, area, wave and dabs: the blow is always its own colour (red), whoever blows;
+        /// the earworm takes the player's colour.
+        /// </summary>
+        public static Color EffectColour(bool isBlow, Color playerColour, Color blowColour) => isBlow ? blowColour : playerColour;
 
         /// <summary>Whether the blow is charging now.</summary>
         public bool IsCharging { get; private set; }
@@ -49,6 +55,19 @@ namespace SpacePartyGame
         {
             IsCharging = false;
         }
+
+        /// <summary>
+        /// Running and calling come first: while the player runs or calls, no charge (blow or earworm) can fill, and
+        /// one already filling stops.
+        /// </summary>
+        public static bool IsInterrupted(bool isRunning, bool isCalling) => isRunning || isCalling;
+
+        /// <summary>
+        /// How long after a blow or earworm fires before a new charge can start: until its picture is done (the
+        /// longer of the arc and the area's fade), or the chord, if that is shorter.
+        /// </summary>
+        public static float LockoutSeconds(float chordSeconds, float arcSeconds, float sectorSeconds) =>
+            Mathf.Min(chordSeconds, Mathf.Max(arcSeconds, sectorSeconds));
     }
 
     /// <summary>How the blow sounds: the charging note swells, and the blow plays a chord on that note.</summary>

@@ -8,7 +8,8 @@ namespace SpacePartyGame
     /// walks. When it hears a player's call it follows that player (see <see cref="VerminFollow"/>), shows a thin
     /// outline in their colour, and passes through cage walls; if it was caged, it first pushes against the bars for
     /// a moment, flattening as it does, before it squeezes through. Once it stops following it first moves clear of any
-    /// wall, then the walls are solid to it again.
+    /// wall, then the walls are solid to it again. An earworm makes it follow the player who played it for a while,
+    /// deaf to the other player's calls; a blow still carries it off, but it comes straight back.
     /// </summary>
     /// <remarks>Its root sits on the Vermin layer, so cages count it and the map's edge stops it.</remarks>
     [SelectionBase]
@@ -25,8 +26,11 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("How it fades in when it spawns.")]
         private VerminAppearance _appearance;
 
-        [SerializeField, Tooltip("The thin outline shown in the leader's colour while it follows.")]
+        [SerializeField, Tooltip("The outline child shown in a soft tone of the leader's colour while it follows a call. Switched on and off as needed; keep it off in the prefab.")]
         private SpriteRenderer _outline;
+
+        [SerializeField, Tooltip("The outline child shown, in a vivid tone of the leader's colour, while an earworm holds it. Switched on and off as needed; keep it off in the prefab.")]
+        private SpriteRenderer _earwormOutline;
 
         [SerializeField, Tooltip("Which layers hold cage walls.")]
         private LayerMask _cageWallLayers;
@@ -47,10 +51,12 @@ namespace SpacePartyGame
         private CageManager _cages;
         private VerminWander _wander;
         private VerminFollow _follow;
+        private EarwormHold _earworm;
         private CageSqueeze _squeeze;
         private Vector2 _squeezeNormal = Vector2.right;
         private Vector3 _bodyScale;
         private Vector3 _outlineScale;
+        private Vector3 _earwormOutlineScale;
         private PlayerIdentity _leader;
         private PlayerMovement _leaderMovement;
         private ContactFilter2D _wallFilter;
@@ -65,7 +71,10 @@ namespace SpacePartyGame
         public int Facing => _facing;
 
         /// <summary>Whether it is following a player now.</summary>
-        public bool IsFollowing => _follow != null && _follow.IsFollowing(Time.time);
+        public bool IsFollowing => _follow != null && (_follow.IsFollowing(Time.time) || IsEarwormed);
+
+        /// <summary>Whether an earworm holds it now.</summary>
+        public bool IsEarwormed => _earworm != null && _earworm.IsActive(Time.time);
 
         /// <summary>The player it follows now, or null.</summary>
         public PlayerIdentity Leader => IsFollowing ? _leader : null;
@@ -87,6 +96,7 @@ namespace SpacePartyGame
             _wander = new VerminWander(settings.WanderSpeed, settings.MinWanderSeconds, settings.MaxWanderSeconds,
                 settings.PauseChance, () => Random.value);
             _follow = new VerminFollow(settings.FollowSeconds);
+            _earworm = new EarwormHold(settings.EarwormSeconds);
             _squeeze = new CageSqueeze(settings.SqueezeSeconds);
             _startFacingLeftChance = settings.StartFacingLeftChance;
         }
@@ -105,7 +115,7 @@ namespace SpacePartyGame
             Cage cage = CurrentCage();
             int? owner = cage != null && cage.Owner != null ? cage.Owner.Slot : (int?)null;
 
-            if (!CallRules.Hears(caller.Slot, owner))
+            if (!CallRules.Hears(caller.Slot, owner) || _earworm.BlocksCall(caller.Slot, Time.time))
             {
                 return;
             }
@@ -115,25 +125,47 @@ namespace SpacePartyGame
 
             if (_follow.Leader == caller.Slot)
             {
-                if (!wasFollowingThem)
+                TakeLeader(caller, wasFollowingThem, cage);
+            }
+        }
+
+        /// <summary>
+        /// A player's earworm catches it: it follows them at once for the earworm time, whoever it followed, and the
+        /// other player's calls cannot take it. Vermin in a cage are left alone.
+        /// </summary>
+        public void Earworm(PlayerIdentity player)
+        {
+            if (_earworm == null || player == null || !EarwormRules.Catches(CurrentCage() != null))
+            {
+                return;
+            }
+
+            bool wasFollowingThem = IsFollowing && _leader == player;
+            _earworm.Catch(player.Slot, Time.time);
+            _follow.Force(player.Slot, Time.time);
+            TakeLeader(player, wasFollowingThem, null);
+        }
+
+        private void TakeLeader(PlayerIdentity leader, bool wasFollowingThem, Cage cage)
+        {
+            if (!wasFollowingThem)
+            {
+                PickASpot();
+            }
+
+            _leader = leader;
+            _leaderMovement = leader.GetComponent<PlayerMovement>();
+
+            // A caged vermin has to squeeze out through the bars first; a free one just passes through walls.
+            if (!_passesThroughCages && !_squeeze.IsActive)
+            {
+                if (cage != null)
                 {
-                    PickASpot();
+                    _squeeze.Begin();
                 }
-
-                _leader = caller;
-                _leaderMovement = caller.GetComponent<PlayerMovement>();
-
-                // A caged vermin has to squeeze out through the bars first; a free one just passes through walls.
-                if (!_passesThroughCages && !_squeeze.IsActive)
+                else
                 {
-                    if (cage != null)
-                    {
-                        _squeeze.Begin();
-                    }
-                    else
-                    {
-                        SetPassThroughCages(true);
-                    }
+                    SetPassThroughCages(true);
                 }
             }
         }
@@ -143,20 +175,22 @@ namespace SpacePartyGame
 
         /// <summary>
         /// A blow carries it away: it stops following, and cage walls do not stop it while the shove lasts. Once
-        /// it stops, it walks clear of any wall it ended up in, as after following.
+        /// it stops, it walks clear of any wall it ended up in, as after following. Under an earworm it heads
+        /// straight back to its holder once the shove ends.
         /// </summary>
         public void Blow(Vector2 velocity, float seconds)
         {
-            StopFollowing();
+            _follow?.Stop();
             _squeeze?.End();
             _blown = new Knockback(velocity, Time.time, seconds);
             SetPassThroughCages(true);
         }
 
-        /// <summary>Stops following its leader now, such as when the round ends.</summary>
+        /// <summary>Stops following its leader now, earworm and all, such as when the round ends.</summary>
         public void StopFollowing()
         {
             _follow?.Stop();
+            _earworm?.End();
         }
 
         private void Awake()
@@ -166,7 +200,7 @@ namespace SpacePartyGame
             _wallFilter = new ContactFilter2D { useLayerMask = true, layerMask = _cageWallLayers, useTriggers = false };
             _verminFilter = new ContactFilter2D { useLayerMask = true, layerMask = _verminLayers, useTriggers = false };
 
-            if (_body == null || _appearance == null || _outline == null)
+            if (_body == null || _appearance == null || _outline == null || _earwormOutline == null)
             {
                 Debug.LogError($"{name}: Vermin is missing its body sprite, appearance or outline.", this);
                 return;
@@ -174,6 +208,7 @@ namespace SpacePartyGame
 
             _bodyScale = _body.transform.localScale;
             _outlineScale = _outline.transform.localScale;
+            _earwormOutlineScale = _earwormOutline.transform.localScale;
         }
 
         // A reused vermin starts fresh: a new direction, a random facing, following no one, walls solid again
@@ -182,6 +217,7 @@ namespace SpacePartyGame
         {
             _wander?.Restart();
             _follow?.Stop();
+            _earworm?.End();
             _squeeze?.End();
             _blown = default;
             _leader = null;
@@ -189,7 +225,8 @@ namespace SpacePartyGame
             _passesThroughCages = false;
             _facing = VerminFacing.AtSpawn(Random.value, _startFacingLeftChance);
             ShowFacing();
-            _outline.enabled = false;
+            _outline.gameObject.SetActive(false);
+            _earwormOutline.gameObject.SetActive(false);
         }
 
         private void OnDisable()
@@ -214,13 +251,19 @@ namespace SpacePartyGame
             {
                 Cage cage = CurrentCage();
 
-                // Walking into its leader's own cage ends the follow: it stays caught.
+                // Walking into its leader's own cage ends the follow, earworm too: it stays caught.
                 if (cage != null && cage.Owner == _leader)
                 {
-                    _follow.Stop();
+                    StopFollowing();
                 }
                 else
                 {
+                    // Under an earworm it keeps hearing its holder, so once it wears off it trails off as after a call.
+                    if (IsEarwormed)
+                    {
+                        _follow.Force(_earworm.Holder, Time.time);
+                    }
+
                     Vector2 spot = (Vector2)_leader.transform.position + _spotOffset;
                     float speed = FollowSpeedNow();
                     Vector2 follow = Steering.Toward(_rigidbody.position, spot, _spotDistance, speed);
@@ -323,6 +366,7 @@ namespace SpacePartyGame
             var factor = new Vector3(scale.x, scale.y, 1f);
             _body.transform.localScale = Vector3.Scale(_bodyScale, factor);
             _outline.transform.localScale = Vector3.Scale(_outlineScale, factor);
+            _earwormOutline.transform.localScale = Vector3.Scale(_earwormOutlineScale, factor);
         }
 
         private float WorldRadius() => _collider.radius * Mathf.Max(transform.lossyScale.x, transform.lossyScale.y);
@@ -389,21 +433,33 @@ namespace SpacePartyGame
             _body.flipX = _artFacesRight ? _facing < 0 : _facing > 0;
         }
 
-        // The outline matches the body's flip and fade, in the leader's colour.
+        // One outline child is on while it follows: the call's (soft) or the earworm's (vivid). Each matches the
+        // body's flip and fade.
         private void ShowOutline()
         {
             PlayerIdentity leader = Leader;
-            _outline.enabled = leader != null;
+            bool earwormed = leader != null && IsEarwormed;
+            SpriteRenderer shown = leader == null ? null : earwormed ? _earwormOutline : _outline;
+            SetOutlineActive(_outline, shown == _outline);
+            SetOutlineActive(_earwormOutline, shown == _earwormOutline);
 
-            if (leader == null)
+            if (shown == null)
             {
                 return;
             }
 
-            Color colour = leader.Colour;
+            Color colour = OutlineTone.For(leader.Colour, earwormed, _settings.CallOutlineSaturation, _settings.EarwormOutlineSaturation);
             colour.a = _body.color.a;
-            _outline.color = colour;
-            _outline.flipX = _body.flipX;
+            shown.color = colour;
+            shown.flipX = _body.flipX;
+        }
+
+        private static void SetOutlineActive(SpriteRenderer outline, bool on)
+        {
+            if (outline.gameObject.activeSelf != on)
+            {
+                outline.gameObject.SetActive(on);
+            }
         }
     }
 }

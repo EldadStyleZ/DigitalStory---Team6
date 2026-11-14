@@ -163,6 +163,9 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("Where the bar sits, from the player's feet, in units.")]
         private Vector2 _barOffset = new Vector2(0f, -0.22f);
 
+        [SerializeField, Tooltip("The blow's colour, whoever blows: its charge bar, area, wave and paint dabs. The earworm uses the player's colour instead.")]
+        private Color _blowColour = new Color(0.86f, 0.12f, 0.12f, 1f);
+
         [SerializeField, Tooltip("The empty part of the bar.")]
         private Color _barBackColour = new Color(0.231f, 0.129f, 0.114f, 0.75f);
 
@@ -218,6 +221,7 @@ namespace SpacePartyGame
         public float BarHeight => _barHeight;
         public Vector2 BarOffset => _barOffset;
         public Color BarBackColour => _barBackColour;
+        public Color BlowColour => _blowColour;
         public float BarFadeSeconds => _barFadeSeconds;
     }
 }

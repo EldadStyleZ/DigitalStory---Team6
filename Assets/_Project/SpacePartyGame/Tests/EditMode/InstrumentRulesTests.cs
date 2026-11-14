@@ -3,6 +3,56 @@ using UnityEngine;
 
 namespace SpacePartyGame.Tests
 {
+    public sealed class NotePressLatchTests
+    {
+        [Test]
+        public void APress_CountsOnce_UntilReleased()
+        {
+            var latch = new NotePressLatch();
+
+            Assert.That(latch.Press(Note.Left), Is.True);
+            Assert.That(latch.Press(Note.Left), Is.False);
+        }
+
+        [Test]
+        public void AfterARelease_TheNextPressCountsAgain()
+        {
+            var latch = new NotePressLatch();
+            latch.Press(Note.Left);
+
+            Assert.That(latch.Release(Note.Left), Is.True);
+            Assert.That(latch.Press(Note.Left), Is.True);
+        }
+
+        [Test]
+        public void AReleaseWithoutAPress_CountsForNothing()
+        {
+            Assert.That(new NotePressLatch().Release(Note.RT), Is.False);
+        }
+
+        [Test]
+        public void Notes_AreLatchedSeparately()
+        {
+            var latch = new NotePressLatch();
+            latch.Press(Note.Left);
+
+            Assert.That(latch.Press(Note.RT), Is.True);
+        }
+
+        [Test]
+        public void ReleaseAll_LetsEveryNoteBePressedAgain()
+        {
+            var latch = new NotePressLatch();
+            latch.Press(Note.Left);
+            latch.Press(Note.RT);
+
+            latch.ReleaseAll();
+
+            Assert.That(latch.Press(Note.Left), Is.True);
+            Assert.That(latch.Press(Note.RT), Is.True);
+        }
+    }
+
     public sealed class NoteHoldsTests
     {
         [Test]
@@ -109,10 +159,10 @@ namespace SpacePartyGame.Tests
         }
     }
 
-    public sealed class RunRhythmTests
+    public sealed class RunHoldTests
     {
-        // Walk 4, run 7, +0.4 per alternation, alternations within 0.35 s, easing back at 3 per second.
-        private static RunRhythm Make() => new RunRhythm(4f, 7f, 0.4f, 0.35f, 3f);
+        // Walk 4, run 7, 0.1 s from walking to full run (so 30 units per second, per second, both ways).
+        private static RunHold Make() => new RunHold(4f, 7f, 0.1f);
 
         [Test]
         public void New_IsWalkingSpeed()
@@ -122,91 +172,84 @@ namespace SpacePartyGame.Tests
         }
 
         [Test]
-        public void Alternating_Quickly_AddsSpeedEachSwitch()
+        public void Holding_ReachesHalfwayInHalfTheAccelerationTime()
         {
-            RunRhythm run = Make();
+            RunHold run = Make();
 
-            run.Press(Note.LT, 0f);
-            run.Press(Note.RT, 0.2f);
-            run.Press(Note.LT, 0.4f);
+            run.Tick(true, 0.05f);
 
-            Assert.That(run.Speed, Is.EqualTo(4.8f).Within(1e-4f));
+            Assert.That(run.Speed, Is.EqualTo(5.5f).Within(1e-4f));
+            Assert.That(run.Boost, Is.EqualTo(0.5f).Within(1e-4f));
         }
 
         [Test]
-        public void TheSameTriggerTwice_AddsNothing()
+        public void Holding_ReachesTheRunSpeedInTheAccelerationTime_AndStopsThere()
         {
-            RunRhythm run = Make();
+            RunHold run = Make();
 
-            run.Press(Note.LT, 0f);
-            run.Press(Note.LT, 0.2f);
+            run.Tick(true, 0.1f);
+            Assert.That(run.Speed, Is.EqualTo(7f).Within(1e-4f));
 
-            Assert.That(run.Speed, Is.EqualTo(4f));
-        }
-
-        [Test]
-        public void ASlowSwitch_AddsNothing()
-        {
-            RunRhythm run = Make();
-
-            run.Press(Note.LT, 0f);
-            run.Press(Note.RT, 0.5f);
-
-            Assert.That(run.Speed, Is.EqualTo(4f));
-        }
-
-        [Test]
-        public void OtherNotes_AreIgnored()
-        {
-            RunRhythm run = Make();
-
-            run.Press(Note.LT, 0f);
-            run.Press(Note.Root, 0.1f);
-            run.Press(Note.RT, 0.2f);
-
-            Assert.That(run.Speed, Is.EqualTo(4.4f).Within(1e-4f));
-        }
-
-        [Test]
-        public void ManySwitches_StopAtTheRunSpeed()
-        {
-            RunRhythm run = Make();
-
-            for (int i = 0; i < 20; i++)
-            {
-                run.Press(i % 2 == 0 ? Note.LT : Note.RT, i * 0.2f);
-            }
-
+            run.Tick(true, 1f);
             Assert.That(run.Speed, Is.EqualTo(7f));
             Assert.That(run.Boost, Is.EqualTo(1f));
         }
 
         [Test]
-        public void WhileStillAlternating_ItDoesNotEaseBack()
+        public void Releasing_FromFullRun_DropsAtOnce_AndTakesTheAccelerationTime()
         {
-            RunRhythm run = Make();
-            run.Press(Note.LT, 0f);
-            run.Press(Note.RT, 0.2f);
+            RunHold run = Make();
+            run.Tick(true, 1f);
 
-            run.Tick(0.3f, 0.1f);
+            run.Tick(false, 0.05f);
+            Assert.That(run.Speed, Is.EqualTo(5.5f).Within(1e-4f));
 
-            Assert.That(run.Speed, Is.EqualTo(4.4f).Within(1e-4f));
+            run.Tick(false, 0.05f);
+            Assert.That(run.Speed, Is.EqualTo(4f).Within(1e-4f));
         }
 
         [Test]
-        public void AfterStopping_ItEasesBackToWalking()
+        public void Releasing_WhileStillSpeedingUp_SlowsBackInTheTimeSpentSpeedingUp()
         {
-            RunRhythm run = Make();
+            RunHold run = Make();
+            run.Tick(true, 0.04f);
 
-            for (int i = 0; i < 20; i++)
-            {
-                run.Press(i % 2 == 0 ? Note.LT : Note.RT, i * 0.2f);
-            }
+            run.Tick(false, 0.04f);
 
-            run.Tick(4.5f, 0.5f);
-            Assert.That(run.Speed, Is.EqualTo(5.5f).Within(1e-4f));
+            Assert.That(run.Speed, Is.EqualTo(4f).Within(1e-4f));
+        }
 
-            run.Tick(6f, 2f);
+        [Test]
+        public void PressingAgain_WhileSlowing_SpeedsUpFromTheCurrentSpeed()
+        {
+            RunHold run = Make();
+            run.Tick(true, 1f);
+            run.Tick(false, 0.05f);
+
+            run.Tick(true, 0.02f);
+
+            Assert.That(run.Speed, Is.EqualTo(6.1f).Within(1e-4f));
+        }
+
+        [Test]
+        public void NotHolding_StaysAtWalking()
+        {
+            RunHold run = Make();
+
+            run.Tick(false, 1f);
+
+            Assert.That(run.Speed, Is.EqualTo(4f));
+        }
+
+        [Test]
+        public void ZeroAccelerationTime_SwitchesAtOnce()
+        {
+            RunHold run = new RunHold(4f, 7f, 0f);
+
+            run.Tick(true, 0.01f);
+            Assert.That(run.Speed, Is.EqualTo(7f));
+
+            run.Tick(false, 0.01f);
             Assert.That(run.Speed, Is.EqualTo(4f));
         }
     }

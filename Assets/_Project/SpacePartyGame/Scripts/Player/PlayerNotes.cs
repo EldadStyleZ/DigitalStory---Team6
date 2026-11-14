@@ -34,6 +34,7 @@ namespace SpacePartyGame
         };
 
         private InputAction[] _actions;
+        private readonly NotePressLatch _latch = new NotePressLatch();
 
         /// <summary>Raised when a note's button goes down.</summary>
         public event Action<Note> NotePressed;
@@ -65,6 +66,8 @@ namespace SpacePartyGame
 
                 if (!value)
                 {
+                    _latch.ReleaseAll();
+
                     foreach (Note note in Enum.GetValues(typeof(Note)))
                     {
                         NoteReleased?.Invoke(note);
@@ -86,9 +89,10 @@ namespace SpacePartyGame
 
         private void OnEnable()
         {
+            // Performed, not started: a trigger counts as pressed past its press point, not at the lightest touch.
             foreach (InputAction action in _actions)
             {
-                action.started += HandleStarted;
+                action.performed += HandlePerformed;
                 action.canceled += HandleCanceled;
             }
         }
@@ -97,29 +101,33 @@ namespace SpacePartyGame
         {
             foreach (InputAction action in _actions)
             {
-                action.started -= HandleStarted;
+                action.performed -= HandlePerformed;
                 action.canceled -= HandleCanceled;
             }
         }
 
-        private void HandleStarted(InputAction.CallbackContext context)
+        private void HandlePerformed(InputAction.CallbackContext context)
         {
-            if (!_canPlay)
+            Note note = NoteOf(context.action);
+
+            if (!_canPlay || !_latch.Press(note))
             {
                 return;
             }
 
-            NotePressed?.Invoke(NoteOf(context.action));
+            NotePressed?.Invoke(note);
         }
 
         private void HandleCanceled(InputAction.CallbackContext context)
         {
-            if (!_canPlay)
+            Note note = NoteOf(context.action);
+
+            if (!_canPlay || !_latch.Release(note))
             {
                 return;
             }
 
-            NoteReleased?.Invoke(NoteOf(context.action));
+            NoteReleased?.Invoke(note);
         }
 
         private Note NoteOf(InputAction action) => (Note)Array.IndexOf(_actions, action);

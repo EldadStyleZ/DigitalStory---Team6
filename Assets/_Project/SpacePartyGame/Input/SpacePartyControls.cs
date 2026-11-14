@@ -205,6 +205,16 @@ namespace SpacePartyGame
                     ""priority"": 0
                 },
                 {
+                    ""name"": ""Run"",
+                    ""type"": ""Button"",
+                    ""id"": ""df87a9ff-3e99-49a6-bcf9-b3b8e124bf48"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false,
+                    ""priority"": 0
+                },
+                {
                     ""name"": ""Pause"",
                     ""type"": ""Button"",
                     ""id"": ""011e27f1-cf64-4e55-a931-0c77037b4262"",
@@ -285,7 +295,7 @@ namespace SpacePartyGame
                 {
                     ""name"": """",
                     ""id"": ""59131a6c-2cf1-42a3-b3a0-d1103956360a"",
-                    ""path"": ""<Keyboard>/downArrow"",
+                    ""path"": ""<Keyboard>/leftArrow"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""Keyboard&Mouse"",
@@ -296,7 +306,7 @@ namespace SpacePartyGame
                 {
                     ""name"": """",
                     ""id"": ""ee049022-c075-4037-a48f-458961a3208e"",
-                    ""path"": ""<Gamepad>/buttonSouth"",
+                    ""path"": ""<Gamepad>/buttonWest"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""Gamepad"",
@@ -329,7 +339,7 @@ namespace SpacePartyGame
                 {
                     ""name"": """",
                     ""id"": ""152e125a-798e-4170-91ea-b4ee689e360c"",
-                    ""path"": ""<Keyboard>/leftArrow"",
+                    ""path"": ""<Keyboard>/leftShift"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""Keyboard&Mouse"",
@@ -340,7 +350,7 @@ namespace SpacePartyGame
                 {
                     ""name"": """",
                     ""id"": ""77675568-0e29-4171-9ecb-65162c23b68c"",
-                    ""path"": ""<Gamepad>/buttonWest"",
+                    ""path"": ""<Gamepad>/leftTrigger"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""Gamepad"",
@@ -373,7 +383,7 @@ namespace SpacePartyGame
                 {
                     ""name"": """",
                     ""id"": ""de9602fa-3378-464e-a667-facd725a2042"",
-                    ""path"": ""<Keyboard>/leftShift"",
+                    ""path"": ""<Keyboard>/downArrow"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""Keyboard&Mouse"",
@@ -384,7 +394,7 @@ namespace SpacePartyGame
                 {
                     ""name"": """",
                     ""id"": ""5a75069b-f8db-407f-81dc-3f91b0e2243e"",
-                    ""path"": ""<Gamepad>/leftTrigger"",
+                    ""path"": ""<Gamepad>/buttonSouth"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""Gamepad"",
@@ -433,6 +443,28 @@ namespace SpacePartyGame
                     ""processors"": """",
                     ""groups"": ""Gamepad"",
                     ""action"": ""Pause"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""04805717-5473-4b29-8c98-5f9428f98371"",
+                    ""path"": ""<Keyboard>/downArrow"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""Run"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""cf38d96c-40ca-4588-8e22-ee19b65da13d"",
+                    ""path"": ""<Gamepad>/buttonSouth"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Gamepad"",
+                    ""action"": ""Run"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -809,6 +841,7 @@ namespace SpacePartyGame
             m_Player_NoteRight = m_Player.FindAction("NoteRight", throwIfNotFound: true);
             m_Player_NoteLT = m_Player.FindAction("NoteLT", throwIfNotFound: true);
             m_Player_NoteRT = m_Player.FindAction("NoteRT", throwIfNotFound: true);
+            m_Player_Run = m_Player.FindAction("Run", throwIfNotFound: true);
             m_Player_Pause = m_Player.FindAction("Pause", throwIfNotFound: true);
             // UI
             m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
@@ -1007,6 +1040,7 @@ namespace SpacePartyGame
         private readonly InputAction m_Player_NoteRight;
         private readonly InputAction m_Player_NoteLT;
         private readonly InputAction m_Player_NoteRT;
+        private readonly InputAction m_Player_Run;
         private readonly InputAction m_Player_Pause;
         /// <summary>
         /// Provides access to input actions defined in input action map "Player".
@@ -1047,6 +1081,10 @@ namespace SpacePartyGame
             /// Provides access to the underlying input action "Player/NoteRT".
             /// </summary>
             public InputAction @NoteRT => m_Wrapper.m_Player_NoteRT;
+            /// <summary>
+            /// Provides access to the underlying input action "Player/Run".
+            /// </summary>
+            public InputAction @Run => m_Wrapper.m_Player_Run;
             /// <summary>
             /// Provides access to the underlying input action "Player/Pause".
             /// </summary>
@@ -1098,6 +1136,9 @@ namespace SpacePartyGame
                 @NoteRT.started += instance.OnNoteRT;
                 @NoteRT.performed += instance.OnNoteRT;
                 @NoteRT.canceled += instance.OnNoteRT;
+                @Run.started += instance.OnRun;
+                @Run.performed += instance.OnRun;
+                @Run.canceled += instance.OnRun;
                 @Pause.started += instance.OnPause;
                 @Pause.performed += instance.OnPause;
                 @Pause.canceled += instance.OnPause;
@@ -1133,6 +1174,9 @@ namespace SpacePartyGame
                 @NoteRT.started -= instance.OnNoteRT;
                 @NoteRT.performed -= instance.OnNoteRT;
                 @NoteRT.canceled -= instance.OnNoteRT;
+                @Run.started -= instance.OnRun;
+                @Run.performed -= instance.OnRun;
+                @Run.canceled -= instance.OnRun;
                 @Pause.started -= instance.OnPause;
                 @Pause.performed -= instance.OnPause;
                 @Pause.canceled -= instance.OnPause;
@@ -1513,6 +1557,13 @@ namespace SpacePartyGame
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnNoteRT(InputAction.CallbackContext context);
+            /// <summary>
+            /// Method invoked when associated input action "Run" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+            /// </summary>
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+            void OnRun(InputAction.CallbackContext context);
             /// <summary>
             /// Method invoked when associated input action "Pause" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
             /// </summary>

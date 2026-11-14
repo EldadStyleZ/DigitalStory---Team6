@@ -92,12 +92,12 @@ namespace SpacePartyGame.Tests
         }
 
         [Test]
-        public void For_RoundEndWinner_PlaysAndBlowsButCannotMoveCallOrRun()
+        public void For_RoundEndWinner_OnlyPlaysNotes()
         {
             PlayerPermissions p = PlayerPermissions.For(GameState.RoundEnd, true);
 
             Assert.That(p.CanPlay, Is.True);
-            Assert.That(p.CanBlow, Is.True);
+            Assert.That(p.CanBlow, Is.False);
             Assert.That(p.CanMove, Is.False);
             Assert.That(p.CanCall, Is.False);
             Assert.That(p.CanRun, Is.False);

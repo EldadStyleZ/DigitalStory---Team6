@@ -66,12 +66,45 @@ namespace SpacePartyGame.Tests
             Assert.That(new BlowCharge(3f).Release(10f), Is.False);
         }
 
-        [TestCase(Note.Left, true)]
+        [TestCase(Note.RT, true)]
         [TestCase(Note.Root, false)]
-        [TestCase(Note.RT, false)]
-        public void Charges_OnlyTheLeftNote(Note note, bool expected)
+        [TestCase(Note.Left, false)]
+        public void Charges_OnlyTheRTNote(Note note, bool expected)
         {
             Assert.That(BlowCharge.Charges(note), Is.EqualTo(expected));
+        }
+
+        [TestCase(false, false, false)]
+        [TestCase(true, false, true)]
+        [TestCase(false, true, true)]
+        [TestCase(true, true, true)]
+        public void RunningOrCalling_StopsAnyCharge(bool running, bool calling, bool expected)
+        {
+            Assert.That(BlowCharge.IsInterrupted(running, calling), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void Lockout_IsTheEffectsLength_WhenTheChordIsLonger()
+        {
+            Assert.That(BlowCharge.LockoutSeconds(chordSeconds: 1.5f, arcSeconds: 0.55f, sectorSeconds: 0.76f),
+                Is.EqualTo(0.76f).Within(1e-4f));
+        }
+
+        [Test]
+        public void Lockout_IsTheChordsLength_WhenTheChordIsShorter()
+        {
+            Assert.That(BlowCharge.LockoutSeconds(chordSeconds: 0.3f, arcSeconds: 0.55f, sectorSeconds: 0.76f),
+                Is.EqualTo(0.3f).Within(1e-4f));
+        }
+
+        [Test]
+        public void EffectColour_TheBlowIsAlwaysItsOwnColour_TheEarwormThePlayers()
+        {
+            Color player = Color.blue;
+            Color blow = Color.red;
+
+            Assert.That(BlowCharge.EffectColour(isBlow: true, player, blow), Is.EqualTo(Color.red));
+            Assert.That(BlowCharge.EffectColour(isBlow: false, player, blow), Is.EqualTo(Color.blue));
         }
     }
 

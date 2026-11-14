@@ -1,7 +1,40 @@
+using System;
 using UnityEngine;
 
 namespace SpacePartyGame
 {
+    /// <summary>
+    /// Counts each note's press once until it is released. An analog trigger can report "pressed" again while it is
+    /// let go (passing back under its press point), which must not count as a new press.
+    /// </summary>
+    public sealed class NotePressLatch
+    {
+        private readonly bool[] _down = new bool[Enum.GetValues(typeof(Note)).Length];
+
+        /// <summary>The note's button went down: true if this is a new press, false if it was already down.</summary>
+        public bool Press(Note note)
+        {
+            if (_down[(int)note])
+            {
+                return false;
+            }
+
+            _down[(int)note] = true;
+            return true;
+        }
+
+        /// <summary>The note's button came up: true if it was down.</summary>
+        public bool Release(Note note)
+        {
+            bool wasDown = _down[(int)note];
+            _down[(int)note] = false;
+            return wasDown;
+        }
+
+        /// <summary>Forgets every press, such as when playing is switched off.</summary>
+        public void ReleaseAll() => Array.Clear(_down, 0, _down.Length);
+    }
+
     /// <summary>
     /// Which of a player's six notes are playing. Each note has its own timer: it plays from its press until it is
     /// released or has been held for the limit, whichever comes first. Of the notes playing, the one pressed last is
@@ -81,29 +114,23 @@ namespace SpacePartyGame
     }
 
     /// <summary>
-    /// The run: playing LT and RT one after the other, quickly, raises the player's top speed a step per switch up to
-    /// the run speed. Once the switches stop coming, the speed eases back down to walking.
+    /// The run: while the run button is held, the player's top speed rises steadily from walking to the run speed,
+    /// taking the acceleration time to get there. The moment it is let go, the speed falls back at the same rate, so
+    /// slowing down takes as long as the speeding up did: the full acceleration time from flat out, less if let go
+    /// early. Pressing again part way speeds up from wherever the speed is.
     /// </summary>
-    public sealed class RunRhythm
+    public sealed class RunHold
     {
         private readonly float _walkSpeed;
         private readonly float _runSpeed;
-        private readonly float _speedPerSwitch;
-        private readonly float _switchWindow;
-        private readonly float _easeBackPerSecond;
+        private readonly float _accelerationTime;
 
-        private int _lastSide;
-        private float _lastPressAt = float.NegativeInfinity;
-
-        /// <param name="switchWindow">The longest gap between LT and RT that still counts as a switch, in seconds.</param>
-        /// <param name="easeBackPerSecond">How fast the speed drops back to walking once the switches stop.</param>
-        public RunRhythm(float walkSpeed, float runSpeed, float speedPerSwitch, float switchWindow, float easeBackPerSecond)
+        /// <param name="accelerationTime">Seconds from walking to the run speed; 0 or less switches at once.</param>
+        public RunHold(float walkSpeed, float runSpeed, float accelerationTime)
         {
             _walkSpeed = walkSpeed;
             _runSpeed = Mathf.Max(walkSpeed, runSpeed);
-            _speedPerSwitch = speedPerSwitch;
-            _switchWindow = switchWindow;
-            _easeBackPerSecond = easeBackPerSecond;
+            _accelerationTime = accelerationTime;
             Speed = walkSpeed;
         }
 
@@ -113,32 +140,19 @@ namespace SpacePartyGame
         /// <summary>How far from walking to full run the speed is: 0 walking, 1 running flat out.</summary>
         public float Boost => _runSpeed > _walkSpeed ? (Speed - _walkSpeed) / (_runSpeed - _walkSpeed) : 0f;
 
-        /// <summary>A note's button went down. Only LT and RT count; a switch from one to the other in time adds speed.</summary>
-        public void Press(Note note, float now)
+        /// <summary>Moves the clock on: towards the run speed while held, back towards walking when not.</summary>
+        public void Tick(bool held, float deltaTime)
         {
-            int side = note == Note.LT ? -1 : note == Note.RT ? 1 : 0;
+            float target = held ? _runSpeed : _walkSpeed;
 
-            if (side == 0)
+            if (_accelerationTime <= 0f)
             {
+                Speed = target;
                 return;
             }
 
-            if (_lastSide != 0 && side != _lastSide && now - _lastPressAt <= _switchWindow)
-            {
-                Speed = Mathf.Min(_runSpeed, Speed + _speedPerSwitch);
-            }
-
-            _lastSide = side;
-            _lastPressAt = now;
-        }
-
-        /// <summary>Moves the clock on: with no switch for longer than the window, the speed eases back to walking.</summary>
-        public void Tick(float now, float deltaTime)
-        {
-            if (now - _lastPressAt > _switchWindow)
-            {
-                Speed = Mathf.Max(_walkSpeed, Speed - (_easeBackPerSecond * deltaTime));
-            }
+            float rate = (_runSpeed - _walkSpeed) / _accelerationTime;
+            Speed = Mathf.MoveTowards(Speed, target, rate * deltaTime);
         }
     }
 

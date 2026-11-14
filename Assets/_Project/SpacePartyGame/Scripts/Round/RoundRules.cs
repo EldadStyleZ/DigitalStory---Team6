@@ -99,15 +99,16 @@ namespace SpacePartyGame
         /// <summary>Call vermin with the root note.</summary>
         public bool CanCall { get; }
 
-        /// <summary>Run by alternating LT and RT.</summary>
+        /// <summary>Run by holding the run button (A or Down arrow).</summary>
         public bool CanRun { get; }
 
         /// <summary>Charge and release the blow.</summary>
         public bool CanBlow { get; }
 
         /// <summary>
-        /// Everything while playing. At the round's end the winner may play notes and blow, but not move, call or
-        /// run; the loser, and everyone in a draw, may do nothing. Nothing in any other stage.
+        /// Everything while playing. At the round's end the winner may only play notes (the sound, with no charge or
+        /// blow, earworm, move, call or run); the loser, and everyone in a draw, may do nothing. Nothing in any other
+        /// stage.
         /// </summary>
         public static PlayerPermissions For(GameState state, bool isWinner)
         {
@@ -116,7 +117,7 @@ namespace SpacePartyGame
                 case GameState.Playing:
                     return All;
                 case GameState.RoundEnd when isWinner:
-                    return new PlayerPermissions(false, true, false, false, true);
+                    return new PlayerPermissions(false, true, false, false, false);
                 default:
                     return None;
             }

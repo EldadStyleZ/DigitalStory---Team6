@@ -1,12 +1,15 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace SpacePartyGame
 {
     /// <summary>
     /// What a player's notes do. The root note calls: while it plays, a ring in the player's colour shows the call's
-    /// reach, and every vermin inside it hears the call and follows. LT and RT played one after the other, quickly,
-    /// make the player run faster, with a trail of paint dabs behind. The other notes only make sound.
+    /// reach, and every vermin inside it hears the call and follows. Holding the run button (A or Down arrow) makes the
+    /// player run faster, with a trail of paint dabs behind. RT (hold, let go when full) blows, in red; LT, charged the
+    /// same way, plays the earworm in the player's colour: the same wave and chord, but free vermin it reaches follow
+    /// the player for a while, deaf to the other player's calls. The other notes only make sound.
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(PlayerInstrument), typeof(PlayerIdentity), typeof(PlayerMovement))]
@@ -22,23 +25,17 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("Which layers hold vermin.")]
         private LayerMask _verminLayers;
 
-        [Header("Run (LT and RT, one after the other, fast)")]
+        [Header("Run (hold A or Down arrow)")]
         [SerializeField, Min(0f), Tooltip("The top speed when running flat out, in units per second. Walking speed is on PlayerMovement.")]
         private float _runSpeedMax = 7f;
 
-        [SerializeField, Min(0f), Tooltip("How much each quick switch between LT and RT adds to the top speed, in units per second.")]
-        private float _speedPerSwitch = 0.4f;
-
-        [SerializeField, Min(0.05f), Tooltip("The longest gap between LT and RT that still counts as a quick switch, in seconds.")]
-        private float _switchWindow = 0.35f;
-
-        [SerializeField, Min(0f), Tooltip("How fast the speed eases back to walking once the switches stop, in units per second, per second.")]
-        private float _easeBackPerSecond = 3f;
+        [SerializeField, Min(0f), Tooltip("Seconds from walking to the run speed while the run button is held. Letting go slows back at the same rate, starting at once, so it takes as long as the speeding up did.")]
+        private float _accelerationTime = 0.1f;
 
         [SerializeField, Tooltip("The paint dabs dropped behind the player while running.")]
         private SpeedTrail _speedTrail;
 
-        [Header("Blow (hold Left, let go when the bar is full)")]
+        [Header("Blow (hold RT) and earworm (hold LT): let go when the bar is full")]
         [SerializeField, Tooltip("The blow's numbers, shared by both players.")]
         private BlowSettings _blowSettings;
 
@@ -46,6 +43,7 @@ namespace SpacePartyGame
         private BlowBar _blowBar;
 
         private BlowCharge _blow;
+        private BlowCharge _earworm;
         private readonly List<Collider2D> _blowHits = new List<Collider2D>();
         private readonly HashSet<Rigidbody2D> _blowBodies = new HashSet<Rigidbody2D>();
 
@@ -54,7 +52,8 @@ namespace SpacePartyGame
         private PlayerIdentity _identity;
         private PlayerNotes _notes;
         private PlayerMovement _movement;
-        private RunRhythm _run;
+        private RunHold _run;
+        private InputAction _runAction;
         private ContactFilter2D _filter;
 
         /// <summary>What the player may do now; set by the round for each stage.</summary>
@@ -67,10 +66,15 @@ namespace SpacePartyGame
         /// <summary>Sets what the player may do: walk, play notes, call, run and blow.</summary>
         public void Apply(PlayerPermissions permissions)
         {
-            // Stop charging first: switching notes off below releases Left, which must not fire the blow.
+            // Stop charging first: switching notes off below releases Left or RT, which must not fire anything.
             if (!permissions.CanBlow)
             {
-                CancelBlow();
+                CancelCharge(_blow);
+            }
+
+            if (!CanEarworm(permissions))
+            {
+                CancelCharge(_earworm);
             }
 
             Permissions = permissions;
@@ -92,13 +96,30 @@ namespace SpacePartyGame
         /// <summary>How hard the player is running: 0 walking, 1 flat out.</summary>
         public float RunBoost => _run.Boost;
 
-        /// <summary>Whether the blow is charging now.</summary>
-        public bool IsChargingBlow => _blow != null && _blow.IsCharging;
+        /// <summary>Whether the blow or the earworm is charging now.</summary>
+        public bool IsChargingBlow => ChargingNow != null;
 
-        /// <summary>How full the blow's charge is, 0 to 1.</summary>
-        public float BlowProgress => _blow != null ? _blow.Progress(Time.time) : 0f;
+        /// <summary>How full the blow's (or earworm's) charge is, 0 to 1.</summary>
+        public float BlowProgress => ChargingNow != null ? ChargingNow.Progress(Time.time) : 0f;
 
-        /// <summary>Raised when the blow fires, with the way the player aims.</summary>
+        /// <summary>
+        /// The colour of the charge filling now, or of the last one fired: the blow's own colour (red) or, for the
+        /// earworm, the player's. The bar, area, wave and dabs all take it.
+        /// </summary>
+        public Color EffectColour => BlowCharge.EffectColour(
+            (ChargingNow ?? _lastFired) != _earworm, _identity.Colour, _blowSettings != null ? _blowSettings.BlowColour : Color.red);
+
+        private BlowCharge _lastFired;
+        private float _chargeLockedUntil = float.NegativeInfinity;
+
+        // The charge filling now, the blow's or the earworm's, or null. Only one charges at a time.
+        private BlowCharge ChargingNow =>
+            _blow != null && _blow.IsCharging ? _blow : _earworm != null && _earworm.IsCharging ? _earworm : null;
+
+        // The earworm changes who vermin follow, so it needs the call allowed as well as the blow.
+        private static bool CanEarworm(PlayerPermissions permissions) => permissions.CanBlow && permissions.CanCall;
+
+        /// <summary>Raised when the blow or the earworm fires (they look the same), with the way the player aims.</summary>
         public event System.Action<Vector2> Blew;
 
         private void Awake()
@@ -107,7 +128,8 @@ namespace SpacePartyGame
             _identity = GetComponent<PlayerIdentity>();
             _notes = GetComponent<PlayerNotes>();
             _movement = GetComponent<PlayerMovement>();
-            _run = new RunRhythm(_movement.WalkSpeed, _runSpeedMax, _speedPerSwitch, _switchWindow, _easeBackPerSecond);
+            _run = new RunHold(_movement.WalkSpeed, _runSpeedMax, _accelerationTime);
+            _runAction = GetComponent<PlayerInput>().actions.FindAction("Player/Run", true);
 
             if (_blowSettings == null || _blowBar == null)
             {
@@ -116,6 +138,7 @@ namespace SpacePartyGame
             else
             {
                 _blow = new BlowCharge(_blowSettings.ChargeSeconds);
+                _earworm = new BlowCharge(_blowSettings.ChargeSeconds);
                 _blowBar.Initialize(_blowSettings);
                 _blowBar.HideNow();
             }
@@ -155,58 +178,95 @@ namespace SpacePartyGame
             _notes.NoteReleased -= HandleNoteReleased;
         }
 
-        // Every press counts toward the run, even a quick tap of a note already playing.
         private void HandleNotePressed(Note note)
         {
-            PressForBlow(note);
-
-            if (!Permissions.CanRun)
-            {
-                return;
-            }
-
-            _run.Press(note, Time.time);
+            PressForCharges(note);
         }
 
-        // Left starts the charge; any other note cancels it.
-        private void PressForBlow(Note note)
+        // RT starts the blow's charge and Left (LT) the earworm's; any other press, the other one's included, cancels it.
+        private void PressForCharges(Note note)
         {
             if (_blow == null)
             {
                 return;
             }
 
-            if (BlowCharge.Charges(note) && Permissions.CanBlow && !_instrument.IsPlayingChord)
+            BlowCharge wanted = IsChargeInterrupted ? null : ChargeStartedBy(note);
+            BlowCharge charging = ChargingNow;
+
+            if (charging != null && charging != wanted)
             {
-                _blow.Begin(Time.time);
+                CancelCharge(charging);
+            }
+
+            if (wanted != null && Time.time >= _chargeLockedUntil)
+            {
+                wanted.Begin(Time.time);
                 _instrument.HoldWithoutLimit(note);
                 _instrument.Gain = _blowSettings.ChargeStartVolume;
             }
-            else if (_blow.IsCharging)
+        }
+
+        // Running (A or Down arrow) or calling (X or Left arrow) stops any charge, and none can start while either is held.
+        private bool IsChargeInterrupted => BlowCharge.IsInterrupted(
+            Permissions.CanRun && Permissions.CanMove && _runAction.IsPressed(),
+            Permissions.CanCall && _notes.IsHeld(Note.Root));
+
+        // The charge a note starts now, if the player may use it.
+        private BlowCharge ChargeStartedBy(Note note)
+        {
+            if (BlowCharge.Charges(note))
             {
-                CancelBlow();
+                return Permissions.CanBlow ? _blow : null;
             }
+
+            if (EarwormRules.Charges(note))
+            {
+                return CanEarworm(Permissions) ? _earworm : null;
+            }
+
+            return null;
         }
 
         private void HandleNoteReleased(Note note)
         {
-            if (_blow == null || !_blow.IsCharging || !BlowCharge.Charges(note))
+            BlowCharge charge = BlowCharge.Charges(note) ? _blow : EarwormRules.Charges(note) ? _earworm : null;
+
+            if (charge == null || !charge.IsCharging)
             {
                 return;
             }
 
-            bool fires = _blow.Release(Time.time);
+            bool fires = charge.Release(Time.time);
             _blowBar.Hide();
             _instrument.HoldWithoutLimit(null);
             _instrument.Gain = 1f;
 
-            if (fires)
+            if (!fires)
             {
-                _instrument.PlayChord(note, _blowSettings.ChordSemitones, _blowSettings.ChordSeconds, _blowSettings.ChordVolume);
-                Vector2 aim = _movement.AimDirection;
-                BlowAway(aim);
-                Blew?.Invoke(aim);
+                return;
             }
+
+            _lastFired = charge;
+
+            // No new charge until the picture is done (the chord may ring on longer).
+            float sectorSeconds = _blowSettings.SectorFadeInSeconds + _blowSettings.SectorHoldSeconds + _blowSettings.SectorFadeOutSeconds;
+            _chargeLockedUntil = Time.time + BlowCharge.LockoutSeconds(_blowSettings.ChordSeconds, _blowSettings.ArcSeconds, sectorSeconds);
+
+            // Both play the same chord, on Left, so they sound the same.
+            _instrument.PlayChord(Note.Left, _blowSettings.ChordSemitones, _blowSettings.ChordSeconds, _blowSettings.ChordVolume);
+            Vector2 aim = _movement.AimDirection;
+
+            if (charge == _blow)
+            {
+                BlowAway(aim);
+            }
+            else
+            {
+                PlayEarworm(aim);
+            }
+
+            Blew?.Invoke(aim);
         }
 
         /// <summary>Where the blow's area starts: the middle of the player's body.</summary>
@@ -256,11 +316,35 @@ namespace SpacePartyGame
             }
         }
 
-        private void CancelBlow()
+        // Every free vermin whose body touches the area (the blow's ring sector) follows this player for a while.
+        private void PlayEarworm(Vector2 aim)
         {
-            if (_blow != null && _blow.IsCharging)
+            Vector2 origin = BlowOrigin;
+            float leeway = _blowSettings.HitLeeway;
+            Physics2D.OverlapCircle(origin, _blowSettings.Reach + leeway, _filter, _blowHits);
+            _blowBodies.Clear();
+
+            foreach (Collider2D hit in _blowHits)
             {
-                _blow.Cancel();
+                Rigidbody2D body = hit.attachedRigidbody;
+
+                if (body == null || !_blowBodies.Add(body) || !body.TryGetComponent(out Vermin vermin))
+                {
+                    continue;
+                }
+
+                if (BlowCone.Overlaps(origin, aim, hit.bounds.center, leeway, _blowSettings.ConeAngle, _blowSettings.InnerRadius, _blowSettings.Reach))
+                {
+                    vermin.Earworm(_identity);
+                }
+            }
+        }
+
+        private void CancelCharge(BlowCharge charge)
+        {
+            if (charge != null && charge.IsCharging)
+            {
+                charge.Cancel();
                 _blowBar.Hide();
                 _instrument.HoldWithoutLimit(null);
                 _instrument.Gain = 1f;
@@ -269,14 +353,20 @@ namespace SpacePartyGame
 
         private void Update()
         {
-            if (_blow != null && _blow.IsCharging)
+            if (ChargingNow != null && IsChargeInterrupted)
             {
-                float progress = _blow.Progress(Time.time);
-                _blowBar.Show(progress, _identity.Colour);
+                CancelCharge(ChargingNow);
+            }
+
+            if (ChargingNow != null)
+            {
+                float progress = ChargingNow.Progress(Time.time);
+                _blowBar.Show(progress, EffectColour);
                 _instrument.Gain = BlowSound.ChargeGain(progress, _blowSettings.ChargeStartVolume, _blowSettings.ChargeEndVolume);
             }
 
-            _run.Tick(Time.time, Time.deltaTime);
+            bool runHeld = Permissions.CanRun && Permissions.CanMove && _runAction.IsPressed();
+            _run.Tick(runHeld, Time.deltaTime);
             _movement.TopSpeed = _run.Speed;
 
             if (_speedTrail != null)

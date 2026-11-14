@@ -52,6 +52,15 @@ namespace SpacePartyGame
         [SerializeField, Min(0f), Tooltip("How long it keeps following after it last heard its leader's call, in seconds.")]
         private float _followSeconds = 2f;
 
+        [SerializeField, Min(0f), Tooltip("How long an earworm (LT) makes it follow the player who played it, in seconds. Only the other player's earworm, or the player caging it, ends it sooner.")]
+        private float _earwormSeconds = 8f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("The call outline's saturation, as a share of the player colour's: lower is softer. Hue and brightness stay the player's.")]
+        private float _callOutlineSaturation = 0.5f;
+
+        [SerializeField, Range(1f, 4f), Tooltip("The earworm outline's saturation, as a multiple of the player colour's (capped at full): higher is more vivid. Same brightness as the call outline.")]
+        private float _earwormOutlineSaturation = 2f;
+
         [SerializeField, Min(0f), Tooltip("How fast it follows, in units per second (the toy creatures' follow speed).")]
         private float _followSpeed = 3.6f;
 
@@ -89,6 +98,9 @@ namespace SpacePartyGame
         public float SpacingStrength => _spacingStrength;
         public int StartCount => _startCount;
         public float FollowSeconds => _followSeconds;
+        public float EarwormSeconds => _earwormSeconds;
+        public float CallOutlineSaturation => _callOutlineSaturation;
+        public float EarwormOutlineSaturation => _earwormOutlineSaturation;
         public float FollowSpeed => _followSpeed;
         public float MatchLeaderRun => _matchLeaderRun;
         public float FollowDistance => _followDistance;

@@ -3,7 +3,7 @@ using UnityEngine;
 namespace SpacePartyGame
 {
     /// <summary>
-    /// What a blow looks like: a burst of watercolour dabs streaking out along the cone in the player's colour, and
+    /// What a blow looks like: a burst of watercolour dabs streaking out along the cone (red for the blow, the player's colour for the earworm), and
     /// a wide painted arc sweeping out to the edge of the reach and fading. It plays when
     /// <see cref="PlayerAbilities.Blew"/> fires; every size and time is in <see cref="BlowSettings"/>.
     /// </summary>
@@ -13,7 +13,7 @@ namespace SpacePartyGame
         [SerializeField, Tooltip("The player whose blow this shows.")]
         private PlayerAbilities _abilities;
 
-        [SerializeField, Tooltip("Whose colour the effect takes.")]
+        [SerializeField, Tooltip("The player whose blow or earworm this shows; the colour comes from PlayerAbilities.EffectColour.")]
         private PlayerIdentity _identity;
 
         [SerializeField, Tooltip("The blow's numbers.")]
@@ -166,7 +166,7 @@ namespace SpacePartyGame
 
             Vector2 aim = _abilities.AimDirection;
             PlaceSector(_abilities.BlowOrigin, aim.sqrMagnitude > 1e-6f ? aim.normalized : Vector2.right);
-            Color colour = _identity.Colour;
+            Color colour = _abilities.EffectColour;
             colour.a = _settings.SectorAlpha * _settings.PreviewAlpha;
             _sector.color = colour;
             _sector.enabled = true;
@@ -241,7 +241,7 @@ namespace SpacePartyGame
                 return;
             }
 
-            Color colour = _identity.Colour;
+            Color colour = _abilities.EffectColour;
             colour.a = _settings.SectorAlpha * Mathf.Clamp01(strength);
             _sector.color = colour;
         }
@@ -271,14 +271,14 @@ namespace SpacePartyGame
             float stretched = width / size.y;
             wave.localScale = new Vector3(keepShape, Mathf.Lerp(keepShape, stretched, _settings.WaveStretch), 1f);
 
-            _waveSprite.color = _identity.Colour;
+            _waveSprite.color = _abilities.EffectColour;
             _wave.Play(_waveState, 0, 0f);
         }
 
         private void ThrowDabs(Vector2 origin, Vector2 direction)
         {
             float half = _settings.ConeAngle * 0.5f;
-            Color colour = _identity.Colour;
+            Color colour = _abilities.EffectColour;
             int count = _settings.DabCount;
 
             for (int i = 0; i < count; i++)
@@ -312,7 +312,7 @@ namespace SpacePartyGame
         {
             _arc.transform.position = new Vector3(origin.x, origin.y, _arc.transform.position.z);
             _arc.transform.rotation = Quaternion.Euler(0f, 0f, Vector2.SignedAngle(Vector2.right, direction));
-            _arcColour = _identity.Colour;
+            _arcColour = _abilities.EffectColour;
             _arcStartedAt = Time.time;
             _arc.enabled = true;
             DrawArc(0f);

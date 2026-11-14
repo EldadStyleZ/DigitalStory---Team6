@@ -94,6 +94,80 @@ namespace SpacePartyGame
 
         /// <summary>Stops following at once, such as when it walks into its leader's own cage.</summary>
         public void Stop() => _lastHeard = float.NegativeInfinity;
+
+        /// <summary>
+        /// Follows a player at once, whoever it followed before, as if it just heard them, such as under an
+        /// earworm. Any later call can take it over again, even one held since before.
+        /// </summary>
+        public void Force(int leader, float now)
+        {
+            _leader = leader;
+            _leaderCallStartedAt = float.NegativeInfinity;
+            _lastHeard = now;
+        }
+    }
+
+    /// <summary>
+    /// The earworm's hold on one vermin: for the earworm time it follows the player whose earworm caught it, and no
+    /// other player's call can take it. Only another player's earworm takes it over (for a full earworm time).
+    /// </summary>
+    public sealed class EarwormHold
+    {
+        private readonly float _seconds;
+        private float _until = float.NegativeInfinity;
+
+        public EarwormHold(float seconds)
+        {
+            _seconds = seconds;
+        }
+
+        /// <summary>The slot of the player whose earworm caught it last, or -1 if none yet.</summary>
+        public int Holder { get; private set; } = -1;
+
+        /// <summary>Whether the earworm still holds it.</summary>
+        public bool IsActive(float now) => Holder >= 0 && now < _until;
+
+        /// <summary>A player's earworm catches it: it is theirs for the earworm time from now.</summary>
+        public void Catch(int player, float now)
+        {
+            Holder = player;
+            _until = now + _seconds;
+        }
+
+        /// <summary>Whether a call from this player is ignored now: any player but the holder, while it lasts.</summary>
+        public bool BlocksCall(int caller, float now) => IsActive(now) && caller != Holder;
+
+        /// <summary>Lets go at once, such as when the holder cages it or the round ends.</summary>
+        public void End() => _until = float.NegativeInfinity;
+    }
+
+    /// <summary>
+    /// The colour of a follower's outline: its leader's hue and brightness, with the saturation scaled. A call's
+    /// outline is softer (less saturated) and an earworm's is vivid (more saturated), at the same brightness, so the
+    /// earworm reads as the stronger effect.
+    /// </summary>
+    public static class OutlineTone
+    {
+        /// <param name="callSaturation">The call outline's saturation, as a share of the leader colour's (0.5 = half).</param>
+        /// <param name="earwormSaturation">The earworm outline's saturation, as a multiple of the leader colour's, up to full.</param>
+        public static Color For(Color leaderColour, bool isEarwormed, float callSaturation, float earwormSaturation)
+        {
+            Color.RGBToHSV(leaderColour, out float hue, out float saturation, out float brightness);
+            float scale = isEarwormed ? earwormSaturation : callSaturation;
+            Color tone = Color.HSVToRGB(hue, Mathf.Clamp01(saturation * Mathf.Max(0f, scale)), brightness);
+            tone.a = leaderColour.a;
+            return tone;
+        }
+    }
+
+    /// <summary>What the earworm (LT, charged like the blow) does and does not reach.</summary>
+    public static class EarwormRules
+    {
+        /// <summary>The note that charges the earworm: Left (Left Shift on the keyboard, LT on a gamepad).</summary>
+        public static bool Charges(Note note) => note == Note.Left;
+
+        /// <summary>It catches free vermin; ones in any cage are left alone, though the wave is still drawn over them.</summary>
+        public static bool Catches(bool isCaged) => !isCaged;
     }
 
     /// <summary>
