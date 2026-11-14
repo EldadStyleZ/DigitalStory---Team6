@@ -96,8 +96,10 @@ namespace DigitalStory.GrassBrush
         [SerializeField, Range(0f, 400f)] private float _thinStart = 35f;
         [Tooltip("Metres from the camera where it has thinned to the far share.")]
         [SerializeField, Range(0f, 400f)] private float _thinEnd = 90f;
+        // Plan section AD: 0.35 cut the chase view's frame by about 1.1 ms (uncapped, 5120x2160) with no change in the top
+        // view, whose ground ends about 30 m from the camera; the stills before and after are in the plan.
         [Tooltip("The share of clumps kept from the end of the thinning on. 1 keeps every clump at every distance.")]
-        [SerializeField, Range(0.05f, 1f)] private float _farKeep = 1f;
+        [SerializeField, Range(0.05f, 1f)] private float _farKeep = 0.35f;
         [Tooltip("The share of clumps over which a clump past the kept share shrinks away, so thinning never pops.")]
         [SerializeField, Range(0.01f, 0.5f)] private float _thinFade = 0.1f;
 

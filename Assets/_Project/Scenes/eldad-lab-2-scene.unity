@@ -63838,7 +63838,12 @@ MonoBehaviour:
   _bladeLean: 0.422
   _heightVariation: 0.125
   _drawDistance: 90
-  _cellSize: 64
+  _drawCellSize: 8
+  _cellBuildsPerFrame: 12
+  _thinStart: 35
+  _thinEnd: 90
+  _farKeep: 0.35
+  _thinFade: 0.1
   _windZone: {fileID: 0}
   _windDirection: {x: 1, y: 0, z: 0.3}
   _windStrength: 0.6
