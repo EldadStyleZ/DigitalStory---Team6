@@ -242,7 +242,7 @@ The swarm grows during a match. Strength comes from the **swarm level**, never f
 | Nests on the map | 8, in Raz's `WaspNestTree_LowPoly` trees, each at least 12 m from a hive |
 | Open at the start | 2, within 10 to 14 m of the middle |
 | Opened later | 2 after wave 1, 2 after wave 2, 1 after wave 3, 1 after wave 4 |
-| Collecting | Stay within 2.5 m of an open nest for 2 s. Leaving the circle or being hit starts the 2 s again |
+| Collecting | Stand within 2.5 m of an open nest and play its combo of 4 or 5 notes (section U; until 2026-11-14: stay 2 s) |
 | Each nest gives | +400 capacity (4,000 at most), +400 wasps now, +1 level. The nest is gone; the tree stays |
 | Size per level | × (1 + 0.12 × (level − 1)) on every song's radius, reach and height |
 | Damage per level | The same multiplier |
@@ -254,7 +254,7 @@ The swarm grows during a match. Strength comes from the **swarm level**, never f
 - A collected nest **hums**: the first two notes of one song the player has not found are shown on its empty slot in the songbook. A nest collected when every song is found hums nothing.
 - Wasps knocked off by a hit stay absolute numbers, so a bigger swarm is also a tougher one.
 - Waves 4 and 5 grow to match the stronger swarm. The playtest bot sets the numbers: lost without nests, winnable with them.
-- The HUD shows the level, a marker at the screen edge for each open nest, and a ring that fills while collecting. The end screen counts nests.
+- The HUD shows the level, a marker at the screen edge for each open nest, and a ring that fills as the combo is played. The end screen counts nests.
 - Left out for now: beekeepers that destroy nests, and wild wasps that defend them.
 
 ### I. The giant, version 2
@@ -425,7 +425,7 @@ Open for the owner:
 - **The first farm phase teaches one thing at a time.** Each prompt goes away when the player has done it:
   1. Move with W A S D.
   2. Play J K H.
-  3. Fly to the glowing nest and stay until it is yours.
+  3. Fly to the glowing nest and play the notes shown (section U).
   4. Fly to a hive to take its wasps. Hold E to give some back and heal it.
   5. Enemies come when the timer ends. Press Enter when ready.
 - The second hive starts the match at 80% health, so step 4 has something to heal.
@@ -560,3 +560,15 @@ Added 2026-11-14. The owner: "there's a UI bug of the hives' circles: now when t
 - **Fair by rule.** Each hive has two spawn points of its own (`LayoutGenerator.HiveOfSpawn`: 0 and 2 the first hive's, 1 and 3 the second's), out beyond it 20 to 70 degrees to either side, 18 to 22 m from it, at least 4 m farther from the other hive, 20 m from the start and 10 m from each other. Each spawn point serves its nearest hive, fixed when the match starts, and its beekeepers walk to that hive while it stands, whoever they chase on the way (`BeekeeperBrain.HomeHive`); once it falls they go for the nearest standing hive. The waves take the spawn points in turn, so every wave alternates between the hives on every map. The west lean of section S (`SpawnWestLeanMetres`) is gone: the old map sent three beekeepers of four to the west hive, now each hive gets half.
 - **Kept.** Lanes clear of props, nothing inside a hive's rings, every try bounded with the fixed fallback map (its spawn points moved to the new rules). Over 200 seeds no map needs the fallback and every prop is placed.
 - **Economy.** Not retuned. With the even split the economy playtests move; the ones that left their bands are listed in `Logs/f010/known-red.txt` for the Balance stage.
+
+### U. A combo collects a nest
+
+Added 2026-11-14. The owner: "for each hive we collect in the forest, instead of standing to collect the bees, we have to play a random combo of 4-5 letters that is shown on the screen when we stand at the tree."
+
+- **The rule** (`NestComboRule`, `Nest`, `NestField`, plain C#). Each nest draws a combo when the match starts, from the match's random source, so a seed replays its combos: 4 or 5 notes (`NestConfig.ComboShortest`, `ComboLongest`), never the same note twice in a row, so it reads as a tune. No song's keys lie inside a combo and no song's keys hold it, so a combo never casts a song; over 200 seeds of 8 nests none did through the song book. 64 random tries, then the first fitting combo in counting order; a config where none fits throws.
+- **Playing it.** Standing within 2.5 m of an open nest makes it the active nest (the nearest wins when rings overlap, the first on a tie) and shows its combo. Standing still collects nothing and there is no timer. A note that continues the combo fills a slot; any other note empties it, and counts as the first when it is the first. Leaving the ring empties it. A hit on the core costs nothing (it used to restart the 2 s). While the swarm is collapsed or the giant stands, no combo shows (the keys are the giant's moves). Songs still work in a ring: every note reaches both. The last note collects the nest with exactly the reward of section H.
+- **Known side effect.** Combo notes are flute notes, so they fill the song table's beginnings like any notes (section N). A notes run that starts before the ring and ends inside the combo can still finish a song; only the combo's own notes are guaranteed song-free.
+- **HUD** (`NestComboView`). A row of 4 or 5 large slots, 44 px, near the top centre under the phase lines, titled "Play the nest's notes". Each slot wears its note's colour, dim (38%) until played, with the key's letter, or the four-dot diamond once the pad was used last. A right note fills its slot with a pop (0.18 s, up to 35% bigger) and the flute's note rises 2 semitones per filled slot (`SwarmFluteVoice.LiftNote`); a wrong note shakes the row (0.3 s, 12 px, 22 swings a second) and empties it; the last note bursts the row (0.45 s, 60% bigger, fading) while the nest's own collected burst and the "Level n" line play. The timings run on real time, so they stay crisp in slow motion. All these numbers are on `NestConfig` under "Combo prompt". The old "Collecting" bar is gone.
+- **Hooks for effects.** `NestField.ComboShown`, `ComboHidden` and `ComboNote(nest, step)` (`NestComboStep`: Advanced, Broken, Restarted, Completed) are the attach points; the HUD and the flute listen to them and nothing calls the effects directly, so a later stage can add camera or particle juice by listening too.
+- **Lesson.** Step 3 now reads "Fly to the glowing nest and play the notes shown."
+- **Playtest bot.** It reads a combo for 0.6 s once it shows, then plays a note every 0.3 s (`PlaytestBot.NestComboReadSeconds`, `NestComboNoteSeconds`), so a nest takes 1.8 to 2.1 s, about the old 2 s. The economy is not retuned; band tests that moved are listed in `Logs/f010/known-red.txt` for the Balance stage. The benchmark plays the combo the same way.
