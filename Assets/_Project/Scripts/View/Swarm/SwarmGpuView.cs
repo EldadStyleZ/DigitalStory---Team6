@@ -123,6 +123,7 @@ namespace DigitalStory.View
         private static readonly int CoreForwardId = Shader.PropertyToID("_CoreForward");
         private static readonly int HiveAId = Shader.PropertyToID("_HiveA");
         private static readonly int HiveBId = Shader.PropertyToID("_HiveB");
+        private static readonly int SpawnSourceId = Shader.PropertyToID("_SpawnSource");
         private static readonly int LastHitId = Shader.PropertyToID("_LastHit");
         private static readonly int SlotsId = Shader.PropertyToID("_Slots");
         private static readonly int SlotColorsId = Shader.PropertyToID("_SlotColors");
@@ -263,6 +264,8 @@ namespace DigitalStory.View
         private float _woundSeconds;
         private Vector4 _firstHive;
         private Vector4 _secondHive;
+        private Vector3 _spawnSource;
+        private float _spawnSourceUntil = -1f;
         private Vector3 _lastHit;
         private int _boneCount;
         private bool _hasColossusSamples;
@@ -742,6 +745,16 @@ namespace DigitalStory.View
         }
 
         /// <summary>Where both hives are and whether each still stands. Revived wasps come from a standing hive.</summary>
+        /// <summary>
+        /// For the next <paramref name="seconds"/>, every wasp that joins the swarm flies out of <paramref name="point"/>
+        /// instead of the nearest hive: the root calls it when a nest is collected, so its new wasps pour out of that nest.
+        /// </summary>
+        public void SetSpawnSource(Vector3 point, float seconds)
+        {
+            _spawnSource = point;
+            _spawnSourceUntil = _simTime + Mathf.Max(0f, seconds);
+        }
+
         public void SetHives(Vector3 first, Vector3 second, bool firstStands, bool secondStands)
         {
             _firstHive = new Vector4(first.x, first.y, first.z, firstStands ? StandsFlag : FallenFlag);
@@ -1477,6 +1490,8 @@ namespace DigitalStory.View
             compute.SetFloat(RiverReachId, _riverReach);
             compute.SetVector(HiveAId, _firstHive);
             compute.SetVector(HiveBId, _secondHive);
+            bool hasSource = _simTime < _spawnSourceUntil;
+            compute.SetVector(SpawnSourceId, new Vector4(_spawnSource.x, _spawnSource.y, _spawnSource.z, hasSource ? 1f : 0f));
             compute.SetVector(LastHitId, _lastHit);
             compute.SetVectorArray(SlotsId, _slotVectors);
             compute.SetVector(SlotFlashId, new Vector4(FlashOf((int)SongSlot.Post), FlashOf((int)SongSlot.Guard), FlashOf((int)SongSlot.Strike), 0f));

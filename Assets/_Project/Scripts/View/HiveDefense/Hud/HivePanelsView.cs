@@ -50,6 +50,18 @@ namespace DigitalStory.View
         private readonly string[] _storeTexts;
         private ControlDevice _device;
 
+        // The emblem: a glowing hexagon cell for each hive. Its rim is the hive's health, running round the cell in a light
+        // that turns from green to red, and honey rises inside it as the store fills.
+        private const float EmblemSize = 48f;
+        private const float EmblemRadius = 17f;
+        private static readonly Color HealthWhole = new Color(0.4f, 1f, 0.45f, 1f);
+        private static readonly Color HealthLow = new Color(1f, 0.25f, 0.15f, 1f);
+        private static readonly Color Honey = new Color(1f, 0.72f, 0.22f, 1f);
+        private static readonly Color CellDark = new Color(0.04f, 0.05f, 0.03f, 0.85f);
+        private readonly VisualElement[] _emblems;
+        private readonly float[] _health01;
+        private readonly float[] _store01;
+
         /// <summary>Builds the panels into the column, one for each hive of the match.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
         public HivePanelsView(HiveDefenseSession session, VisualElement column, float flashSeconds, string holdText, string healingText)
@@ -66,6 +78,9 @@ namespace DigitalStory.View
 
             int count = session.Hives.Count;
             _panels = new VisualElement[count];
+            _emblems = new VisualElement[count];
+            _health01 = new float[count];
+            _store01 = new float[count];
             _healthFills = new VisualElement[count];
             _storeFills = new VisualElement[count];
             _storeLabels = new Label[count];
@@ -132,6 +147,22 @@ namespace DigitalStory.View
             panel.AddToClassList("hive-panel");
             panel.pickingMode = PickingMode.Ignore;
 
+            var emblem = new VisualElement { pickingMode = PickingMode.Ignore };
+            emblem.AddToClassList("hive-emblem");
+            emblem.style.width = EmblemSize;
+            emblem.style.height = EmblemSize;
+            emblem.style.flexShrink = 0;
+            int at = index;
+            emblem.generateVisualContent += context => DrawEmblem(context, at);
+            emblem.Add(EmblemNumber(index + 1, 15));
+            panel.Add(emblem);
+            _emblems[index] = emblem;
+
+            var body = new VisualElement { pickingMode = PickingMode.Ignore };
+            body.AddToClassList("hive-body");
+            body.style.flexGrow = 1;
+            panel.Add(body);
+
             var row = new VisualElement();
             row.AddToClassList("row");
             row.pickingMode = PickingMode.Ignore;
@@ -147,15 +178,15 @@ namespace DigitalStory.View
             storeLabel.AddToClassList("hive-store-label");
             storeLabel.pickingMode = PickingMode.Ignore;
             row.Add(storeLabel);
-            panel.Add(row);
+            body.Add(row);
 
-            panel.Add(Track("hive-fill", "bar-track", out VisualElement healthFill));
-            panel.Add(Track("hive-store-fill", "bar-track--thin", out VisualElement storeFill));
+            body.Add(Track("hive-fill", "bar-track", out VisualElement healthFill));
+            body.Add(Track("hive-store-fill", "bar-track--thin", out VisualElement storeFill));
 
             var hint = new Label(string.Empty);
             hint.AddToClassList("hive-hint");
             hint.pickingMode = PickingMode.Ignore;
-            panel.Add(hint);
+            body.Add(hint);
 
             column.Add(panel);
             _panels[index] = panel;
@@ -183,6 +214,14 @@ namespace DigitalStory.View
         private void ShowBars(int index, Hive hive)
         {
             int health = BarValue(hive.MaxHealth > 0f ? hive.Health / hive.MaxHealth : 0f);
+            float store01 = hive.StoreCapacity > 0f ? Mathf.Clamp01(hive.Store / hive.StoreCapacity) : 0f;
+            if (health != _healthShown[index] || Mathf.Abs(store01 - _store01[index]) > 0.004f)
+            {
+                _health01[index] = health / BarScale;
+                _store01[index] = store01;
+                _emblems[index].MarkDirtyRepaint();
+            }
+
             if (health != _healthShown[index])
             {
                 _healthShown[index] = health;
@@ -244,6 +283,7 @@ namespace DigitalStory.View
             {
                 _flashOn[index] = flashOn;
                 _panels[index].EnableInClassList(FlashClass, flashOn);
+                _emblems[index].MarkDirtyRepaint();
             }
         }
 
@@ -280,6 +320,150 @@ namespace DigitalStory.View
             }
 
             return _storeTexts[store];
+        }
+
+        /// <summary>The hive's number, in the middle of its emblem.</summary>
+        public static Label EmblemNumber(int number, int fontSize)
+        {
+            var label = new Label(number.ToString(CultureInfo.InvariantCulture)) { pickingMode = PickingMode.Ignore };
+            label.style.position = Position.Absolute;
+            label.style.left = 0;
+            label.style.right = 0;
+            label.style.top = 0;
+            label.style.bottom = 0;
+            label.style.marginLeft = 0;
+            label.style.marginRight = 0;
+            label.style.marginTop = 0;
+            label.style.marginBottom = 0;
+            label.style.paddingLeft = 0;
+            label.style.paddingRight = 0;
+            label.style.paddingTop = 0;
+            label.style.paddingBottom = 0;
+            label.style.unityTextAlign = TextAnchor.MiddleCenter;
+            label.style.unityFontStyleAndWeight = FontStyle.Bold;
+            label.style.fontSize = fontSize;
+            label.style.color = new Color(0.22f, 0.12f, 0.03f, 1f);
+            return label;
+        }
+
+        private void DrawEmblem(MeshGenerationContext context, int index)
+        {
+            PaintEmblem(context.painter2D, new Vector2(EmblemSize * 0.5f, EmblemSize * 0.5f), EmblemRadius, _health01[index], _store01[index], _flashOn[index], _destroyedShown[index]);
+        }
+
+        /// <summary>Paints a hive's emblem: a glowing cell whose rim is its health and whose honey is its store.</summary>
+        public static void PaintEmblem(Painter2D paint, Vector2 centre, float EmblemRadius, float health, float store, bool alarm, bool fallen)
+        {
+            Color rim = fallen ? new Color(0.4f, 0.4f, 0.4f, 1f) : (alarm ? HealthLow : Color.Lerp(HealthLow, HealthWhole, health));
+
+            // The soft glow round the cell.
+            for (int ring = 3; ring >= 1; ring--)
+            {
+                Hexagon(paint, centre, EmblemRadius + (ring * 2.6f));
+                paint.fillColor = new Color(rim.r, rim.g, rim.b, (fallen ? 0.03f : 0.07f) * (4 - ring) * (alarm ? 1.6f : 1f));
+                paint.Fill();
+            }
+
+            Hexagon(paint, centre, EmblemRadius);
+            paint.fillColor = CellDark;
+            paint.Fill();
+
+            // Honey: the store, rising from the bottom of the cell.
+            if (store > 0.01f)
+            {
+                float top = centre.y + EmblemRadius - (store * EmblemRadius * 2f);
+                if (HoneyBelow(paint, centre, EmblemRadius - 2.5f, top))
+                {
+                    paint.fillColor = new Color(Honey.r, Honey.g, Honey.b, 0.9f);
+                    paint.Fill();
+                }
+            }
+
+            // The rim: dim all round, lit as far as the health reaches, from the top corner clockwise.
+            Hexagon(paint, centre, EmblemRadius);
+            paint.strokeColor = new Color(rim.r, rim.g, rim.b, 0.18f);
+            paint.lineWidth = 3f;
+            paint.Stroke();
+            if (health > 0.001f)
+            {
+                HexagonArc(paint, centre, EmblemRadius, health);
+                paint.strokeColor = rim;
+                paint.lineWidth = 3f;
+                paint.lineCap = LineCap.Round;
+                paint.Stroke();
+            }
+        }
+
+        // Pointy-topped, like the cells of a hive.
+        private static Vector2 Corner(Vector2 centre, float radius, int corner)
+        {
+            float angle = (corner * Mathf.PI / 3f) - (Mathf.PI * 0.5f);
+            return centre + (new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius);
+        }
+
+        private static void Hexagon(Painter2D paint, Vector2 centre, float radius)
+        {
+            paint.BeginPath();
+            paint.MoveTo(Corner(centre, radius, 0));
+            for (int corner = 1; corner < 6; corner++)
+            {
+                paint.LineTo(Corner(centre, radius, corner));
+            }
+
+            paint.ClosePath();
+        }
+
+        private static void HexagonArc(Painter2D paint, Vector2 centre, float radius, float share)
+        {
+            float sides = Mathf.Clamp01(share) * 6f;
+            paint.BeginPath();
+            paint.MoveTo(Corner(centre, radius, 0));
+            for (int side = 0; side < 6 && sides > 0f; side++)
+            {
+                Vector2 from = Corner(centre, radius, side);
+                Vector2 to = Corner(centre, radius, side + 1);
+                paint.LineTo(Vector2.Lerp(from, to, Mathf.Min(sides, 1f)));
+                sides -= 1f;
+            }
+        }
+
+        private static readonly Vector2[] HoneyPoints = new Vector2[12];
+
+        // The hexagon cut off above a line (screen y grows downward), as one closed path. False when nothing is left.
+        private static bool HoneyBelow(Painter2D paint, Vector2 centre, float radius, float lineY)
+        {
+            int count = 0;
+            for (int side = 0; side < 6; side++)
+            {
+                Vector2 a = Corner(centre, radius, side);
+                Vector2 b = Corner(centre, radius, side + 1);
+                bool aIn = a.y >= lineY;
+                bool bIn = b.y >= lineY;
+                if (aIn)
+                {
+                    HoneyPoints[count++] = a;
+                }
+
+                if (aIn != bIn)
+                {
+                    HoneyPoints[count++] = Vector2.Lerp(a, b, (lineY - a.y) / (b.y - a.y));
+                }
+            }
+
+            if (count < 3)
+            {
+                return false;
+            }
+
+            paint.BeginPath();
+            paint.MoveTo(HoneyPoints[0]);
+            for (int index = 1; index < count; index++)
+            {
+                paint.LineTo(HoneyPoints[index]);
+            }
+
+            paint.ClosePath();
+            return true;
         }
 
         private static int BarValue(float fraction) => (int)(Mathf.Clamp01(fraction) * BarScale);

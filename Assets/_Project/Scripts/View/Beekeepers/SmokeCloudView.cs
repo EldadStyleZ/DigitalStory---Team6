@@ -52,6 +52,7 @@ namespace DigitalStory.View
         private float _hideElapsed;
         private bool _hiding;
         private bool _shown;
+        private bool _stylized;
 
         /// <summary>Raised when the cloud has faded, so the pool can take this view back.</summary>
         public event Action<SmokeCloudView> Faded;
@@ -73,7 +74,7 @@ namespace DigitalStory.View
             _particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             Configure(_radius);
 
-            _discMaterial.color = _discColor;
+            SetDiscFade(1f);
             _disc.transform.localScale = new Vector3(_radius, 1f, _radius);
             _disc.SetActive(true);
             _particles.Play();
@@ -107,6 +108,10 @@ namespace DigitalStory.View
                 shader = Shader.Find("Particles/Standard Unlit");
             }
 
+            // Stylized smoke: toon-lit puffs that dissolve, and a soft ring on the ground. The plain look stays as a fallback.
+            Shader puffShader = Shader.Find("DigitalStory/StylizedSmoke");
+            Shader ringShader = Shader.Find("DigitalStory/SmokeGroundRing");
+
             if (shader == null)
             {
                 throw new InvalidOperationException("Neither Sprites/Default nor Particles/Standard Unlit was found, so smoke cannot be drawn.");
@@ -119,13 +124,18 @@ namespace DigitalStory.View
 
             s_puffUsers++;
 
-            _puffMaterial = new Material(shader) { mainTexture = s_puffTexture };
+            _stylized = puffShader != null;
+            _puffMaterial = _stylized ? new Material(puffShader) : new Material(shader) { mainTexture = s_puffTexture };
             _particleRenderer.sharedMaterial = _puffMaterial;
+            if (_stylized)
+            {
+                SmokeStyle.UseStreams(_particleRenderer);
+            }
             _particleRenderer.sortingOrder = _sortingOrder;
             _particleRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _particleRenderer.receiveShadows = false;
 
-            _discMaterial = new Material(shader) { color = _discColor };
+            _discMaterial = ringShader != null ? new Material(ringShader) : new Material(shader) { color = _discColor };
             _discMesh = BuildDisc();
             _discMesh.name = "SmokeCloudDisc";
             _disc = new GameObject("RadiusDisc", typeof(MeshFilter), typeof(MeshRenderer));
@@ -151,22 +161,35 @@ namespace DigitalStory.View
             _particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
 
+        // While leaving Play mode the editor may already count as not playing, where only DestroyImmediate is allowed.
+        private static void Release(UnityEngine.Object thing)
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(thing);
+            }
+            else
+            {
+                DestroyImmediate(thing);
+            }
+        }
+
         private void OnDestroy()
         {
             Faded = null;
             if (_puffMaterial != null)
             {
-                Destroy(_puffMaterial);
+                Release(_puffMaterial);
             }
 
             if (_discMaterial != null)
             {
-                Destroy(_discMaterial);
+                Release(_discMaterial);
             }
 
             if (_discMesh != null)
             {
-                Destroy(_discMesh);
+                Release(_discMesh);
             }
 
             s_puffUsers--;
@@ -187,9 +210,7 @@ namespace DigitalStory.View
 
             _hideElapsed += Time.deltaTime;
             float fade = 1f - Mathf.Clamp01(_hideElapsed / _fadeSeconds);
-            Color disc = _discColor;
-            disc.a *= fade;
-            _discMaterial.color = disc;
+            SetDiscFade(fade);
 
             if (_particles.particleCount > 0 && _hideElapsed < _fadeSeconds)
             {
@@ -203,8 +224,27 @@ namespace DigitalStory.View
             Faded?.Invoke(this);
         }
 
+        private void SetDiscFade(float fade)
+        {
+            if (_discMaterial.HasProperty("_Opacity"))
+            {
+                _discMaterial.SetFloat("_Opacity", fade);
+                return;
+            }
+
+            Color disc = _discColor;
+            disc.a *= fade;
+            _discMaterial.color = disc;
+        }
+
         private void Configure(float radius)
         {
+            if (_stylized)
+            {
+                SmokeStyle.ConfigureCloud(_particles, radius, _puffLifetime, _puffsPerSquareMetre, _puffSizeShare);
+                return;
+            }
+
             ParticleSystem.MainModule main = _particles.main;
             main.loop = true;
             main.playOnAwake = false;

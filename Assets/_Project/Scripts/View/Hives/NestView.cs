@@ -10,7 +10,8 @@ namespace DigitalStory.View
     /// Shows one wasp nest in the world. Closed, the nest hangs dark and still. Open, it glows warm and pulses, owns a small
     /// point light, lets a few gold motes drift around it and lies a faint ring on the ground at the collect radius. While the
     /// core collects it, a bright ring fills clockwise with the progress and motes stream from the nest down to the ground
-    /// circle. Once collected, a short burst of motes plays, then the nest, its light and the rings go and the tree stays.
+    /// circle. Both rings are rings of light (NestGlowRing.shader): a bright line with a soft halo, and the filling one flares
+    /// at its front. The motes are fireflies (FireflyGlow.shader): soft glowing dots that wander and blink. Once collected, a short burst of motes plays, then the nest, its light and the rings go and the tree stays.
     /// It polls the nest each frame and changes nothing in the logic.
     /// </summary>
     [DisallowMultipleComponent]
@@ -19,15 +20,25 @@ namespace DigitalStory.View
     {
         private const string NestObjectName = "WaspNest";
         private const string ShaderName = "Sprites/Default";
+        private const string GlowRingShaderName = "DigitalStory/NestGlowRing";
+        private const string FireflyShaderName = "DigitalStory/FireflyGlow";
         private const int RingSegments = 64;
-        private const int DotSegments = 10;
         private const int MoteCount = 12;
         private const int IdleMoteCount = 4;
         private const float GroundRingHeight = 0.05f;
         private const float FillRingHeight = 0.07f;
-        private const float GroundRingInnerRatio = 0.96f;
-        private const float FillRingInnerRatio = 0.88f;
-        private const float MoteSize = 0.38f;
+        // The glow rings' bands: wide enough for the soft halo around the bright core line.
+        private const float GroundRingInnerRatio = 0.9f;
+        private const float GroundRingOuterRatio = 1.1f;
+        private const float FillRingInnerRatio = 0.84f;
+        private const float FillRingOuterRatio = 1.16f;
+        private const float GroundRingIntensity = 3.5f;
+        private const float FillRingIntensity = 6.5f;
+        private const float GroundWallHeight = 0.9f;
+        private const float FillWallHeight = 1.6f;
+        private const float MoteSize = 0.6f;               // the glow's whole quad; the bright core is much smaller
+        private const float FireflyWander = 0.45f;         // metres each firefly drifts off its path, in lazy loops
+        private const float FireflyBlinkLow = 0.18f;       // how lit a firefly is between its flashes
         private const float MoteFadeShare = 0.2f;
         private const float StreamCycleSeconds = 0.9f;
         private const float StreamArc = 1.2f;
@@ -35,13 +46,19 @@ namespace DigitalStory.View
         private const float IdleRadius = 1.1f;
         private const float IdleRise = 1.6f;
         private const float BurstSeconds = 0.9f;
+        private const float ShrinkSeconds = 0.5f;          // the full ring closing in on the tree before the burst
+        private const float ShrinkToShare = 0.06f;         // how small the ring gets, as a share of the collect radius
         private const float BurstRadius = 3.5f;
         private const float BurstLift = 1.8f;
 
         private static readonly int ColorId = Shader.PropertyToID("_Color");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+        private static readonly int ProgressId = Shader.PropertyToID("_Progress");
+        private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
         private static Material s_sharedMaterial;
         private static Material s_fillMaterial;
+        private static Material s_glowRingMaterial;
+        private static Material s_fireflyMaterial;
 
         [Header("Look")]
         [SerializeField, Tooltip("The tint of the nest while it is closed. Dark, so a closed nest reads as dead.")]
@@ -102,7 +119,10 @@ namespace DigitalStory.View
         private Renderer[] _moteRenderers;
         private MaterialPropertyBlock _block;
         private ShownState _state = ShownState.Closed;
-        private int _shownSegments;
+        private float _shownProgress = -1f;
+        private Transform _groundRing;
+        private Transform _fillRing;
+        private bool _isBursting;
         private int _enabledMotes;
         private float _burstStart;
         private bool _isGone;
@@ -114,6 +134,9 @@ namespace DigitalStory.View
             Collecting,
             Collected,
         }
+
+        /// <summary>The middle of the nest hanging in its tree, where its wasps fly out from.</summary>
+        public Vector3 NestPoint => _nestCenter;
 
         /// <summary>True while the nest is shown open: glowing, with its ring, whether or not it is being collected.</summary>
         public bool IsOpenShown => _state == ShownState.Open || _state == ShownState.Collecting;
@@ -201,7 +224,15 @@ namespace DigitalStory.View
                     ShowStreamMotes();
                     break;
                 case ShownState.Collected:
-                    ShowBurst();
+                    if (Time.time < _burstStart)
+                    {
+                        ShowShrink();
+                    }
+                    else
+                    {
+                        ShowBurst();
+                    }
+
                     break;
             }
         }
@@ -254,7 +285,7 @@ namespace DigitalStory.View
             _groundRenderer.enabled = isOpen;
             if (!isOpen || state == ShownState.Open)
             {
-                SetFillSegments(0);
+                HideFill();
             }
 
             if (state == ShownState.Closed)
@@ -272,9 +303,11 @@ namespace DigitalStory.View
             }
             else
             {
-                _burstStart = Time.time;
-                SetFillSegments(0);
-                SetMotesEnabled(MoteCount);
+                // The full ring first closes in on the tree, then the burst plays.
+                _burstStart = Time.time + ShrinkSeconds;
+                _isBursting = false;
+                SetFillProgress(1f);
+                SetMotesEnabled(0);
             }
         }
 
@@ -290,26 +323,29 @@ namespace DigitalStory.View
 
         private void ShowFill()
         {
-            int segments = Mathf.CeilToInt(Mathf.Clamp01(_nest.Progress01) * RingSegments);
-            SetFillSegments(segments);
+            SetFillProgress(Mathf.Clamp01(_nest.Progress01));
         }
 
-        // Shows only the first segments of the fill ring, which run clockwise from the top. A sub-mesh descriptor is a struct,
-        // so this allocates nothing, and it runs only when the count changes.
-        private void SetFillSegments(int segments)
+        private void HideFill()
         {
-            if (segments == _shownSegments)
+            _fillRenderer.enabled = false;
+            _shownProgress = -1f;
+        }
+
+        // The fill ring is a ring of light that the glow shader lights from the top round to the progress, with a flare at
+        // its front. While nothing is collected it still shows its faint track, so the player sees where to stand.
+        private void SetFillProgress(float progress)
+        {
+            if (Mathf.Approximately(progress, _shownProgress))
             {
                 return;
             }
 
-            _shownSegments = segments;
-            _fillRenderer.enabled = segments > 0;
-            if (segments > 0)
-            {
-                var descriptor = new SubMeshDescriptor(0, segments * 6, MeshTopology.Triangles);
-                _fillMesh.SetSubMesh(0, descriptor, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices);
-            }
+            _shownProgress = progress;
+            _fillRenderer.enabled = progress > 0f;
+            _fillRenderer.GetPropertyBlock(_block);
+            _block.SetFloat(ProgressId, progress);
+            _fillRenderer.SetPropertyBlock(_block);
         }
 
         // A few motes drift up and around the nest and fade in and out, so an open nest looks alive even from far away.
@@ -322,7 +358,7 @@ namespace DigitalStory.View
                 float t = Mathf.Repeat(baseTime + ((float)index / IdleMoteCount), 1f);
                 float angle = (t * Mathf.PI * 2f) + (index * 1.7f);
                 var offset = new Vector3(Mathf.Sin(angle) * IdleRadius, (t - 0.3f) * IdleRise, Mathf.Cos(angle) * IdleRadius);
-                PlaceMote(index, _nestCenter + offset, facing, t);
+                PlaceMote(index, _nestCenter + offset + Wander(index), facing, t);
             }
         }
 
@@ -339,13 +375,37 @@ namespace DigitalStory.View
                 Vector3 target = ground + (new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle)) * _config.CollectRadius);
                 Vector3 position = Vector3.Lerp(_nestCenter, target, t);
                 position.y += Mathf.Sin(t * Mathf.PI) * StreamArc;
-                PlaceMote(index, position, facing, t);
+                PlaceMote(index, position + Wander(index), facing, t);
             }
         }
 
         // The burst flies outward and up once, then the nest, its light and its rings are gone and only the tree stays.
+        // The full ring of light pulls in to the tree, speeding up as it closes, and burns brighter as it shrinks.
+        private void ShowShrink()
+        {
+            float t = Mathf.Clamp01(1f - ((_burstStart - Time.time) / ShrinkSeconds));
+            float eased = t * t;
+            float radius = _config.CollectRadius * Mathf.Lerp(1f, ShrinkToShare, eased);
+            var scale = new Vector3(radius, 1f, radius);
+            _groundRing.localScale = scale;
+            _fillRing.localScale = scale;
+
+            _fillRenderer.GetPropertyBlock(_block);
+            _block.SetFloat(IntensityId, FillRingIntensity * (1f + (1.5f * eased)));
+            _fillRenderer.SetPropertyBlock(_block);
+            ShowGlow(1f + eased);
+        }
+
         private void ShowBurst()
         {
+            if (!_isBursting)
+            {
+                _isBursting = true;
+                HideFill();
+                _groundRenderer.enabled = false;
+                SetMotesEnabled(MoteCount);
+            }
+
             float t = (Time.time - _burstStart) / BurstSeconds;
             if (t >= 1f)
             {
@@ -360,16 +420,36 @@ namespace DigitalStory.View
                 var outward = new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle));
                 Vector3 position = _nestCenter + (outward * (BurstRadius * t));
                 position.y += Mathf.Sin(t * Mathf.PI) * BurstLift;
-                PlaceMote(index, position, facing, 1f - t);
+                PlaceMote(index, position + Wander(index), facing, 1f - t);
             }
         }
 
-        // Puts one mote down. Its alpha follows the cycle position: in at the start, out at the end.
+        // A firefly never flies straight: each one loops lazily off its path at its own pace.
+        private static Vector3 Wander(int index)
+        {
+            float time = Time.time;
+            float seed = index * 1.618f;
+            return new Vector3(
+                Mathf.Sin((time * 1.1f) + seed) + (0.5f * Mathf.Sin((time * 2.3f) + (seed * 2f))),
+                0.6f * Mathf.Sin((time * 1.6f) + (seed * 3f)),
+                Mathf.Cos((time * 0.9f) + (seed * 1.3f)) + (0.5f * Mathf.Cos((time * 2.7f) + seed))) * (FireflyWander / 1.5f);
+        }
+
+        // How lit a firefly is: a quick flash, a slow fade and a dim wait, each at its own pace, so they never blink together.
+        private static float Blink(int index)
+        {
+            float rate = 0.55f + (0.35f * Mathf.Repeat(index * 0.618f, 1f));
+            float phase = Mathf.Repeat((Time.time * rate) + (index * 0.37f), 1f);
+            float flash = phase < 0.15f ? phase / 0.15f : Mathf.Pow(1f - ((phase - 0.15f) / 0.85f), 3f);
+            return Mathf.Lerp(FireflyBlinkLow, 1f, flash);
+        }
+
+        // Puts one mote down. Its alpha follows the cycle position, in at the start and out at the end, times its blink.
         private void PlaceMote(int index, Vector3 position, Quaternion facing, float t)
         {
             _motes[index].SetPositionAndRotation(position, facing);
             Color color = _moteColor;
-            color.a = _moteColor.a * Mathf.Clamp01(Mathf.Min(t, 1f - t) / MoteFadeShare);
+            color.a = _moteColor.a * Mathf.Clamp01(Mathf.Min(t, 1f - t) / MoteFadeShare) * Blink(index);
             _block.SetColor(ColorId, color);
             _moteRenderers[index].SetPropertyBlock(_block);
         }
@@ -445,17 +525,45 @@ namespace DigitalStory.View
 
         private void BuildRings(Material material)
         {
-            _groundMesh = BuildRingMesh(GroundRingInnerRatio);
-            NewMeshObject("NestRing", _groundMesh, material, GroundRingHeight, out _groundRenderer);
+            Material glow = GlowRingMaterial();
+            bool isGlow = glow != null;
+
+            _groundMesh = BuildRingMesh(GroundRingInnerRatio, GroundRingOuterRatio, isGlow ? GroundWallHeight : 0f);
+            _groundRing = NewMeshObject("NestRing", _groundMesh, isGlow ? glow : material, GroundRingHeight, out _groundRenderer);
+            _block.Clear();
             _block.SetColor(ColorId, _ringColor);
+            _block.SetFloat(ProgressId, 1f);
+            _block.SetFloat(IntensityId, GroundRingIntensity);
             _groundRenderer.SetPropertyBlock(_block);
             _groundRenderer.enabled = false;
 
-            _fillMesh = BuildRingMesh(FillRingInnerRatio);
-            NewMeshObject("NestFill", _fillMesh, FillMaterial(material), FillRingHeight, out _fillRenderer);
+            _fillMesh = BuildRingMesh(FillRingInnerRatio, FillRingOuterRatio, isGlow ? FillWallHeight : 0f);
+            _fillRing = NewMeshObject("NestFill", _fillMesh, isGlow ? glow : FillMaterial(material), FillRingHeight, out _fillRenderer);
+            _block.Clear();
             _block.SetColor(ColorId, _fillColor);
+            _block.SetFloat(ProgressId, 0f);
+            _block.SetFloat(IntensityId, FillRingIntensity);
             _fillRenderer.SetPropertyBlock(_block);
             _fillRenderer.enabled = false;
+            _block.Clear();
+        }
+
+        // The ring of light. Null when the shader is missing, and then the rings stay plain.
+        private static Material GlowRingMaterial()
+        {
+            if (s_glowRingMaterial != null)
+            {
+                return s_glowRingMaterial;
+            }
+
+            Shader shader = Shader.Find(GlowRingShaderName);
+            if (shader == null)
+            {
+                return null;
+            }
+
+            s_glowRingMaterial = new Material(shader) { name = "NestView Glow Ring", hideFlags = HideFlags.HideAndDontSave, enableInstancing = true };
+            return s_glowRingMaterial;
         }
 
         private Transform NewMeshObject(string objectName, Mesh mesh, Material material, float height, out Renderer renderer)
@@ -477,6 +585,12 @@ namespace DigitalStory.View
         // A fixed pool of centred dots, made once and moved in code; no allocation per frame.
         private void BuildMotes(Material material)
         {
+            Material firefly = FireflyMaterial();
+            if (firefly != null)
+            {
+                material = firefly;
+            }
+
             _dotMesh = BuildDotMesh();
             var root = new GameObject("NestMotes").transform;
             root.SetParent(transform, false);
@@ -531,55 +645,95 @@ namespace DigitalStory.View
             return s_fillMaterial;
         }
 
-        // A round dot of diameter 1, centred, facing -z.
+        // A square of side 1, centred, facing -z, with uv 0 to 1 across it. The firefly shader draws a round glow in it;
+        // the plain shader, used only when that one is missing, shows the whole square faint.
         private static Mesh BuildDotMesh()
         {
-            var vertices = new Vector3[DotSegments + 1];
-            var triangles = new int[DotSegments * 3];
-            vertices[0] = Vector3.zero;
-            for (int segment = 0; segment < DotSegments; segment++)
+            var mesh = new Mesh
             {
-                float angle = segment * Mathf.PI * 2f / DotSegments;
-                vertices[segment + 1] = new Vector3(Mathf.Cos(angle) * 0.5f, Mathf.Sin(angle) * 0.5f, 0f);
-                int t = segment * 3;
-                triangles[t] = 0;
-                triangles[t + 1] = ((segment + 1) % DotSegments) + 1;
-                triangles[t + 2] = segment + 1;
-            }
-
-            var mesh = new Mesh { name = "NestView Dot", vertices = vertices, triangles = triangles };
+                name = "NestView Firefly",
+                vertices = new[] { new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f), new Vector3(0.5f, 0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f) },
+                uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f) },
+                triangles = new[] { 0, 2, 1, 0, 3, 2 },
+            };
             mesh.RecalculateBounds();
             return mesh;
         }
 
-        // A flat ring of outer radius 1 on the ground plane. Its segments run clockwise seen from above, starting at the top
-        // (+z), and its triangles are in that order, so drawing the first n segments draws the ring filled n/64 of the way.
-        private static Mesh BuildRingMesh(float innerRatio)
+        private static Material FireflyMaterial()
         {
-            var vertices = new Vector3[RingSegments * 2];
-            var triangles = new int[RingSegments * 6];
-            for (int segment = 0; segment < RingSegments; segment++)
+            if (s_fireflyMaterial != null)
             {
-                float angle = segment * Mathf.PI * 2f / RingSegments;
-                var direction = new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle));
-                vertices[segment * 2] = direction;
-                vertices[(segment * 2) + 1] = direction * innerRatio;
-
-                int next = (segment + 1) % RingSegments;
-                int outer = segment * 2;
-                int inner = outer + 1;
-                int nextOuter = next * 2;
-                int nextInner = nextOuter + 1;
-                int t = segment * 6;
-                triangles[t] = outer;
-                triangles[t + 1] = inner;
-                triangles[t + 2] = nextOuter;
-                triangles[t + 3] = inner;
-                triangles[t + 4] = nextInner;
-                triangles[t + 5] = nextOuter;
+                return s_fireflyMaterial;
             }
 
-            var mesh = new Mesh { name = "NestView Ring", vertices = vertices, triangles = triangles };
+            Shader shader = Shader.Find(FireflyShaderName);
+            if (shader == null)
+            {
+                return null;
+            }
+
+            s_fireflyMaterial = new Material(shader) { name = "NestView Firefly", hideFlags = HideFlags.HideAndDontSave, enableInstancing = true };
+            return s_fireflyMaterial;
+        }
+
+        // A flat band on the ground plane, from innerRatio to outerRatio of radius 1, and a wall of wallHeight metres standing
+        // on its centre line (none when wallHeight is 0). uv.x runs once round clockwise seen from above, starting at the top
+        // (+z). On the band uv.y runs across it, 0 inside and 1 outside; on the wall it runs up it, and uv2.x is 1. The ring's
+        // object is scaled by the collect radius across but not up, so the wall's height stays in metres.
+        private static Mesh BuildRingMesh(float innerRatio, float outerRatio, float wallHeight)
+        {
+            int columns = RingSegments + 1;
+            bool hasWall = wallHeight > 0f;
+            int parts = hasWall ? 2 : 1;
+            var vertices = new Vector3[columns * 2 * parts];
+            var uvs = new Vector2[vertices.Length];
+            var wallFlags = new Vector2[vertices.Length];
+            var triangles = new int[RingSegments * 6 * parts];
+            float middle = (innerRatio + outerRatio) * 0.5f;
+
+            for (int column = 0; column < columns; column++)
+            {
+                float around = (float)column / RingSegments;
+                float angle = around * Mathf.PI * 2f;
+                var direction = new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle));
+                vertices[column * 2] = direction * outerRatio;
+                vertices[(column * 2) + 1] = direction * innerRatio;
+                uvs[column * 2] = new Vector2(around, 1f);
+                uvs[(column * 2) + 1] = new Vector2(around, 0f);
+
+                if (hasWall)
+                {
+                    int wall = (columns * 2) + (column * 2);
+                    vertices[wall] = (direction * middle) + (Vector3.up * wallHeight);
+                    vertices[wall + 1] = direction * middle;
+                    uvs[wall] = new Vector2(around, 1f);
+                    uvs[wall + 1] = new Vector2(around, 0f);
+                    wallFlags[wall] = Vector2.right;
+                    wallFlags[wall + 1] = Vector2.right;
+                }
+            }
+
+            for (int part = 0; part < parts; part++)
+            {
+                int first = part * columns * 2;
+                for (int segment = 0; segment < RingSegments; segment++)
+                {
+                    int outer = first + (segment * 2);
+                    int inner = outer + 1;
+                    int nextOuter = outer + 2;
+                    int nextInner = outer + 3;
+                    int t = ((part * RingSegments) + segment) * 6;
+                    triangles[t] = outer;
+                    triangles[t + 1] = inner;
+                    triangles[t + 2] = nextOuter;
+                    triangles[t + 3] = inner;
+                    triangles[t + 4] = nextInner;
+                    triangles[t + 5] = nextOuter;
+                }
+            }
+
+            var mesh = new Mesh { name = "NestView Ring", vertices = vertices, uv = uvs, uv2 = wallFlags, triangles = triangles };
             mesh.RecalculateBounds();
             return mesh;
         }

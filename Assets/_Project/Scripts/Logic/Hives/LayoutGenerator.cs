@@ -22,6 +22,18 @@ namespace DigitalStory.Logic
     /// </remarks>
     public static class LayoutGenerator
     {
+        /// <summary>
+        /// Optional: true where the ground can take nothing of the given radius, such as in or beside a river. The scene sets
+        /// it; null blocks nothing. Hives, spawn points, nest trees and scenery all keep off blocked ground.
+        /// </summary>
+        public static Func<Vector3, float, bool> IsBlocked { get; set; }
+
+        private const float HiveRoom = 3f;
+        private const float SpawnRoom = 2f;
+        private const float NestRoom = 3f;
+
+        private static bool IsFree(Vector3 point, float radius) => IsBlocked == null || !IsBlocked(point, radius);
+
         /// <summary>Hives on every map: the first anywhere in its band, the second across the middle from it.</summary>
         public const int HiveCount = 2;
 
@@ -121,7 +133,8 @@ namespace DigitalStory.Logic
                 Vector3 second = Polar(
                     bearing + HalfTurnDegrees + Spread(random, layout.HiveAcrossSpreadDegrees),
                     Between(random, layout.HiveNearest, layout.HiveFarthest));
-                if (GroundMath.DistanceSquared(first, second) >= layout.HiveLeastSeparation * layout.HiveLeastSeparation)
+                if (GroundMath.DistanceSquared(first, second) >= layout.HiveLeastSeparation * layout.HiveLeastSeparation
+                    && IsFree(first, HiveRoom) && IsFree(second, HiveRoom))
                 {
                     hives[0] = first;
                     hives[1] = second;
@@ -153,7 +166,8 @@ namespace DigitalStory.Logic
                     if (IsInside(spawn, layout.ArenaHalfSize)
                         && IsClearOf(spawn, start, layout.SpawnStartClearance)
                         && IsClearOf(spawn, other, lead)
-                        && IsClearOf(spawn, spawns, index, layout.SpawnLeastSpacing))
+                        && IsClearOf(spawn, spawns, index, layout.SpawnLeastSpacing)
+                        && IsFree(spawn, SpawnRoom))
                     {
                         spawns[index] = spawn;
                         isPlaced = true;
@@ -220,7 +234,8 @@ namespace DigitalStory.Logic
                     && IsClearOf(point, rules.Start, layout.NestStartClearance)
                     && IsClearOf(point, rules.Hives, hiveClearance)
                     && IsClearOf(point, rules.Spawns, layout.NestSpawnClearance)
-                    && IsClearOf(point, rules.Placed, layout.NestLeastSpacing))
+                    && IsClearOf(point, rules.Placed, layout.NestLeastSpacing)
+                    && IsFree(point, NestRoom))
                 {
                     rules.Placed.Add(point);
                     return true;
@@ -254,7 +269,8 @@ namespace DigitalStory.Logic
                         && IsClearOf(point, nests, layout.SceneryNestClearance + radius)
                         && IsClearOf(point, spawns, layout.ScenerySpawnClearance + radius)
                         && IsClearOfLanes(point, spawns, hives, layout.LaneHalfWidth + radius)
-                        && IsClearOfProps(point, radius, placed, placedRadii, layout))
+                        && IsClearOfProps(point, radius, placed, placedRadii, layout)
+                        && IsFree(point, radius))
                     {
                         result[index] = new SceneryPlacement(point, Between(random, 0f, FullTurnDegrees));
                         placed.Add(point);

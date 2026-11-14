@@ -18,6 +18,13 @@ namespace DigitalStory.View
     {
         private const int RequiredHiveCount = LayoutGenerator.HiveCount;
 
+        // How long after a nest is collected the wasps that join come out of it. Long enough for the whole gain to fly out.
+        private const float NestSpawnSeconds = 1.5f;
+
+        // Over a river the swarm flies this far above the water, instead of following the core down into the bed.
+        private const float AboveWater = 0.25f;
+        private const string WaterObjectName = "Water (Crest)";
+
         // A sting's target as the swarm view reads it: w is 1 while the sting wraps a living beekeeper. The rules give each
         // sting a new target when its own dies, and end them all at once, letting the song go, when none is left; so every
         // sting the running Sting sent is alive until the slot lets go and the whole squad flies home.
@@ -162,6 +169,19 @@ namespace DigitalStory.View
 
         [SerializeField, Tooltip("The HUD.")]
         private HiveDefenseHudView _hud;
+
+        private HiveMinimapView _minimap;
+        private HiveKeysView _keys;
+        private HiveBadgesView _badges;
+        private ScreenFadeView _fadeIn;
+        private Transform _water;
+        private const float AmbienceFullSwarm = 2000f;
+        private const float AmbienceFullSpeed = 7f;
+        private const float StreamReach = 18f;
+        private const float RiverMargin = 2.5f;
+        private AmbienceVoice _ambience;
+        private Vector3 _lastCore;
+        private float _coreSpeed;
 
         [SerializeField, Tooltip("The felt hit: the camera's shake and kick, the beekeeper's flash and recoil, the swarm's freeze and the shield's blue flash.")]
         private HitFeedbackView _hitFeedback;
@@ -404,6 +424,9 @@ namespace DigitalStory.View
             _volumeStore = new PlayerPrefsVolumeStore();
             _volumes.Load(_volumeStore);
             _volumes.Changed += HandleVolumeChanged;
+            _ambience = new GameObject("Ambience", typeof(AudioSource), typeof(AmbienceVoice)).GetComponent<AmbienceVoice>();
+            _ambience.transform.SetParent(transform, false);
+
             Layout = DrawMap();
 
             var rules = new HiveDefenseRules(
@@ -424,6 +447,7 @@ namespace DigitalStory.View
             _attackGlowLight.Initialize(_swarm);
             Session.Forms.FormChanged += HandleFormChanged;
             Session.Caster.SongCast += HandleSongCast;
+            Session.Nests.NestCollected += HandleNestCollected;
             Session.Nests.ComboNote += HandleComboNote;
             for (int index = 0; index < _hives.Length; index++)
             {
@@ -465,6 +489,8 @@ namespace DigitalStory.View
             ApplyVolumes();
 
             _followCamera.SetTarget(_coreMotor.transform);
+            GameObject water = GameObject.Find(WaterObjectName);
+            _water = water != null ? water.transform : null;
             _lastAimPoint = _coreMotor.Position;
             _input.HolePressed += PressHole;
 
@@ -487,6 +513,13 @@ namespace DigitalStory.View
             _settings = _hud.MakeSettings(_volumes);
             ApplyVolumes();
             _hud.ShowControls(_input.LastDevice);
+            _minimap = new HiveMinimapView(
+                Session, _hud.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement, _coreMove.PlayAreaHalfSize, () => _followCamera.GroundForward);
+            UnityEngine.UIElements.VisualElement hudRoot = _hud.GetComponent<UnityEngine.UIElements.UIDocument>().rootVisualElement;
+            UnityEngine.UIElements.VisualElement bottom = UnityEngine.UIElements.UQueryExtensions.Q(hudRoot, "bottom");
+            _keys = new HiveKeysView(_input, bottom ?? hudRoot);
+            _badges = new HiveBadgesView(Session, hudRoot, _camera);
+            _fadeIn = new ScreenFadeView(hudRoot);
             _input.LastDeviceChanged += HandleLastDeviceChanged;
         }
 
@@ -503,6 +536,17 @@ namespace DigitalStory.View
 
             NoteVoiceKind voice = _fluteVoice.NextVoice();
             _hud.ShowNotice("Voice: " + SwarmFluteVoice.TitleOf(voice));
+        }
+
+        // The wasps a nest gives pour out of that nest in its tree, not out of a hive.
+        private void HandleNestCollected(int nest)
+        {
+            if (nest >= 0 && nest < _nestViews.Length)
+            {
+                _swarmView.SetSpawnSource(_nestViews[nest].NestPoint, NestSpawnSeconds);
+            }
+
+            _ambience.PlayCollect();
         }
 
         private void Restart()
@@ -546,10 +590,20 @@ namespace DigitalStory.View
                 _volumes.Changed -= HandleVolumeChanged;
             }
 
+            _minimap?.Dispose();
+            _minimap = null;
+            _keys?.Dispose();
+            _keys = null;
+            _badges?.Dispose();
+            _badges = null;
+            _fadeIn?.Dispose();
+            _fadeIn = null;
+
             if (Session != null)
             {
                 Session.Forms.FormChanged -= HandleFormChanged;
                 Session.Caster.SongCast -= HandleSongCast;
+                Session.Nests.NestCollected -= HandleNestCollected;
                 Session.Nests.ComboNote -= HandleComboNote;
             }
 
@@ -607,6 +661,11 @@ namespace DigitalStory.View
                 return;
             }
 
+            _minimap?.Tick();
+            _keys?.Tick(Time.unscaledDeltaTime);
+            _badges?.Tick(Time.unscaledDeltaTime);
+            _fadeIn?.Tick(Time.unscaledDeltaTime);
+
             StepSlowMotion();
             // The press that opens or closes the panel does nothing else: Start closing it neither calls the wave nor restarts.
             if (_input.SettingsPressed || (IsSettingsOpen && _input.SettingsBackPressed))
@@ -657,8 +716,10 @@ namespace DigitalStory.View
             Vector3 cameraForward = _followCamera.GroundForward;
             Vector3 move = HiveDefenseFrame.GroundStep(localMove, cameraForward);
 
+            // Shift sprints the swarm. The giant has its own speed, and there Shift kicks.
+            float sprint = _input.SprintHeld && !isColossus ? _coreMove.SprintSpeedMultiplier : 1f;
             _coreMotor.Move(
-                isColossus ? Vector3.zero : move, Session.CoreSpeedMultiplier, isColossus || Session.IsCoreRooted, dt);
+                isColossus ? Vector3.zero : move, Session.CoreSpeedMultiplier * sprint, isColossus || Session.IsCoreRooted, dt);
 
             if (_input.TryGetAimPoint(_coreMotor.Position, cameraForward, out Vector3 aim))
             {
@@ -699,14 +760,56 @@ namespace DigitalStory.View
             // controller has nothing to jump out of on the next move.
             _coreMotor.PlaceAt(Session.CorePosition, !Session.IsColossusActive);
             Vector3 core = _coreMotor.Position;
-            _trail.Push(core);
 
-            FeedSwarm(core);
+            // The swarm and its lights stay above any water the core walks into; the hives still see the core itself.
+            Vector3 flying = OverWater(core);
+            _trail.Push(flying);
+
+            FeedSwarm(flying);
             FeedHives(core);
-            FeedGlow(core, dt);
+            FeedGlow(flying, dt);
+            FeedAmbience(core, dt);
             FeedChase();
             FeedWave();
             FeedLean();
+        }
+
+        // Lifts a point to just above the water's surface when it is below it, as in a riverbed. Unchanged without water.
+        // The field's noise and the swarm's buzz: louder with more wasps, higher as the swarm speeds along.
+        private void FeedAmbience(Vector3 core, float dt)
+        {
+            if (dt > 0f)
+            {
+                float speed = new Vector2(core.x - _lastCore.x, core.z - _lastCore.z).magnitude / dt;
+                _coreSpeed = Mathf.Lerp(_coreSpeed, Mathf.Min(speed, AmbienceFullSpeed * 2f), 1f - Mathf.Exp(-6f * dt));
+            }
+
+            _lastCore = core;
+            float water = RiverBridge.Nearness(core, StreamReach);
+            float charge = 0f;
+            for (int index = 0; index < Session.Nests.Count; index++)
+            {
+                Nest nest = Session.Nests[index];
+                if (nest.IsOpen && !nest.IsCollected)
+                {
+                    charge = Mathf.Max(charge, nest.Progress01);
+                }
+            }
+
+            _ambience.SetCharge(charge);
+            _ambience.SetFluteSounding(_fluteVoice != null && _fluteVoice.HolePlaying != FluteSynth.Silent);
+            _ambience.Feed(Session.Swarm.Count / AmbienceFullSwarm, _coreSpeed / AmbienceFullSpeed, water * water);
+        }
+
+        private Vector3 OverWater(Vector3 point)
+        {
+            if (_water == null)
+            {
+                return point;
+            }
+
+            point.y = Mathf.Max(point.y, _water.position.y + AboveWater);
+            return point;
         }
 
         // Only the hive the core stands at shows the core near, and its store flowing in or the swarm's wasps flowing out.
@@ -1276,6 +1379,16 @@ namespace DigitalStory.View
         private ArenaLayout DrawMap()
         {
             int seed = MatchSeed.Next();
+            // Nothing stands in or beside a river: the map keeps a few metres off the water.
+            // Trees painted on the terrain never move; the random scenery is the only wood inside the map, the edge forest frames it.
+            Terrain ground = Terrain.activeTerrain;
+            if (ground != null && ground.terrainData != null && ground.terrainData.treeInstanceCount > 0)
+            {
+                Debug.Log($"[F010] Hiding {ground.terrainData.treeInstanceCount} trees painted on the terrain, so the trees change every match.");
+                ground.treeDistance = 0f;
+            }
+
+            LayoutGenerator.IsBlocked = (point, radius) => RiverBridge.Nearness(point, radius + RiverMargin) > 0f;
             ArenaLayout layout = LayoutGenerator.Generate(seed, _coreMotor.Position, _layout, _nests, _scenery.Footprints);
             string fallback = layout.IsFallback ? " No map kept the rules, so the fallback map stands." : string.Empty;
             Debug.Log($"[F010] Map seed {seed}: launch with {MatchSeed.CommandLineOption} {seed} to play this map again.{fallback}");
@@ -1289,8 +1402,13 @@ namespace DigitalStory.View
                 _spawnPoints[index].position = layout.Spawns[index];
             }
 
+            // The bridges follow the map: one wherever a spawn point's way to its own hive crosses a river.
+            RuntimeBridges.Build(layout.Spawns, layout.Hives);
+
             var blockers = new List<Bounds>();
             _scenery.AddBlockers(blockers);
+            // The swarm flows round the scenery only: it has to fly into the nest trees to take their bees.
+            _mapBoxes = new List<Bounds>(blockers);
             for (int index = 0; index < _nestViews.Length; index++)
             {
                 _nestViews[index].transform.position = layout.Nests[index];
@@ -1298,7 +1416,6 @@ namespace DigitalStory.View
             }
 
             _followCamera.SetChaseBlockers(blockers.ToArray());
-            _mapBoxes = blockers;
             return layout;
         }
 

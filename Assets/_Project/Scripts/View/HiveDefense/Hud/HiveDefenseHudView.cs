@@ -163,6 +163,7 @@ namespace DigitalStory.View
 
             _uiRoot = root;
             _waspCount = Require<Label>(root, "wasp-count");
+            BeeIcon.ReplaceTitle(_waspCount.parent);
             _waspFill = Require<VisualElement>(root, "wasp-fill");
             if (_swarmConfig == null)
             {

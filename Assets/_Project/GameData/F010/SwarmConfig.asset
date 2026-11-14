@@ -20,21 +20,21 @@ MonoBehaviour:
   <RespawnShare>k__BackingField: 0.5
   <MinRespawnShare>k__BackingField: 0.15
   <LowShare>k__BackingField: 0.3
-  <RiverSpring>k__BackingField: 100
-  <RiverDamping>k__BackingField: 1
+  <RiverSpring>k__BackingField: 40
+  <RiverDamping>k__BackingField: 0.6
   <ShapeSpring>k__BackingField: 180
   <ShapeDamping>k__BackingField: 0.75
-  <WobbleDamping>k__BackingField: 0.5
+  <WobbleDamping>k__BackingField: 0.3
   <WobbleSeconds>k__BackingField: 0.35
   <FormWaveSeconds>k__BackingField: 0.6
   <FlowSpeed>k__BackingField: 0.08
-  <RiverLengthMeters>k__BackingField: 8
+  <RiverLengthMeters>k__BackingField: 11
   <RiverRadius>k__BackingField: 1.2
   <MeanderAmplitude>k__BackingField: 0.25
   <StandingTrailMeters>k__BackingField: 2
   <StandStillMeters>k__BackingField: 0.05
   <StandDelaySeconds>k__BackingField: 0.5
-  <StandBlendSeconds>k__BackingField: 1
+  <StandBlendSeconds>k__BackingField: 0.75
   <EightRadius>k__BackingField: 2.6
   <EightHeight>k__BackingField: 1.4
   <EightTilt>k__BackingField: 0.5
@@ -46,6 +46,12 @@ MonoBehaviour:
   <TailWidthShare>k__BackingField: 0.55
   <FormBlendSeconds>k__BackingField: 0.3
   <SpringStepSeconds>k__BackingField: 0.004166667
+  <ObstacleRadiusShare>k__BackingField: 0.8
+  <ObstacleMargin>k__BackingField: 0.45
+  <ObstacleLeadMeters>k__BackingField: 2.5
+  <ObstacleCloseMeters>k__BackingField: 2
+  <ObstacleStrength>k__BackingField: 1
+  <ObstacleSpeedUp>k__BackingField: 0.25
   <BuzzAmplitude>k__BackingField: 0.04
   <BuzzFrequency>k__BackingField: 9
   <DyingSeconds>k__BackingField: 1.5

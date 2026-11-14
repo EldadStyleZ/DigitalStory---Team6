@@ -17,6 +17,9 @@ namespace DigitalStory.Data
             + "The giant keeps to it too. 42 m reaches the outer edge of the scenery (LayoutConfig.ArenaHalfSize) and stays well inside the 80 m ground.")]
         public float PlayAreaHalfSize { get; private set; } = 42f;
 
+        [field: SerializeField, Min(1f), Tooltip("How much faster the core moves while Shift is held. 1 turns the sprint off.")]
+        public float SprintSpeedMultiplier { get; private set; } = 1.8f;
+
         [field: SerializeField, Range(0f, 1f), Tooltip("Share of speed kept while the core is in smoke.")]
         public float SmokeSpeedMultiplier { get; private set; } = 0.6f;
 
