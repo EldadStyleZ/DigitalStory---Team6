@@ -203,6 +203,13 @@ namespace DigitalStory.Tests.PlayMode
         private const float GiantOrbitSeconds = 0.6f;
         private const float MaxMoveWaitSeconds = 2f;
 
+        // Songs-v2 W: the thrown wasps are taken this long after each move's hit, from this far off the giant's side.
+        private const float ThrowShotSeconds = 0.15f;
+        private const float ThrowViewDistance = 7.5f;
+        private const float ThrowFocusAhead = 1.5f;
+        private const float ThrowSidePitch = 12f;
+        private const float ThrowHighPitch = 38f;
+
         // When the fist pictures are taken: near the end of the thrust, halfway through the flight, a third into the regrow, and
         // a moment after the arm is whole.
         private const float FistThrustShotShare = 0.8f;
@@ -1219,6 +1226,97 @@ namespace DigitalStory.Tests.PlayMode
             {
                 EndHudOverlay(overlay, document, original, copy);
             }
+        }
+
+        // Songs-v2 W: every giant move throws a burst of red wasps off the limb that strikes, on its hit, in its own shape; and a
+        // flying fist burns red too. Each from the giant's side, close, a moment after the hit, when the burst is widest; the
+        // rings and the spiral from higher up, so their round shape shows.
+        [UnityTest]
+        public IEnumerator Snapshot23_Throws()
+        {
+            yield return Stage(GiantCore, GiantBeekeepers);
+            HiveDefenseSession session = _root.Session;
+            var landed = new List<ColossusAttack>();
+            session.ColossusAttackLanded += attack => landed.Add(attack);
+            session.Fury.AddDamage(FuryDamage);
+            yield return Play(KeysOf<ColossusSong>());
+            float waited = 0f;
+            while (!session.IsColossusActive && waited < MaxColossusWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.IsColossusActive, Is.True, "The Colossus keys at full Fury did not form the Colossus.");
+            yield return Wait(GiantSettleSeconds + GiantSettleSeconds);
+
+            yield return Throw(landed, ColossusAttack.Punch, PressOnce(PunchHole), ThrowSidePitch, "snap-23-throw-punch");
+            yield return Throw(landed, ColossusAttack.Kick, PressOnce(KickHole), ThrowSidePitch, "snap-23-throw-kick");
+            yield return Throw(landed, ColossusAttack.Roar, PressOnce(RoarHole), ThrowSidePitch, "snap-23-throw-roar");
+            yield return Throw(landed, ColossusAttack.Slam, PressOnce(SlamHole), ThrowHighPitch, "snap-23-throw-slam");
+            yield return Throw(landed, ColossusAttack.SpinKick, PressTwice(KickHole), ThrowHighPitch, "snap-23-throw-spin");
+            while (session.SlamCooldown01 > 0f)
+            {
+                yield return null;
+            }
+
+            yield return Throw(landed, ColossusAttack.LeapSlam, PressTwice(SlamHole), ThrowHighPitch, "snap-23-throw-leap");
+
+            ColossusConfig giant = LoadColossus();
+            _root.PressHand(ColossusHand.Right);
+            yield return WaitForFist(session, FistPhase.Flight);
+            yield return Wait(session.FistFlightSeconds(ColossusHand.Right) * FistFlightShotShare);
+            Vector3 middle = (session.ColossusPosition + session.FistTarget(ColossusHand.Right)) * 0.5f;
+            yield return CapturePosed(
+                "snap-23-throw-fist", middle + (Vector3.up * ColossusFocusHeight), ThrowViewDistance, ThrowSidePitch, SideYaw(session));
+            Assert.That(giant, Is.Not.Null);
+            Assert.That(session.IsColossusActive, Is.True, "the giant ended before the last picture");
+        }
+
+        // Presses the move's keys, waits for its hit, a moment more, and takes the picture from the giant's right side.
+        private IEnumerator Throw(List<ColossusAttack> landed, ColossusAttack move, IEnumerator press, float pitch, string name)
+        {
+            HiveDefenseSession session = _root.Session;
+            landed.Clear();
+            yield return press;
+            float waited = 0f;
+            while (!landed.Contains(move) && waited < MaxMoveWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(landed.Contains(move), Is.True, move + " did not land");
+            yield return Wait(ThrowShotSeconds);
+            Vector3 facing = session.ColossusFacing;
+            facing.y = 0f;
+            Vector3 focus = session.ColossusPosition + (facing.normalized * ThrowFocusAhead) + (Vector3.up * ColossusFocusHeight);
+            yield return CapturePosed(name, focus, ThrowViewDistance, pitch, SideYaw(session));
+            yield return Wait(GiantBetweenMovesSeconds);
+        }
+
+        private IEnumerator PressOnce(int hole)
+        {
+            _root.PressHole(hole);
+            yield return null;
+        }
+
+        // A phrase: the second press a frame after the first, as a player's quickest double tap.
+        private IEnumerator PressTwice(int hole)
+        {
+            _root.PressHole(hole);
+            yield return null;
+            _root.PressHole(hole);
+            yield return null;
+        }
+
+        // Looking at the giant from its left, away from the hive behind its right, so what it throws ahead flies across the
+        // picture, right to left.
+        private static float SideYaw(HiveDefenseSession session)
+        {
+            Vector3 facing = session.ColossusFacing;
+            float yaw = Mathf.Atan2(facing.x, facing.z) * Mathf.Rad2Deg;
+            return yaw + QuarterTurnDegrees;
         }
 
         // Plan section U, from the game camera with the HUD over it: a nest's combo as the core steps into the ring, empty;

@@ -71,6 +71,19 @@ namespace DigitalStory.View
         private const int FistGrowOffset = 2;
         private const float NoFist = -1f;
 
+        // The giant's thrown wasps (songs-v2 W): a ring of the latest throws, four float4s each, and each bone's limb bits,
+        // four bones to a float4. Match THROW_COUNT, THROW_VECTORS and BONE_LIMB_VECTORS in WaspSwarm.compute.
+        private const int ThrowCount = 4;
+        private const int VectorsPerThrow = 4;
+        private const int ThrowAimOffset = 1;
+        private const int ThrowBandOffset = 2;
+        private const int ThrowNumbersOffset = 3;
+        private const int BonesPerVector = 4;
+        private const float NoThrow = -1f;
+
+        // Each throw's band of wasps starts this share of the seeds on from the last, so quick blows throw fresh wasps.
+        private const float GoldenShare = 0.618034f;
+
         // The figure-eight round the standing core turns this fast about it, so it never looks frozen. Once the core walks
         // on, it swings back across the walk at up to EightAlignSpeed, so the river forming behind the core unwinds from
         // its sides instead of through the core.
@@ -118,6 +131,10 @@ namespace DigitalStory.View
         private static readonly int StingTargetCountId = Shader.PropertyToID("_StingTargetCount");
         private static readonly int FistsId = Shader.PropertyToID("_Fists");
         private static readonly int FistBonesId = Shader.PropertyToID("_FistBones");
+        private static readonly int ThrowsId = Shader.PropertyToID("_Throws");
+        private static readonly int BoneLimbsId = Shader.PropertyToID("_BoneLimbs");
+        private static readonly int ThrowColorId = Shader.PropertyToID("_ThrowColor");
+        private static readonly int ThrowRedSecondsId = Shader.PropertyToID("_ThrowRedSeconds");
         private static readonly int PulseId = Shader.PropertyToID("_Pulse");
         private static readonly int RiverColorId = Shader.PropertyToID("_RiverColor");
         private static readonly int CastColorId = Shader.PropertyToID("_CastColor");
@@ -268,6 +285,14 @@ namespace DigitalStory.View
         private readonly bool[] _isFistFresh = new bool[FistCount];
         private Vector4 _fistBones = new Vector4(NoFist, NoFist, NoFist, NoFist);
 
+        // The giant's thrown wasps as WaspSwarm.compute reads them (_Throws, _BoneLimbs, _ThrowColor, _ThrowRedSeconds).
+        private readonly Vector4[] _throwVectors = new Vector4[ThrowCount * VectorsPerThrow];
+        private readonly Vector4[] _boneLimbVectors = new Vector4[MostBones / BonesPerVector];
+        private int _nextThrow;
+        private int _throwsStarted;
+        private Color _throwColor = Color.red;
+        private float _throwRedSeconds;
+
         // The Gust pulse, kept the same way: the rules' seconds since the Gust until LateUpdate turns them into a start.
         private Vector3 _gustCenter;
         private float _gustRadius;
@@ -301,6 +326,9 @@ namespace DigitalStory.View
         public bool IsFrozen => _freezeSeconds > 0f;
 
         /// <summary>True while the hand's fist is out, from its launch until its wasps are all home, for tests and debugging.</summary>
+        /// <summary>How many throws (songs-v2 W) have started since the swarm last started over. For tests.</summary>
+        public int ThrowsStarted => _throwsStarted;
+
         public bool IsFistOut(int hand) => _fistVectors[FistIndex(hand) * VectorsPerFist].w >= 0f && _simTime < _fistVectors[(hand * VectorsPerFist) + FistGrowOffset].x;
 
         /// <summary>How many sting targets the last <see cref="SetStingTargets"/> gave, for tests and debugging.</summary>
@@ -720,6 +748,74 @@ namespace DigitalStory.View
             }
         }
 
+        /// <summary>
+        /// Each Colossus bone's limb (songs-v2 W, DigitalStory.Logic.ColossusThrows.FindLimbs), in the order of
+        /// <see cref="SetColossusBones"/>, so a throw knows which wasps stand on the limbs it throws. Call once with the samples.
+        /// </summary>
+        /// <param name="limbs">Each bone's limb.</param>
+        /// <param name="count">How many of them to use; bones past it, and past the most bones, throw nothing.</param>
+        /// <exception cref="ArgumentNullException">The limbs are missing.</exception>
+        public void SetBoneLimbs(ColossusLimb[] limbs, int count)
+        {
+            if (limbs == null)
+            {
+                throw new ArgumentNullException(nameof(limbs));
+            }
+
+            Array.Clear(_boneLimbVectors, 0, _boneLimbVectors.Length);
+            int used = Mathf.Clamp(count, 0, Mathf.Min(limbs.Length, MostBones));
+            for (int bone = 0; bone < used; bone++)
+            {
+                Vector4 four = _boneLimbVectors[bone / BonesPerVector];
+                four[bone % BonesPerVector] = (int)limbs[bone];
+                _boneLimbVectors[bone / BonesPerVector] = four;
+            }
+        }
+
+        /// <summary>The colour thrown wasps and flying fists burn, and the seconds they take to turn to it as they leave.</summary>
+        public void SetThrowLook(Color color, float redSeconds)
+        {
+            _throwColor = color;
+            _throwRedSeconds = Mathf.Max(redSeconds, 0f);
+        }
+
+        /// <summary>
+        /// Throws a share of the wasps on <paramref name="limbs"/> off the giant (songs-v2 W), from this frame: they fly out in
+        /// <paramref name="shape"/>, hold a moment and stream home, all back after <paramref name="backSeconds"/>. A look only.
+        /// The latest four throws fly at once; a wasp two of them claim flies the later one, and a flying fist keeps its own.
+        /// </summary>
+        /// <param name="shape">How they fly.</param>
+        /// <param name="limbs">The limbs they leave from.</param>
+        /// <param name="center">The move's centre on the ground: the giant's feet, or where the leap landed.</param>
+        /// <param name="facing">The giant's facing; flattened here.</param>
+        /// <param name="share">The share of the limbs' wasps that leave, 0 to 1.</param>
+        /// <param name="spreadDegrees">Degrees either side of the facing the burst spreads.</param>
+        /// <param name="reachMetres">Metres the wasps fly out.</param>
+        /// <param name="outSeconds">Seconds they fly out.</param>
+        /// <param name="backSeconds">Seconds until every one is back.</param>
+        /// <param name="shapeNumber">The spiral's spin in radians a second, or the crater's second ring share; 0 otherwise.</param>
+        public void Throw(
+            ColossusThrowShape shape, ColossusLimb limbs, Vector3 center, Vector3 facing, float share, float spreadDegrees,
+            float reachMetres, float outSeconds, float backSeconds, float shapeNumber)
+        {
+            if (shape == ColossusThrowShape.None || limbs == ColossusLimb.None || !(share > 0f) || !(backSeconds > 0f))
+            {
+                return;
+            }
+
+            facing.y = 0f;
+            facing = facing.sqrMagnitude > 0f ? facing.normalized : Vector3.forward;
+            float bandStart = Mathf.Repeat(_throwsStarted * GoldenShare, 1f);
+            int at = _nextThrow * VectorsPerThrow;
+            _throwVectors[at] = new Vector4(center.x, center.y, center.z, _simTime);
+            _throwVectors[at + ThrowAimOffset] = new Vector4(facing.x, facing.y, facing.z, (int)shape);
+            _throwVectors[at + ThrowBandOffset] = new Vector4((int)limbs, Mathf.Clamp01(share), bandStart, backSeconds);
+            _throwVectors[at + ThrowNumbersOffset] = new Vector4(
+                spreadDegrees * Mathf.Deg2Rad, Mathf.Max(reachMetres, 0f), Mathf.Clamp(outSeconds, 0.01f, backSeconds), shapeNumber);
+            _nextThrow = (_nextThrow + 1) % ThrowCount;
+            _throwsStarted++;
+        }
+
         /// <summary>Where the swarm was last hit. Lost wasps scatter away from it.</summary>
         public void SetLastHit(Vector3 point) => _lastHit = point;
 
@@ -1026,6 +1122,17 @@ namespace DigitalStory.View
                 _isFistFresh[hand] = false;
             }
 
+            for (int index = 0; index < ThrowCount; index++)
+            {
+                int at = index * VectorsPerThrow;
+                _throwVectors[at] = new Vector4(0f, 0f, 0f, NoThrow);
+                _throwVectors[at + ThrowAimOffset] = Vector4.zero;
+                _throwVectors[at + ThrowBandOffset] = Vector4.zero;
+                _throwVectors[at + ThrowNumbersOffset] = Vector4.zero;
+            }
+
+            _nextThrow = 0;
+            _throwsStarted = 0;
             _gustRadius = 0f;
             _gustStartTime = 0f;
             _isGustFresh = false;
@@ -1306,6 +1413,9 @@ namespace DigitalStory.View
             compute.SetInt(StingTargetCountId, _stingTargetCount);
             compute.SetVectorArray(FistsId, _fistVectors);
             compute.SetVector(FistBonesId, _fistBones);
+            compute.SetVectorArray(ThrowsId, _throwVectors);
+            compute.SetVectorArray(BoneLimbsId, _boneLimbVectors);
+            compute.SetFloat(ThrowRedSecondsId, _throwRedSeconds);
             compute.SetVector(PulseId, new Vector4(_gustCenter.x, _gustCenter.z, _gustStartTime, _gustRadius));
         }
 
@@ -1381,6 +1491,7 @@ namespace DigitalStory.View
             }
 
             compute.SetVectorArray(SlotColorsId, _slotColorVectors);
+            compute.SetVector(ThrowColorId, ShaderColor(_throwColor, isLinear));
         }
 
         // 48 bytes, the same layout as WaspStatic in WaspSwarm.compute, WaspInstanced.shader and WaspGlow.shader.

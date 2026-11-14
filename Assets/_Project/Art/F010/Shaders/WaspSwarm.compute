@@ -37,6 +37,13 @@
 #define FIST_COUNT 2
 #define FIST_VECTORS 3
 
+// Matches SwarmGpuView.ThrowCount and SwarmGpuView.VectorsPerThrow: the giant's thrown wasps, the latest four throws.
+#define THROW_COUNT 4
+#define THROW_VECTORS 4
+
+// Matches SwarmGpuView.MostBones / 4: each bone's limb bits, four bones to a float4.
+#define BONE_LIMB_VECTORS 16
+
 // 48 bytes, the same layout as SwarmGpuView.WaspStatic and the struct in WaspInstanced.shader. Written once by the CPU.
 struct WaspStatic
 {
@@ -113,6 +120,24 @@ float4 _Fists[FIST_COUNT * FIST_VECTORS];
 // The Colossus bones each hand's fist is made of, its forearm, hand and fingers: x to y the right's, z to w the left's;
 // -1 for none.
 float4 _FistBones;
+
+// The giant's thrown wasps (SwarmGpuView.Throw, songs-v2 W), THROW_VECTORS float4s a throw, a ring of the latest:
+//   [0] xyz the move's centre on the ground (the giant's feet at the hit, or the leap's landing), w the hit in _SimTime,
+//       or -1 for none
+//   [1] xyz the giant's facing, flat and unit, w the shape (DigitalStory.Logic.ColossusThrowShape)
+//   [2] x the limbs thrown (DigitalStory.Logic.ColossusLimb bits), y the share of their wasps that leave, z where this
+//       throw's band of wasps starts (0..1, moved on at each throw so quick blows throw fresh wasps), w seconds until back
+//   [3] x the spread in radians, y metres the wasps fly out, z seconds they fly out, w the shape's own number (the
+//       spiral's spin in radians a second, or the crater's second ring share)
+float4 _Throws[THROW_COUNT * THROW_VECTORS];
+
+// Each Colossus bone's limb bits (DigitalStory.Logic.ColossusLimb), bone b at _BoneLimbs[b / 4][b % 4].
+float4 _BoneLimbs[BONE_LIMB_VECTORS];
+
+// The colour a thrown wasp or a flying fist burns, in the colour space the draw expects, and the seconds it takes to turn
+// to it as it leaves the body.
+float4 _ThrowColor;
+float _ThrowRedSeconds;
 
 // The Gust pulse: xy the centre on the ground (world x and z), z its start in _SimTime, w its radius (0: no gust yet).
 float4 _Pulse;
@@ -2112,6 +2137,7 @@ struct FistSteer
     float share;    // 0 while the wasp flies its form, 1 while the fist holds it
     float heat;
     float pin;
+    float red;      // 0 to 1: how far the wasp has turned to the throw colour (songs-v2 W)
     bool isFast;
 };
 
@@ -2167,6 +2193,7 @@ FistSteer FistSteerOf(int hand, WaspStatic wasp, float3 formGoal)
     steer.share = 0.0;
     steer.heat = 0.0;
     steer.pin = 0.0;
+    steer.red = 0.0;
     steer.isFast = false;
 
     int at = hand * FIST_VECTORS;
@@ -2204,6 +2231,7 @@ FistSteer FistSteerOf(int hand, WaspStatic wasp, float3 formGoal)
         steer.share = leftArm * (1.0 - smoothstep(0.0, FistDropSeconds, t - dropped));
         steer.goal = lerp(formGoal, flying, steer.share);
         steer.heat = HoldHeat;
+        steer.red = steer.share;
         return steer;
     }
 
@@ -2215,6 +2243,7 @@ FistSteer FistSteerOf(int hand, WaspStatic wasp, float3 formGoal)
         steer.pin = takeOff;
         steer.isFast = true;
         steer.heat = lerp(WindUpStartHeat, WindUpHeat, along);
+        steer.red = takeOff * smoothstep(0.0, max(_ThrowRedSeconds, Tiny), t - leaves);
         return steer;
     }
 
@@ -2236,6 +2265,7 @@ FistSteer FistSteerOf(int hand, WaspStatic wasp, float3 formGoal)
     {
         steer.goal = to + TurnAboutUp(cloud, sinceHit * FistCloudSpin);
         steer.heat = sinceHit < ImpactSeconds ? ImpactHeat : HoldHeat;
+        steer.red = 1.0;
         return steer;
     }
 
@@ -2244,7 +2274,215 @@ FistSteer FistSteerOf(int hand, WaspStatic wasp, float3 formGoal)
     steer.goal = FistPath(waited, formGoal, eased, FistReturnArcShare, FistMostReturnArc);
     steer.pin = smoothstep(0.0, FistTakeOffSeconds, sinceHit - homeStart);
     steer.heat = HoldHeat * (1.0 - eased);
+    steer.red = 1.0 - eased;
     return steer;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The giant's thrown wasps (songs-v2 W). On a move's hit a band of the wasps on the limbs it strikes with leaves the body in
+// that move's shape, burning red, holds a moment and streams home along a low arc, gold again as it rejoins. A look only:
+// the rules never see it. Each throw picks its wasps by their seed, in a band that moves on at every throw, so a quick
+// chain of punches throws fresh wasps each time; a wasp two throws claim flies the later one. A flying fist keeps its own.
+
+static const int ShapeCone = 1;
+static const int ShapeFan = 2;
+static const int ShapeRing = 3;
+static const int ShapeSpray = 4;
+static const int ShapeSpiral = 5;
+static const int ShapeCrater = 6;
+
+static const float ThrowStagger = 0.04;          // seconds over which a burst's wasps leave, the first on the hit's frame
+static const float ThrowFanStagger = 0.08;       // the kick's fan sweeps across over this long, one side first
+static const float ThrowTakeOffSeconds = 0.05;   // seconds a wasp eases from its place on the body onto the throw's path
+static const float ThrowHoldSeconds = 0.05;      // seconds the burst hangs at its widest before the stream home
+static const float ThrowReturnStagger = 0.12;    // seconds the starts home spread over, so the limb fills back in turn
+static const float ThrowLeastReturnSeconds = 0.18;
+static const float ThrowReturnArcShare = 0.25;
+static const float ThrowMostReturnArc = 1.2;     // metres
+static const float ThrowGroundHeight = 0.3;      // metres above the ground the fan, the rings and the crater skim
+static const float ThrowSkimRise = 0.5;          // metres the skimming wasps spread up from there, by their seed
+static const float ThrowConeNear = 0.3;          // the share of the reach the cone's nearest wasp flies, so it streams from the fist
+static const float ThrowFanNear = 0.45;          // ... the fan's, so it fills from the foot out
+static const float ThrowSprayNear = 0.4;         // ... the spray's
+static const float ThrowFlashSeconds = 0.04;     // seconds a thrown wasp flashes white as it leaves, before it burns red
+static const float ThrowHeat = 0.6;              // how hot it burns while it is out
+static const float ThrowRingInner = 0.6;         // metres from the centre the rings and the spiral start
+static const float ThrowDropShare = 0.3;         // share of the way out a ring's wasp takes to drop from the hand to the ground
+static const float ThrowSprayLift = 0.6;         // radians the roar's spray rises at most
+static const float ThrowSpiralLow = 0.4;         // metres above the ground the spiral's outer end turns
+static const float ThrowSpiralRise = 1.6;        // ... and how much higher its inner end, so it unwinds outward and down
+static const float ThrowSpiralTight = 0.2;       // the spiral's inner end's share of the reach: one arm, widening once round
+static const float ThrowCraterLift = 0.9;        // metres the crater's slower ring arcs up as it goes
+static const float ThrowFloor = 0.12;            // metres above the ground a thrown wasp keeps
+
+struct ThrowSteer
+{
+    float3 goal;    // already blended with the form's goal
+    float share;    // 0 while no throw holds the wasp
+    float heat;
+    float red;      // 0 to 1: how far the wasp has turned to the throw colour
+    float pin;
+    float start;    // the throw's hit, so the latest of two claims wins
+};
+
+int LimbsOfBone(int bone)
+{
+    if (bone < 0 || bone >= BONE_LIMB_VECTORS * 4)
+    {
+        return 0;
+    }
+
+    float4 four = _BoneLimbs[bone >> 2];
+    int lane = bone & 3;
+    float bits = lane == 0 ? four.x : (lane == 1 ? four.y : (lane == 2 ? four.z : four.w));
+    return (int)(bits + 0.5);
+}
+
+// Where the throw holds the wasp `flown` seconds after it left, `outward` of the way out (0 to 1, eased).
+float3 ThrowPoint(int shape, WaspStatic wasp, float3 formGoal, float3 center, float3 facing, float4 numbers, float outward, float flown)
+{
+    float spread = numbers.x;
+    float reach = numbers.y;
+    float3 side = float3(facing.z, 0.0, -facing.x);
+    float skim = center.y + ThrowGroundHeight + ThrowSkimRise * wasp.seed;
+
+    if (shape == ShapeCone)
+    {
+        // A tight cone straight out of the fist: each wasp keeps one direction within the spread of the facing.
+        float around = wasp.phase01 * FullTurn;
+        float off = sqrt(wasp.level01) * tan(min(spread, 1.4));
+        float3 way = normalize(facing + side * (cos(around) * off) + Up * (sin(around) * off));
+        return formGoal + way * (reach * outward * lerp(ThrowConeNear, 1.0, wasp.seed));
+    }
+
+    if (shape == ShapeFan)
+    {
+        // A low fan from the foot: across the spread by the wasp's phase, the side it sweeps from leaving first.
+        float3 way = TurnFlat(facing, lerp(-spread, spread, wasp.phase01));
+        float3 spot = formGoal + way * (reach * outward * lerp(ThrowFanNear, 1.0, wasp.seed));
+        spot.y = lerp(formGoal.y, skim, saturate(outward * 2.0));
+        return spot;
+    }
+
+    if (shape == ShapeSpray)
+    {
+        // A spray from the head and chest in a wide arc ahead, rising by the wasp's height.
+        float lift = wasp.level01 * ThrowSprayLift;
+        float3 way = TurnFlat(facing, lerp(-spread, spread, wasp.phase01)) * cos(lift) + Up * sin(lift);
+        return formGoal + way * (reach * outward * lerp(ThrowSprayNear, 1.0, wasp.seed));
+    }
+
+    if (shape == ShapeSpiral)
+    {
+        // A spiral unwinding around the giant: one arm, its radius growing with the angle round it, turning as it widens.
+        float arm = wasp.phase01;
+        float angle = arm * FullTurn + numbers.w * flown;
+        float3 spot = center + RingOffset(angle, ThrowRingInner + reach * outward * lerp(ThrowSpiralTight, 1.0, arm));
+        spot.y = center.y + ThrowSpiralLow + ThrowSpiralRise * (1.0 - arm);
+        return lerp(formGoal, spot, smoothstep(0.0, ThrowDropShare, outward));
+    }
+
+    // The slam's ring and the leap's crater race outward along the ground all around the centre. The crater sends its
+    // second share of wasps as a slower ring that arcs up as it goes.
+    bool isSecondRing = shape == ShapeCrater && wasp.level01 < numbers.w;
+    float pace = isSecondRing ? numbers.w : 1.0;
+    float3 ring = center + RingOffset(wasp.phase01 * FullTurn, ThrowRingInner + reach * pace * outward);
+    ring.y = skim + (isSecondRing ? sin(outward * HalfTurn) * ThrowCraterLift : 0.0);
+    return lerp(formGoal, ring, smoothstep(0.0, ThrowDropShare, outward));
+}
+
+ThrowSteer ThrowSteerOf(int index, WaspStatic wasp, int limbs, float3 formGoal)
+{
+    ThrowSteer steer;
+    steer.goal = formGoal;
+    steer.share = 0.0;
+    steer.heat = 0.0;
+    steer.red = 0.0;
+    steer.pin = 0.0;
+    steer.start = -1.0;
+
+    int at = index * THROW_VECTORS;
+    float4 header = _Throws[at];
+    float4 aim = _Throws[at + 1];
+    float4 band = _Throws[at + 2];
+    float4 numbers = _Throws[at + 3];
+    float back = band.w;
+    float t = _SimTime - header.w;
+    if (header.w < 0.0 || t < 0.0 || t >= back || ((int)(band.x + 0.5) & limbs) == 0 || frac(wasp.seed - band.z) >= band.y)
+    {
+        return steer;
+    }
+
+    int shape = (int)(aim.w + 0.5);
+    float leaves = shape == ShapeFan ? wasp.phase01 * ThrowFanStagger : wasp.seed * ThrowStagger;
+    float flown = t - leaves;
+    if (flown < 0.0)
+    {
+        return steer;
+    }
+
+    float outSeconds = max(numbers.z, Tiny);
+    float returnStart = min(outSeconds + ThrowHoldSeconds + wasp.seed * ThrowReturnStagger, back - leaves - ThrowLeastReturnSeconds);
+    returnStart = max(returnStart, Tiny);
+    float returnSeconds = max(back - leaves - returnStart, Tiny);
+    float takeOff = smoothstep(0.0, ThrowTakeOffSeconds, flown);
+
+    steer.start = header.w;
+    if (flown < returnStart)
+    {
+        float outward = EaseOutCubic(flown / outSeconds);
+        steer.goal = lerp(formGoal, ThrowPoint(shape, wasp, formGoal, header.xyz, aim.xyz, numbers, outward, flown), takeOff);
+        steer.share = takeOff;
+        steer.pin = takeOff;
+        steer.heat = flown < ThrowFlashSeconds ? ImpactHeat : ThrowHeat;
+        steer.red = smoothstep(0.0, max(_ThrowRedSeconds, Tiny), flown);
+        return steer;
+    }
+
+    float home = saturate((flown - returnStart) / returnSeconds);
+    if (home >= 1.0)
+    {
+        return steer;
+    }
+
+    float eased = smoothstep(0.0, 1.0, home);
+    float3 widest = ThrowPoint(shape, wasp, formGoal, header.xyz, aim.xyz, numbers, EaseOutCubic(returnStart / outSeconds), returnStart);
+    steer.goal = FistPath(widest, formGoal, eased, ThrowReturnArcShare, ThrowMostReturnArc);
+    steer.share = 1.0;
+    steer.pin = 1.0;
+    steer.heat = ThrowHeat * (1.0 - eased);
+    steer.red = 1.0 - eased;
+    return steer;
+}
+
+// The latest throw that holds the wasp, if any. Only a wasp in its place on the giant can be thrown.
+ThrowSteer ThrownSteerOf(WaspStatic wasp, float3 formGoal)
+{
+    ThrowSteer chosen;
+    chosen.goal = formGoal;
+    chosen.share = 0.0;
+    chosen.heat = 0.0;
+    chosen.red = 0.0;
+    chosen.pin = 0.0;
+    chosen.start = -1.0;
+
+    int limbs = LimbsOfBone(BoneOf(wasp));
+    if (limbs == 0)
+    {
+        return chosen;
+    }
+
+    [unroll]
+    for (int index = 0; index < THROW_COUNT; index++)
+    {
+        ThrowSteer steer = ThrowSteerOf(index, wasp, limbs, formGoal);
+        if (steer.share > 0.0 && steer.start > chosen.start)
+        {
+            chosen = steer;
+        }
+    }
+
+    return chosen;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -2385,15 +2623,22 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     float pin = 0.0;
     bool isFlashing = false;
 
-    // The giant's hand launch: the wasps of a launched hand fly its fist instead of their places on the arm.
+    // The giant's hand launch: the wasps of a launched hand fly its fist instead of their places on the arm. Thrown wasps
+    // and flying fists burn the throw colour while they are off the body (songs-v2 W).
+    bool isThrown = false;
+    bool isOnGiant = _Form == FormColossus && hasSwitched && HasColossusPlace(wasp);
     int fistHand = FistHandOf(wasp);
+    bool isFistFlying = false;
     if (fistHand >= 0)
     {
         FistSteer fist = FistSteerOf(fistHand, wasp, goal);
         if (fist.share > 0.0)
         {
+            isFistFlying = true;
+            isThrown = true;
             goal = fist.goal;
             tint.a = lerp(tint.a, fist.heat, saturate(fist.share));
+            tint.rgb = lerp(tint.rgb, _ThrowColor.rgb, saturate(fist.red));
             isWobbling = false;
             isFlowing = false;
             pin = saturate(fist.pin);
@@ -2405,6 +2650,30 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
                 maxSpeed = StrikeMaxSpeed;
             }
         }
+    }
+
+    if (isOnGiant && !isFistFlying)
+    {
+        ThrowSteer thrown = ThrownSteerOf(wasp, goal);
+        if (thrown.share > 0.0)
+        {
+            isThrown = true;
+            goal = thrown.goal;
+            tint.a = lerp(tint.a, thrown.heat, saturate(thrown.share));
+            tint.rgb = lerp(tint.rgb, _ThrowColor.rgb, saturate(thrown.red));
+            isWobbling = false;
+            isFlowing = false;
+            pin = saturate(thrown.pin);
+            floorY = ThrowFloor;
+            stiffness = StrikeSpring;
+            damping = StrikeDamping;
+            maxSpeed = StrikeMaxSpeed;
+        }
+    }
+
+    if (isThrown)
+    {
+        tintSharpness = SlotTintSharpness;
     }
 
     int slot = SlotOf(wasp);
@@ -2493,7 +2762,7 @@ void Fly(uint index, WaspStatic wasp, inout WaspDynamic body)
     // A song's heat rises at once and cools at the tint's pace, so an impact flashes on the frame it lands. The cast
     // flash takes its colour at once too, so it shows on its frame even while the swarm is frozen.
     float4 blended = lerp(body.tint, tint, saturate(_DeltaTime * tintSharpness));
-    if (slot != NoSlot)
+    if (slot != NoSlot || isThrown)
     {
         blended.a = max(blended.a, tint.a);
     }

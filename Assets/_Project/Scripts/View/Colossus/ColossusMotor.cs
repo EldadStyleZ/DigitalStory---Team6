@@ -136,6 +136,9 @@ namespace DigitalStory.View
         private readonly int[] _fistHandBones = { -1, -1 };
         private readonly bool[] _isFistOut = new bool[2];
         private readonly Vector3[] _fistOrigins = new Vector3[2];
+        private readonly int[] _toeBones = { -1, -1 };
+        private ColossusLimb[] _boneLimbs = Array.Empty<ColossusLimb>();
+        private ColossusLimb _lastThrownLimbs;
         private bool _isPulsing;
         private float _pulseSeconds;
         private float _pulseRiseSeconds;
@@ -164,6 +167,9 @@ namespace DigitalStory.View
 
         /// <summary>Where the leap marker stands, for tests.</summary>
         public Vector3 LeapMarkerPosition => _leapMarker != null ? _leapMarker.position : Vector3.zero;
+
+        /// <summary>The limbs the last move threw wasps off (songs-v2 W), for tests; None until a move has landed.</summary>
+        public ColossusLimb LastThrownLimbs => _lastThrownLimbs;
 
         /// <summary>Where the hand bone is now, the place a fist leaves from, for tests and pictures. Zero without the bone.</summary>
         public Vector3 HandPosition(ColossusHand hand)
@@ -283,6 +289,7 @@ namespace DigitalStory.View
             _swarm = swarm;
             _config = config;
             _session.ColossusAttackStarted += HandleColossusAttackStarted;
+            _session.ColossusAttackLanded += HandleColossusAttackLanded;
             _session.ColossusFistThrown += HandleColossusFistThrown;
 
             // A swarm view that switched itself off (no compute shaders) has already said so, and holds no wasps.
@@ -290,7 +297,84 @@ namespace DigitalStory.View
             {
                 swarm.SetColossusSamples(_sampleBones, _sampleOffsets, _sampleHeights);
                 FindFistBones(samples);
+                FindLimbs(samples);
             }
+        }
+
+        // Songs-v2 W: which limb each bone is, for the wasps a move throws, and each leg's last bone, its toe, to tell which
+        // foot kicked.
+        private void FindLimbs(ColossusSampleSet samples)
+        {
+            _boneLimbs = new ColossusLimb[samples.BoneCount];
+            int count = ColossusThrows.FindLimbs(samples.BoneNames, _boneLimbs);
+            _toeBones[(int)ColossusHand.Right] = -1;
+            _toeBones[(int)ColossusHand.Left] = -1;
+            for (int bone = 0; bone < count; bone++)
+            {
+                if (_boneLimbs[bone] == ColossusLimb.RightLeg)
+                {
+                    _toeBones[(int)ColossusHand.Right] = bone;
+                }
+                else if (_boneLimbs[bone] == ColossusLimb.LeftLeg)
+                {
+                    _toeBones[(int)ColossusHand.Left] = bone;
+                }
+            }
+
+            _swarm.SetBoneLimbs(_boneLimbs, count);
+            _swarm.SetThrowLook(_config.ThrowColor, _config.ThrowRedSeconds);
+        }
+
+        // Songs-v2 W: on the hit the rules already have, the move throws a burst of wasps off the limb that struck, in its own
+        // shape. A look only; it waits for nothing and changes no rule.
+        private void HandleColossusAttackLanded(ColossusAttack attack)
+        {
+            if (!_session.IsColossusActive || _swarm == null || !_swarm.enabled)
+            {
+                return;
+            }
+
+            ColossusThrow style = ColossusThrows.ThrowOf(_config, attack);
+            ColossusThrowShape shape = ColossusThrows.ShapeOf(attack);
+            if (style == null || shape == ColossusThrowShape.None)
+            {
+                return;
+            }
+
+            ColossusHand side = ColossusThrows.StrikesWithOneSide(attack) ? StrikingSide(attack) : ColossusHand.Right;
+            _lastThrownLimbs = ColossusThrows.LimbsThrownBy(attack, side);
+            float outSeconds = style.BackSeconds * _config.ThrowOutShare;
+            float reach = style.Speed * outSeconds * _session.ColossusSizeScale;
+            float shapeNumber = shape == ColossusThrowShape.Spiral ? _config.ThrowSpiralSpin
+                : shape == ColossusThrowShape.Crater ? _config.ThrowSecondRingShare : 0f;
+            _swarm.SetThrowLook(_config.ThrowColor, _config.ThrowRedSeconds);
+            _swarm.Throw(
+                shape, _lastThrownLimbs, _session.ColossusPosition, _session.ColossusFacing, style.Share, style.SpreadDegrees, reach,
+                outSeconds, style.BackSeconds, shapeNumber);
+        }
+
+        // The hand or foot that struck: the one furthest out ahead of the giant on the hit, a kicking foot also by its height.
+        private ColossusHand StrikingSide(ColossusAttack attack)
+        {
+            bool isKick = attack == ColossusAttack.Kick;
+            int[] tips = isKick ? _toeBones : _fistHandBones;
+            float right = Reach(tips[(int)ColossusHand.Right], isKick);
+            float left = Reach(tips[(int)ColossusHand.Left], isKick);
+            return right >= left ? ColossusHand.Right : ColossusHand.Left;
+        }
+
+        private float Reach(int bone, bool countsHeight)
+        {
+            if (_bones == null || bone < 0 || bone >= _bones.Length)
+            {
+                return float.MinValue;
+            }
+
+            Vector3 offset = _bones[bone].position - _session.ColossusPosition;
+            Vector3 facing = _session.ColossusFacing;
+            facing.y = 0f;
+            float ahead = Vector3.Dot(offset, facing.sqrMagnitude > MinimumSquaredLength ? facing.normalized : transform.forward);
+            return countsHeight ? ahead + offset.y : ahead;
         }
 
         // Songs-v2 R: the wasps on each forearm, hand and fingers are that hand's fist. A rig without them launches nothing
@@ -338,6 +422,7 @@ namespace DigitalStory.View
             _session = null;
             _swarm = null;
             _config = null;
+            _lastThrownLimbs = ColossusLimb.None;
         }
 
         private void ReadSamples(ColossusSampleSet samples)
@@ -992,6 +1077,7 @@ namespace DigitalStory.View
             if (_session != null)
             {
                 _session.ColossusAttackStarted -= HandleColossusAttackStarted;
+                _session.ColossusAttackLanded -= HandleColossusAttackLanded;
                 _session.ColossusFistThrown -= HandleColossusFistThrown;
             }
         }
