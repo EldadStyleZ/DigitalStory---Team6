@@ -1,0 +1,21 @@
+﻿<Solution>
+  <Project Path="DigitalStory.Data.csproj" />
+  <Project Path="Unity.ShaderGraph.Editor.csproj" />
+  <Project Path="DigitalStory.Logic.csproj" />
+  <Project Path="Unity.RenderPipelines.Core.Runtime.csproj" />
+  <Project Path="WaveHarmonic.Crest.csproj" />
+  <Project Path="DigitalStory.View.csproj" />
+  <Project Path="Unity.RenderPipelines.Core.Editor.csproj" />
+  <Project Path="DigitalStory.Tests.EditMode.csproj" />
+  <Project Path="WaveHarmonic.Crest.Shared.csproj" />
+  <Project Path="DigitalStory.Tests.PlayMode.csproj" />
+  <Project Path="WaveHarmonic.Crest.Samples.csproj" />
+  <Project Path="WaveHarmonic.Crest.Shared.Editor.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="WaveHarmonic.Crest.Scripting.csproj" />
+  <Project Path="WaveHarmonic.Crest.Editor.csproj" />
+  <Project Path="DigitalStory.Editor.csproj" />
+  <Project Path="DigitalStory.GrassBrush.Editor.csproj" />
+  <Project Path="DigitalStory.GrassBrush.csproj" />
+  <Project Path="WaveHarmonic.Crest.Editor.Dependents.csproj" />
+</Solution>
