@@ -82,6 +82,32 @@ namespace DigitalStory.Tests.PlayMode
         private static readonly float[] MeteorStripSeconds = { 0.25f, 0.6f, 0.95f, 1.1f, 1.4f, 2.2f };
         private static readonly float[] GiantStripSeconds = { 0.3f, 0.8f, 1.4f, 2.2f, 3.2f, 4.5f };
 
+        // Songs-v2 AA: the owner's clips, about 3 s each.
+        private const float ClipSeconds = 3f;
+        private const float ComboStandBackMetres = 1.2f;
+        private const float ComboSettleSeconds = 0.8f;
+        private const float ComboBeforeSeconds = 0.5f;
+        private const float ComboNoteSeconds = 0.35f;
+        private const float ComboAfterSeconds = 1f;
+        private const int TreeDirections = 8;
+        private const float TreeLineOffset = 0.25f;
+        private const float TreeStartBackMetres = 12f;
+        private const float TreeWalkEndMetres = 10f;
+        private const float TreeClearance = 2f;
+        private const float TreePlayEdge = 38f;
+        private const float TreeRecordBeforeMetres = 4f;
+        private const float TreeViewPitch = 62f;
+        private const float TreeViewDistance = 15f;
+        private const float TreeViewAheadMetres = -1f;
+        private const int PunchHole = 1;
+        private const int SlamHole = 3;
+        private const float SlamAfterPunchSeconds = 0.5f;
+        private const float ThrowClipSeconds = 3.3f;
+        private const int FeelWasps = 4000;
+        private const float OccluderMarginMetres = 1f;
+        private static readonly Vector3 ThrowFocus = new Vector3(0f, 2.5f, 7f);
+        private static readonly Vector3 ThrowOffset = new Vector3(9f, 1.5f, -2f);
+
         private string _directory;
         private float _savedTimeScale;
         private float _savedCaptureDeltaTime;
@@ -270,6 +296,257 @@ namespace DigitalStory.Tests.PlayMode
 
                 CombineStrip(folder, names, times.Length, "strip-" + song.Name);
             }
+        }
+
+        // Songs-v2 AA, for the owner: the first open nest collected by its combo, in the game camera with the HUD (the combo
+        // row fills slot by slot and bursts), a note every 0.35 s, as a player taps.
+        [UnityTest]
+        [Explicit(ExplicitReason)]
+        public IEnumerator Take5_NestCombo()
+        {
+            yield return LoadScene();
+            NestField nests = _root.Session.Nests;
+            int nest = 0;
+            while (nest < nests.Count && !nests[nest].IsOpen)
+            {
+                nest++;
+            }
+
+            Assert.That(nest, Is.LessThan(nests.Count), "no nest is open at the start");
+            _core.PlaceAt(nests[nest].Position + (Vector3.back * ComboStandBackMetres), true);
+            yield return WaitGameSeconds(ComboSettleSeconds);
+            string folder = TakeFolder("take-5-nest-combo");
+            RenderTexture overlay = BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy);
+            try
+            {
+                yield return null;
+                int frame = 0;
+                yield return Record(folder, ComboBeforeSeconds, frame, null);
+                frame += FramesIn(ComboBeforeSeconds);
+                IReadOnlyList<int> combo = nests[nest].Combo;
+                for (int note = 0; note < combo.Count; note++)
+                {
+                    _root.PressHole(combo[note]);
+                    yield return Record(folder, ComboNoteSeconds, frame, null);
+                    frame += FramesIn(ComboNoteSeconds);
+                }
+
+                yield return Record(folder, ComboAfterSeconds, frame, null);
+            }
+            finally
+            {
+                EndHudOverlay(overlay, document, original, copy);
+            }
+
+            Assert.That(nests[nest].IsCollected, Is.True, "the combo did not collect the nest");
+        }
+
+        // Songs-v2 X, for the owner: the river walks straight through a nest tree, seen from a steep camera beside the walk,
+        // from 4 m before the tree until the river has closed behind it.
+        [UnityTest]
+        [Explicit(ExplicitReason)]
+        public IEnumerator Take6_RiverSplitsRoundATree()
+        {
+            yield return LoadScene();
+            var swarmView = UnityEngine.Object.FindAnyObjectByType<SwarmGpuView>();
+            Assert.That(swarmView, Is.Not.Null);
+            FindTreeWalk(swarmView, out Vector3 tree, out Vector3 direction, out Vector3 start);
+            _core.PlaceAt(start, true);
+            yield return WaitGameSeconds(SettleSeconds);
+            while (Vector3.Dot(_core.Position - tree, direction) < -TreeRecordBeforeMetres)
+            {
+                _core.Move(direction, 1f, false, Time.deltaTime);
+                yield return null;
+            }
+
+            string folder = TakeFolder("take-6-river-splits-round-a-tree");
+            Vector3 across = Vector3.Cross(Vector3.up, direction);
+            Vector3 view = (across * Mathf.Cos(TreeViewPitch * Mathf.Deg2Rad)) + (Vector3.down * Mathf.Sin(TreeViewPitch * Mathf.Deg2Rad));
+            Quaternion rotation = Quaternion.LookRotation(view, direction);
+            Vector3 position = tree + (direction * TreeViewAheadMetres) - (view * TreeViewDistance);
+            int frames = FramesIn(ClipSeconds);
+            for (int index = 0; index < frames; index++)
+            {
+                _core.Move(direction, 1f, false, Time.deltaTime);
+                _capturer.RequestCapture(FramePath(folder, index), position, rotation);
+                yield return WaitForCapture();
+            }
+        }
+
+        // Songs-v2 W, for the owner: two giant attacks, a punch and then the slam, from a fixed camera close off the giant's
+        // right, so the red thrown wasps read: they leave on each hit, fly out and stream home gold.
+        [UnityTest]
+        [Explicit(ExplicitReason)]
+        public IEnumerator Take7_GiantThrowsSide()
+        {
+            yield return LoadScene();
+            yield return StageGiant();
+            string folder = TakeFolder("take-7-giant-throws-side");
+            Vector3 position = ThrowFocus + ThrowOffset;
+            Quaternion rotation = Quaternion.LookRotation(ThrowFocus - position, Vector3.up);
+            int landed = 0;
+            void OnLanded(ColossusAttack attack) => landed++;
+            _root.Session.ColossusAttackLanded += OnLanded;
+            List<Renderer> hidden = HideBetween(position, GiantCore);
+            hidden.AddRange(HideBetween(position, GiantBeekeepers[1]));
+            try
+            {
+                int frames = FramesIn(ThrowClipSeconds);
+                int slamAt = -1;
+                for (int index = 0; index < frames; index++)
+                {
+                    if (index == FramesIn(BeforeRightSeconds))
+                    {
+                        _root.PressHole(PunchHole);
+                    }
+
+                    if (landed >= 1 && slamAt < 0)
+                    {
+                        slamAt = index + FramesIn(SlamAfterPunchSeconds);
+                    }
+
+                    if (index == slamAt)
+                    {
+                        _root.PressHole(SlamHole);
+                    }
+
+                    _capturer.RequestCapture(FramePath(folder, index), position, rotation);
+                    yield return WaitForCapture();
+                }
+            }
+            finally
+            {
+                _root.Session.ColossusAttackLanded -= OnLanded;
+                foreach (Renderer renderer in hidden)
+                {
+                    renderer.enabled = true;
+                }
+            }
+
+            Assert.That(landed, Is.GreaterThanOrEqualTo(2), "the punch and the slam did not both land during the take");
+        }
+
+        // Props and nest trees standing between the fixed camera and the giant would hide it on some maps; they are hidden for
+        // the take and shown again after it.
+        private static List<Renderer> HideBetween(Vector3 camera, Vector3 subject)
+        {
+            var hidden = new List<Renderer>();
+            var a = new Vector2(camera.x, camera.z);
+            var b = new Vector2(subject.x, subject.z);
+            var owners = new List<Component>();
+            owners.AddRange(UnityEngine.Object.FindObjectsByType<SceneryView>());
+            owners.AddRange(UnityEngine.Object.FindObjectsByType<NestView>());
+            foreach (Component owner in owners)
+            {
+                foreach (Renderer renderer in owner.GetComponentsInChildren<Renderer>())
+                {
+                    Bounds bounds = renderer.bounds;
+                    var middle = new Vector2(bounds.center.x, bounds.center.z);
+                    float reach = new Vector2(bounds.extents.x, bounds.extents.z).magnitude;
+                    Vector2 segment = b - a;
+                    float along = Mathf.Clamp01(Vector2.Dot(middle - a, segment) / segment.sqrMagnitude);
+                    if (renderer.enabled && Vector2.Distance(middle, a + (segment * along)) < reach + OccluderMarginMetres)
+                    {
+                        renderer.enabled = false;
+                        hidden.Add(renderer);
+                    }
+                }
+            }
+
+            return hidden;
+        }
+
+        // Songs-v2 Y, for the owner: a strong feel moment, the Meteor at 4,000 wasps into three sticks, in the game camera with
+        // the HUD: the cast's zoom punch, the climb, the landing's shake, the hit numbers and the kill chain's stamp.
+        [UnityTest]
+        [Explicit(ExplicitReason)]
+        public IEnumerator Take8_FeelMeteor()
+        {
+            yield return LoadScene();
+            yield return StageSong(typeof(MeteorSong), FeelWasps);
+            string folder = TakeFolder("take-8-feel-meteor");
+            RenderTexture overlay = BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy);
+            try
+            {
+                yield return null;
+                IReadOnlyList<int> keys = _root.Session.Caster[SongIndexOf(typeof(MeteorSong))].Song.Keys;
+                int frame = 0;
+                for (int key = 0; key < keys.Count; key++)
+                {
+                    _root.PressHole(keys[key]);
+                    yield return Record(folder, FrameSeconds, frame, null);
+                    frame++;
+                }
+
+                yield return Record(folder, ClipSeconds, frame, null);
+            }
+            finally
+            {
+                EndHudOverlay(overlay, document, original, copy);
+            }
+        }
+
+        // A nest tree with a straight walk through it, clear of the other obstacles and inside the play area.
+        private void FindTreeWalk(SwarmGpuView swarmView, out Vector3 tree, out Vector3 direction, out Vector3 start)
+        {
+            NestField nests = _root.Session.Nests;
+            for (int nest = 0; nest < nests.Count; nest++)
+            {
+                Vector3 nestPosition = nests[nest].Position;
+                for (int index = 0; index < swarmView.ObstacleCount; index++)
+                {
+                    Vector4 obstacle = swarmView.Obstacle(index);
+                    var middle = new Vector3(obstacle.x, 0f, obstacle.y);
+                    if (Vector3.Distance(middle, new Vector3(nestPosition.x, 0f, nestPosition.z)) > obstacle.z + 1f)
+                    {
+                        continue;
+                    }
+
+                    for (int turn = 0; turn < TreeDirections; turn++)
+                    {
+                        Vector3 heading = Quaternion.Euler(0f, turn * (360f / TreeDirections), 0f) * Vector3.forward;
+                        Vector3 side = Vector3.Cross(Vector3.up, heading) * TreeLineOffset;
+                        Vector3 from = middle - (heading * TreeStartBackMetres) + side;
+                        Vector3 to = middle + (heading * TreeWalkEndMetres) + side;
+                        if (IsInPlayArea(from) && IsInPlayArea(to) && IsClearOfOthers(swarmView, index, from, to))
+                        {
+                            tree = middle;
+                            direction = heading;
+                            start = new Vector3(from.x, _core.Position.y, from.z);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            Assert.Fail("No nest tree has a clear straight walk through it on this map.");
+            tree = direction = start = Vector3.zero;
+        }
+
+        private static bool IsInPlayArea(Vector3 point) => Mathf.Abs(point.x) <= TreePlayEdge && Mathf.Abs(point.z) <= TreePlayEdge;
+
+        private static bool IsClearOfOthers(SwarmGpuView swarmView, int tree, Vector3 from, Vector3 to)
+        {
+            var a = new Vector2(from.x, from.z);
+            var b = new Vector2(to.x, to.z);
+            for (int index = 0; index < swarmView.ObstacleCount; index++)
+            {
+                if (index == tree)
+                {
+                    continue;
+                }
+
+                Vector4 obstacle = swarmView.Obstacle(index);
+                var point = new Vector2(obstacle.x, obstacle.y);
+                Vector2 segment = b - a;
+                float along = Mathf.Clamp01(Vector2.Dot(point - a, segment) / segment.sqrMagnitude);
+                if (Vector2.Distance(point, a + (segment * along)) < obstacle.z + TreeClearance)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         // Puts the core 6 m south of the middle facing north, with three sticks stunned ahead, the swarm at `wasps` and, for the
