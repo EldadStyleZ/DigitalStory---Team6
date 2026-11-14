@@ -31,11 +31,12 @@ namespace DigitalStory.Logic
         /// <summary>True when no drawn map kept the rules and the config's fixed fallback map stands instead.</summary>
         public bool IsFallback { get; }
 
-        /// <summary>The hives: the first west of the middle, the second east of it.</summary>
+        /// <summary>The hives: the first anywhere in its band, the second across the middle from it.</summary>
         public IReadOnlyList<Vector3> Hives { get; }
 
         /// <summary>
-        /// Where beekeepers enter, in the order the waves take them: ahead, behind, beyond the east hive, beyond the west hive.
+        /// Where beekeepers enter, in the order the waves take them: the first hive's, the second's, the first's, the
+        /// second's (<see cref="LayoutGenerator.HiveOfSpawn"/>).
         /// </summary>
         public IReadOnlyList<Vector3> Spawns { get; }
 

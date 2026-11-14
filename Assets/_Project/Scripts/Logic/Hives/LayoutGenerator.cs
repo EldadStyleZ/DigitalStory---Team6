@@ -6,39 +6,38 @@ using UnityEngine;
 namespace DigitalStory.Logic
 {
     /// <summary>
-    /// Draws a match's map from a seed (plan section S): random within <see cref="LayoutConfig"/>'s and
+    /// Draws a match's map from a seed (plan sections S and T): random within <see cref="LayoutConfig"/>'s and
     /// <see cref="NestConfig"/>'s rules, so every map is fair. The same seed and configs always draw the same map.
     /// </summary>
     /// <remarks>
-    /// The order follows what each part must keep away from. The hives come first, one in a band west of the middle and one
-    /// east of it. The line between them sets the map's turn, and the four spawn points turn with it, one ahead, one behind
-    /// and one beyond each hive, so every walk to a hive stays as long as on the old fixed map; the ones ahead and behind lean
-    /// to the west hive, so each hive is walked to by as many beekeepers as there. The nests follow, the ones open
-    /// at the start ahead to either side and the rest one in each slice of the circle, turned the same way; then the scenery
-    /// around the edge, clear of the hives' rings, the nest trees, the start, the spawn points and the lanes from each spawn
-    /// point to each hive. Each part has a bounded number of tries. When a whole map fails <see cref="LayoutConfig.LayoutAttempts"/>
+    /// The order follows what each part must keep away from. The hives come first: the first at any bearing in a wide band,
+    /// the second across the middle from it. The line between them sets the map's turn. Each hive then gets two spawn
+    /// points of its own (<see cref="HiveOfSpawn"/>), out beyond it to either side and as far from it as the other hive's
+    /// are from that one, so the waves, which take the spawn points in turn, alternate between the hives on every map. The
+    /// nests follow, the ones open at the start ahead to either side and the rest one in each slice of the circle, turned
+    /// the same way; then the scenery around the edge, clear of the hives' rings, the nest trees, the start, the spawn
+    /// points and the lanes from each spawn point to each hive. Each part has a bounded number of tries. When a whole map fails <see cref="LayoutConfig.LayoutAttempts"/>
     /// times the config's fixed fallback map stands instead, and a prop that finds no place is left out. It runs once a
     /// match, not each frame, so it may allocate.
     /// </remarks>
     public static class LayoutGenerator
     {
-        /// <summary>Hives on every map: one west of the middle, one east.</summary>
+        /// <summary>Hives on every map: the first anywhere in its band, the second across the middle from it.</summary>
         public const int HiveCount = 2;
 
-        /// <summary>Spawn points on every map: ahead, behind, beyond the east hive, beyond the west hive.</summary>
+        /// <summary>Spawn points on every map: two for each hive, in the order the waves take them, the hives in turn.</summary>
         public const int SpawnCount = 4;
 
         private const float FullTurnDegrees = 360f;
-        private const float WestBearing = 270f;
+        private const float HalfTurnDegrees = 180f;
+        private const float QuarterTurnDegrees = 90f;
         private const float EastBearing = 90f;
 
-        // The spawn points' sides of the hives' line, in the order the waves take them: ahead, behind, beyond the east hive
-        // and beyond the west hive, which on the old fixed map were north, south, east and west.
-        private static readonly float[] SpawnSides = { 0f, 180f, 90f, 270f };
-
-        // Which way each spawn point's bearing turns off its side: the one ahead turns only anticlockwise and the one behind
-        // only clockwise, both toward the west hive (LayoutConfig.SpawnWestLeanMetres); 0 turns either way.
-        private static readonly float[] SpawnLeans = { -1f, 1f, 0f, 0f };
+        /// <summary>
+        /// The hive spawn point <paramref name="spawnIndex"/> belongs to: 0 and 2 the first hive's, 1 and 3 the second's.
+        /// The waves take the spawn points in turn, so they alternate between the hives.
+        /// </summary>
+        public static int HiveOfSpawn(int spawnIndex) => spawnIndex % HiveCount;
 
         /// <summary>Draws the map for <paramref name="seed"/>.</summary>
         /// <param name="seed">Any number. The same seed draws the same map.</param>
@@ -62,7 +61,7 @@ namespace DigitalStory.Logic
             for (int attempt = 0; attempt < layout.LayoutAttempts && !isDrawn; attempt++)
             {
                 isDrawn = TryHives(random, layout, hives)
-                    && TrySpawns(random, layout, hives, spawns)
+                    && TrySpawns(random, layout, start, hives, spawns)
                     && TryNests(random, layout, nests, start, hives, spawns, nestPositions);
             }
 
@@ -117,14 +116,15 @@ namespace DigitalStory.Logic
         {
             for (int attempt = 0; attempt < layout.PlaceAttempts; attempt++)
             {
-                Vector3 west = Polar(
-                    WestBearing + Spread(random, layout.HiveTiltDegrees), Between(random, layout.HiveNearest, layout.HiveFarthest));
-                Vector3 east = Polar(
-                    EastBearing + Spread(random, layout.HiveTiltDegrees), Between(random, layout.HiveNearest, layout.HiveFarthest));
-                if (GroundMath.DistanceSquared(west, east) >= layout.HiveLeastSeparation * layout.HiveLeastSeparation)
+                float bearing = Between(random, 0f, FullTurnDegrees);
+                Vector3 first = Polar(bearing, Between(random, layout.HiveNearest, layout.HiveFarthest));
+                Vector3 second = Polar(
+                    bearing + HalfTurnDegrees + Spread(random, layout.HiveAcrossSpreadDegrees),
+                    Between(random, layout.HiveNearest, layout.HiveFarthest));
+                if (GroundMath.DistanceSquared(first, second) >= layout.HiveLeastSeparation * layout.HiveLeastSeparation)
                 {
-                    hives[0] = west;
-                    hives[1] = east;
+                    hives[0] = first;
+                    hives[1] = second;
                     return true;
                 }
             }
@@ -132,20 +132,28 @@ namespace DigitalStory.Logic
             return false;
         }
 
-        private static bool TrySpawns(IRandomSource random, LayoutConfig layout, Vector3[] hives, Vector3[] spawns)
+        // Each spawn point stands out beyond its own hive, turned to one side of the line from the middle through the hive:
+        // a hive's first spawn point anticlockwise, its second clockwise.
+        private static bool TrySpawns(IRandomSource random, LayoutConfig layout, Vector3 start, Vector3[] hives, Vector3[] spawns)
         {
-            float turn = Turn(hives);
             for (int index = 0; index < SpawnCount; index++)
             {
+                int hive = HiveOfSpawn(index);
+                Vector3 own = hives[hive];
+                Vector3 other = hives[(hive + 1) % HiveCount];
+                float outward = Bearing(own);
+                float side = index < HiveCount ? -1f : 1f;
                 bool isPlaced = false;
-                float lean = SpawnLeans[index];
                 for (int attempt = 0; attempt < layout.PlaceAttempts && !isPlaced; attempt++)
                 {
-                    float jitter = lean == 0f ? Spread(random, layout.SpawnJitterDegrees) : lean * Between(random, 0f, layout.SpawnJitterDegrees);
-                    Vector3 spawn = Polar(turn + SpawnSides[index] + jitter, Between(random, layout.SpawnNearest, layout.SpawnFarthest));
+                    float walk = Between(random, layout.SpawnFromHiveNearest, layout.SpawnFromHiveFarthest);
+                    float turn = side * Between(random, layout.SpawnSideNarrowestDegrees, layout.SpawnSideWidestDegrees);
+                    Vector3 spawn = own + Polar(outward + turn, walk);
+                    float lead = walk + layout.SpawnOwnHiveLeadMetres;
                     if (IsInside(spawn, layout.ArenaHalfSize)
-                        && IsClearOf(spawn, hives, layout.SpawnHiveLeastDistance)
-                        && (lean == 0f || LeansWest(spawn, hives, layout.SpawnWestLeanMetres)))
+                        && IsClearOf(spawn, start, layout.SpawnStartClearance)
+                        && IsClearOf(spawn, other, lead)
+                        && IsClearOf(spawn, spawns, index, layout.SpawnLeastSpacing))
                     {
                         spawns[index] = spawn;
                         isPlaced = true;
@@ -161,18 +169,20 @@ namespace DigitalStory.Logic
             return true;
         }
 
-        // The ones open at the start stand ahead, where the opening camera looks, one to each side. The rest stand one in each
-        // equal slice of the circle, and the nearer ones open first, so each wave's nests are a longer trip than the last.
+        // The ones open at the start stand ahead, one to each side: square to the hives' line, on the side the opening camera
+        // looks. The rest stand one in each equal slice of the circle, and the nearer ones open first, so each wave's nests
+        // are a longer trip than the last.
         private static bool TryNests(
             IRandomSource random, LayoutConfig layout, NestConfig nests, Vector3 start, Vector3[] hives, Vector3[] spawns, Vector3[] result)
         {
             float turn = Turn(hives);
+            float ahead = Ahead(hives);
             var rules = new NestRules(layout, nests, start, hives, spawns, new List<Vector3>(result.Length));
             for (int index = 0; index < nests.OpenAtStart; index++)
             {
                 float side = index % 2 == 0 ? -1f : 1f;
-                float from = turn + (side * layout.FirstNestsNarrowestBearing);
-                float to = turn + (side * layout.FirstNestsWidestBearing);
+                float from = ahead + (side * layout.FirstNestsNarrowestBearing);
+                float to = ahead + (side * layout.FirstNestsWidestBearing);
                 if (!TryNest(random, rules, from, to, nests.FirstNestsNearest, nests.FirstNestsFarthest))
                 {
                     return false;
@@ -257,13 +267,6 @@ namespace DigitalStory.Logic
             return result;
         }
 
-        private static bool LeansWest(Vector3 spawn, Vector3[] hives, float metres)
-        {
-            float toWest = Mathf.Sqrt(GroundMath.DistanceSquared(spawn, hives[0]));
-            float toEast = Mathf.Sqrt(GroundMath.DistanceSquared(spawn, hives[1]));
-            return toEast - toWest >= metres;
-        }
-
         private static bool IsAroundTheEdge(Vector3 point, LayoutConfig layout)
         {
             return Mathf.Max(Mathf.Abs(point.x), Mathf.Abs(point.z)) >= layout.SceneryInnerHalfSize;
@@ -318,6 +321,20 @@ namespace DigitalStory.Logic
             return true;
         }
 
+        // Clear of the first `count` points of others.
+        private static bool IsClearOf(Vector3 point, Vector3[] others, int count, float distance)
+        {
+            for (int index = 0; index < count; index++)
+            {
+                if (!IsClearOf(point, others[index], distance))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private static bool IsInside(Vector3 point, float halfSize)
         {
             return Mathf.Abs(point.x) <= halfSize && Mathf.Abs(point.z) <= halfSize;
@@ -339,11 +356,27 @@ namespace DigitalStory.Logic
             return (offX * offX) + (offZ * offZ);
         }
 
-        // Degrees the line from the west hive to the east hive turns off due east.
+        // Degrees the line from the first hive to the second turns off due east.
         private static float Turn(Vector3[] hives)
         {
+            return Bearing(hives[1] - hives[0]) - EastBearing;
+        }
+
+        /// <summary>
+        /// The bearing nests open at the start stand either side of: square to the line between the hives, on the side the
+        /// opening camera looks (north, bearing 0), so they are in or near the first view whichever way the hives lie.
+        /// </summary>
+        public static float Ahead(IReadOnlyList<Vector3> hives)
+        {
             Vector3 line = hives[1] - hives[0];
-            return (Mathf.Atan2(line.x, line.z) * Mathf.Rad2Deg) - EastBearing;
+            float turn = (Mathf.Atan2(line.x, line.z) * Mathf.Rad2Deg) - EastBearing;
+            return Mathf.Abs(Mathf.DeltaAngle(0f, turn)) <= QuarterTurnDegrees ? turn : turn + HalfTurnDegrees;
+        }
+
+        // Degrees clockwise from +Z, seen from above.
+        private static float Bearing(Vector3 point)
+        {
+            return Mathf.Atan2(point.x, point.z) * Mathf.Rad2Deg;
         }
 
         // A point on the ground, bearingDegrees clockwise from +Z seen from above, radius metres from the middle.

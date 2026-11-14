@@ -7,8 +7,9 @@ using UnityEngine;
 namespace DigitalStory.Tests.EditMode
 {
     /// <summary>
-    /// Plan section S, the random map: the same seed draws the same map, and over 200 seeds every map keeps every rule of the
-    /// default LayoutConfig and NestConfig, with no fallback. The rules are checked here from the config's numbers, not with
+    /// Plan sections S and T, the random map: the same seed draws the same map, and over 200 seeds every map keeps every rule
+    /// of the default LayoutConfig and NestConfig, with no fallback. The hives lie along every direction, and each has two
+    /// spawn points of its own, which the waves alternate between. The rules are checked here from the config's numbers, not with
     /// the generator's own helpers. The props stand in for the scene builder's: 70 of its 13 kinds, from bushes about 1 m
     /// across to ruins about 9 m across.
     /// </summary>
@@ -16,16 +17,15 @@ namespace DigitalStory.Tests.EditMode
     {
         private const int SeedCount = 200;
         private const int PropCount = 70;
-        private const float PlayArea = 34f; // CoreMoveConfig.PlayAreaHalfSize's default.
+        private const float PlayArea = 42f; // CoreMoveConfig.PlayAreaHalfSize's default.
         private const float Tolerance = 0.001f;
         private const float AngleTolerance = 0.01f;
-        private const float WestBearing = 270f;
         private const float EastBearing = 90f;
         private const float LeastPlacedShare = 0.9f;
         private const int LeastDistinctMaps = 190;
-
-        // The four spawn points' sides of the hives' line: ahead, behind, beyond the east hive, beyond the west hive.
-        private static readonly float[] SpawnSides = { 0f, 180f, 90f, 270f };
+        private const int SpawnCount = 4;
+        private const int Octants = 8;
+        private const int LeastMapsPerOctant = 12; // Of 200, an eighth would be 25.
 
         // Ground radii like the builder's props: two pines, a dead tree, four bushes, four ruins and two shacks.
         private static readonly float[] Kinds = { 3.2f, 3.2f, 2.5f, 1f, 0.8f, 0.7f, 0.9f, 4.5f, 3.5f, 4f, 3f, 2.5f, 2.5f };
@@ -94,6 +94,30 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
+        public void Generate_TwoHundredSeeds_LayTheHivesAlongEveryDirection()
+        {
+            var perOctant = new int[Octants];
+            foreach (ArenaLayout map in _maps)
+            {
+                perOctant[Mathf.FloorToInt(Bearing(map.Hives[0]) / (360f / Octants)) % Octants]++;
+            }
+
+            for (int octant = 0; octant < Octants; octant++)
+            {
+                Assert.That(perOctant[octant], Is.GreaterThanOrEqualTo(LeastMapsPerOctant), $"the first hive hardly ever stands in octant {octant}");
+            }
+        }
+
+        [Test]
+        public void HiveOfSpawn_AlternatesBetweenTheHives()
+        {
+            Assert.That(LayoutGenerator.HiveOfSpawn(0), Is.EqualTo(0));
+            Assert.That(LayoutGenerator.HiveOfSpawn(1), Is.EqualTo(1));
+            Assert.That(LayoutGenerator.HiveOfSpawn(2), Is.EqualTo(0));
+            Assert.That(LayoutGenerator.HiveOfSpawn(3), Is.EqualTo(1));
+        }
+
+        [Test]
         public void Generate_TwoHundredSeeds_NeverNeedTheFallback()
         {
             foreach (ArenaLayout map in _maps)
@@ -103,7 +127,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Generate_TwoHundredSeeds_HivesStayInTheirBandWestAndEastAndApart()
+        public void Generate_TwoHundredSeeds_HivesStayInTheirBandAcrossTheMiddleAndApart()
         {
             foreach (ArenaLayout map in _maps)
             {
@@ -112,7 +136,7 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Generate_TwoHundredSeeds_SpawnPointsTurnWithTheHivesKeepTheirDistanceAndLeanWest()
+        public void Generate_TwoHundredSeeds_EachHiveHasTwoSpawnPointsOfItsOwnAtTheSameWalk()
         {
             foreach (ArenaLayout map in _maps)
             {
@@ -206,56 +230,47 @@ namespace DigitalStory.Tests.EditMode
         private void CheckHives(ArenaLayout map, string which)
         {
             Assert.That(map.Hives.Count, Is.EqualTo(2), which);
-            Vector3 west = map.Hives[0];
-            Vector3 east = map.Hives[1];
-            Assert.That(west.x, Is.LessThan(0f), $"{which}: the first hive is not west of the middle");
-            Assert.That(east.x, Is.GreaterThan(0f), $"{which}: the second hive is not east of the middle");
             for (int index = 0; index < 2; index++)
             {
                 Vector3 hive = map.Hives[index];
                 Assert.That(hive.y, Is.EqualTo(0f), which);
-                float radius = Radius(hive);
-                Assert.That(radius, Is.InRange(_layout.HiveNearest - Tolerance, _layout.HiveFarthest + Tolerance), $"{which}: hive {index}");
-                float due = index == 0 ? WestBearing : EastBearing;
-                Assert.That(
-                    Mathf.Abs(Mathf.DeltaAngle(due, Bearing(hive))),
-                    Is.LessThanOrEqualTo(_layout.HiveTiltDegrees + AngleTolerance),
-                    $"{which}: hive {index} turns too far off its side");
+                Assert.That(Radius(hive), Is.InRange(_layout.HiveNearest - Tolerance, _layout.HiveFarthest + Tolerance), $"{which}: hive {index}");
             }
 
-            Assert.That(Ground(west, east), Is.GreaterThanOrEqualTo(_layout.HiveLeastSeparation - Tolerance), $"{which}: the hives are too close");
+            float across = Mathf.Abs(Mathf.DeltaAngle(Bearing(map.Hives[0]) + 180f, Bearing(map.Hives[1])));
+            Assert.That(across, Is.LessThanOrEqualTo(_layout.HiveAcrossSpreadDegrees + AngleTolerance), $"{which}: the hives are not across the middle");
+            Assert.That(Ground(map.Hives[0], map.Hives[1]), Is.GreaterThanOrEqualTo(_layout.HiveLeastSeparation - Tolerance), $"{which}: the hives are too close");
         }
 
+        // Spawn point i belongs to hive i mod 2, stands out beyond it to one side (a hive's first anticlockwise, its second
+        // clockwise), at a walk in the band, nearer its own hive than the other by the lead, inside the arena and off the start.
         private void CheckSpawns(ArenaLayout map, string which)
         {
-            Assert.That(map.Spawns.Count, Is.EqualTo(SpawnSides.Length), which);
-            float turn = Turn(map);
+            Assert.That(map.Spawns.Count, Is.EqualTo(SpawnCount), which);
             for (int index = 0; index < map.Spawns.Count; index++)
             {
                 Vector3 spawn = map.Spawns[index];
                 string name = $"{which}: spawn {index}";
+                Vector3 own = map.Hives[index % 2];
+                Vector3 other = map.Hives[(index + 1) % 2];
+                float walk = Ground(spawn, own);
                 Assert.That(spawn.y, Is.EqualTo(0f), name);
-                Assert.That(Radius(spawn), Is.InRange(_layout.SpawnNearest - Tolerance, _layout.SpawnFarthest + Tolerance), name);
+                Assert.That(walk, Is.InRange(_layout.SpawnFromHiveNearest - Tolerance, _layout.SpawnFromHiveFarthest + Tolerance), $"{name}: its walk");
+                Assert.That(Ground(spawn, other), Is.GreaterThanOrEqualTo(walk + _layout.SpawnOwnHiveLeadMetres - Tolerance), $"{name} is not its own hive's");
                 Assert.That(Mathf.Abs(spawn.x), Is.LessThanOrEqualTo(_layout.ArenaHalfSize + Tolerance), name);
                 Assert.That(Mathf.Abs(spawn.z), Is.LessThanOrEqualTo(_layout.ArenaHalfSize + Tolerance), name);
+                Assert.That(Radius(spawn), Is.GreaterThanOrEqualTo(_layout.SpawnStartClearance - Tolerance), $"{name} is on the start");
+                float side = index < 2 ? -1f : 1f;
+                float turn = Mathf.DeltaAngle(Bearing(own), Bearing(spawn - own)) * side;
                 Assert.That(
-                    Mathf.Abs(Mathf.DeltaAngle(turn + SpawnSides[index], Bearing(spawn))),
-                    Is.LessThanOrEqualTo(_layout.SpawnJitterDegrees + AngleTolerance),
-                    $"{name} does not turn with the hives");
-                foreach (Vector3 hive in map.Hives)
+                    turn,
+                    Is.InRange(_layout.SpawnSideNarrowestDegrees - AngleTolerance, _layout.SpawnSideWidestDegrees + AngleTolerance),
+                    $"{name} does not stand out beyond its hive on its side");
+                for (int later = index + 1; later < map.Spawns.Count; later++)
                 {
-                    Assert.That(Ground(spawn, hive), Is.GreaterThanOrEqualTo(_layout.SpawnHiveLeastDistance - Tolerance), $"{name} is too near a hive");
+                    Assert.That(Ground(spawn, map.Spawns[later]), Is.GreaterThanOrEqualTo(_layout.SpawnLeastSpacing - Tolerance), $"{name} is near spawn {later}");
                 }
             }
-
-            for (int index = 0; index < 2; index++)
-            {
-                float lean = Ground(map.Spawns[index], map.Hives[1]) - Ground(map.Spawns[index], map.Hives[0]);
-                Assert.That(lean, Is.GreaterThanOrEqualTo(_layout.SpawnWestLeanMetres - Tolerance), $"{which}: spawn {index} does not lean to the west hive");
-            }
-
-            Assert.That(Ground(map.Spawns[2], map.Hives[1]), Is.LessThan(Ground(map.Spawns[2], map.Hives[0])), $"{which}: spawn 2 is not beyond the east hive");
-            Assert.That(Ground(map.Spawns[3], map.Hives[0]), Is.LessThan(Ground(map.Spawns[3], map.Hives[1])), $"{which}: spawn 3 is not beyond the west hive");
         }
 
         private void CheckNests(ArenaLayout map, string which)
@@ -287,7 +302,9 @@ namespace DigitalStory.Tests.EditMode
 
                 if (index < _nests.OpenAtStart)
                 {
-                    float offAhead = Mathf.DeltaAngle(turn, Bearing(nest));
+                    // Ahead is square to the hives' line, on the side the opening camera looks: north.
+                    float ahead = Mathf.Abs(Mathf.DeltaAngle(0f, turn)) <= 90f ? turn : turn + 180f;
+                    float offAhead = Mathf.DeltaAngle(ahead, Bearing(nest));
                     float side = index % 2 == 0 ? -1f : 1f;
                     Assert.That(
                         offAhead * side,
@@ -357,7 +374,7 @@ namespace DigitalStory.Tests.EditMode
             }
         }
 
-        // Degrees the hives' line turns off due east: the spawn points and the nests turn with it.
+        // Degrees the hives' line turns off due east: the nests turn with it.
         private static float Turn(ArenaLayout map) => Bearing(map.Hives[1] - map.Hives[0]) - EastBearing;
 
         // Degrees clockwise from +Z, seen from above, from 0 to 360.

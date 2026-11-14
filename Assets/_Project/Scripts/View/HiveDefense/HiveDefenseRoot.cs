@@ -1101,7 +1101,7 @@ namespace DigitalStory.View
             if (_spawnPoints == null || _spawnPoints.Length != LayoutGenerator.SpawnCount)
             {
                 throw new InvalidOperationException(
-                    $"{name}: HiveDefenseRoot needs {LayoutGenerator.SpawnCount} spawn points, as every map has: ahead, behind, east and west.");
+                    $"{name}: HiveDefenseRoot needs {LayoutGenerator.SpawnCount} spawn points, as every map has: two for each hive.");
             }
 
             for (int index = 0; index < _spawnPoints.Length; index++)

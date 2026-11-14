@@ -65,6 +65,7 @@ namespace DigitalStory.Logic
 
         private readonly HiveDefenseRules _rules;
         private readonly IReadOnlyList<Vector3> _spawnPoints;
+        private readonly int[] _spawnHomes;
         private readonly IRandomSource _random;
         private readonly BeekeeperBrain[] _pool;
         private readonly bool[] _isActive;
@@ -132,6 +133,8 @@ namespace DigitalStory.Logic
             {
                 throw new ArgumentException("At least one spawn point is needed.", nameof(spawnPoints));
             }
+
+            _spawnHomes = SpawnHomes(spawnPoints, hivePositions);
 
             if (rules.HoleCount < 1 || rules.HoleCount > MaxHoleBits)
             {
@@ -1050,6 +1053,32 @@ namespace DigitalStory.Logic
             return push;
         }
 
+        /// <summary>The hive the beekeepers from spawn point <paramref name="spawnPointIndex"/> walk to while it stands.</summary>
+        public int SpawnHome(int spawnPointIndex) => _spawnHomes[spawnPointIndex];
+
+        // Plan section T: each spawn point serves the hive nearest it when the match starts, and its beekeepers walk to that
+        // hive while it stands, wherever they are led off. The map gives each hive two spawn points (LayoutGenerator), so
+        // the waves, which take them in turn, split evenly between the hives on every map.
+        private static int[] SpawnHomes(IReadOnlyList<Vector3> spawnPoints, IReadOnlyList<Vector3> hivePositions)
+        {
+            var homes = new int[spawnPoints.Count];
+            for (int spawn = 0; spawn < homes.Length; spawn++)
+            {
+                float best = float.PositiveInfinity;
+                for (int hive = 0; hive < hivePositions.Count; hive++)
+                {
+                    float distance = GroundMath.DistanceSquared(spawnPoints[spawn], hivePositions[hive]);
+                    if (distance < best)
+                    {
+                        best = distance;
+                        homes[spawn] = hive;
+                    }
+                }
+            }
+
+            return homes;
+        }
+
         private void OnSpawnRequested(BeekeeperKind kind, int spawnPointIndex)
         {
             int first = kind == BeekeeperKind.Stick ? 0 : _stickPoolSize;
@@ -1063,7 +1092,7 @@ namespace DigitalStory.Logic
 
                 _isActive[slot] = true;
                 _activeCount++;
-                _pool[slot].Spawn(_spawnPoints[spawnPointIndex]);
+                _pool[slot].Spawn(_spawnPoints[spawnPointIndex], _spawnHomes[spawnPointIndex]);
                 BeekeeperSpawned?.Invoke(_pool[slot]);
                 return;
             }

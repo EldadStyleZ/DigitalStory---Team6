@@ -49,7 +49,7 @@ namespace DigitalStory.Tests.EditMode
             Assert.AreEqual(10f, config.FirstNestsNearest);
             Assert.AreEqual(14f, config.FirstNestsFarthest);
             Assert.AreEqual(16f, config.LaterNestsNearest);
-            Assert.AreEqual(30f, config.LaterNestsFarthest);
+            Assert.AreEqual(34f, config.LaterNestsFarthest); // Plan section T: the owner asked for trees over a bigger area.
 
             Object.DestroyImmediate(config);
         }

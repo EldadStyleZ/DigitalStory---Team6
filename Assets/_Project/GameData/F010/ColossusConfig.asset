@@ -54,4 +54,5 @@ MonoBehaviour:
   <FistSpeed>k__BackingField: 24
   <FistLeastFlightSeconds>k__BackingField: 0.2
   <FistRange>k__BackingField: 14
+  <FistAimConeDegrees>k__BackingField: 25
   <FistRegrowSeconds>k__BackingField: 2

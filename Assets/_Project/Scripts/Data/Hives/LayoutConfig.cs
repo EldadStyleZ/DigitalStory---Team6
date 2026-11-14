@@ -4,58 +4,57 @@ using UnityEngine;
 namespace DigitalStory.Data
 {
     /// <summary>
-    /// Where a match's map puts things (plan section S): the two hives, the beekeepers' four spawn points, the nest trees and
-    /// the scenery around the edge. Each match draws its own map from a seed, random within these rules, so every map is
-    /// fair. The bands come from the fixed map the scene had before (hives 12.5 m either side of the middle, spawn points
-    /// 32 m out, scenery between 25.5 and 34 m), so distances stay in that range. Where the nests may stand is also ruled by
-    /// <see cref="NestConfig"/>; these numbers only add to it.
+    /// Where a match's map puts things (plan sections S and T): the two hives, the beekeepers' four spawn points, the nest
+    /// trees and the scenery. Each match draws its own map from a seed, random within these rules. The pair of hives may lie
+    /// along any line, anywhere in a wide band, and each hive has two spawn points of its own, as far from it as the other
+    /// hive's are from that one, so the map's shape never decides how the waves split (section T). Where the nests may stand
+    /// is also ruled by <see cref="NestConfig"/>; these numbers only add to it.
     /// </summary>
     [CreateAssetMenu(menuName = "DigitalStory/F010/Layout Config", fileName = "LayoutConfig")]
     public sealed class LayoutConfig : ScriptableObject
     {
         [field: Header("Arena")]
         [field: SerializeField, Min(1f), Tooltip("Metres from the middle of the map to the arena's edge along either ground axis: the outer edge of the scenery and the farthest a spawn point may be. Keep it at most CoreMoveConfig.PlayAreaHalfSize.")]
-        public float ArenaHalfSize { get; private set; } = 34f;
+        public float ArenaHalfSize { get; private set; } = 42f;
 
-        // The hive and spawn bands stay close to the old fixed map (hives 12.5 m out and 25 m apart, walks of 19.5 m and more)
-        // because the economy was tuned on it: with hives 11 to 14 m out, 22 m apart and turned up to 20 degrees, the Mixed
-        // plan without nests, which lost every match in round 5 on the fixed map, won one in five with 10% of its wasps on
-        // healing. The nests and the scenery take the variety.
         [field: Header("Hives")]
-        [field: SerializeField, Min(0f), Tooltip("Fewest metres from the middle of the map to a hive. The first hive stands west of the middle, the second east.")]
-        public float HiveNearest { get; private set; } = 12f;
+        [field: SerializeField, Min(0f), Tooltip("Fewest metres from the middle of the map to a hive. The first hive's bearing is any; the second stands across the middle from it.")]
+        public float HiveNearest { get; private set; } = 8f;
 
         [field: SerializeField, Min(0f), Tooltip("Most metres from the middle of the map to a hive.")]
-        public float HiveFarthest { get; private set; } = 13.5f;
+        public float HiveFarthest { get; private set; } = 20f;
 
-        [field: SerializeField, Range(0f, 60f), Tooltip("Most degrees a hive's bearing from the middle turns off due west (the first) or due east (the second), so both stay in the opening view.")]
-        public float HiveTiltDegrees { get; private set; } = 15f;
+        [field: SerializeField, Range(0f, 90f), Tooltip("Most degrees the second hive's bearing from the middle turns off straight across from the first, so the two never stand on the same side.")]
+        public float HiveAcrossSpreadDegrees { get; private set; } = 60f;
 
         [field: SerializeField, Min(0f), Tooltip("Fewest metres between the two hives, so defending both is always a trip.")]
-        public float HiveLeastSeparation { get; private set; } = 24f;
+        public float HiveLeastSeparation { get; private set; } = 18f;
 
         [field: Header("Spawn points")]
-        [field: SerializeField, Min(0f), Tooltip("Fewest metres from the middle of the map to a spawn point. The four turn with the line between the hives: one ahead, one behind, one beyond each hive.")]
-        public float SpawnNearest { get; private set; } = 31f;
+        [field: SerializeField, Min(0f), Tooltip("Fewest metres from a spawn point to its own hive: the walk each of its beekeepers makes. Spawn points 0 and 2 belong to the first hive, 1 and 3 to the second, so the waves, which take them in turn, alternate between the hives.")]
+        public float SpawnFromHiveNearest { get; private set; } = 18f;
 
-        [field: SerializeField, Min(0f), Tooltip("Most metres from the middle of the map to a spawn point.")]
-        public float SpawnFarthest { get; private set; } = 33f;
+        [field: SerializeField, Min(0f), Tooltip("Most metres from a spawn point to its own hive.")]
+        public float SpawnFromHiveFarthest { get; private set; } = 22f;
 
-        [field: SerializeField, Range(0f, 45f), Tooltip("Most degrees a spawn point's bearing turns off its side of the hives' line. The ones ahead and behind turn only toward the west hive.")]
-        public float SpawnJitterDegrees { get; private set; } = 8f;
+        [field: SerializeField, Range(0f, 90f), Tooltip("Fewest degrees a spawn point turns off straight out from the middle through its hive. A hive's two spawn points turn to either side, so they come from two directions.")]
+        public float SpawnSideNarrowestDegrees { get; private set; } = 20f;
 
-        // On the old fixed map the spawn points ahead and behind were as far from both hives, and the tie sent their
-        // beekeepers to the west hive, so it took three of every four and the east hive, which starts hurt, one. The economy
-        // was tuned on that split; without it the share of wasps spent healing swung from 0% to 30% between maps.
-        [field: SerializeField, Min(0f), Tooltip("Metres the spawn points ahead and behind stand nearer the west hive than the east one, so their beekeepers walk to the west hive as on the old fixed map.")]
-        public float SpawnWestLeanMetres { get; private set; } = 1f;
+        [field: SerializeField, Range(0f, 120f), Tooltip("Most degrees a spawn point turns off straight out through its hive.")]
+        public float SpawnSideWidestDegrees { get; private set; } = 70f;
 
-        [field: SerializeField, Min(0f), Tooltip("Fewest metres from a spawn point to any hive, so no beekeeper's walk to a hive is much shorter than on the old fixed map (19.5 m).")]
-        public float SpawnHiveLeastDistance { get; private set; } = 19f;
+        [field: SerializeField, Min(0f), Tooltip("Metres a spawn point stands farther from the other hive than from its own, so its beekeepers never walk past the other hive.")]
+        public float SpawnOwnHiveLeadMetres { get; private set; } = 4f;
+
+        [field: SerializeField, Min(0f), Tooltip("Fewest metres from a spawn point to the swarm's start, so no beekeeper enters on the swarm.")]
+        public float SpawnStartClearance { get; private set; } = 20f;
+
+        [field: SerializeField, Min(0f), Tooltip("Fewest metres between two spawn points.")]
+        public float SpawnLeastSpacing { get; private set; } = 10f;
 
         [field: Header("Nest trees")]
         [field: SerializeField, Min(0f), Tooltip("Most metres a nest tree stands from the middle along either ground axis, so it stays inside the clear middle, short of the scenery.")]
-        public float NestInsideHalfSize { get; private set; } = 24f;
+        public float NestInsideHalfSize { get; private set; } = 34f;
 
         [field: SerializeField, Min(0f), Tooltip("Fewest metres between two nest trees, so no two collect circles touch.")]
         public float NestLeastSpacing { get; private set; } = 8f;
@@ -69,7 +68,7 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0f), Tooltip("Fewest metres from a nest tree to the swarm's start.")]
         public float NestStartClearance { get; private set; } = 8f;
 
-        [field: SerializeField, Range(0f, 90f), Tooltip("Fewest degrees off ahead (the line from the middle to the spawn point ahead) that a nest open at the start stands, one to each side, so neither tree stands in the way of a core walking ahead.")]
+        [field: SerializeField, Range(0f, 90f), Tooltip("Fewest degrees off ahead that a nest open at the start stands, one to each side. Ahead is square to the hives' line, on the side the opening camera looks (north), so neither tree stands in the way of a core walking ahead.")]
         public float FirstNestsNarrowestBearing { get; private set; } = 15f;
 
         [field: SerializeField, Range(0f, 90f), Tooltip("Most degrees off ahead that a nest open at the start stands, so both are in the opening view.")]
@@ -80,7 +79,7 @@ namespace DigitalStory.Data
 
         [field: Header("Scenery")]
         [field: SerializeField, Min(0f), Tooltip("The scenery stands between this many metres from the middle along either ground axis and ArenaHalfSize, around the edge, never in the clear middle.")]
-        public float SceneryInnerHalfSize { get; private set; } = 25.5f;
+        public float SceneryInnerHalfSize { get; private set; } = 22f;
 
         [field: SerializeField, Min(0f), Tooltip("Fewest metres between two props' pivots.")]
         public float SceneryLeastSpacing { get; private set; } = 2f;
@@ -117,10 +116,10 @@ namespace DigitalStory.Data
         [SerializeField, Tooltip("The hives of the map used when no map keeps the rules: the old fixed map's, west then east.")]
         private Vector3[] _fallbackHives = { new Vector3(-12.5f, 0f, 0f), new Vector3(12.5f, 0f, 0f) };
 
-        [SerializeField, Tooltip("The fallback map's spawn points: ahead, behind, beyond the east hive, beyond the west hive. The old fixed map's, with the ones ahead and behind 2 m toward the west hive.")]
+        [SerializeField, Tooltip("The fallback map's spawn points, 20 m from their own hive: the west hive's to the south-west, the east hive's to the north-east, the west hive's to the north-west and the east hive's to the south-east.")]
         private Vector3[] _fallbackSpawns =
         {
-            new Vector3(-2f, 0f, 31.94f), new Vector3(-2f, 0f, -31.94f), new Vector3(32f, 0f, 0f), new Vector3(-32f, 0f, 0f),
+            new Vector3(-29.82f, 0f, -10f), new Vector3(29.82f, 0f, 10f), new Vector3(-29.82f, 0f, 10f), new Vector3(22.5f, 0f, -17.32f),
         };
 
         [SerializeField, Tooltip("The fallback map's nest trees, in the order they open: the old fixed map's.")]
@@ -139,7 +138,7 @@ namespace DigitalStory.Data
         /// <summary>The fallback map's hives, west then east.</summary>
         public IReadOnlyList<Vector3> FallbackHives => _fallbackHives;
 
-        /// <summary>The fallback map's spawn points: ahead, behind, beyond the east hive, beyond the west hive.</summary>
+        /// <summary>The fallback map's spawn points: the first hive's, the second's, the first's, the second's.</summary>
         public IReadOnlyList<Vector3> FallbackSpawns => _fallbackSpawns;
 
         /// <summary>The fallback map's nest trees, in the order they open.</summary>

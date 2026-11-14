@@ -95,7 +95,7 @@ namespace DigitalStory.Editor
 
         // The seed of the props' kinds and sizes, and of the map the saved scene shows. Each match draws its own map when it
         // starts (plan section S), so this map is only what the Editor shows before Play.
-        private const int SceneSeed = 1010;
+        private const int SceneSeed = MatchSeed.SavedSceneSeed;
         private const float NestTreeHeight = 5f;
 
         // Props at least this tall block the chase camera's view of the giant; the bushes below it are looked over.
@@ -1727,14 +1727,16 @@ namespace DigitalStory.Editor
             ground.isStatic = true;
         }
 
-        // In the order the waves take them, which the map keeps: ahead, behind, beyond the east hive, beyond the west hive.
+        // In the order the waves take them, which the map keeps: the hives' in turn (LayoutGenerator.HiveOfSpawn).
         private static Transform BuildSpawnPoints(IReadOnlyList<Vector3> places)
         {
             var parent = new GameObject("Spawn Points").transform;
-            CreateSpawn(parent, "Spawn Ahead", places[0]);
-            CreateSpawn(parent, "Spawn Behind", places[1]);
-            CreateSpawn(parent, "Spawn East", places[2]);
-            CreateSpawn(parent, "Spawn West", places[3]);
+            for (int index = 0; index < places.Count; index++)
+            {
+                string hive = LayoutGenerator.HiveOfSpawn(index) == 0 ? "A" : "B";
+                CreateSpawn(parent, $"Spawn {index + 1} (Hive {hive})", places[index]);
+            }
+
             return parent;
         }
 

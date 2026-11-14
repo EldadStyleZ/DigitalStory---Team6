@@ -47,7 +47,7 @@ namespace DigitalStory.Data
         public float LaterNestsNearest { get; private set; } = 16f;
 
         [field: SerializeField, Min(0f), Tooltip("Most metres from the middle of the map to a nest that opens after a wave.")]
-        public float LaterNestsFarthest { get; private set; } = 30f;
+        public float LaterNestsFarthest { get; private set; } = 34f;
 
         [field: SerializeField, Range(0f, 360f), Tooltip("The nests that open after a wave are spread around the middle: seen from the middle, no gap between two neighbouring ones is wider than this many degrees.")]
         public float LaterNestsWidestGapDegrees { get; private set; } = 90f;

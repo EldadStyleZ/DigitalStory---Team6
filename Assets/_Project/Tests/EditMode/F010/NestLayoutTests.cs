@@ -99,8 +99,8 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [TestCase(15.9f)]
-        [TestCase(30.1f)]
-        public void Check_ALaterNestOutsideSixteenToThirtyMetres_ThrowsNamingIt(float distance)
+        [TestCase(34.1f)]
+        public void Check_ALaterNestOutsideSixteenToThirtyFourMetres_ThrowsNamingIt(float distance)
         {
             Vector3[] nests = Valid();
             float bearing = 150f * Mathf.Deg2Rad;

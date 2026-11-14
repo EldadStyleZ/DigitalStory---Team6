@@ -12,17 +12,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8fe2728629eb94b529c56b69b29e3dc6, type: 3}
   m_Name: LayoutConfig
   m_EditorClassIdentifier: DigitalStory.Data::DigitalStory.Data.LayoutConfig
-  <ArenaHalfSize>k__BackingField: 34
-  <HiveNearest>k__BackingField: 12
-  <HiveFarthest>k__BackingField: 13.5
-  <HiveTiltDegrees>k__BackingField: 15
-  <HiveLeastSeparation>k__BackingField: 24
-  <SpawnNearest>k__BackingField: 31
-  <SpawnFarthest>k__BackingField: 33
-  <SpawnJitterDegrees>k__BackingField: 8
-  <SpawnWestLeanMetres>k__BackingField: 1
-  <SpawnHiveLeastDistance>k__BackingField: 19
-  <NestInsideHalfSize>k__BackingField: 24
+  <ArenaHalfSize>k__BackingField: 42
+  <HiveNearest>k__BackingField: 8
+  <HiveFarthest>k__BackingField: 20
+  <HiveAcrossSpreadDegrees>k__BackingField: 60
+  <HiveLeastSeparation>k__BackingField: 18
+  <SpawnFromHiveNearest>k__BackingField: 18
+  <SpawnFromHiveFarthest>k__BackingField: 22
+  <SpawnSideNarrowestDegrees>k__BackingField: 20
+  <SpawnSideWidestDegrees>k__BackingField: 70
+  <SpawnOwnHiveLeadMetres>k__BackingField: 4
+  <SpawnStartClearance>k__BackingField: 20
+  <SpawnLeastSpacing>k__BackingField: 10
+  <NestInsideHalfSize>k__BackingField: 34
   <NestLeastSpacing>k__BackingField: 8
   <NestSpawnClearance>k__BackingField: 8
   <NestHiveMargin>k__BackingField: 0.5
@@ -30,7 +32,7 @@ MonoBehaviour:
   <FirstNestsNarrowestBearing>k__BackingField: 15
   <FirstNestsWidestBearing>k__BackingField: 40
   <LaterNestJitterDegrees>k__BackingField: 10
-  <SceneryInnerHalfSize>k__BackingField: 25.5
+  <SceneryInnerHalfSize>k__BackingField: 22
   <SceneryLeastSpacing>k__BackingField: 2
   <SceneryFootprintShare>k__BackingField: 0.5
   <SceneryHiveClearance>k__BackingField: 6
@@ -45,10 +47,10 @@ MonoBehaviour:
   - {x: -12.5, y: 0, z: 0}
   - {x: 12.5, y: 0, z: 0}
   _fallbackSpawns:
-  - {x: -2, y: 0, z: 31.94}
-  - {x: -2, y: 0, z: -31.94}
-  - {x: 32, y: 0, z: 0}
-  - {x: -32, y: 0, z: 0}
+  - {x: -29.82, y: 0, z: -10}
+  - {x: 29.82, y: 0, z: 10}
+  - {x: -29.82, y: 0, z: 10}
+  - {x: 22.5, y: 0, z: -17.32}
   _fallbackNests:
   - {x: -4.2303505, y: 0, z: 9.91818}
   - {x: 6.0840244, y: 0, z: 12.559615}

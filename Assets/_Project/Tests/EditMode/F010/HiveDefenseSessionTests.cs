@@ -148,6 +148,24 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.Swarm.Count, Is.EqualTo(wasps));
         }
 
+        // Plan section T: each spawn point serves the hive nearest it at the start, and the map gives each hive two, taken in
+        // turn, so a wave splits evenly between the hives by rule, not by where its beekeepers wander.
+        [Test]
+        public void Wave_FromSpawnPointsOfEachHiveInTurn_SplitsEvenlyBetweenTheHives()
+        {
+            Vector3[] hives = { new Vector3(-12f, 0f, 0f), new Vector3(12f, 0f, 0f) };
+            Vector3[] spawns = { new Vector3(-30f, 0f, -6f), new Vector3(30f, 0f, 6f), new Vector3(-30f, 0f, 6f), new Vector3(30f, 0f, -6f) };
+            _world = new HiveDefenseWorld(new[] { new WaveEntry(4, 0) }, hives: hives, spawns: spawns, core: new Vector3(0f, 0f, 40f));
+            var homes = new List<int>();
+            _world.Session.BeekeeperSpawned += brain => homes.Add(brain.HomeHive);
+
+            bool spawned = _world.RunUntil(() => homes.Count == 4, 20f);
+
+            Assert.That(spawned, Is.True);
+            Assert.That(new[] { _world.Session.SpawnHome(0), _world.Session.SpawnHome(1), _world.Session.SpawnHome(2), _world.Session.SpawnHome(3) }, Is.EqualTo(new[] { 0, 1, 0, 1 }));
+            Assert.That(homes, Is.EqualTo(new[] { 0, 1, 0, 1 }));
+        }
+
         [Test]
         public void Tick_LastWaveCleared_IsWon()
         {

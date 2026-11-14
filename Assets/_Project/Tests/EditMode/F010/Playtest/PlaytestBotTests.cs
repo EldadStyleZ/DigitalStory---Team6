@@ -18,13 +18,11 @@ namespace DigitalStory.Tests.EditMode
         // As EconomyPlaytestTests: a match neither won nor lost by then has stalled.
         private const float MatchSeconds = 20f * 60f;
 
-        // PlaytestMatch's hives: on every map the first stands 12 to 13.5 m west of the middle and the second as far east
-        // (plan section S), the core between them, so 6 m either side of the middle is nearer that side's hive.
+        // PlaytestMatch's hives stand wherever the seed's map puts them, at least 18 m apart (plan section T), so a spot 4 m
+        // from one hive toward the other is nearer that one. The names are the old fixed map's.
         private const int West = 0;
         private const int East = 1;
-
-        private static readonly Vector3 NearWest = new Vector3(-6f, 0f, 0f);
-        private static readonly Vector3 NearEast = new Vector3(6f, 0f, 0f);
+        private const float NearMetres = 4f;
 
         [Test]
         public void ShellHive_OneHiveHitASecondAgoAndTheOtherNeverHit_IsTheHitHive()
@@ -34,7 +32,7 @@ namespace DigitalStory.Tests.EditMode
                 var bot = new PlaytestBot(match, Seed);
                 float westHealth = match.Session.Hives[West].Health;
 
-                bot.Play(new HitOncePlan(NearWest, East, 1f), 2f);
+                bot.Play(new HitOncePlan(Near(match, West), East, 1f), 2f);
 
                 Assert.That(match.Session.Hives[West].Health, Is.EqualTo(westHealth), "the west hive was never hit");
                 Assert.That(bot.ShellHive(), Is.EqualTo(East), "the hive hit within the last 3 s, though the core stands nearer the other");
@@ -48,9 +46,13 @@ namespace DigitalStory.Tests.EditMode
             {
                 var bot = new PlaytestBot(match, Seed);
 
-                bot.Play(new HitOncePlan(NearEast, -1, 0f), 2f);
+                bot.Play(new HitOncePlan(Near(match, East), -1, 0f), 2f);
 
-                Assert.That(bot.Core.x, Is.GreaterThan(0f), "the core stands nearer the east hive");
+                Vector3 core = bot.Core;
+                Assert.That(
+                    (core - match.Session.Hives[East].Position).sqrMagnitude,
+                    Is.LessThan((core - match.Session.Hives[West].Position).sqrMagnitude),
+                    "the core stands nearer the east hive");
                 Assert.That(bot.ShellHive(), Is.EqualTo(East));
             }
         }
@@ -62,7 +64,7 @@ namespace DigitalStory.Tests.EditMode
             {
                 var bot = new PlaytestBot(match, Seed);
 
-                bot.Play(new HitOncePlan(NearWest, East, 0.5f), 0.5f + match.Aim.HiveRecentSeconds + 1f);
+                bot.Play(new HitOncePlan(Near(match, West), East, 0.5f), 0.5f + match.Aim.HiveRecentSeconds + 1f);
 
                 Assert.That(bot.ShellHive(), Is.EqualTo(West));
             }
@@ -110,6 +112,13 @@ namespace DigitalStory.Tests.EditMode
         }
 
         // Flies the core toward a point, and hits one hive once, by a point of health, at the first tick from a given time.
+        private static Vector3 Near(PlaytestMatch match, int hive)
+        {
+            Vector3 own = match.Session.Hives[hive].Position;
+            Vector3 other = match.Session.Hives[1 - hive].Position;
+            return own + ((other - own).normalized * NearMetres);
+        }
+
         private sealed class HitOncePlan : IPlaytestPlan
         {
             private readonly Vector3 _standAt;
