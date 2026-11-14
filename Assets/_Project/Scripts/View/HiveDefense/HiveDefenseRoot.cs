@@ -363,6 +363,12 @@ namespace DigitalStory.View
             _smokePool.Initialize(Session.Smoke, _grenadePrefab, _cloudPrefab);
             _colossusMotor.Initialize(Session, _swarmView, _colossusSamples, _colossus);
             _hitFeedback.Initialize(Session, _followCamera, _swarmView);
+
+            // Plan section AB: the optional impact effects, made from a paid Asset Store pack that the public repo may not
+            // publish. Their library lives only in an untracked local folder, so no committed file may refer to it, not even the
+            // scene; loading it by name from a Resources folder is the one way to keep every committed file the same with or
+            // without the pack. Without it (a teammate without the pack) this is null and the game's own effects run alone.
+            _hitFeedback.UseImpactFx(Resources.Load<ImpactFxLibrary>(ImpactFxLibrary.ResourceName));
             _rumble.Initialize(Session, _input, _gamepad);
             SetSceneShadows();
 

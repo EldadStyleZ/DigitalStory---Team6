@@ -16,6 +16,8 @@ namespace DigitalStory.View
     /// little, a milestone of a kill chain, a heavy song, the giant's blows, a hive hit or lost, a wave cleared more), a cast
     /// punches the view's zoom and roll, the giant's blows kick the view along its facing, and kills feed a kill chain whose
     /// steps the HUD's sound and stamp read. Its numbers live in the FeelConfig.
+    /// It also plays the optional impact effects of plan section AB, when the root gives it a library: a particle burst on a hit,
+    /// a kill, a nest's burst, the Meteor's landing and the giant's slam, over the effects above. Without one it plays none.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("DigitalStory/Hit Feedback View")]
@@ -25,6 +27,10 @@ namespace DigitalStory.View
 
         // The ground ring is one flat band round a circle of radius 1, scaled to the Tornado's reach.
         private const int RingSegments = 96;
+
+        // Metres under the core where the impact effects play once at load: the ground hides them, and the GPU still draws them.
+        private const float ImpactWarmDepthMetres = 3f;
+        private const string ImpactHolderName = "Impact Fx";
 
         [Header("Camera")]
         [SerializeField, Tooltip("The feel numbers: trauma per moment, punches, the kill chain and the master scale.")]
@@ -118,6 +124,9 @@ namespace DigitalStory.View
         private bool _wasColossus;
         private bool _wasWaveRunning;
         private float _castRollSign = 1f;
+        private ImpactFxSpawner _impactFx;
+        private Transform _impactHolder;
+        private float _hitLeastDamage;
 
         /// <summary>Raised for each kill, with where the kill chain stands; the HUD's sound climbs and stamps from it.</summary>
         public event Action<KillChainStep> KillChained;
@@ -133,6 +142,9 @@ namespace DigitalStory.View
 
         /// <summary>True while a freeze is waiting for the end of the frame. For tests.</summary>
         public bool HasPendingFreeze => _hasPendingFreeze;
+
+        /// <summary>The optional impact effects (plan section AB), or null before <see cref="UseImpactFx"/>. For tests and the benchmark.</summary>
+        public ImpactFxSpawner ImpactFx => _impactFx;
 
         /// <summary>Starts listening to the match. Call once, after the swarm view and the camera exist; calling again starts over.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
@@ -168,6 +180,7 @@ namespace DigitalStory.View
             _session.ColossusFistLaunched += OnColossusFistLaunched;
             _session.ColossusFistLanded += OnColossusFistLanded;
             _session.Hives.HiveDestroyed += OnHiveDestroyed;
+            _session.Nests.NestCollected += OnNestCollected;
             _hiveHitAt = new float[_session.Hives.Count];
             for (int index = 0; index < _session.Hives.Count; index++)
             {
@@ -176,6 +189,37 @@ namespace DigitalStory.View
             }
 
             _isReady = true;
+        }
+
+        /// <summary>
+        /// Gives the feel director the optional impact effects of plan section AB, or none (null), and makes all their pooled
+        /// instances now, at load. Without a library the game's own effects are all there is. Call after
+        /// <see cref="Initialize"/>; calling again replaces the effects.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Initialize has not run.</exception>
+        public void UseImpactFx(ImpactFxLibrary library)
+        {
+            if (_session == null)
+            {
+                throw new InvalidOperationException("Call HitFeedbackView.Initialize before UseImpactFx.");
+            }
+
+            _impactFx?.Dispose();
+            if (_impactHolder == null)
+            {
+                _impactHolder = new GameObject(ImpactHolderName).transform;
+                _impactHolder.SetParent(transform, false);
+            }
+
+            _impactFx = new ImpactFxSpawner(library, _impactHolder);
+            _hitLeastDamage = library != null ? library.HitLeastDamage : 0f;
+            if (!_impactFx.HasEffects)
+            {
+                return;
+            }
+
+            _impactFx.Warm(_session.CorePosition + (Vector3.down * ImpactWarmDepthMetres));
+            Debug.Log($"[F010] Impact effects from the local library {library.name}: {_impactFx.InstanceCount} pooled instances made.", this);
         }
 
         private void LateUpdate()
@@ -223,6 +267,7 @@ namespace DigitalStory.View
                 _session.ColossusFistLaunched -= OnColossusFistLaunched;
                 _session.ColossusFistLanded -= OnColossusFistLanded;
                 _session.Hives.HiveDestroyed -= OnHiveDestroyed;
+                _session.Nests.NestCollected -= OnNestCollected;
                 for (int index = 0; index < _session.Hives.Count; index++)
                 {
                     _session.Hives[index].Damaged -= OnHiveDamaged;
@@ -243,6 +288,15 @@ namespace DigitalStory.View
         }
 
         private bool AreFlashesOn => _camera.ShakeScale > 0f;
+
+        // An optional impact effect (plan section AB). The master scale at 0 turns it off, as it does every other flash.
+        private void PlayImpact(ImpactFxKind kind, Vector3 point, float sizeScale)
+        {
+            if (_impactFx != null && AreFlashesOn)
+            {
+                _impactFx.Play(kind, point, Time.time, sizeScale);
+            }
+        }
 
         // The moments read from the session's state: the swarm becoming the giant, and a wave cleared (its last kill).
         private void StepMoments()
@@ -281,6 +335,10 @@ namespace DigitalStory.View
             }
 
             AddTrauma(hit.IsBlocked ? trauma * _blockedShakeShare : trauma);
+            if (ImpactFxChoice.ForHit(in hit, _hitLeastDamage, out ImpactFxKind impact))
+            {
+                PlayImpact(impact, hit.Position, 1f);
+            }
 
             if (hit.IsBlocked)
             {
@@ -312,6 +370,11 @@ namespace DigitalStory.View
             {
                 _camera.PushIn(_heavyPushIn);
                 AddTrauma(ImpactTrauma(form));
+            }
+
+            if (ImpactFxChoice.ForFormLanded(form, out ImpactFxKind impact))
+            {
+                PlayImpact(impact, point, _session.SizeScale);
             }
 
             if (form != SwarmForm.Tornado || !AreFlashesOn)
@@ -371,6 +434,12 @@ namespace DigitalStory.View
             {
                 _camera.Nudge(_session.ColossusFacing, _feel.GiantKickMetres);
             }
+
+            // The leap has touched down before it lands, so the giant stands where it struck.
+            if (ImpactFxChoice.ForColossusAttack(attack, out ImpactFxKind impact))
+            {
+                PlayImpact(impact, _session.ColossusPosition, _session.ColossusSizeScale);
+            }
         }
 
         // A thrown fist that lands kicks the view along the giant's facing, as a punch does.
@@ -403,6 +472,11 @@ namespace DigitalStory.View
         private void OnHiveDestroyed(int hive)
         {
             AddTrauma(_feel.HiveLostTrauma);
+        }
+
+        private void OnNestCollected(int nest)
+        {
+            PlayImpact(ImpactFxKind.NestBurst, _session.Nests[nest].Position, 1f);
         }
 
         // Songs-v2 R: a small push as the fist leaves; its hit is heavy, felt through SongLanded like the giant's other blows.
