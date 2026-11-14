@@ -346,6 +346,7 @@ namespace DigitalStory.View
             _attackGlowLight.Initialize(_swarm);
             Session.Forms.FormChanged += HandleFormChanged;
             Session.Caster.SongCast += HandleSongCast;
+            Session.Nests.ComboNote += HandleComboNote;
             for (int index = 0; index < _hives.Length; index++)
             {
                 _hives[index].Initialize(Session.Hives[index], _camera, _hive);
@@ -427,6 +428,7 @@ namespace DigitalStory.View
             {
                 Session.Forms.FormChanged -= HandleFormChanged;
                 Session.Caster.SongCast -= HandleSongCast;
+                Session.Nests.ComboNote -= HandleComboNote;
             }
 
             // A scene unloaded during the slow-down or the chase leaves time and the cursor as it found them.
@@ -595,6 +597,16 @@ namespace DigitalStory.View
         private void HandleFormChanged(SwarmForm form)
         {
             _hasFormChangedThisTick = true;
+        }
+
+        // Plan section U: each right note of a nest's combo sounds higher than the last, so the combo climbs as it fills. The
+        // note was sounded as it was pressed, earlier this frame, so the voice glides it up before it is heard for long.
+        private void HandleComboNote(int nest, NestComboStep step)
+        {
+            if (_fluteVoice != null && step != NestComboStep.Broken)
+            {
+                _fluteVoice.LiftNote((Session.Nests[nest].NotesPlayed - 1) * _nests.LiftSemitonesPerNote);
+            }
         }
 
         // A whole-swarm form (Hive Call, the Colossus) takes the colour of the category of the song whose cast started it.
