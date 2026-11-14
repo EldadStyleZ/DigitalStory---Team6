@@ -21,6 +21,12 @@ namespace DigitalStory.View
     ///                              -f010BenchOff and a first-cast switch (noattacklight, nocastflash, nocastsound,
     ///                              nocamerakick, nodamagenumbers), one short run tells whether that thing makes the first
     ///                              cast's slow frame.
+    /// -f010BenchUncapped           vsync off and no frame-rate cap even with -f010BenchNormal, so the frame rate shows the
+    ///                              headroom the fixed 120 Hz hides (plan section AD).
+    /// -f010BenchSwitches &lt;a,b&gt;   the switches the subtraction script measures, in order, instead of its own list; "none"
+    ///                              is the reference. A switch that cannot be restored (nohud) must come last.
+    /// -f010BenchShots &lt;a,b&gt;      saves a screenshot after each named window ends, outside every measured frame, so two
+    ///                              builds can be compared picture by picture.
     /// </remarks>
     internal sealed class BenchmarkOptions
     {
@@ -33,6 +39,9 @@ namespace DigitalStory.View
         private const string OverdrawFlag = "-f010BenchOverdraw";
         private const string OffFlag = "-f010BenchOff";
         private const string FirstCastFlag = "-f010BenchFirstCast";
+        private const string UncappedFlag = "-f010BenchUncapped";
+        private const string SwitchesFlag = "-f010BenchSwitches";
+        private const string ShotsFlag = "-f010BenchShots";
         private const string DefaultLabel = "run";
         private const string DefaultStations = "stand,domesting";
         private const int DefaultWasps = 2000;
@@ -49,6 +58,11 @@ namespace DigitalStory.View
             Stations = (Value(arguments, StationsFlag) ?? DefaultStations).Split(',');
             HeldSwitchName = Value(arguments, OffFlag);
             IsFirstCastOnly = Has(arguments, FirstCastFlag);
+            IsUncapped = Has(arguments, UncappedFlag);
+            string switches = Value(arguments, SwitchesFlag);
+            SwitchNames = switches != null ? switches.Split(',') : null;
+            string shots = Value(arguments, ShotsFlag);
+            ShotWindows = shots != null ? shots.Split(',') : new string[0];
             CommandLine = string.Join(" ", arguments);
         }
 
@@ -78,6 +92,15 @@ namespace DigitalStory.View
 
         /// <summary>True for the short script that measures only the first two Sting casts.</summary>
         public bool IsFirstCastOnly { get; }
+
+        /// <summary>True to run with vsync off and no frame-rate cap, whatever the game would set.</summary>
+        public bool IsUncapped { get; }
+
+        /// <summary>The switches the subtraction script measures, or null for its own list.</summary>
+        public string[] SwitchNames { get; }
+
+        /// <summary>The windows after which a screenshot is saved.</summary>
+        public string[] ShotWindows { get; }
 
         /// <summary>The whole command line, for the run's notes.</summary>
         public string CommandLine { get; }

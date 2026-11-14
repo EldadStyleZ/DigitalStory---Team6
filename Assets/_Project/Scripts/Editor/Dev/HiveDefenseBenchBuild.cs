@@ -32,7 +32,7 @@ namespace DigitalStory.Editor
                 options = BuildOptions.Development,
             };
 
-            BuildReport report = BuildPipeline.BuildPlayer(options);
+            BuildReport report = HiveDefenseBuild.BuildWithFrameTimings(options);
             if (report.summary.result != BuildResult.Succeeded)
             {
                 Debug.LogError($"[F010] Development player build failed: {report.summary.result}, {report.summary.totalErrors} errors.");

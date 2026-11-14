@@ -28,7 +28,7 @@ namespace DigitalStory.Editor
                 options = BuildOptions.None,
             };
 
-            BuildReport report = BuildPipeline.BuildPlayer(options);
+            BuildReport report = BuildWithFrameTimings(options);
             if (report.summary.result != BuildResult.Succeeded)
             {
                 Debug.LogError($"[F010] Player build failed: {report.summary.result}, {report.summary.totalErrors} errors.");
@@ -41,6 +41,25 @@ namespace DigitalStory.Editor
             }
 
             Debug.Log($"[F010] Player built: {output}");
+        }
+
+        /// <summary>
+        /// Builds with Frame Timing Stats on, so FrameTimingManager reports the main thread, the render thread and the GPU
+        /// (plan section AD: the benchmark's load metrics, which a frame time pinned to vsync hides), then puts the project's
+        /// setting back, so no shared setting changes. On Metal its cost is a timestamp per command buffer.
+        /// </summary>
+        internal static BuildReport BuildWithFrameTimings(BuildPlayerOptions options)
+        {
+            bool wasOn = PlayerSettings.enableFrameTimingStats;
+            PlayerSettings.enableFrameTimingStats = true;
+            try
+            {
+                return BuildPipeline.BuildPlayer(options);
+            }
+            finally
+            {
+                PlayerSettings.enableFrameTimingStats = wasOn;
+            }
         }
 
         private static string ReadArgument(string name)

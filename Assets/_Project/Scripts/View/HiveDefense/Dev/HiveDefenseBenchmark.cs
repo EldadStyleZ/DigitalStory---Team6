@@ -91,6 +91,8 @@ namespace DigitalStory.View
         private const string Reloading = "fresh_match";
         private const string GiantForming = "giant_form";
         private const string Ending = "end";
+        private const string Horizon = "horizon";
+        private const int ShotQuietFrames = 3;
 
         // The giant's keys while it stands (plan section I). Holes count from 0 as H J K L.
         private const int RoarHole = 0;
@@ -106,7 +108,9 @@ namespace DigitalStory.View
         {
             "none", "noglow", "noswarmlights", "nohivenestlights", "noshadows", "nowaspdraw", "nocompute", "noground",
             "noscenery", "noanimators", "halfwasps", "nohud", "noattacklight", "nocastflash", "nocastsound", "nocamerakick",
-            "nodamagenumbers", "nocursorlock",
+            "nodamagenumbers", "nocursorlock", "nograss", "nowater", "nowaterreflections", "noforest", "noterrain", "nomist",
+            "nominimap", "nosmoke", "noambience", "halfres", "waterslices6", "waterres256", "waternoshadowsim", "waternofoamsim",
+            "waternounderwater", "waterreflecthalf", "nohdr", "nomsaa", "grassthin", "shadowlite", "scale75", "dynres75",
         };
 
         // The giant's moves, each measured in a window of its own in the chase camera, over two giants: one cannot stand long
@@ -185,7 +189,14 @@ namespace DigitalStory.View
         {
             "frame", "real_s", "dt_ms", "scenario", "phase", "switch", "cast", "hits", "wasps", "target", "beekeepers", "clouds", "round",
             "nests_open", "form", "post", "guard", "strike", "l_on", "l_forcepixel", "l_swarm", "l_hive", "l_nest", "screen_w",
-            "screen_h", "focused", "ftm_cpu_ms", "ftm_main_ms", "ftm_render_ms", "ftm_gpu_ms",
+            "screen_h", "focused", "ftm_cpu_ms", "ftm_main_ms", "ftm_render_ms", "ftm_gpu_ms", "ftm_wait_ms",
+        };
+
+        // One row per measured window: how much processor time the whole process (every thread: main, render, jobs and
+        // audio) used over its wall time. Heat follows work per second, which a frame time pinned to vsync hides.
+        private static readonly string[] WindowColumns =
+        {
+            "scenario", "switch", "frames", "wall_s", "cpu_s", "cpu_cores",
         };
 
         private static readonly string[] OverdrawColumns =
@@ -209,7 +220,15 @@ namespace DigitalStory.View
         private BenchmarkRecorders _recorders;
         private BenchmarkFrameLog _log;
         private BenchmarkFrameLog _overdrawLog;
+        private BenchmarkFrameLog _windowLog;
         private GlowOverdrawProbe _overdraw;
+        private Process _process;
+        private bool _isInWindow;
+        private string _windowScenario;
+        private BenchmarkSwitch _windowSwitch;
+        private int _windowStartFrame;
+        private long _windowStartTimestamp;
+        private double _windowStartCpuSeconds;
 
         private string _scenario = Boot;
         private Phase _phase = Phase.Boot;
@@ -312,15 +331,20 @@ namespace DigitalStory.View
             UnityEngine.Random.InitState(Seed);
             Application.runInBackground = true; // A window that loses focus must not pause the run.
             Time.captureDeltaTime = FrameSeconds;
-            if (!options.KeepsGameSettings)
+            if (!options.KeepsGameSettings || options.IsUncapped)
             {
-                QualitySettings.vSyncCount = 0;
-                Application.targetFrameRate = -1;
+                Uncap();
             }
 
             var host = new GameObject("F010 Benchmark");
             DontDestroyOnLoad(host);
             host.AddComponent<HiveDefenseBenchmark>().Begin(options);
+        }
+
+        private static void Uncap()
+        {
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = -1;
         }
 
         private void Begin(BenchmarkOptions options)
@@ -393,6 +417,13 @@ namespace DigitalStory.View
         // and the held switch. Called at the start and again after every fresh match.
         private void Bind()
         {
+            // The game sets its own frame rate when a match starts (plan section AD's settings), so the run's choice is
+            // applied again after it.
+            if (!_options.KeepsGameSettings || _options.IsUncapped)
+            {
+                Uncap();
+            }
+
             _switches = new BenchmarkSwitchBoard(_root, _swarmView);
             if (_options.ProbesOverdraw)
             {
@@ -816,10 +847,12 @@ namespace DigitalStory.View
 
         private IEnumerator RunSubtraction()
         {
-            for (int index = 0; index < SongStationSwitches.Length; index++)
+            BenchmarkSwitch[] songSwitches = _options.SwitchNames != null ? ParseSwitches(_options.SwitchNames) : SongStationSwitches;
+            BenchmarkSwitch[] waveSwitches = _options.SwitchNames != null ? songSwitches : WaveStationSwitches;
+            for (int index = 0; index < songSwitches.Length; index++)
             {
                 yield return EnsureFarm(StationLoopSeconds, _session.RoundCount - 1);
-                BenchmarkSwitch change = SongStationSwitches[index];
+                BenchmarkSwitch change = songSwitches[index];
                 yield return Switch(change);
                 foreach (string station in _options.Stations)
                 {
@@ -830,12 +863,29 @@ namespace DigitalStory.View
             }
 
             yield return LastWave();
-            for (int index = 0; index < WaveStationSwitches.Length; index++)
+            for (int index = 0; index < waveSwitches.Length; index++)
             {
-                yield return Switch(WaveStationSwitches[index]);
+                yield return Switch(waveSwitches[index]);
                 yield return Measure(WaveLast, StationSeconds);
                 yield return Unswitch();
             }
+        }
+
+        private static BenchmarkSwitch[] ParseSwitches(string[] names)
+        {
+            var switches = new BenchmarkSwitch[names.Length];
+            for (int index = 0; index < names.Length; index++)
+            {
+                int found = Array.IndexOf(SwitchNames, names[index].Trim().ToLowerInvariant());
+                if (found < 0)
+                {
+                    throw new ArgumentException($"-f010BenchSwitches takes {string.Join(",", SwitchNames)}; '{names[index]}' is none of them.");
+                }
+
+                switches[index] = (BenchmarkSwitch)found;
+            }
+
+            return switches;
         }
 
         private IEnumerator Switch(BenchmarkSwitch change)
@@ -871,10 +921,23 @@ namespace DigitalStory.View
                 yield break;
             }
 
+            if (station == Horizon)
+            {
+                // The giant's chase view without the giant: the low camera behind the core sees the map to the horizon
+                // (the forest wall, the water, the far grass), which the top view never shows.
+                yield return WaitReady(-1, -1);
+                _follow.EnterChase(_motor.transform);
+                yield return Hold(Horizon, Phase.Settle, GiantSwoopSeconds);
+                yield return Measure(Horizon, StationSeconds);
+                _follow.ExitChase();
+                yield return Hold(Horizon, Phase.Wait, GiantSwoopSeconds);
+                yield break;
+            }
+
             int order = Array.IndexOf(SongNames, station);
             if (order < 0)
             {
-                throw new ArgumentException($"Unknown station '{station}'. Use stand, domesting or a song: {string.Join(",", SongNames)}.");
+                throw new ArgumentException($"Unknown station '{station}'. Use stand, domesting, horizon or a song: {string.Join(",", SongNames)}.");
             }
 
             int song = SongIndex(SongOrder[order]);
@@ -949,6 +1012,20 @@ namespace DigitalStory.View
             _phase = Phase.Wait;
             _isHoldingSwarm = true;
             _log.Flush();
+            if (Array.IndexOf(_options.ShotWindows, _scenario) >= 0)
+            {
+                // Saved at the end of this frame; its frames are setup, so the save never lands in a window or a wait.
+                _phase = Phase.Setup;
+                string suffix = _switches.Current == BenchmarkSwitch.None ? string.Empty : "-" + SwitchNames[(int)_switches.Current];
+                ScreenCapture.CaptureScreenshot(_options.PathFor("shot-" + _scenario + suffix + ".png"));
+                for (int frame = 0; frame < ShotQuietFrames; frame++)
+                {
+                    yield return null;
+                }
+
+                _phase = Phase.Wait;
+            }
+
             if (_overdraw == null || _switches.Current != BenchmarkSwitch.None)
             {
                 yield break;
@@ -1212,6 +1289,7 @@ namespace DigitalStory.View
             log.Fixed(timing.cpuMainThreadFrameTime, TimeDecimals);
             log.Fixed(timing.cpuRenderThreadFrameTime, TimeDecimals);
             log.Fixed(timing.gpuFrameTime, TimeDecimals);
+            log.Fixed(timing.cpuMainThreadPresentWaitTime, TimeDecimals);
             for (int index = 0; index < _recorders.Count; index++)
             {
                 if (_recorders.IsValid(index))
@@ -1228,6 +1306,62 @@ namespace DigitalStory.View
             if (log.IsFilling)
             {
                 log.Flush();
+            }
+
+            TrackWindow(now);
+        }
+
+        // Opens a window's processor-time count on its first measured frame and writes it on the first frame after.
+        private void TrackWindow(long now)
+        {
+            bool isMeasuring = _phase == Phase.Measure;
+            if (isMeasuring && _isInWindow && (_scenario != _windowScenario || _switches.Current != _windowSwitch))
+            {
+                CloseWindow(now);
+            }
+
+            if (isMeasuring && !_isInWindow)
+            {
+                _isInWindow = true;
+                _windowScenario = _scenario;
+                _windowSwitch = _switches.Current;
+                _windowStartFrame = _frame;
+                _windowStartTimestamp = now;
+                _windowStartCpuSeconds = ProcessCpuSeconds();
+            }
+            else if (!isMeasuring && _isInWindow)
+            {
+                CloseWindow(now);
+            }
+        }
+
+        private void CloseWindow(long now)
+        {
+            _isInWindow = false;
+            double wall = (now - _windowStartTimestamp) / (double)Stopwatch.Frequency;
+            double cpu = ProcessCpuSeconds() - _windowStartCpuSeconds;
+            BenchmarkFrameLog log = _windowLog;
+            log.Text(_windowScenario);
+            log.Text(SwitchNames[(int)_windowSwitch]);
+            log.Integer(_frame - _windowStartFrame);
+            log.Fixed(wall, SecondsDecimals);
+            log.Fixed(cpu, SecondsDecimals);
+            log.Fixed(wall > 0.0 ? cpu / wall : 0.0, TimeDecimals);
+            log.EndRow();
+            log.Flush();
+        }
+
+        // Every thread's user and system time since the process started; -1 where the platform cannot tell.
+        private double ProcessCpuSeconds()
+        {
+            try
+            {
+                _process.Refresh();
+                return _process.TotalProcessorTime.TotalSeconds;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException || exception is NotSupportedException || exception is PlatformNotSupportedException)
+            {
+                return -1.0;
             }
         }
 
@@ -1262,6 +1396,14 @@ namespace DigitalStory.View
             _recorders = new BenchmarkRecorders(Debug.isDebugBuild, _options.PathFor("markers.txt"));
             _log = new BenchmarkFrameLog(_options.PathFor("frames.csv"));
             WriteHeader();
+            _process = Process.GetCurrentProcess();
+            _windowLog = new BenchmarkFrameLog(_options.PathFor("windows.csv"));
+            foreach (string column in WindowColumns)
+            {
+                _windowLog.Text(column);
+            }
+
+            _windowLog.EndRow();
             if (_options.ProbesOverdraw)
             {
                 _overdrawLog = new BenchmarkFrameLog(_options.PathFor("overdraw.csv"));
@@ -1329,6 +1471,9 @@ namespace DigitalStory.View
                     notes.WriteLine($"swarm target {_target}, count {_session.Swarm.Count}, capacity {_session.Swarm.Capacity}, max {_session.Swarm.Max}, round {_session.Round}/{_session.RoundCount}, nests open {_session.Nests.OpenCount}/{_session.Nests.Count}");
                 }
 
+                notes.WriteLine($"lodBias {QualitySettings.lodBias}, maximumLODLevel {QualitySettings.maximumLODLevel}, terrain pixel error {(Terrain.activeTerrain != null ? Terrain.activeTerrain.heightmapPixelError : -1f)}, shadowProjection {QualitySettings.shadowProjection}, softParticles {QualitySettings.softParticles}, realtimeReflectionProbes {QualitySettings.realtimeReflectionProbes}, anisotropic {QualitySettings.anisotropicFiltering}");
+                notes.WriteLine($"cameras {Camera.allCamerasCount}, depth texture of the main camera {_camera.depthTextureMode}, hdr {_camera.allowHDR}, dynamic resolution {_camera.allowDynamicResolution}");
+                notes.WriteLine(_switches.DescribeMap());
                 _recorders?.Describe(notes);
                 foreach (Light light in _switches.Lights)
                 {
@@ -1389,6 +1534,8 @@ namespace DigitalStory.View
                 }
 
                 _log?.Dispose();
+                _windowLog?.Dispose();
+                _process?.Dispose();
                 _overdrawLog?.Dispose();
                 _overdraw?.Dispose();
                 if (_switches != null)

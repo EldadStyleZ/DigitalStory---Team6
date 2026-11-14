@@ -23,6 +23,18 @@ namespace DigitalStory.View
         private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
         private const string GroundName = "Ground";
         private const string SceneryName = "Scenery";
+        private const string GrassName = "Grass Field";
+        private const string GrassType = "GrassField";
+        private const string WaterName = "Water (Crest)";
+        private const string WaterType = "WaterRenderer";
+        private const string SetDressingName = "Set Dressing";
+        private const string MistName = "Ground Mist";
+        private const string MistType = "GroundMist";
+        private const string SmokeName = "Smoke Pool";
+        private const string AmbienceName = "Ambience";
+        private const string MinimapName = "minimap";
+        private const int HalfResDivisor = 2;
+        private const float ThreeQuarters = 0.75f;
         private const int OneGroup = 1;
         private const int AnimatorRescanFrames = 30;
 
@@ -51,6 +63,22 @@ namespace DigitalStory.View
         private readonly Renderer _ground;
         private readonly Renderer[] _scenery;
         private readonly GraphicsBuffer.IndirectDrawIndexedArgs[] _args = new GraphicsBuffer.IndirectDrawIndexedArgs[1];
+        private readonly Behaviour[] _grass;
+        private readonly GameObject _water;
+        private readonly Component _waterRenderer;
+        private readonly object _waterReflections;
+        private readonly PropertyInfo _reflectionsEnabled;
+        private readonly Renderer[] _setDressing;
+        private readonly Renderer[] _mist;
+        private readonly Behaviour[] _mistDepth;
+        private readonly GameObject _smokePool;
+        private readonly AudioSource[] _ambience;
+        private readonly Terrain _terrain;
+        private readonly List<Renderer> _smoke = new List<Renderer>();
+        private readonly List<(object Target, MemberInfo Member, object Before)> _assigned = new List<(object, MemberInfo, object)>();
+        private int _framesSinceSmokeScan;
+        private int _savedWidth;
+        private int _savedHeight;
 
         private readonly List<Light> _shadowLights = new List<Light>();
         private readonly List<LightShadows> _shadowKinds = new List<LightShadows>();
@@ -115,6 +143,28 @@ namespace DigitalStory.View
             _ground = ground != null ? ground.GetComponent<Renderer>() : null;
             GameObject scenery = GameObject.Find(SceneryName);
             _scenery = scenery != null ? scenery.GetComponentsInChildren<Renderer>(true) : new Renderer[0];
+
+            // Raz's parts (plan section AD), found by name: the grass and the mist live in an assembly the View does not
+            // reference, and Crest is a package, so their components are reached by type name and reflection.
+            _grass = BehavioursNamed(GameObject.Find(GrassName), GrassType);
+            _water = GameObject.Find(WaterName);
+            if (_water != null)
+            {
+                _waterRenderer = _water.GetComponent(WaterType);
+                PropertyInfo reflections = _waterRenderer != null ? _waterRenderer.GetType().GetProperty("Reflections") : null;
+                _waterReflections = reflections != null ? reflections.GetValue(_waterRenderer) : null;
+                _reflectionsEnabled = _waterReflections != null ? _waterReflections.GetType().GetProperty("Enabled") : null;
+            }
+
+            GameObject setDressing = GameObject.Find(SetDressingName);
+            _setDressing = setDressing != null ? setDressing.GetComponentsInChildren<Renderer>(true) : new Renderer[0];
+            GameObject mist = GameObject.Find(MistName);
+            _mist = mist != null ? mist.GetComponentsInChildren<Renderer>(true) : new Renderer[0];
+            _mistDepth = BehavioursNamed(mist, MistType);
+            _smokePool = GameObject.Find(SmokeName);
+            Transform ambience = root.transform.Find(AmbienceName);
+            _ambience = ambience != null ? ambience.GetComponentsInChildren<AudioSource>(true) : new AudioSource[0];
+            _terrain = Terrain.activeTerrain;
         }
 
         /// <summary>The switch now applied.</summary>
@@ -128,6 +178,15 @@ namespace DigitalStory.View
 
         /// <summary>The scenery's renderers.</summary>
         public IReadOnlyList<Renderer> Scenery => _scenery;
+
+        /// <summary>One line per part of Raz's map the switches reach, for the run's notes: what was found and how much.</summary>
+        public string DescribeMap()
+        {
+            return $"switch parts: grass fields {_grass.Length}, water {(_water != null ? "found" : "missing")}, "
+                + $"water reflections {(_reflectionsEnabled != null ? "found" : "missing")}, set dressing renderers {_setDressing.Length}, "
+                + $"mist renderers {_mist.Length}, mist depth {_mistDepth.Length}, smoke pool {(_smokePool != null ? "found" : "missing")}, "
+                + $"ambience sources {_ambience.Length}, terrain {(_terrain != null ? _terrain.name : "missing")}";
+        }
 
         /// <summary>Switches one thing off. The switch before it must have been restored.</summary>
         public void Apply(BenchmarkSwitch change)
@@ -189,6 +248,88 @@ namespace DigitalStory.View
                     // Its private Release stops it listening for hits. Not restored, as the run holds it to the end.
                     MethodOf(typeof(DamageNumbersView), "Release").Invoke(_numbers, null);
                     break;
+                case BenchmarkSwitch.NoGrass:
+                    SaveAndSwitchOff(_grass);
+                    break;
+                case BenchmarkSwitch.NoWater:
+                    Required(_water, WaterName).SetActive(false);
+                    break;
+                case BenchmarkSwitch.NoWaterReflections:
+                    Required(_reflectionsEnabled, "Crest's reflections").SetValue(_waterReflections, false);
+                    break;
+                case BenchmarkSwitch.NoForest:
+                    SaveAndSwitchOff(_setDressing);
+                    break;
+                case BenchmarkSwitch.NoTerrain:
+                    Required(_terrain, "terrain").drawHeightmap = false;
+                    _terrain.drawTreesAndFoliage = false;
+                    break;
+                case BenchmarkSwitch.NoMist:
+                    SaveAndSwitchOff(_mist);
+                    break;
+                case BenchmarkSwitch.NoMinimap:
+                    Minimap().style.display = DisplayStyle.None;
+                    break;
+                case BenchmarkSwitch.NoSmoke:
+                    _framesSinceSmokeScan = AnimatorRescanFrames;
+                    break;
+                case BenchmarkSwitch.NoAmbience:
+                    foreach (AudioSource source in _ambience)
+                    {
+                        source.enabled = false;
+                    }
+
+                    break;
+                case BenchmarkSwitch.WaterSlices6:
+                    Assign(Water(), "LodLevels", 6);
+                    break;
+                case BenchmarkSwitch.WaterRes256:
+                    Assign(Water(), "Resolution", 256);
+                    break;
+                case BenchmarkSwitch.WaterNoShadowSim:
+                    Assign(WaterPart("ShadowLod"), "Enabled", false);
+                    break;
+                case BenchmarkSwitch.WaterNoFoamSim:
+                    Assign(WaterPart("FoamLod"), "Enabled", false);
+                    break;
+                case BenchmarkSwitch.WaterNoUnderwater:
+                    Assign(WaterPart("Underwater"), "Enabled", false);
+                    Assign(WaterPart("Meniscus"), "Enabled", false);
+                    break;
+                case BenchmarkSwitch.WaterReflectHalf:
+                    // Crest only skips frames for a reflection that serves one camera.
+                    Assign(_waterReflections, "_RenderOnlySingleCamera", true);
+                    Assign(_waterReflections, "_RefreshPerFrames", 2);
+                    break;
+                case BenchmarkSwitch.NoHdr:
+                    Assign(Camera.main, "allowHDR", false);
+                    break;
+                case BenchmarkSwitch.NoMsaa:
+                    Assign(null, typeof(QualitySettings), "antiAliasing", 0);
+                    break;
+                case BenchmarkSwitch.GrassThin:
+                    Assign(Required(_grass.Length > 0 ? _grass[0] : null, "grass field"), "_farKeep", 0.35f);
+                    Assign(_grass[0], "_cellsDirty", true);
+                    break;
+                case BenchmarkSwitch.ShadowLite:
+                    Assign(null, typeof(QualitySettings), "shadowDistance", 30f);
+                    Assign(null, typeof(QualitySettings), "shadowResolution", ShadowResolution.Medium);
+                    break;
+                case BenchmarkSwitch.Scale75:
+                    _savedWidth = Screen.currentResolution.width;
+                    _savedHeight = Screen.currentResolution.height;
+                    Screen.SetResolution(Mathf.RoundToInt(_savedWidth * ThreeQuarters), Mathf.RoundToInt(_savedHeight * ThreeQuarters), Screen.fullScreenMode);
+                    break;
+                case BenchmarkSwitch.DynRes75:
+                    Assign(Camera.main, "allowDynamicResolution", true);
+                    ScalableBufferManager.ResizeBuffers(ThreeQuarters, ThreeQuarters);
+                    break;
+                case BenchmarkSwitch.HalfRes:
+                    // From the display's size, not the window's, so a switch held over a fresh match never halves twice.
+                    _savedWidth = Screen.currentResolution.width;
+                    _savedHeight = Screen.currentResolution.height;
+                    Screen.SetResolution(_savedWidth / HalfResDivisor, _savedHeight / HalfResDivisor, Screen.fullScreenMode);
+                    break;
             }
 
             ForceAfterUpdate();
@@ -248,8 +389,68 @@ namespace DigitalStory.View
                 case BenchmarkSwitch.NoCameraKick:
                     _castKickField.SetValue(_feedback, _savedCastKick);
                     break;
+                case BenchmarkSwitch.NoGrass:
+                    RestoreEnabled(_grass);
+                    break;
+                case BenchmarkSwitch.NoWater:
+                    _water.SetActive(true);
+                    break;
+                case BenchmarkSwitch.NoWaterReflections:
+                    _reflectionsEnabled.SetValue(_waterReflections, true);
+                    break;
+                case BenchmarkSwitch.NoForest:
+                    RestoreEnabled(_setDressing);
+                    break;
+                case BenchmarkSwitch.NoTerrain:
+                    _terrain.drawHeightmap = true;
+                    _terrain.drawTreesAndFoliage = true;
+                    break;
+                case BenchmarkSwitch.NoMist:
+                    RestoreEnabled(_mist);
+                    break;
+                case BenchmarkSwitch.NoMinimap:
+                    Minimap().style.display = DisplayStyle.Flex;
+                    break;
+                case BenchmarkSwitch.NoSmoke:
+                    foreach (Renderer renderer in _smoke)
+                    {
+                        if (renderer != null)
+                        {
+                            renderer.enabled = true;
+                        }
+                    }
+
+                    _smoke.Clear();
+                    break;
+                case BenchmarkSwitch.NoAmbience:
+                    foreach (AudioSource source in _ambience)
+                    {
+                        source.enabled = true;
+                    }
+
+                    break;
+                case BenchmarkSwitch.HalfRes:
+                case BenchmarkSwitch.Scale75:
+                    Screen.SetResolution(_savedWidth, _savedHeight, Screen.fullScreenMode);
+                    break;
+                case BenchmarkSwitch.DynRes75:
+                    ScalableBufferManager.ResizeBuffers(1f, 1f);
+                    break;
             }
 
+            // Every value a switch assigned goes back, last first.
+            for (int index = _assigned.Count - 1; index >= 0; index--)
+            {
+                (object target, MemberInfo member, object before) = _assigned[index];
+                Write(target, member, before);
+            }
+
+            if (Current == BenchmarkSwitch.GrassThin)
+            {
+                Write(_grass[0], _grass[0].GetType().GetField("_cellsDirty", Private), true);
+            }
+
+            _assigned.Clear();
             Current = BenchmarkSwitch.None;
         }
 
@@ -286,6 +487,23 @@ namespace DigitalStory.View
                 for (int index = 0; index < _swarmLights.Length; index++)
                 {
                     _swarmLights[index].enabled = false;
+                }
+            }
+            else if (Current == BenchmarkSwitch.NoSmoke)
+            {
+                // The pool shows clouds made after the switch was applied, so look again now and then.
+                if (++_framesSinceSmokeScan >= AnimatorRescanFrames && _smokePool != null)
+                {
+                    _framesSinceSmokeScan = 0;
+                    _smokePool.GetComponentsInChildren(true, _smoke);
+                }
+
+                for (int index = 0; index < _smoke.Count; index++)
+                {
+                    if (_smoke[index] != null)
+                    {
+                        _smoke[index].enabled = false;
+                    }
                 }
             }
             else if (Current == BenchmarkSwitch.NoAnimators)
@@ -342,6 +560,70 @@ namespace DigitalStory.View
         {
             return type.GetMethod(name, Private)
                 ?? throw new InvalidOperationException($"{type.Name} has no method '{name}' any more. Update BenchmarkSwitchBoard.");
+        }
+
+        private static Behaviour[] BehavioursNamed(GameObject holder, string typeName)
+        {
+            var found = new List<Behaviour>();
+            if (holder != null)
+            {
+                foreach (Behaviour behaviour in holder.GetComponentsInChildren<Behaviour>(true))
+                {
+                    if (behaviour != null && behaviour.GetType().Name == typeName)
+                    {
+                        found.Add(behaviour);
+                    }
+                }
+            }
+
+            return found.ToArray();
+        }
+
+        private static T Required<T>(T found, string what) where T : class
+        {
+            bool isMissing = found is UnityEngine.Object unityObject ? unityObject == null : found == null;
+            return isMissing ? throw new InvalidOperationException($"The scene has no {what} for this switch.") : found;
+        }
+
+        private Component Water() => Required(_waterRenderer, "Crest water renderer");
+
+        private object WaterPart(string name)
+        {
+            PropertyInfo part = Water().GetType().GetProperty(name)
+                ?? throw new InvalidOperationException($"Crest's water renderer has no '{name}' any more. Update BenchmarkSwitchBoard.");
+            return Required(part.GetValue(_waterRenderer), name);
+        }
+
+        // Sets a property or a field (public or not) and remembers the value before, for Restore.
+        private void Assign(object target, string name, object value) => Assign(target, target.GetType(), name, value);
+
+        private void Assign(object target, Type type, string name, object value)
+        {
+            const BindingFlags Any = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            MemberInfo member = (MemberInfo)type.GetProperty(name, Any) ?? type.GetField(name, Any)
+                ?? throw new InvalidOperationException($"{type.Name} has no '{name}' any more. Update BenchmarkSwitchBoard.");
+            object before = member is PropertyInfo property ? property.GetValue(target) : ((FieldInfo)member).GetValue(target);
+            _assigned.Add((target, member, before));
+            Write(target, member, value);
+        }
+
+        private static void Write(object target, MemberInfo member, object value)
+        {
+            if (member is PropertyInfo property)
+            {
+                property.SetValue(target, value);
+            }
+            else
+            {
+                ((FieldInfo)member).SetValue(target, value);
+            }
+        }
+
+        private VisualElement Minimap()
+        {
+            HiveDefenseHudView hud = Found(UnityEngine.Object.FindAnyObjectByType<HiveDefenseHudView>(), nameof(HiveDefenseHudView));
+            VisualElement map = hud.GetComponent<UIDocument>().rootVisualElement.Q(MinimapName);
+            return Required(map, "minimap");
         }
 
         private static T Found<T>(T found, string what) where T : UnityEngine.Object
@@ -408,6 +690,23 @@ namespace DigitalStory.View
             for (int index = 0; index < lights.Length; index++)
             {
                 lights[index].enabled = _savedEnabled[index];
+            }
+        }
+
+        private void SaveAndSwitchOff(Behaviour[] behaviours)
+        {
+            foreach (Behaviour behaviour in behaviours)
+            {
+                _savedEnabled.Add(behaviour.enabled);
+                behaviour.enabled = false;
+            }
+        }
+
+        private void RestoreEnabled(Behaviour[] behaviours)
+        {
+            for (int index = 0; index < behaviours.Length; index++)
+            {
+                behaviours[index].enabled = _savedEnabled[index];
             }
         }
 
