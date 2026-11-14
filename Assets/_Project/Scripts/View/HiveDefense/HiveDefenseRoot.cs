@@ -664,7 +664,9 @@ namespace DigitalStory.View
             _minimap?.Tick();
             _keys?.Tick(Time.unscaledDeltaTime);
             _badges?.Tick(Time.unscaledDeltaTime);
-            _fadeIn?.Tick(Time.unscaledDeltaTime);
+            // The load's fade-in runs on the game clock, as the match does: on the real clock a fast machine (or a test or the
+            // benchmark on a fixed game step) still showed the black veil whole game seconds into the match (plan section AD).
+            _fadeIn?.Tick(Time.deltaTime);
 
             StepSlowMotion();
             // The press that opens or closes the panel does nothing else: Start closing it neither calls the wave nor restarts.
