@@ -158,6 +158,37 @@ namespace DigitalStory.Tests.PlayMode
             CheckEveryPartOnTheMap(restarted, "after a restart");
         }
 
+        // The reviewer's finding: the session's chance came from the scene's fixed seed (1010), so every match showed the same
+        // nest combos whatever the map. It comes from the match's map seed now.
+        [UnityTest]
+        public IEnumerator NestCombos_ComeFromTheMatchsSeed_SoAnotherMapShowsOtherCombos()
+        {
+            yield return LoadScene();
+            string first = CombosOf(Root());
+
+            MatchSeed.Fixed = RestartSeed;
+            yield return LoadScene();
+            string second = CombosOf(Root());
+
+            Assert.That(second, Is.Not.EqualTo(first), "a match on another map showed the same combos");
+        }
+
+        private static string CombosOf(HiveDefenseRoot root)
+        {
+            var text = new System.Text.StringBuilder();
+            for (int nest = 0; nest < root.Session.Nests.Count; nest++)
+            {
+                foreach (int note in root.Session.Nests[nest].Combo)
+                {
+                    text.Append(note);
+                }
+
+                text.Append(' ');
+            }
+
+            return text.ToString();
+        }
+
         [UnityTest]
         public IEnumerator Scenery_StandsOnTheGroundWhereTheMapPutsIt_AndBlocksTheChaseCameraThere()
         {

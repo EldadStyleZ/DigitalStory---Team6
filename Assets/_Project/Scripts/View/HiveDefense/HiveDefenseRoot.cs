@@ -93,9 +93,6 @@ namespace DigitalStory.View
         [SerializeField, Tooltip("The baked body samples the swarm takes when it forms the giant.")]
         private ColossusSampleSet _colossusSamples;
 
-        [SerializeField, Tooltip("Seed of the random source. The same seed gives the same match.")]
-        private int _seed = 1010;
-
         [Header("Scene objects")]
         [SerializeField, Tooltip("Reads the keyboard, the mouse and a controller.")]
         private HiveDefenseInput _input;
@@ -334,7 +331,9 @@ namespace DigitalStory.View
             var rules = new HiveDefenseRules(
                 _swarm, _squads, _coreMove, _fury, _colossus, _hive, _nests, _swarmLevel, _smoke, _waves, _stick, _smoker, _aim,
                 _songConfig, _songs, _holeCount);
-            var random = new Mulberry32Random(unchecked((uint)_seed));
+            // The session's chance (the nests' combos, the hummed notes, where beekeepers step in) comes from the match's map
+            // seed, as in the playtest bot, so each match is new and a seed replays all of it, not only the map.
+            var random = new Mulberry32Random(unchecked((uint)Layout.Seed));
             Session = new HiveDefenseSession(rules, Layout.Hives, Layout.Nests, Layout.Spawns, _coreMotor.Position, random);
 
             _trail = new PathTrail(_swarm.TrailPoints, _swarm.TrailSpacing);
