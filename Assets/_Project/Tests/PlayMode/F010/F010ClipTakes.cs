@@ -108,6 +108,12 @@ namespace DigitalStory.Tests.PlayMode
         private static readonly Vector3 ThrowFocus = new Vector3(0f, 2.5f, 7f);
         private static readonly Vector3 ThrowOffset = new Vector3(9f, 1.5f, -2f);
 
+        // Songs-v2 AB: the impact effects, from the Meteor's cast past its landing (at 1 s) and from the slam's key past its hit.
+        private const float ImpactMeteorSeconds = 1.6f;
+        private const float ImpactSlamSeconds = 1.5f;
+        private const float ImpactNestSeconds = 1.2f;
+        private const float LastBreathHealth = 1f;
+
         private string _directory;
         private float _savedTimeScale;
         private float _savedCaptureDeltaTime;
@@ -484,6 +490,93 @@ namespace DigitalStory.Tests.PlayMode
             {
                 EndHudOverlay(overlay, document, original, copy);
             }
+        }
+
+        // Songs-v2 AB, for the owner: the optional impact effects in the game camera with the HUD. One folder: the Meteor at
+        // 4,000 wasps into three stunned sticks on their last breath (its landing and the kill), then the giant's ground slam.
+        // A second folder: the first open nest collected by its combo, from its last note. Without the local library it shows
+        // the game's own effects.
+        [UnityTest]
+        [Explicit(ExplicitReason)]
+        public IEnumerator Take9_ImpactEffects()
+        {
+            string folder = TakeFolder("take-9-impact-effects");
+            int frame = 0;
+            yield return LoadScene();
+            yield return StageSong(typeof(MeteorSong), FeelWasps);
+
+            // On their last breath, so the Meteor's hit kills and the death effect shows.
+            for (int index = 0; index < StripBeekeepers.Length; index++)
+            {
+                BeekeeperBrain keeper = _root.Session.ActiveBeekeeper(index);
+                keeper.TakeDamage(keeper.Health - LastBreathHealth);
+            }
+
+            RenderTexture overlay = BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy);
+            try
+            {
+                yield return null;
+                IReadOnlyList<int> keys = _root.Session.Caster[SongIndexOf(typeof(MeteorSong))].Song.Keys;
+                for (int key = 0; key < keys.Count; key++)
+                {
+                    _root.PressHole(keys[key]);
+                    yield return Record(folder, FrameSeconds, frame, null);
+                    frame++;
+                }
+
+                yield return Record(folder, ImpactMeteorSeconds, frame, null);
+                frame += FramesIn(ImpactMeteorSeconds);
+            }
+            finally
+            {
+                EndHudOverlay(overlay, document, original, copy);
+            }
+
+            yield return LoadScene();
+            yield return StageGiant();
+            overlay = BeginHudOverlay(out document, out original, out copy);
+            try
+            {
+                yield return null;
+                _root.PressHole(SlamHole);
+                yield return Record(folder, ImpactSlamSeconds, frame, null);
+            }
+            finally
+            {
+                EndHudOverlay(overlay, document, original, copy);
+            }
+
+            yield return LoadScene();
+            NestField nests = _root.Session.Nests;
+            int nest = 0;
+            while (nest < nests.Count && !nests[nest].IsOpen)
+            {
+                nest++;
+            }
+
+            Assert.That(nest, Is.LessThan(nests.Count), "no nest is open at the start");
+            _core.PlaceAt(nests[nest].Position + (Vector3.back * ComboStandBackMetres), true);
+            yield return WaitGameSeconds(ComboSettleSeconds);
+            string nestFolder = TakeFolder("take-9b-nest-burst");
+            overlay = BeginHudOverlay(out document, out original, out copy);
+            try
+            {
+                IReadOnlyList<int> combo = nests[nest].Combo;
+                for (int note = 0; note < combo.Count - 1; note++)
+                {
+                    _root.PressHole(combo[note]);
+                    yield return WaitGameSeconds(ComboNoteSeconds);
+                }
+
+                _root.PressHole(combo[combo.Count - 1]);
+                yield return Record(nestFolder, ImpactNestSeconds, 0, null);
+            }
+            finally
+            {
+                EndHudOverlay(overlay, document, original, copy);
+            }
+
+            Assert.That(nests[nest].IsCollected, Is.True, "the combo did not collect the nest");
         }
 
         // A nest tree with a straight walk through it, clear of the other obstacles and inside the play area.
