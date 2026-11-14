@@ -1137,6 +1137,9 @@ namespace DigitalStory.View
                 _spawnPoints[index].position = layout.Spawns[index];
             }
 
+            // The bridges follow the map: one wherever a spawn point's way to its own hive crosses a river.
+            RuntimeBridges.Build(layout.Spawns, layout.Hives);
+
             var blockers = new List<Bounds>();
             _scenery.AddBlockers(blockers);
             for (int index = 0; index < _nestViews.Length; index++)
