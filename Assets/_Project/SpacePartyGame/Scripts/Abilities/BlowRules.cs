@@ -97,6 +97,46 @@ namespace SpacePartyGame
         }
 
         /// <summary>
+        /// Whether a round target of <paramref name="leeway"/> radius centred on <paramref name="point"/> touches
+        /// the blow's area (the ring sector between <paramref name="innerRadius"/> and <paramref name="reach"/>,
+        /// <paramref name="angle"/> degrees wide around the aim). Leeway 0 is the same as <see cref="Contains(Vector2, Vector2, Vector2, float, float, float)"/>.
+        /// </summary>
+        public static bool Overlaps(Vector2 origin, Vector2 aim, Vector2 point, float leeway, float angle, float innerRadius, float reach)
+        {
+            return DistanceToArea(origin, aim, point, angle, innerRadius, reach) <= Mathf.Max(0f, leeway);
+        }
+
+        /// <summary>How far a point is from the blow's area (its ring sector); 0 inside it.</summary>
+        public static float DistanceToArea(Vector2 origin, Vector2 aim, Vector2 point, float angle, float innerRadius, float reach)
+        {
+            Vector2 forward = aim.sqrMagnitude > 1e-6f ? aim.normalized : Vector2.right;
+            Vector2 offset = point - origin;
+            float distance = offset.magnitude;
+            float half = Mathf.Clamp(angle, 0f, 360f) * 0.5f;
+            float inner = Mathf.Min(innerRadius, reach);
+
+            // Within the cone's angle (or right at the origin), only the distance from the origin matters.
+            if (distance < 1e-5f || Vector2.Angle(forward, offset) <= half)
+            {
+                return Mathf.Max(0f, inner - distance, distance - reach);
+            }
+
+            // Outside the angle, the nearest part of the area is on one of its two straight sides.
+            Vector2 upper = Quaternion.Euler(0f, 0f, half) * forward;
+            Vector2 lower = Quaternion.Euler(0f, 0f, -half) * forward;
+            return Mathf.Min(
+                DistanceToSegment(offset, upper * inner, upper * reach),
+                DistanceToSegment(offset, lower * inner, lower * reach));
+        }
+
+        private static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float t = ab.sqrMagnitude > 1e-8f ? Mathf.Clamp01(Vector2.Dot(point - a, ab) / ab.sqrMagnitude) : 0f;
+            return Vector2.Distance(point, a + ab * t);
+        }
+
+        /// <summary>
         /// The scale that makes a drawing running from <paramref name="contentStart"/> to
         /// <paramref name="contentEnd"/> (from its pivot, at scale 1) cover exactly <paramref name="innerRadius"/>
         /// to <paramref name="reach"/>; <paramref name="pivotDistance"/> is where its pivot must go, from the origin.

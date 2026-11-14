@@ -39,6 +39,19 @@ namespace SpacePartyGame
         [SerializeField, Min(0f), Tooltip("The gap around the player the blow leaves out, from the middle of the body, in units. The blow's area (and the sector shown) runs from here to the reach.")]
         private float _innerRadius = 0.7f;
 
+        [SerializeField, Min(0f), Tooltip("How forgiving the blow is, in units: a target is hit when its body's middle is this close to the area, so an enemy half inside still counts. 0 = only when its middle is inside.")]
+        private float _hitLeeway = 0.35f;
+
+        [Header("Aiming preview")]
+        [SerializeField, Tooltip("Shows the blow's area, faintly and following the aim, while the Left note is held.")]
+        private bool _showAreaWhileCharging = true;
+
+        [SerializeField, Tooltip("For tuning: shows the blow's area all the time, following the aim. Change the push numbers above in Play Mode and watch it update.")]
+        private bool _alwaysShowArea;
+
+        [SerializeField, Range(0f, 1f), Tooltip("How solid the preview is (multiplies the sector's own look).")]
+        private float _previewAlpha = 0.35f;
+
         [SerializeField, Min(0f), Tooltip("How fast vermin are blown away at first, in units per second (at the player; weaker at the edge).")]
         private float _verminPushSpeed = 20f;
 
@@ -180,6 +193,10 @@ namespace SpacePartyGame
         public float SectorFeather => _sectorFeather;
         public float SectorPixelsPerUnit => _sectorPixelsPerUnit;
         public float InnerRadius => _innerRadius;
+        public float HitLeeway => _hitLeeway;
+        public bool ShowAreaWhileCharging => _showAreaWhileCharging;
+        public bool AlwaysShowArea => _alwaysShowArea;
+        public float PreviewAlpha => _previewAlpha;
         public float SectorFadeInSeconds => _sectorFadeInSeconds;
         public float SectorHoldSeconds => _sectorHoldSeconds;
         public float SectorFadeOutSeconds => _sectorFadeOutSeconds;

@@ -288,6 +288,8 @@ MonoBehaviour:
   _wave: {fileID: 6087266473716823651}
   _waveSprite: {fileID: 8151491154980999719}
   _waveState: Play
+  _waveContentStart: 0.04
+  _waveContentEnd: 7.72
   _sector: {fileID: 7631587442252331575}
 --- !u!1 &4065072750145317811
 GameObject:
@@ -467,7 +469,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: d091f810a4bc37244b62b1ca20507b06, type: 2}
+  - {fileID: 2100000, guid: e942159eb4d360240af0b0c10cd65a65, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -513,8 +515,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: WINNER
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: b20d9b2797f374142971cd96093c342b, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: d091f810a4bc37244b62b1ca20507b06, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 02a8f8306436e664796942c5ad734c90, type: 2}
+  m_sharedMaterial: {fileID: 2100000, guid: e942159eb4d360240af0b0c10cd65a65, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -3159,7 +3161,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: d091f810a4bc37244b62b1ca20507b06, type: 2}
+  - {fileID: 2100000, guid: e942159eb4d360240af0b0c10cd65a65, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -3205,8 +3207,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: P1
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: b20d9b2797f374142971cd96093c342b, type: 2}
-  m_sharedMaterial: {fileID: 2100000, guid: d091f810a4bc37244b62b1ca20507b06, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 02a8f8306436e664796942c5ad734c90, type: 2}
+  m_sharedMaterial: {fileID: 2100000, guid: e942159eb4d360240af0b0c10cd65a65, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []

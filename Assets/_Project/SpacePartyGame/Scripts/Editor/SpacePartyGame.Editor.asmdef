@@ -1,0 +1,11 @@
+{
+    "name": "SpacePartyGame.Editor",
+    "rootNamespace": "SpacePartyGame.Editor",
+    "references": [
+        "SpacePartyGame"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": false
+}

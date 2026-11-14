@@ -231,6 +231,26 @@ namespace SpacePartyGame
         public static bool Hears(int caller, int? cageOwner) => cageOwner != caller;
     }
 
+    /// <summary>How fast followers go: faster when their leader runs, so they keep up.</summary>
+    public static class FollowPace
+    {
+        /// <summary>
+        /// The follow speed now: <paramref name="followSpeed"/> scaled by how much faster than walking the leader can
+        /// go (<paramref name="leaderTopSpeed"/> over <paramref name="leaderWalkSpeed"/>). <paramref name="match"/>
+        /// (0 to 1) is how much of that boost followers take; it never drops below the normal follow speed.
+        /// </summary>
+        public static float Speed(float followSpeed, float leaderWalkSpeed, float leaderTopSpeed, float match)
+        {
+            if (leaderWalkSpeed <= 0f)
+            {
+                return followSpeed;
+            }
+
+            float boost = Mathf.Max(1f, leaderTopSpeed / leaderWalkSpeed);
+            return followSpeed * Mathf.Lerp(1f, boost, Mathf.Clamp01(match));
+        }
+    }
+
     /// <summary>Moving toward a target: the toy creatures' follow, slowing as it arrives so it settles.</summary>
     public static class Steering
     {

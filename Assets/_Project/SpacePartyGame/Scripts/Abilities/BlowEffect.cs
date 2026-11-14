@@ -46,7 +46,8 @@ namespace SpacePartyGame
         private SpriteRenderer _sector;
 
         private float _sectorStartedAt = float.NegativeInfinity;
-        private string _sectorShape;
+        private (float, float, float, float, float, float, float, float, float) _sectorShape;
+        private bool _previewing;
         private Sprite _sectorPicture;
 
         private float _arcStartedAt = float.NegativeInfinity;
@@ -122,6 +123,16 @@ namespace SpacePartyGame
                 return;
             }
 
+            PlaceSector(origin, direction);
+            _previewing = false;
+            _sectorStartedAt = Time.time;
+            _sector.enabled = true;
+            DrawSector();
+        }
+
+        // Points the sector along the aim from the origin, drawn to the blow's current shape.
+        private void PlaceSector(Vector2 origin, Vector2 direction)
+        {
             Transform sector = _sector.transform;
             sector.position = new Vector3(origin.x, origin.y, sector.position.z);
             sector.rotation = Quaternion.Euler(0f, 0f, Vector2.SignedAngle(Vector2.right, direction));
@@ -131,15 +142,43 @@ namespace SpacePartyGame
             // sector.localScale = new Vector3(reach, reach * widen, 1f);
             sector.localScale = Vector3.one;
             _sector.sprite = SectorPicture();
-            _sectorStartedAt = Time.time;
+        }
+
+        /// <summary>Whether the faint aiming preview of the blow's area is on screen now.</summary>
+        public bool IsPreviewShowing => _previewing && IsSectorShowing;
+
+        // While charging (or always, when tuning), the sector follows the aim faintly, so the player sees what
+        // the blow will hit before letting go. Changes to the shape in the Inspector show up straight away.
+        private void UpdatePreview()
+        {
+            bool wanted = _settings.AlwaysShowArea || (_settings.ShowAreaWhileCharging && _abilities.IsChargingBlow);
+
+            if (!wanted)
+            {
+                if (_previewing)
+                {
+                    _previewing = false;
+                    _sector.enabled = false;
+                }
+
+                return;
+            }
+
+            Vector2 aim = _abilities.AimDirection;
+            PlaceSector(_abilities.BlowOrigin, aim.sqrMagnitude > 1e-6f ? aim.normalized : Vector2.right);
+            Color colour = _identity.Colour;
+            colour.a = _settings.SectorAlpha * _settings.PreviewAlpha;
+            _sector.color = colour;
             _sector.enabled = true;
-            DrawSector();
+            _previewing = true;
         }
 
         // Draws the sector picture again only when the blow's shape or look has changed.
         private Sprite SectorPicture()
         {
-            string shape = $"{_settings.ConeAngle}|{_settings.InnerRadius}|{_settings.Reach}|{_settings.SectorWashAlpha}|{_settings.SectorBlotchAlpha}|{_settings.SectorBlotchSize}|{_settings.SectorFeather}|{_settings.SectorWashVariation}|{_settings.SectorPixelsPerUnit}";
+            // Checked every frame while previewing, so it is compared as numbers, not built into a string.
+            var shape = (_settings.ConeAngle, _settings.InnerRadius, _settings.Reach, _settings.SectorWashAlpha, _settings.SectorBlotchAlpha,
+                _settings.SectorBlotchSize, _settings.SectorFeather, _settings.SectorWashVariation, _settings.SectorPixelsPerUnit);
 
             if (_sectorPicture != null && shape == _sectorShape)
             {
@@ -281,9 +320,18 @@ namespace SpacePartyGame
 
         private void Update()
         {
-            if (_sector != null && _sector.enabled && _settings != null)
+            if (_sector != null && _settings != null && _abilities != null)
             {
-                DrawSector();
+                // The blow's own fade comes first; the preview takes over once it has gone.
+                if (_sector.enabled && !_previewing)
+                {
+                    DrawSector();
+                }
+
+                if (!_sector.enabled || _previewing)
+                {
+                    UpdatePreview();
+                }
             }
 
             if (_arc == null || !_arc.enabled)

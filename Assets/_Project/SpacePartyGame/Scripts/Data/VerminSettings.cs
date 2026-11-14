@@ -55,6 +55,9 @@ namespace SpacePartyGame
         [SerializeField, Min(0f), Tooltip("How fast it follows, in units per second (the toy creatures' follow speed).")]
         private float _followSpeed = 3.6f;
 
+        [SerializeField, Range(0f, 1f), Tooltip("How much of their leader's run followers match: 1 = they speed up by as much as the leader does, so they keep up; 0 = they always go at the follow speed.")]
+        private float _matchLeaderRun = 1f;
+
         [SerializeField, Min(0f), Tooltip("How close it walks up to its leader (the toy creatures' follow distance).")]
         private float _followDistance = 1.1f;
 
@@ -87,6 +90,7 @@ namespace SpacePartyGame
         public int StartCount => _startCount;
         public float FollowSeconds => _followSeconds;
         public float FollowSpeed => _followSpeed;
+        public float MatchLeaderRun => _matchLeaderRun;
         public float FollowDistance => _followDistance;
         public int RefillThreshold => _refillThreshold;
         public int RefillAmount => _refillAmount;

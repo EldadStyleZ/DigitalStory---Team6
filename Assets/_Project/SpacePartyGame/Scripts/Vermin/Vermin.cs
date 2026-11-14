@@ -52,6 +52,7 @@ namespace SpacePartyGame
         private Vector3 _bodyScale;
         private Vector3 _outlineScale;
         private PlayerIdentity _leader;
+        private PlayerMovement _leaderMovement;
         private ContactFilter2D _wallFilter;
         private float _startFacingLeftChance = 0.5f;
         private int _facing = 1;
@@ -120,6 +121,7 @@ namespace SpacePartyGame
                 }
 
                 _leader = caller;
+                _leaderMovement = caller.GetComponent<PlayerMovement>();
 
                 // A caged vermin has to squeeze out through the bars first; a free one just passes through walls.
                 if (!_passesThroughCages && !_squeeze.IsActive)
@@ -183,6 +185,7 @@ namespace SpacePartyGame
             _squeeze?.End();
             _blown = default;
             _leader = null;
+            _leaderMovement = null;
             _passesThroughCages = false;
             _facing = VerminFacing.AtSpawn(Random.value, _startFacingLeftChance);
             ShowFacing();
@@ -219,8 +222,9 @@ namespace SpacePartyGame
                 else
                 {
                     Vector2 spot = (Vector2)_leader.transform.position + _spotOffset;
-                    Vector2 follow = Steering.Toward(_rigidbody.position, spot, _spotDistance, _settings.FollowSpeed);
-                    _rigidbody.linearVelocity = WithSpacing(follow);
+                    float speed = FollowSpeedNow();
+                    Vector2 follow = Steering.Toward(_rigidbody.position, spot, _spotDistance, speed);
+                    _rigidbody.linearVelocity = WithSpacing(follow, speed);
 
                     if (_squeeze.IsActive)
                     {
@@ -238,7 +242,7 @@ namespace SpacePartyGame
                 return;
             }
 
-            _rigidbody.linearVelocity = WithSpacing(_wander.Tick(Time.fixedDeltaTime));
+            _rigidbody.linearVelocity = WithSpacing(_wander.Tick(Time.fixedDeltaTime), _settings.FollowSpeed);
         }
 
         // Its own place near the leader, so followers do not all head for one point.
@@ -248,8 +252,13 @@ namespace SpacePartyGame
             _spotOffset = FollowSpot.Offset(_settings.FollowOffsetRadius, Random.value, Random.value);
         }
 
-        // Adds a nudge away from close neighbours, never going faster than following.
-        private Vector2 WithSpacing(Vector2 velocity)
+        // The follow speed now: faster while the leader runs, so followers are not left behind.
+        private float FollowSpeedNow() => _leaderMovement == null
+            ? _settings.FollowSpeed
+            : FollowPace.Speed(_settings.FollowSpeed, _leaderMovement.WalkSpeed, _leaderMovement.TopSpeed, _settings.MatchLeaderRun);
+
+        // Adds a nudge away from close neighbours, never going faster than the top speed given.
+        private Vector2 WithSpacing(Vector2 velocity, float topSpeed)
         {
             _neighbours.Clear();
             Physics2D.OverlapCircle(_rigidbody.position, _settings.SpacingRadius, _verminFilter, _neighbourHits);
@@ -263,7 +272,7 @@ namespace SpacePartyGame
             }
 
             Vector2 push = VerminSpacing.Push(_rigidbody.position, _neighbours, _settings.SpacingRadius, _settings.SpacingStrength);
-            return Vector2.ClampMagnitude(velocity + push, _settings.FollowSpeed);
+            return Vector2.ClampMagnitude(velocity + push, topSpeed);
         }
 
         private void Update()

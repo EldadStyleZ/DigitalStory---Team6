@@ -209,14 +209,20 @@ namespace SpacePartyGame
             }
         }
 
-        // Pushes every vermin and other player in the cone, from the player's feet, along the aim.
+        /// <summary>Where the blow's area starts: the middle of the player's body.</summary>
+        public Vector2 BlowOrigin => (Vector2)transform.position + (_blowSettings != null ? _blowSettings.EffectOffset : Vector2.zero);
+
+        /// <summary>The way the player aims now (or faces, before Play Mode).</summary>
+        public Vector2 AimDirection => _movement != null ? _movement.AimDirection : Vector2.right;
+
+        // Pushes every vermin and other player whose body touches the blow's area, along the aim.
         private void BlowAway(Vector2 aim)
         {
             // The blow's area is a ring sector from the middle of the body, the same shape the sector shows.
-            // Vector2 origin = transform.position;
-            Vector2 origin = (Vector2)transform.position + _blowSettings.EffectOffset;
+            Vector2 origin = BlowOrigin;
+            float leeway = _blowSettings.HitLeeway;
             var filter = new ContactFilter2D { useLayerMask = true, layerMask = _blowSettings.PushLayers, useTriggers = false };
-            Physics2D.OverlapCircle(origin, _blowSettings.Reach, filter, _blowHits);
+            Physics2D.OverlapCircle(origin, _blowSettings.Reach + leeway, filter, _blowHits);
             _blowBodies.Clear();
 
             foreach (Collider2D hit in _blowHits)
@@ -228,20 +234,23 @@ namespace SpacePartyGame
                     continue;
                 }
 
-                // if (!BlowCone.Contains(origin, aim, body.position, _blowSettings.ConeAngle, _blowSettings.Reach))
-                if (!BlowCone.Contains(origin, aim, body.position, _blowSettings.ConeAngle, _blowSettings.InnerRadius, _blowSettings.Reach))
+                // Judged at the middle of the target's body (not its feet), with some leeway, so what looks
+                // inside the sector is hit.
+                Vector2 target = hit.bounds.center;
+
+                if (!BlowCone.Overlaps(origin, aim, target, leeway, _blowSettings.ConeAngle, _blowSettings.InnerRadius, _blowSettings.Reach))
                 {
                     continue;
                 }
 
                 if (body.TryGetComponent(out Vermin vermin))
                 {
-                    Vector2 push = BlowCone.Push(origin, aim, body.position, _blowSettings.Reach, _blowSettings.VerminPushSpeed, _blowSettings.EdgeStrength);
+                    Vector2 push = BlowCone.Push(origin, aim, target, _blowSettings.Reach, _blowSettings.VerminPushSpeed, _blowSettings.EdgeStrength);
                     vermin.Blow(push, _blowSettings.PushSeconds);
                 }
                 else if (body.TryGetComponent(out PlayerMovement other))
                 {
-                    Vector2 push = BlowCone.Push(origin, aim, body.position, _blowSettings.Reach, _blowSettings.PlayerPushSpeed, _blowSettings.EdgeStrength);
+                    Vector2 push = BlowCone.Push(origin, aim, target, _blowSettings.Reach, _blowSettings.PlayerPushSpeed, _blowSettings.EdgeStrength);
                     other.Push(push, _blowSettings.PushSeconds, _blowSettings.PushedPlayerControl);
                 }
             }
@@ -321,15 +330,44 @@ namespace SpacePartyGame
 
             if (_blowSettings != null)
             {
-                // The blow's cone, toward the way the player aims (or faces, outside Play Mode).
-                Vector2 aim = _movement != null ? _movement.AimDirection : Vector2.right;
-                Vector3 origin = transform.position;
-                Vector3 left = Quaternion.Euler(0f, 0f, _blowSettings.ConeAngle * 0.5f) * aim * _blowSettings.Reach;
-                Vector3 right = Quaternion.Euler(0f, 0f, -_blowSettings.ConeAngle * 0.5f) * aim * _blowSettings.Reach;
-                Gizmos.color = Color.magenta;
-                Gizmos.DrawLine(origin, origin + left);
-                Gizmos.DrawLine(origin, origin + right);
-                Gizmos.DrawLine(origin + left, origin + right);
+                // The blow's real area: the ring sector, and (fainter) how far the leeway lets a target's middle be.
+                Vector2 aim = AimDirection;
+                DrawSectorGizmo(BlowOrigin, aim, _blowSettings.ConeAngle, _blowSettings.InnerRadius, _blowSettings.Reach, Color.magenta);
+
+                if (_blowSettings.HitLeeway > 0f)
+                {
+                    DrawSectorGizmo(BlowOrigin, aim, _blowSettings.ConeAngle, Mathf.Max(0f, _blowSettings.InnerRadius - _blowSettings.HitLeeway),
+                        _blowSettings.Reach + _blowSettings.HitLeeway, new Color(1f, 0f, 1f, 0.35f));
+                }
+            }
+        }
+
+        private static void DrawSectorGizmo(Vector2 origin, Vector2 aim, float angle, float inner, float reach, Color colour)
+        {
+            const int steps = 24;
+            Gizmos.color = colour;
+            Vector2 forward = aim.sqrMagnitude > 1e-6f ? aim.normalized : Vector2.right;
+            Vector3 previousInner = default, previousOuter = default;
+
+            for (int i = 0; i <= steps; i++)
+            {
+                Vector3 direction = Quaternion.Euler(0f, 0f, Mathf.Lerp(-angle * 0.5f, angle * 0.5f, i / (float)steps)) * forward;
+                Vector3 innerPoint = (Vector3)origin + direction * inner;
+                Vector3 outerPoint = (Vector3)origin + direction * reach;
+
+                if (i == 0 || i == steps)
+                {
+                    Gizmos.DrawLine(innerPoint, outerPoint);
+                }
+
+                if (i > 0)
+                {
+                    Gizmos.DrawLine(previousInner, innerPoint);
+                    Gizmos.DrawLine(previousOuter, outerPoint);
+                }
+
+                previousInner = innerPoint;
+                previousOuter = outerPoint;
             }
         }
     }
