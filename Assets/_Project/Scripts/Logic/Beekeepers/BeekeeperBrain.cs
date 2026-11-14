@@ -382,8 +382,33 @@ namespace DigitalStory.Logic
             Face(target);
         }
 
+        /// <summary>
+        /// Optional: the next point to walk to on the way from a position to a target, so the scene can send beekeepers
+        /// round obstacles such as rivers (over their bridges). Null walks straight.
+        /// </summary>
+        public static Func<Vector3, Vector3, Vector3> Route { get; set; }
+
+        private const float RouteRefreshSeconds = 0.25f;
+        private Vector3 _waypoint;
+        private Vector3 _waypointFor;
+        private float _waypointAge = float.MaxValue;
+
         private void WalkToward(Vector3 target, float deltaTime)
         {
+            if (Route != null)
+            {
+                _waypointAge += deltaTime;
+                if (_waypointAge >= RouteRefreshSeconds || (_waypointFor - target).sqrMagnitude > 1f
+                    || (new Vector2(_waypoint.x - _position.x, _waypoint.z - _position.z)).sqrMagnitude < 0.25f)
+                {
+                    _waypoint = Route(_position, target);
+                    _waypointFor = target;
+                    _waypointAge = 0f;
+                }
+
+                target = _waypoint;
+            }
+
             float dx = target.x - _position.x;
             float dz = target.z - _position.z;
             float sqr = dx * dx + dz * dz;

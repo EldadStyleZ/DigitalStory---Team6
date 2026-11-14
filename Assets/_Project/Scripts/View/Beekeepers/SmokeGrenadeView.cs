@@ -41,6 +41,8 @@ namespace DigitalStory.View
         private float _flightSeconds;
         private float _elapsed;
         private bool _flying;
+        private ParticleSystem _trail;
+        private Material _trailMaterial;
 
         /// <summary>Raised when the flight ends, so the pool can take this view back.</summary>
         public event Action<SmokeGrenadeView> Landed;
@@ -60,6 +62,11 @@ namespace DigitalStory.View
             _flying = true;
             transform.position = new Vector3(to.x, RingHeight, to.z);
             _ball.position = from;
+            if (_trail != null)
+            {
+                _trail.Clear(true);
+                _trail.Play(true);
+            }
         }
 
         private void Awake()
@@ -87,6 +94,14 @@ namespace DigitalStory.View
             ball.transform.localScale = Vector3.one * _ballSize;
             ball.GetComponent<MeshRenderer>().sharedMaterial = _ballMaterial;
             _ball = ball.transform;
+
+            // The smoker's canister leaves a trail of stylized puffs in the air.
+            Shader smoke = Shader.Find("DigitalStory/StylizedSmoke");
+            if (smoke != null)
+            {
+                _trailMaterial = new Material(smoke);
+                _trail = SmokeStyle.AddTrail(_ball, _trailMaterial);
+            }
         }
 
         private void OnDestroy()
@@ -106,6 +121,11 @@ namespace DigitalStory.View
             {
                 Destroy(_ballMaterial);
             }
+
+            if (_trailMaterial != null)
+            {
+                Destroy(_trailMaterial);
+            }
         }
 
         private void Update()
@@ -124,6 +144,13 @@ namespace DigitalStory.View
             if (t >= 1f)
             {
                 _flying = false;
+                if (_trail != null)
+                {
+                    _trail.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+                }
+
+                ExplosionFlash.Burst(_to);
+
                 Landed?.Invoke(this);
             }
         }

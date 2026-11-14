@@ -1,0 +1,11 @@
+{
+    "name": "DigitalStory.GrassBrush.Editor",
+    "rootNamespace": "DigitalStory.GrassBrush.Editor",
+    "references": [
+        "DigitalStory.GrassBrush"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "autoReferenced": false
+}

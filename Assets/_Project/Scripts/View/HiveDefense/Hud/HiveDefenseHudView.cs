@@ -153,6 +153,7 @@ namespace DigitalStory.View
                 ?? throw new InvalidOperationException("The UIDocument has no Visual Tree Asset. Set HiveDefenseHud.uxml.");
 
             _waspCount = Require<Label>(root, "wasp-count");
+            BeeIcon.ReplaceTitle(_waspCount.parent);
             _waspFill = Require<VisualElement>(root, "wasp-fill");
             if (_swarmConfig == null)
             {

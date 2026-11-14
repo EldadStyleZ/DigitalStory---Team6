@@ -77,6 +77,9 @@ namespace DigitalStory.View
         /// <summary>True only on the frame the kick was pressed (Left Shift, right mouse or the left trigger).</summary>
         public bool KickPressed { get; private set; }
 
+        /// <summary>True while either Shift is held: the swarm sprints. The giant ignores it; a Shift press still kicks.</summary>
+        public bool SprintHeld { get; private set; }
+
         /// <summary>True only on the frame restart was pressed (R or Start).</summary>
         public bool RestartPressed { get; private set; }
 
@@ -206,6 +209,7 @@ namespace DigitalStory.View
             LocalMove = Vector2.ClampMagnitude(keysMove + _padMove, 1f);
             PunchPressed = isPunchKey || (padPressed & PunchBit) != 0;
             KickPressed = isKickKey || (padPressed & KickBit) != 0;
+            SprintHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
             RestartPressed = isRestartKey || (padPressed & StartBit) != 0;
             GiveHeld = isGiveKey || (_padHeld & GiveBit) != 0;
             CallWavePressed = isCallWaveKey || (padPressed & StartBit) != 0;

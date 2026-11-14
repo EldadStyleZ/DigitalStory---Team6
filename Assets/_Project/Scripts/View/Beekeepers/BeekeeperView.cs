@@ -247,7 +247,7 @@ namespace DigitalStory.View
 
             _recoil = Vector3.Lerp(_recoil, Vector3.zero, 1f - Mathf.Exp(-_recoilSettlePerSecond * deltaTime));
             ShowFlight(deltaTime);
-            transform.position = _brain.Position + _recoil + (Vector3.up * _liftHeight);
+            transform.position = OnGround(_brain.Position) + _recoil + (Vector3.up * _liftHeight);
             _facing = Quaternion.RotateTowards(_facing, FacingRotation(_brain.Facing), _turnDegreesPerSecond * deltaTime);
             transform.rotation = Tumble() * _facing;
             SetSpeed(_brain.IsMoving ? 1f : 0f);
@@ -330,6 +330,13 @@ namespace DigitalStory.View
             SetLean(_swingDegrees * settle * settle);
         }
 
+        // Walks on the hills and climbs over the bridges, instead of the flat height the brain plans on.
+        private static Vector3 OnGround(Vector3 position)
+        {
+            position.y = RiverBridge.GroundAt(position);
+            return position;
+        }
+
         private void ShowDeath(float deltaTime)
         {
             _deathElapsed += deltaTime;
@@ -338,7 +345,7 @@ namespace DigitalStory.View
             {
                 // One killed in the air falls back to the ground as it dies.
                 ShowFlight(deltaTime);
-                transform.position = _brain.Position + (Vector3.up * _liftHeight);
+                transform.position = OnGround(_brain.Position) + (Vector3.up * _liftHeight);
             }
 
             Quaternion fall = Quaternion.Euler(0f, 0f, 90f * t);

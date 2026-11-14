@@ -71,6 +71,7 @@ float4 _CorePosition;
 float4 _CoreForward;                     // flat and unit length
 float4 _HiveA;                            // xyz position, w 1 while it stands
 float4 _HiveB;
+float4 _SpawnSource;                      // xyz where joining wasps appear while w is 1: the nest just collected
 float4 _LastHit;
 
 // The song slots, SLOT_VECTORS float4s per slot, in the order of DigitalStory.Logic.SongSlot:
@@ -173,6 +174,30 @@ static const float CrossSectionHeight = 0.45;    // the river's height as a shar
 static const float RiverSwirl = 0.6;             // radians per second the river's and the eight's cross-section turns
 static const float MeanderWaveNumber = 1.4;      // radians per metre along the river, a wave about 4.5 m long
 static const float MeanderSpeed = 0.9;           // radians per second
+// The river's body: thin at the head, swelling thick and wild, thinning again to the tail, like a living swarm rather than
+// a tube. Bulges roll down it as it flies, and the thick part swirls faster.
+static const float RiverHeadWidth = 0.2;         // share of the river radius at the head, by the core
+static const float RiverTailWidth = 0.15;        // share at the tail
+static const float RiverBellyWidth = 1.15;       // share at the thickest part
+static const float RiverBellyAt = 0.35;          // where along the river (0 head, 1 tail) it is thickest
+static const float RiverBulge = 0.2;             // how much the rolling bulges swell and pinch the body
+static const float RiverBulgeWaves = 2.5;        // bulges along the whole river
+static const float RiverBulgeSpeed = 3.0;        // radians per second the bulges roll toward the tail
+static const float RiverBellySwirl = 1.8;        // extra swirl in the thickest part, as a share of RiverSwirl
+static const float RiverBreath = 0.18;           // how much each wasp drifts in and out of the body on its own
+static const float RiverBellyPack = 0.9;         // how much the belly's wasps crowd toward its middle line, so it reads dense
+static const float RiverBellyCrowd = 0.7;        // 0 spreads the wasps evenly along the river; up to 1 gathers them into the
+                                                 // belly, so it is the densest part and the head and tail thin out
+// A big swarm reads as a snake if it only gets longer, so as it grows it gets shorter, much fatter and looser instead:
+// a rounded cloud of wasps with a short tail, each wasp drifting round its place on its own.
+static const float CrowdFrom = 300.0;            // wasps at which the swarm starts to bunch up
+static const float CrowdFull = 1800.0;           // wasps at which it is fully a cloud
+static const float CrowdLength = 0.55;           // share of the river's length left at full crowd
+static const float CrowdRadius = 2.6;            // times the river's radius at full crowd
+static const float CrowdEnds = 0.55;             // how far the thin head and tail fill out toward the belly at full crowd
+static const float CrowdScatter = 1.1;           // metres each wasp wanders round its place at full crowd
+static const float CrowdLift = 1.4;             // metres the fat cloud rises, so its lower half stays above the grass
+static const float CrowdScatterSpeed = 0.9;      // how fast that wander turns
 static const float RiverHeadGap = 0.5;           // metres behind the core where the river starts, so its head shows where
                                                  // the core leads it
 static const float HaloRadius = 0.9;
@@ -877,19 +902,39 @@ float WoundShare(float flowLane)
 // of a run; SwarmGpuView works that into _EightShare.
 float3 RiverTarget(WaspStatic wasp)
 {
+    // The wasps still flow head to tail at one pace, but they slow through the belly, so more of them are in it at once.
     float flowLane = FlowLaneAt(wasp, _SimTime);
+    float bellyPhase = FullTurn * RiverBellyAt;
+    flowLane = saturate(flowLane - RiverBellyCrowd * (sin(FullTurn * flowLane - bellyPhase) + sin(bellyPhase)) / FullTurn);
+    float crowd = smoothstep(CrowdFrom, CrowdFull, (float)_ActiveCount);
     float trailLength = TrailLength();
-    float along = lerp(RiverHeadGap, max(min(_RiverLength, trailLength), RiverHeadGap), flowLane);
+    float riverLength = _RiverLength * lerp(1.0, CrowdLength, crowd);
+    float along = lerp(RiverHeadGap, max(min(riverLength, trailLength), RiverHeadGap), flowLane);
 
     float3 center;
     float3 direction;
     SampleTrail(along, center, direction);
     float3 side = cross(Up, direction);
 
-    float angle = wasp.ringAngle + _SimTime * RiverSwirl;
-    float radius = wasp.ringRadius * _RiverRadius;
+    // Thin, thick and wild, thin again: a smooth rise to the belly and a longer fall to the tail.
+    float rise = smoothstep(0.0, RiverBellyAt, flowLane);
+    float fall = 1.0 - smoothstep(RiverBellyAt, 1.0, flowLane);
+    float belly = rise * fall;
+    float width = lerp(lerp(RiverHeadWidth, RiverTailWidth, step(RiverBellyAt, flowLane)), RiverBellyWidth, belly);
+    width = lerp(width, RiverBellyWidth, CrowdEnds * crowd * (1.0 - belly));
+    float bulge = 1.0 + RiverBulge * belly * sin(flowLane * RiverBulgeWaves * FullTurn - _SimTime * RiverBulgeSpeed);
+    float breath = 1.0 + RiverBreath * sin(_SimTime * (1.3 + wasp.seed * 1.7) + wasp.seed * FullTurn);
+
+    float angle = wasp.ringAngle + _SimTime * RiverSwirl * (1.0 + RiverBellySwirl * belly);
+    // In the belly most wasps crowd toward the middle line, so the thick part is a dense body with no hollow inside.
+    float packed = lerp(wasp.ringRadius, wasp.ringRadius * wasp.ringRadius, RiverBellyPack * belly);
+    float radius = packed * _RiverRadius * lerp(1.0, CrowdRadius, crowd) * width * bulge * breath;
     float meander = _MeanderAmplitude * sin(along * MeanderWaveNumber - _SimTime * MeanderSpeed);
     float3 river = center + Up * (FlyHeight + sin(angle) * radius * CrossSectionHeight) + side * (cos(angle) * radius + meander);
+    float wander = _SimTime * CrowdScatterSpeed * (0.6 + wasp.phase01) + wasp.seed * 40.0;
+    float3 scatter = float3(sin(wander), 0.5 * sin(wander * 1.37 + 2.0), cos(wander * 0.83 + wasp.squad * FullTurn));
+    river += scatter * (CrowdScatter * crowd * (0.4 + wasp.ringRadius));
+    river += Up * (CrowdLift * crowd);
 
     float3 eight = EightTarget(wasp, EightLaneAt(flowLane));
     return AroundCore(lerp(river, eight, WoundShare(flowLane)), min(FlatReach(eight), FlatReach(river)));
@@ -2118,7 +2163,8 @@ float DistanceOnGround(float3 from, float3 to)
     return length(offset);
 }
 
-// Where a revived wasp appears: the nearest standing hive to the core, or the core when none stands.
+// Where a revived wasp appears: the nest just collected, while there is one, so its wasps pour out of it; otherwise the
+// nearest standing hive to the core, or the core when none stands.
 // During Hive Call with both hives standing, half come from each, so streams fly in from every hive.
 float3 SpawnPoint(WaspStatic wasp)
 {
@@ -2139,7 +2185,7 @@ float3 SpawnPoint(WaspStatic wasp)
         spawn = hive + Up * SpawnHeight;
     }
 
-    return spawn;
+    return _SpawnSource.w > 0.5 ? _SpawnSource.xyz : spawn;
 }
 
 float3 Scatter(WaspStatic wasp, float size)

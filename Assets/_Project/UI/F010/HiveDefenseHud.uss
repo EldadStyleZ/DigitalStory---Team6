@@ -171,12 +171,23 @@
 
 .hive-panel {
     min-width: 150px;
-    background-color: var(--panel);
-    border-radius: 6px;
-    border-width: 2px;
-    border-color: rgba(0, 0, 0, 0);
-    padding: 2px 8px;
-    margin-bottom: 4px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(10, 12, 8, 0.42);
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: rgba(255, 200, 90, 0.22);
+    padding: 4px 14px 4px 4px;
+    margin-bottom: 6px;
+}
+
+/* The bars live in the hexagon emblem now: its rim is the health and the honey inside is the store. */
+.hive-panel .bar-track {
+    display: none;
+}
+
+.hive-body {
+    margin-left: 8px;
 }
 
 .hive-title {
@@ -233,7 +244,7 @@
 
 .hive-panel--flash {
     border-color: var(--alarm);
-    background-color: rgba(130, 70, 10, 0.85);
+    background-color: rgba(120, 35, 12, 0.55);
 }
 
 .hive-panel--flash .hive-fill {
