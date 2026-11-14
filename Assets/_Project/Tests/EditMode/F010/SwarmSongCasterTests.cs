@@ -811,6 +811,55 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_notReady, Is.Empty);
         }
 
+        // Plan section U: a note a nest's combo uses is the combo's alone. Taken while it is heard, it finishes no song.
+        [Test]
+        public void Press_ANoteTakenWhileItIsHeard_CastsNothingAndForgetsTheNotes()
+        {
+            _caster.NotePlayed += hole =>
+            {
+                if (hole == K)
+                {
+                    _caster.TakeNote();
+                }
+            };
+
+            Press(H);
+            Press(L);
+            int song = Press(K);
+
+            Assert.That(song, Is.EqualTo(SongBook.NoSong));
+            Assert.That(_cast, Is.Empty, "the taken note finished the Gust");
+            Assert.That(_notReady, Is.Empty);
+            Assert.That(_caster.RecentNoteCount, Is.EqualTo(0));
+        }
+
+        // The notes heard before a taken one are forgotten too, so they cannot finish a song after it: K, then a taken L,
+        // then L H would make the Scythe (K L H) from the K, or the Lance (K L L H) if the taken note still counted.
+        [Test]
+        public void Press_TheNotesBeforeATakenNote_CannotFinishASongAfterIt()
+        {
+            bool takeNext = false;
+            _caster.NotePlayed += hole =>
+            {
+                if (takeNext)
+                {
+                    takeNext = false;
+                    _caster.TakeNote();
+                }
+            };
+
+            Press(K);
+            takeNext = true;
+            Press(L);
+            Press(L);
+            Press(H);
+            Assert.That(_cast, Is.Empty, "the notes around the taken one finished a song");
+            Assert.That(_notReady, Is.Empty);
+
+            PlayAll(SongKeys[GustIndex]);
+            Assert.That(_cast, Is.EqualTo(new[] { GustIndex }), "fresh notes after a taken one still cast");
+        }
+
         [Test]
         public void Press_WhileCollapsedWithNotesPlayed_AllocatesNothing()
         {

@@ -68,7 +68,8 @@ namespace DigitalStory.Tests.EditMode
             bool withSongs = false,
             bool withAllSongs = false,
             float firstFarmSeconds = ShortFirstFarmSeconds,
-            bool withNewSongs = false)
+            bool withNewSongs = false,
+            IRandomSource random = null)
         {
             Core = core;
             Swarm = Make<SwarmConfig>();
@@ -125,7 +126,7 @@ namespace DigitalStory.Tests.EditMode
                 NestPositions,
                 spawns ?? new[] { new Vector3(30f, 0f, -30f), new Vector3(-30f, 0f, -30f) },
                 Core,
-                new FixedRandomSource());
+                random ?? new FixedRandomSource());
         }
 
         public SwarmConfig Swarm { get; }

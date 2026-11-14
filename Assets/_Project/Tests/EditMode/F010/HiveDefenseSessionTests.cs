@@ -2512,6 +2512,52 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Level, Is.EqualTo(2));
         }
 
+        // Plan section U: a note the combo uses is the combo's alone, so a typo at a nest casts no song. With the old seed the
+        // first nest was L K J H, where L J L made the Hive Call. Every wrong note after every start of the combo is tried,
+        // then the start again and the same wrong note, as a player tries again; then the combo still collects.
+        [Test]
+        public void CollectingANest_WrongNotesAndTriesAgain_CastNoSong_AndTheComboStillCollects([Values(1010, 7, 2026)] int seed)
+        {
+            _world = new HiveDefenseWorld(withNewSongs: true, firstFarmSeconds: 60f, random: new Mulberry32Random(unchecked((uint)seed)));
+            HiveDefenseSession session = _world.Session;
+            var songs = new List<int>();
+            session.SongCastNow += songs.Add;
+            session.Caster.SongNotReady += (song, reason) => songs.Add(song);
+            IReadOnlyList<int> combo = session.Nests[0].Combo;
+            _world.MoveCoreTo(_world.NestPositions[0]);
+
+            var notes = new List<int>();
+            for (int start = 1; start < combo.Count; start++)
+            {
+                for (int wrong = 0; wrong < HiveDefenseWorld.HoleCount; wrong++)
+                {
+                    if (wrong == combo[start])
+                    {
+                        continue;
+                    }
+
+                    notes.Clear();
+                    for (int round = 0; round < 2; round++)
+                    {
+                        for (int index = 0; index < start; index++)
+                        {
+                            notes.Add(combo[index]);
+                        }
+
+                        notes.Add(wrong);
+                    }
+
+                    _world.Play(notes);
+                }
+            }
+
+            Assert.That(songs, Is.Empty, "a mistyped combo note cast a song (seed " + seed + ")");
+            Assert.That(session.Nests[0].IsCollected, Is.False);
+            _world.Play(combo);
+            Assert.That(session.Nests[0].IsCollected, Is.True, "the combo no longer collects after the typos");
+            Assert.That(songs, Is.Empty);
+        }
+
         [Test]
         public void CollectingANest_LeavingTheRingHalfWay_StartsTheComboAgain()
         {

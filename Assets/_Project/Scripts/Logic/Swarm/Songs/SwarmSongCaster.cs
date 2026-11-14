@@ -34,6 +34,7 @@ namespace DigitalStory.Logic
 
         private int _noteCount;
         private int _missedCount;
+        private bool _isNoteTaken;
 
         public SwarmSongCaster(IReadOnlyList<SwarmSongEffect> songs, SongConfig config, int holeCount)
         {
@@ -153,7 +154,13 @@ namespace DigitalStory.Logic
             _missedCount = 0;
             ForgetExpiredNotes();
             RememberNote(hole);
+            _isNoteTaken = false;
             NotePlayed?.Invoke(hole);
+            if (_isNoteTaken)
+            {
+                _isNoteTaken = false;
+                return SongBook.NoSong;
+            }
 
             int song = _book.Press(hole);
 
@@ -194,6 +201,18 @@ namespace DigitalStory.Logic
             effect.Cast(in context);
             SongCast?.Invoke(song);
             return song;
+        }
+
+        /// <summary>
+        /// The note being heard belongs to something else, such as a nest's combo (plan section U): call it from
+        /// <see cref="NotePlayed"/>. The caster and its book forget every note they heard, this one too, so the note casts no
+        /// song now and cannot finish one later. Called outside a press it only forgets the notes. It never allocates.
+        /// </summary>
+        public void TakeNote()
+        {
+            _noteCount = 0;
+            _book.ForgetNotes();
+            _isNoteTaken = true;
         }
 
         /// <summary>Advances note ages and cooldowns.</summary>

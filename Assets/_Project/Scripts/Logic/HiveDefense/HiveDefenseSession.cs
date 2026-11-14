@@ -578,15 +578,20 @@ namespace DigitalStory.Logic
         }
 
         // The song table fills in from every note the flute hears, before the note can cast a song and use the notes up. The
-        // nest whose ring the core stands in hears it too (plan section U).
+        // nest whose ring the core stands in hears it too (plan section U), and a note its combo uses (one that fills a slot,
+        // restarts it or breaks it) is the combo's alone: the songs forget what they heard and do not hear it, so a mistyped
+        // combo note never casts a song. Notes the combo ignores still reach the songs.
         private void OnNotePlayed(int hole)
         {
             Discovery.RecordNotes(Caster);
-            Nests.PlayNote(hole);
+            if (Nests.PlayNote(hole) != NestComboStep.Ignored)
+            {
+                Caster.TakeNote();
+            }
         }
 
-        // Plan section U: each nest's combo, drawn from the match's random source when the match starts, so a seed replays
-        // its combos. Missing positions are the nest field's to report.
+        // Plan section U: each nest's combo, drawn from the match's random source when the match starts, so a match's seed
+        // replays its combos (the scene seeds that source from the map's seed). Missing positions are the nest field's to report.
         private static int[][] DrawCombos(HiveDefenseRules rules, IReadOnlyList<Vector3> nestPositions, IRandomSource random)
         {
             int count = nestPositions != null ? nestPositions.Count : 0;
