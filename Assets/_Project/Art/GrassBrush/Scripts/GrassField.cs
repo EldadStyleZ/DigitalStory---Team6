@@ -198,6 +198,15 @@ namespace DigitalStory.GrassBrush
         /// <summary>True for the field whose wind settings move all the grass.</summary>
         public bool DrivesWind => _windOwner == this;
 
+        /// <summary>Clumps drawn for the last camera, the regression guard's measure of how much grass is in view (plan section AD).</summary>
+        public int DrawnClumps { get; private set; }
+
+        /// <summary>Draw calls (cells) issued for the last camera.</summary>
+        public int DrawnCells { get; private set; }
+
+        /// <summary>Cells filled since the field was enabled; it stays put while the camera stands still.</summary>
+        public int CellsBuilt { get; private set; }
+
         private float DrawCellSize => Mathf.Max(1f, _drawCellSize);
 
         private void OnEnable()
@@ -362,6 +371,8 @@ namespace DigitalStory.GrassBrush
             }
 
             Rebuild();
+            DrawnClumps = 0;
+            DrawnCells = 0;
             GeometryUtility.CalculateFrustumPlanes(camera, _frustum);
             var eye = camera.transform.position;
             var reach = _drawDistance;
@@ -395,6 +406,7 @@ namespace DigitalStory.GrassBrush
                         }
 
                         builds--;
+                        CellsBuilt++;
                         drawCell = BuildCell(key);
                         _drawCells.Add(key, drawCell);
                     }
@@ -406,7 +418,10 @@ namespace DigitalStory.GrassBrush
 
                     renderParams.worldBounds = drawCell.Bounds;
                     renderParams.matProps = drawCell.Block;
-                    Graphics.RenderMeshPrimitives(renderParams, mesh, 0, InstancesToDraw(drawCell, eye));
+                    var instances = InstancesToDraw(drawCell, eye);
+                    Graphics.RenderMeshPrimitives(renderParams, mesh, 0, instances);
+                    DrawnClumps += instances;
+                    DrawnCells++;
                 }
             }
         }

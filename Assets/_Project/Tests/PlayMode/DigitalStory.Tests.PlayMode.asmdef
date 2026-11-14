@@ -5,6 +5,7 @@
         "DigitalStory.Data",
         "DigitalStory.Logic",
         "DigitalStory.View",
+        "DigitalStory.GrassBrush",
         "Unity.InputSystem",
         "Unity.InputSystem.TestFramework",
         "UnityEngine.TestRunner",
