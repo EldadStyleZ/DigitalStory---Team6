@@ -10369,7 +10369,7 @@ MonoBehaviour:
   _PrimaryLight: {fileID: 0}
   _InjectionPoint: 0
   _WriteToColorTexture: 1
-  _WriteToDepthTexture: 1
+  _WriteToDepthTexture: 0
   _WriteMotionVectors: 1
   _OverrideRenderHDR: 0
   _RenderHDR: 1
@@ -10659,12 +10659,12 @@ MonoBehaviour:
         _ClipPlaneOffset: 0
         _FarClipPlane: 1000
         _DisableOcclusionCulling: 1
-        _RefreshPerFrames: 1
+        _RefreshPerFrames: 2
         _FrameRefreshOffset: 0
         _UseObliqueMatrix: 1
         _NonObliqueNearSurface: 0
         _NonObliqueNearSurfaceThreshold: 0.05
-        _RenderOnlySingleCamera: 0
+        _RenderOnlySingleCamera: 1
         _RendererIndex: 0
         _Debug:
           _ShowHiddenObjects: 0
