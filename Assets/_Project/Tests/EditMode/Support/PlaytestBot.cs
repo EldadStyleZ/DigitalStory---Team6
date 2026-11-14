@@ -29,6 +29,11 @@ namespace DigitalStory.Tests.EditMode
         private const float FastestNoteSeconds = 0.09f;
         private const float SlowestNoteSeconds = 0.18f;
         private const float BoldestStandOffMetres = 6f;
+
+        // Plan section U: a nest's combo is read for this long once it shows, then played at this steady pace, slower than
+        // a song the player knows by heart.
+        private const float NestComboReadSeconds = 0.6f;
+        private const float NestComboNoteSeconds = 0.3f;
         private const float WariestStandOffMetres = 9f;
 
         // Running from a stick: how far ahead it aims, how much it bends sideways so it circles instead of running into the
@@ -104,7 +109,10 @@ namespace DigitalStory.Tests.EditMode
         private bool _callWave;
         private int _typingCount;
         private int _typingNext;
+        private float _typingGap;
         private float _nextNoteAt;
+        private int _comboNest = NestField.NoNest;
+        private float _comboReadAt;
         private float _nextSongAt;
         private int _lastCount;
         private int _knownCapacity;
@@ -289,6 +297,46 @@ namespace DigitalStory.Tests.EditMode
 
             _typingCount = keys.Count;
             _typingNext = 0;
+            _typingGap = _noteSeconds;
+            _nextNoteAt = Time;
+            return true;
+        }
+
+        /// <summary>
+        /// Plays the combo of the nest whose ring the core stands in (plan section U), as a person would: it reads the combo
+        /// first, then presses the notes still to play one at a steady pace. It waits for a song's notes under way to end.
+        /// Returns true while the core stands in a ring, reading or playing.
+        /// </summary>
+        public bool PlayNestCombo()
+        {
+            int active = _session.Nests.ActiveNest;
+            if (active != _comboNest)
+            {
+                _comboNest = active;
+                _comboReadAt = Time + NestComboReadSeconds;
+            }
+
+            if (active == NestField.NoNest)
+            {
+                return false;
+            }
+
+            if (IsTyping || Time < _comboReadAt || _session.IsColossusActive)
+            {
+                return true;
+            }
+
+            Nest nest = _session.Nests[active];
+            IReadOnlyList<int> combo = nest.Combo;
+            _typingCount = 0;
+            for (int index = nest.NotesPlayed; index < combo.Count; index++)
+            {
+                _typing[_typingCount] = combo[index];
+                _typingCount++;
+            }
+
+            _typingNext = 0;
+            _typingGap = NestComboNoteSeconds;
             _nextNoteAt = Time;
             return true;
         }
@@ -1000,7 +1048,7 @@ namespace DigitalStory.Tests.EditMode
             {
                 holes = HiveDefenseFrame.HoleBit(_typing[_typingNext]);
                 _typingNext++;
-                _nextNoteAt = Time + _noteSeconds;
+                _nextNoteAt = Time + _typingGap;
                 if (!IsTyping)
                 {
                     // Mostly quick, now and then slow: the square leans the hesitation toward 0.

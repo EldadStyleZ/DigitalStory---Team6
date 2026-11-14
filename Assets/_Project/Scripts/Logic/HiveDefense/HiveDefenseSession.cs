@@ -159,7 +159,7 @@ namespace DigitalStory.Logic
             }
 
             Hives = new HiveSet(hives);
-            Nests = new NestField(rules.Nests, nestPositions);
+            Nests = new NestField(rules.Nests, nestPositions, DrawCombos(rules, nestPositions, _random));
             _exchange = new HiveExchange(rules.Hive, Hives, Swarm);
             Waves = new WaveDirector(rules.Waves, spawnPoints.Count);
             Caster = new SwarmSongCaster(rules.Songs, rules.SongConfig, rules.HoleCount);
@@ -497,6 +497,10 @@ namespace DigitalStory.Logic
             ReadCore(in frame);
             Forms.SetCore(_corePosition);
 
+            // The ring the core stands in is found before the notes, so a note pressed on the tick the core steps in counts.
+            // A collapsed swarm has nothing to take a nest with, and while the giant stands the keys are its moves.
+            Nests.Tick(_corePosition, !Swarm.IsCollapsed && !_isColossusActive);
+
             Caster.Tick(dt);
             _isMouseLive = frame.IsMouseLive;
             _mousePoint = frame.AimPoint;
@@ -509,8 +513,6 @@ namespace DigitalStory.Logic
 
             TickColossus(frame, dt);
 
-            // A collapsed swarm has nothing to take a nest with, so its stay starts again.
-            Nests.Tick(dt, _corePosition, !Swarm.IsCollapsed);
             _exchange.Tick(dt, _corePosition, frame.Give, Forms.Current == SwarmForm.HiveCall);
             TickLesson();
             Smoke.Tick(dt, Hives, Swarm, _corePosition, Forms);
@@ -575,10 +577,27 @@ namespace DigitalStory.Logic
             Tutorial.Complete(TutorialStep.CollectNest);
         }
 
-        // The song table fills in from every note the flute hears, before the note can cast a song and use the notes up.
+        // The song table fills in from every note the flute hears, before the note can cast a song and use the notes up. The
+        // nest whose ring the core stands in hears it too (plan section U).
         private void OnNotePlayed(int hole)
         {
             Discovery.RecordNotes(Caster);
+            Nests.PlayNote(hole);
+        }
+
+        // Plan section U: each nest's combo, drawn from the match's random source when the match starts, so a seed replays
+        // its combos. Missing positions are the nest field's to report.
+        private static int[][] DrawCombos(HiveDefenseRules rules, IReadOnlyList<Vector3> nestPositions, IRandomSource random)
+        {
+            int count = nestPositions != null ? nestPositions.Count : 0;
+            var combos = new int[count][];
+            IReadOnlyList<IReadOnlyList<int>> songs = NestComboRule.KeysOf(rules.Songs);
+            for (int index = 0; index < count; index++)
+            {
+                combos[index] = NestComboRule.Draw(random, songs, rules.HoleCount, rules.Nests.ComboShortest, rules.Nests.ComboLongest);
+            }
+
+            return combos;
         }
 
         // The running songs hear of every change of phase, so a tower that guards a wave knows when the wave is over.
@@ -1141,7 +1160,6 @@ namespace DigitalStory.Logic
             Swarm.Lose(harm, fraction);
             ReportBlocked(core, harm, fraction, shield);
             Forms.NotifyHit(brain.Position);
-            Nests.NotifyCoreHit();
             _lastHitPoint = _corePosition;
         }
 

@@ -219,13 +219,14 @@ namespace DigitalStory.Tests.EditMode
         }
 
         /// <summary>
-        /// Flies the core to nest <paramref name="index"/> and stays until it is collected, or for the time it takes and a
-        /// little more. Returns whether it was collected.
+        /// Flies the core to nest <paramref name="index"/> and plays its combo (plan section U), one note a tick. Returns
+        /// whether it was collected.
         /// </summary>
         public bool CollectNest(int index)
         {
             MoveCoreTo(NestPositions[index]);
-            return RunUntil(() => Session.Nests[index].IsCollected, Nests.CollectSeconds + 0.5f);
+            Play(Session.Nests[index].Combo);
+            return Session.Nests[index].IsCollected;
         }
 
         /// <summary>Kills every living beekeeper on the field.</summary>

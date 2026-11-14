@@ -652,34 +652,73 @@
     -unity-font-style: bold;
 }
 
-/* The collecting bar sits at the bottom centre, above the notes. */
-.collect-box {
-    display: none;
+/* A nest's combo (NestComboView.cs, plan section U): large, near the top centre, while the core stands in an open nest's
+   ring. Each slot wears its note's colour from the hole classes, dim until played; a played slot is bright and ringed.
+   The pop, the shake and the burst are driven from code, on scale, translate and opacity. */
+.combo-box {
+    position: absolute;
+    top: 92px;
+    left: 0;
+    right: 0;
     align-items: center;
-    width: 160px;
-    margin-bottom: 4px;
-    padding: 2px 8px;
-    border-radius: 6px;
-    background-color: var(--panel);
+    display: none;
 }
 
-.collect--shown {
+.combo--shown {
     display: flex;
 }
 
-.collect-label {
+.combo-title {
+    font-size: 13px;
+    -unity-font-style: bold;
     color: var(--nest);
-    font-size: 12px;
+    background-color: var(--panel);
+    border-radius: 6px;
+    padding: 1px 10px;
+    margin-bottom: 6px;
+}
+
+.combo-slots {
+    flex-direction: row;
+    justify-content: center;
+    padding: 6px 8px;
+    border-radius: 12px;
+    background-color: var(--panel);
+}
+
+.combo-slot {
+    width: 44px;
+    height: 44px;
+    margin: 0 5px;
+    border-radius: 10px;
+    font-size: 24px;
+    -unity-font-style: bold;
+    color: var(--key-text);
+    -unity-text-align: middle-center;
     padding: 0;
+    opacity: 0.38;
+    border-width: 3px;
+    border-color: rgba(0, 0, 0, 0);
 }
 
-.collect-track {
-    align-self: stretch;
-    height: 6px;
+.combo-slot--filled {
+    opacity: 1;
+    border-color: var(--text);
 }
 
-.collect-fill {
-    background-color: var(--nest);
+.combo-slot--hidden {
+    display: none;
+}
+
+.combo-slots .pad-diamond--cell {
+    width: 24px;
+    height: 24px;
+}
+
+.combo-slots .pad-diamond--cell .pad-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
 }
 
 /* Arrows to open nests, off screen. Smaller and quieter than the hive alarm arrows. */

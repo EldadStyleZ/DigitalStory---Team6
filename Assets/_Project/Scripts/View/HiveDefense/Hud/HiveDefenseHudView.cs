@@ -67,7 +67,7 @@ namespace DigitalStory.View
         private string _stingText = "Play J K H.";
 
         [SerializeField, Tooltip("Lesson step after the Sting: collecting a nest.")]
-        private string _collectNestText = "Fly to the glowing nest and stay until it is yours.";
+        private string _collectNestText = "Fly to the glowing nest and play the notes shown.";
 
         [SerializeField, Tooltip("Lesson step 3: taking wasps from a hive.")]
         private string _visitHiveText = "Fly to a hive to take its wasps.";
@@ -98,6 +98,7 @@ namespace DigitalStory.View
         private HiveOffscreenIndicatorView _indicator;
         private NestOffscreenIndicatorView _nestIndicator;
         private NestHudView _nestHud;
+        private NestComboView _nestCombo;
         private EndScreenView _endScreen;
         private GiantHudView _giantHud;
 
@@ -138,6 +139,9 @@ namespace DigitalStory.View
 
         /// <summary>The device whose controls the HUD names, for tests and debugging.</summary>
         public ControlDevice ShownDevice => _device;
+
+        /// <summary>The nest combo prompt (plan section U), for tests.</summary>
+        public NestComboView NestCombo => _nestCombo;
 
         /// <summary>Builds the HUD's cells from the match. Call once, before the first Update.</summary>
         /// <exception cref="ArgumentNullException">The session is missing.</exception>
@@ -195,6 +199,7 @@ namespace DigitalStory.View
             _messageLeft = 0f;
             _messageLine.RemoveFromClassList(LineShownClass);
             _nestHud = new NestHudView(session, _nestConfig, root, _humSeconds, _levelSeconds);
+            _nestCombo = new NestComboView(session.Nests, _nestConfig, root);
             BuildNotes(notes);
             _hives = new HivePanelsView(session, hives, _flashSeconds, _holdToHealText, _healingText);
 
@@ -253,6 +258,7 @@ namespace DigitalStory.View
             _phase.ShowControls(device);
             _lesson.ShowControls(device);
             _nestHud.ShowControls(device);
+            _nestCombo.ShowControls(device);
             _hives.ShowControls(device);
             _endScreen.ShowControls(device);
             _giantHud.ShowControls(device);
@@ -271,6 +277,7 @@ namespace DigitalStory.View
             _lesson.Tick();
             _songbook.Tick(Time.deltaTime);
             _nestHud.Tick(Time.deltaTime);
+            _nestCombo.Tick(Time.unscaledDeltaTime);
             ShowNotes();
             ShowLines(Time.deltaTime);
             ShowSwarmLine();
@@ -301,6 +308,12 @@ namespace DigitalStory.View
             {
                 _nestHud.Dispose();
                 _nestHud = null;
+            }
+
+            if (_nestCombo != null)
+            {
+                _nestCombo.Dispose();
+                _nestCombo = null;
             }
 
             if (_session != null)

@@ -38,7 +38,8 @@ namespace DigitalStory.Tests.EditMode
             var config = ScriptableObject.CreateInstance<NestConfig>();
 
             Assert.AreEqual(2.5f, config.CollectRadius);
-            Assert.AreEqual(2f, config.CollectSeconds);
+            Assert.AreEqual(4, config.ComboShortest);
+            Assert.AreEqual(5, config.ComboLongest);
             Assert.AreEqual(400, config.CapacityPerNest);
             Assert.AreEqual(400, config.WaspsPerNest);
             Assert.AreEqual(2, config.HummedNotes);

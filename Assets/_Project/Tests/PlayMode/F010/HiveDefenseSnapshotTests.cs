@@ -97,7 +97,9 @@ namespace DigitalStory.Tests.PlayMode
         private const float BesideNestMetres = 1.5f;
         private const float OutsideNestRingMetres = 5f;
         private const float NestStayMarginSeconds = 0.3f;
-        private const float HalfCollectShare = 0.5f;
+        private const float NestComboReadSeconds = 0.6f;
+        private const float MaxCooldownWaitSeconds = 20f;
+        private const float NestComboPopSettleSeconds = 0.35f;
         private const float NestRingPitch = 45f;
         private const float NestsInViewBackMetres = 4f;
         private const float NestsSettleSeconds = 2f;
@@ -665,19 +667,21 @@ namespace DigitalStory.Tests.PlayMode
             yield return Capture("snap-14-nests-game");
         }
 
-        // Plan section H: while the core collects, the ring on the ground fills clockwise from the top, here half way, and
-        // motes stream from the nest down to it. The core waits outside the ring first, so the camera has caught up.
+        // Plan sections H and U: while the core plays a nest's combo, the ring on the ground fills clockwise from the top,
+        // here about half way, and motes stream from the nest down to it. The core waits outside the ring first, so the
+        // camera has caught up.
         [UnityTest]
         public IEnumerator Snapshot14_Collecting()
         {
-            NestConfig config = LoadNestConfig();
             Nest nest = _root.Session.Nests[0];
             _core.PlaceAt(nest.Position + (Vector3.back * OutsideNestRingMetres), true);
             yield return Wait(SettleCameraSeconds);
             Assert.That(nest.Progress01, Is.EqualTo(0f), "the nest was being collected from outside its ring");
 
             _core.PlaceAt(nest.Position + (Vector3.back * BesideNestMetres), true);
-            yield return Wait(config.CollectSeconds * HalfCollectShare);
+            yield return Wait(NestComboReadSeconds);
+            yield return Play(HalfOf(nest.Combo));
+            yield return Wait(NestComboReadSeconds);
             Assert.That(nest.Progress01, Is.GreaterThan(0.3f).And.LessThan(0.7f), "the collecting is not about half way");
             yield return CaptureClose("snap-14-collecting", nest.Position + (Vector3.up * CloseFocusHeight), WideCloseDistance, NestRingPitch);
         }
@@ -1216,6 +1220,58 @@ namespace DigitalStory.Tests.PlayMode
             }
         }
 
+        // Plan section U, from the game camera with the HUD over it: a nest's combo as the core steps into the ring, empty;
+        // then with its first half played; then the same named with the controller's diamonds, as after the pad was used.
+        [UnityTest]
+        public IEnumerator Snapshot22_NestCombo()
+        {
+            Nest nest = _root.Session.Nests[0];
+            var input = UnityEngine.Object.FindAnyObjectByType<HiveDefenseInput>();
+            var hud = UnityEngine.Object.FindAnyObjectByType<HiveDefenseHudView>();
+            Assert.That(input, Is.Not.Null);
+            Assert.That(hud, Is.Not.Null);
+            _core.PlaceAt(nest.Position + (Vector3.back * OutsideNestRingMetres), true);
+            yield return Wait(SettleCameraSeconds);
+
+            RenderTexture overlay = BeginHudOverlay(out UIDocument document, out PanelSettings original, out PanelSettings copy);
+            try
+            {
+                _core.PlaceAt(nest.Position + (Vector3.back * BesideNestMetres), true);
+                yield return Wait(NestComboReadSeconds);
+                Assert.That(hud.NestCombo.IsShown, Is.True, "the combo is not shown in the ring");
+                Assert.That(hud.NestCombo.FilledCount, Is.EqualTo(0));
+                yield return ReadHud("snap-22-nestcombo-empty");
+
+                IReadOnlyList<int> half = HalfOf(nest.Combo);
+                yield return Play(half);
+                yield return Wait(NestComboPopSettleSeconds);
+                Assert.That(hud.NestCombo.FilledCount, Is.EqualTo(half.Count));
+                yield return ReadHud("snap-22-nestcombo-half");
+
+                input.RecordUse(false, true);
+                yield return Wait(NestComboPopSettleSeconds);
+                Assert.That(hud.ShownDevice, Is.EqualTo(ControlDevice.Gamepad));
+                yield return ReadHud("snap-22-nestcombo-pad");
+            }
+            finally
+            {
+                input.RecordUse(true, false);
+                EndHudOverlay(overlay, document, original, copy);
+            }
+        }
+
+        // The first half of a combo, rounded down: two notes of four or five.
+        private static IReadOnlyList<int> HalfOf(IReadOnlyList<int> combo)
+        {
+            var half = new List<int>();
+            for (int index = 0; index < combo.Count / 2; index++)
+            {
+                half.Add(combo[index]);
+            }
+
+            return half;
+        }
+
         private static IEnumerator WaitForFist(HiveDefenseSession session, FistPhase phase)
         {
             float waited = 0f;
@@ -1513,6 +1569,20 @@ namespace DigitalStory.Tests.PlayMode
 
             yield return CollectNests(LevelFiveNests);
             Assert.That(_root.Session.Level, Is.EqualTo(1 + LevelFiveNests));
+
+            // Plan section U: four combos take a few seconds, not the eight they took by standing, so the song may still be
+            // cooling down from its level-1 cast.
+            SwarmSongCaster caster = _root.Session.Caster;
+            for (int song = 0; song < caster.Count; song++)
+            {
+                float waited = 0f;
+                while (caster[song] is T && caster.CooldownFraction(song) > 0f && waited < MaxCooldownWaitSeconds)
+                {
+                    waited += Time.deltaTime;
+                    yield return null;
+                }
+            }
+
             _core.PlaceAt(spot, true);
             yield return Wait(StandSeconds);
             Assert.That(_root.Session.Forms.Slot(slot).IsActive, Is.False, "the level-1 song still runs");
@@ -1549,7 +1619,8 @@ namespace DigitalStory.Tests.PlayMode
 
                 Assert.That(nests[index].IsOpen, Is.True, "nest " + index + " never opened");
                 _core.PlaceAt(nests[index].Position + (Vector3.back * BesideNestMetres), true);
-                yield return Wait(config.CollectSeconds + NestStayMarginSeconds);
+                yield return Wait(NestStayMarginSeconds);
+                yield return Play(nests[index].Combo);
                 Assert.That(nests[index].IsCollected, Is.True, "nest " + index + " was not collected");
             }
         }

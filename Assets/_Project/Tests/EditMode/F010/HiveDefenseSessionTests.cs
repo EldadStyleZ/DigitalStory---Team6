@@ -56,6 +56,7 @@ namespace DigitalStory.Tests.EditMode
                 nests: nests,
                 firstFarmSeconds: 3f,
                 withNewSongs: true);
+            CollectTheNestUnderTheCore(nests != null);
             List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
             Assert.That(_world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 5, 16f), Is.True);
             return keepers;
@@ -1366,6 +1367,7 @@ namespace DigitalStory.Tests.EditMode
                 nests: afterANest ? NestUnderTheCore() : null,
                 firstFarmSeconds: 3f);
             HiveDefenseSession session = _world.Session;
+            CollectTheNestUnderTheCore(afterANest);
             List<BeekeeperBrain> keepers = StandStillAsTheySpawn();
             Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f), Is.True);
             Assert.That(session.Level, Is.EqualTo(afterANest ? 2 : 1));
@@ -1385,6 +1387,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _world = new HiveDefenseWorld(nests: afterANest ? NestUnderTheCore() : null, firstFarmSeconds: 3f);
             HiveDefenseSession session = _world.Session;
+            CollectTheNestUnderTheCore(afterANest);
             _world.Run(2.5f);
             Assert.That(session.Level, Is.EqualTo(afterANest ? 2 : 1));
             Assert.That(session.Forms.StartColossus(ColossusSeconds), Is.True);
@@ -2228,10 +2231,10 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.CollectNest));
 
             _world.MoveCoreTo(_world.NestPositions[0]);
-            _world.Run(1f);
-            Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.CollectNest), "half the stay is not yet the nest");
+            _world.Run(3f);
+            Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.CollectNest), "standing at the nest is not the nest");
 
-            _world.Run(1.1f);
+            _world.Play(_world.Session.Nests[0].Combo);
             Assert.That(_world.Session.Nests[0].IsCollected, Is.True);
             Assert.That(_world.Session.Tutorial.Current, Is.EqualTo(TutorialStep.VisitHive));
         }
@@ -2335,6 +2338,15 @@ namespace DigitalStory.Tests.EditMode
             var nests = (Vector3[])HiveDefenseWorld.DefaultNests.Clone();
             nests[0] = Vector3.zero;
             return nests;
+        }
+
+        // Plan section U: standing on a nest collects nothing; its combo does, a few ticks of notes.
+        private void CollectTheNestUnderTheCore(bool isWanted)
+        {
+            if (isWanted)
+            {
+                Assert.That(_world.CollectNest(0), Is.True, "the nest under the core was not collected");
+            }
         }
 
         [Test]
@@ -2471,28 +2483,64 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Level, Is.EqualTo(2), "the level still rises");
         }
 
+        // Plan section U: standing in the ring shows the combo; the notes, not the time, collect the nest.
         [Test]
-        public void CollectingANest_LeavingBeforeTwoSeconds_StartsTheStayAgain()
+        public void CollectingANest_StandingWithoutPlaying_CollectsNothing()
+        {
+            _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+
+            _world.MoveCoreTo(_world.NestPositions[0]);
+            _world.Run(5f);
+
+            Assert.That(session.Nests.ActiveNest, Is.EqualTo(0));
+            Assert.That(session.Nests[0].IsCollected, Is.False);
+            Assert.That(session.Level, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void CollectingANest_PlayingItsCombo_CollectsItAndCastsNoSong()
+        {
+            _world = new HiveDefenseWorld(withAllSongs: true, firstFarmSeconds: 20f);
+            HiveDefenseSession session = _world.Session;
+            var cast = new List<int>();
+            session.SongCastNow += cast.Add;
+
+            Assert.That(_world.CollectNest(0), Is.True);
+
+            Assert.That(cast, Is.Empty, "the combo cast a song");
+            Assert.That(session.Level, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void CollectingANest_LeavingTheRingHalfWay_StartsTheComboAgain()
         {
             _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
             Vector3 nest = _world.NestPositions[0];
+            IReadOnlyList<int> combo = session.Nests[0].Combo;
 
             _world.MoveCoreTo(nest);
-            _world.Run(1.5f);
-            Assert.That(session.Nests[0].Progress01, Is.GreaterThan(0.7f));
+            _world.Play(new[] { combo[0], combo[1] });
+            Assert.That(session.Nests[0].NotesPlayed, Is.EqualTo(2));
             _world.MoveCoreTo(nest + new Vector3(3f, 0f, 0f));
-            Assert.That(session.Nests[0].Progress01, Is.EqualTo(0f));
+            Assert.That(session.Nests[0].NotesPlayed, Is.EqualTo(0));
             _world.MoveCoreTo(nest);
-            _world.Run(1.5f);
+            var rest = new List<int>();
+            for (int index = 2; index < combo.Count; index++)
+            {
+                rest.Add(combo[index]);
+            }
 
-            Assert.That(session.Nests[0].IsCollected, Is.False, "two stays of 1.5 s are not one of 2 s");
+            _world.Play(rest);
+
+            Assert.That(session.Nests[0].IsCollected, Is.False, "the second half alone is not the combo");
             Assert.That(session.Level, Is.EqualTo(1));
         }
 
-        // Changed with plan section O: a stick turns on the core only when a song hurt it, so it is provoked as it spawns.
+        // Plan section U: a hit costs the combo nothing; only leaving the ring or a wrong note empties it.
         [Test]
-        public void CollectingANest_AHitOnTheCore_StartsTheStayAgain()
+        public void CollectingANest_AHitOnTheCore_KeepsTheCombo()
         {
             Vector3 nest = HiveDefenseWorld.DefaultNests[0];
             _world = new HiveDefenseWorld(OneStick(), spawns: new[] { nest + new Vector3(1f, 0f, 0f) });
@@ -2502,39 +2550,28 @@ namespace DigitalStory.Tests.EditMode
             int hits = 0;
             session.ActiveBeekeeper(0).CoreHit += brain => hits++;
             _world.MoveCoreTo(nest);
-            float progressBeforeTheHit = 0f;
+            _world.Play(new[] { session.Nests[0].Combo[0] });
 
-            bool hit = _world.RunUntil(
-                () =>
-                {
-                    if (hits == 0)
-                    {
-                        progressBeforeTheHit = session.Nests[0].Progress01;
-                    }
+            bool hit = _world.RunUntil(() => hits > 0, 5f);
 
-                    return hits > 0;
-                },
-                1.9f);
-
-            Assert.That(hit, Is.True, "the stick struck within the 2 s");
-            Assert.That(progressBeforeTheHit, Is.GreaterThan(0f));
-            Assert.That(session.Nests[0].Progress01, Is.EqualTo(0f));
-            Assert.That(session.Nests[0].IsCollected, Is.False);
+            Assert.That(hit, Is.True, "the stick never struck");
+            Assert.That(session.Nests[0].NotesPlayed, Is.EqualTo(1));
         }
 
         [Test]
-        public void CollectingANest_WhileTheSwarmIsCollapsed_MakesNoProgress()
+        public void CollectingANest_WhileTheSwarmIsCollapsed_ShowsNoCombo()
         {
             _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
             _world.MoveCoreTo(_world.NestPositions[0]);
             session.Swarm.Lose(session.Swarm.Count);
+            _world.Run(HiveDefenseWorld.Step * 2f);
 
-            _world.Run(_world.Swarm.CollapseBlockSeconds - 0.2f);
-
-            Assert.That(session.Nests[0].Progress01, Is.EqualTo(0f));
+            Assert.That(session.Nests.ActiveNest, Is.EqualTo(NestField.NoNest));
+            _world.Play(session.Nests[0].Combo);
             Assert.That(session.Nests[0].IsCollected, Is.False);
-            Assert.That(_world.RunUntil(() => session.Nests[0].IsCollected, 3f), Is.True, "after the respawn the stay counts again");
+            Assert.That(_world.RunUntil(() => session.Nests.ActiveNest == 0, 4f), Is.True, "after the respawn the combo shows again");
+            Assert.That(_world.CollectNest(0), Is.True);
         }
 
         [Test]
@@ -2551,8 +2588,10 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(session.Swarm.Capacity, Is.EqualTo(800));
         }
 
+        // Plan section U: two rings overlap, and only one combo shows at a time: the nearest, the first on a tie. Once it is
+        // collected the other shows, and its combo collects it too.
         [Test]
-        public void CollectingTwoNestsInReachAtOnce_GivesBoth()
+        public void CollectingTwoNestsInReachAtOnce_OneComboAtATime_GivesBoth()
         {
             var nests = (Vector3[])HiveDefenseWorld.DefaultNests.Clone();
             nests[0] = new Vector3(-1f, 0f, 12f);
@@ -2561,7 +2600,11 @@ namespace DigitalStory.Tests.EditMode
             HiveDefenseSession session = _world.Session;
 
             _world.MoveCoreTo(new Vector3(0f, 0f, 12f));
-            _world.Run(2.1f);
+            Assert.That(session.Nests.ActiveNest, Is.EqualTo(0));
+            _world.Play(session.Nests[0].Combo);
+            _world.Run(HiveDefenseWorld.Step);
+            Assert.That(session.Nests.ActiveNest, Is.EqualTo(1));
+            _world.Play(session.Nests[1].Combo);
 
             Assert.That(session.Nests.CollectedCount, Is.EqualTo(2));
             Assert.That(session.Level, Is.EqualTo(3));
@@ -2610,6 +2653,7 @@ namespace DigitalStory.Tests.EditMode
         {
             _world = new HiveDefenseWorld(
                 OneStick(), spawns: new[] { new Vector3(12.6f, 0f, 0f) }, nests: afterANest ? NestUnderTheCore() : null, firstFarmSeconds: 3f);
+            CollectTheNestUnderTheCore(afterANest);
             StandStillAsTheySpawn();
             _world.RunUntil(() => _world.Session.ActiveBeekeeperCount == 1, 5f);
             _world.Run(HiveDefenseWorld.Step);
@@ -2633,6 +2677,7 @@ namespace DigitalStory.Tests.EditMode
             _world = new HiveDefenseWorld(
                 OneStick(), spawns: new[] { new Vector3(0f, 0f, 4.2f) }, nests: afterANest ? NestUnderTheCore() : null, firstFarmSeconds: 3f);
             HiveDefenseSession session = _world.Session;
+            CollectTheNestUnderTheCore(afterANest);
             StandStillAsTheySpawn();
             _world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f);
             session.Forms.StartColossus(ColossusSeconds);
@@ -2647,23 +2692,27 @@ namespace DigitalStory.Tests.EditMode
             Assert.That(keeper.Health, Is.EqualTo(expected).Within(0.01f));
         }
 
+        // Plan section U: while the giant stands the keys are its moves, so a nest it stands at shows no combo and its moves
+        // collect nothing; the giant keeps the level it stood up at.
         [Test]
-        public void Colossus_KeepsTheLevelItStoodUpAt()
+        public void Colossus_AtANest_ShowsNoComboAndKeepsTheLevelItStoodUpAt()
         {
             var nests = NestUnderTheCore();
             nests[1] = new Vector3(0f, 0f, 3.5f);
             _world = new HiveDefenseWorld(nests: nests, firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
-            _world.Run(2.1f);
+            CollectTheNestUnderTheCore(true);
             Assert.That(session.Level, Is.EqualTo(2));
             session.Forms.StartColossus(ColossusSeconds);
             _world.Run(HiveDefenseWorld.Step);
 
             _world.RunWith(1f, _world.Frame(move: new Vector2(0f, 1f)));
-            _world.Run(2.1f);
+            _world.Run(HiveDefenseWorld.Step);
+            Assert.That(session.Nests.ActiveNest, Is.EqualTo(NestField.NoNest), "a combo shows while the giant stands");
+            _world.Play(session.Nests[1].Combo);
 
-            Assert.That(session.Nests[1].IsCollected, Is.True, "the core rides inside the giant to the nest");
-            Assert.That(session.Level, Is.EqualTo(3));
+            Assert.That(session.Nests[1].IsCollected, Is.False, "the giant's moves collected the nest");
+            Assert.That(session.Level, Is.EqualTo(2));
             Assert.That(session.IsColossusActive, Is.True);
             Assert.That(session.ColossusSizeScale, Is.EqualTo(1.12f).Within(1e-5f), "the giant standing keeps its size");
         }
@@ -2678,8 +2727,16 @@ namespace DigitalStory.Tests.EditMode
             var hummed = new List<int>();
             discovery.Hummed += hummed.Add;
 
-            _world.CollectNest(0);
+            // The combo's notes go straight to the nest field, not through the flute, so they teach the song table nothing
+            // and the hum's choice is the random source's alone.
+            _world.MoveCoreTo(_world.NestPositions[0]);
+            IReadOnlyList<int> combo = _world.Session.Nests[0].Combo;
+            for (int index = 0; index < combo.Count; index++)
+            {
+                _world.Session.Nests.PlayNote(combo[index]);
+            }
 
+            Assert.That(_world.Session.Nests[0].IsCollected, Is.True);
             Assert.That(hummed, Is.EqualTo(new[] { HiveDefenseWorld.MeteorIndex }));
             Assert.That(discovery.KnownNotes(HiveDefenseWorld.MeteorIndex), Is.EqualTo(2), "J K of J K L K");
             Assert.That(discovery.IsKnown(HiveDefenseWorld.MeteorIndex), Is.False, "never the whole song");
@@ -2706,16 +2763,18 @@ namespace DigitalStory.Tests.EditMode
         }
 
         [Test]
-        public void Tick_StayingAtANest_AllocatesNothing()
+        public void Tick_PlayingANestsComboNotes_AllocatesNothing()
         {
             _world = new HiveDefenseWorld(firstFarmSeconds: 20f);
             HiveDefenseSession session = _world.Session;
             _world.MoveCoreTo(_world.NestPositions[0]);
             _world.Run(0.1f);
-            HiveDefenseFrame stay = _world.Frame();
+            HiveDefenseFrame first = _world.Frame(holes: HiveDefenseFrame.HoleBit(session.Nests[0].Combo[0]));
+            session.Tick(first, HiveDefenseWorld.Step);
+            HiveDefenseFrame second = _world.Frame(holes: HiveDefenseFrame.HoleBit(session.Nests[0].Combo[1]));
 
-            Assert.That(() => { session.Tick(stay, HiveDefenseWorld.Step); }, Is.Not.AllocatingGCMemory());
-            Assert.That(session.Nests[0].Progress01, Is.GreaterThan(0f));
+            Assert.That(() => { session.Tick(second, HiveDefenseWorld.Step); }, Is.Not.AllocatingGCMemory());
+            Assert.That(session.Nests[0].NotesPlayed, Is.EqualTo(2));
         }
 
         // ---- What changed after the owner played (plan section O) ----

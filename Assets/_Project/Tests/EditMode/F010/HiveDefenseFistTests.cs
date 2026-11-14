@@ -282,6 +282,7 @@ namespace DigitalStory.Tests.EditMode
             nests[0] = Vector3.zero;
             _world = new HiveDefenseWorld(new[] { new WaveEntry(1, 0) }, spawns: new[] { new Vector3(0f, 0f, 8f) }, nests: nests, firstFarmSeconds: 3f);
             HiveDefenseSession session = _world.Session;
+            Assert.That(_world.CollectNest(0), Is.True, "the nest under the core was not collected"); // Plan section U: by its combo.
             _world.Session.BeekeeperSpawned += keeper => keeper.Stun(1000f);
             Assert.That(_world.RunUntil(() => session.ActiveBeekeeperCount == 1, 5f), Is.True);
             session.Forms.StartColossus(ColossusSeconds);
