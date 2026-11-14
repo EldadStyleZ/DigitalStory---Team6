@@ -62,6 +62,32 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0.0001f), Tooltip("Seconds for the flute to fade out.")]
         public float FadeSeconds { get; private set; } = .05f;
 
+        [field: Header("Note voices (The Wasp Piper)")]
+        [field: SerializeField, Tooltip("The voice the swarm's notes start in. F6 cycles the voices while playing. Same pitches and note lengths in every voice.")]
+        public NoteVoiceKind NoteVoice { get; private set; } = NoteVoiceKind.Pluck;
+
+        [field: SerializeField, Tooltip("The kalimba-like pluck.")]
+        public StruckTone Pluck { get; private set; } = StruckTone.Kalimba;
+
+        [field: SerializeField, Tooltip("The soft bell.")]
+        public StruckTone Bell { get; private set; } = StruckTone.SoftBell;
+
+        [field: SerializeField, Tooltip("The buzzing reed: the wasps humming the tune.")]
+        public ReedTone Reed { get; private set; } = ReedTone.WaspHum;
+
+        [field: Header("Volume settings (The Wasp Piper)")]
+        [field: SerializeField, Range(0, 100), Tooltip("The master volume a player starts with, in percent, before they change it in the settings panel (Esc).")]
+        public int DefaultMasterPercent { get; private set; } = 100;
+
+        [field: SerializeField, Range(0, 100), Tooltip("The music volume (the note voice) a player starts with, in percent.")]
+        public int DefaultMusicPercent { get; private set; } = 100;
+
+        [field: SerializeField, Range(0, 100), Tooltip("The effects volume (every other sound) a player starts with, in percent.")]
+        public int DefaultEffectsPercent { get; private set; } = 100;
+
+        [field: SerializeField, Range(1, 25), Tooltip("Percent one press of Left or Right moves a volume in the settings panel.")]
+        public int VolumeStepPercent { get; private set; } = 5;
+
         public int HoleCount => _fluteSemitones.Length;
 
         public IReadOnlyList<SoundCue> Squeaks => _squeaks;

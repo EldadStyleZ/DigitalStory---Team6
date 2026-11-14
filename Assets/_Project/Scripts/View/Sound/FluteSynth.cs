@@ -10,7 +10,7 @@ namespace DigitalStory.View
     /// The recipe is the prototype's: a triangle wave with a soft octave above it, vibrato,
     /// a filter that takes the edge off and a little breath noise.
     /// </remarks>
-    public sealed class FluteSynth
+    public sealed class FluteSynth : INoteSynth
     {
         public const int Silent = Flute.NoHole;
 
@@ -113,6 +113,31 @@ namespace DigitalStory.View
                 for (int channel = 0; channel < channels; channel++)
                 {
                     buffer[index + channel] = sample;
+                }
+            }
+        }
+
+        /// <summary>Adds the next samples to a buffer, so the flute can sound beside the other note voices (plan section AC).</summary>
+        /// <param name="buffer">Samples, with each channel next to the others.</param>
+        /// <param name="channels">How many channels the buffer holds.</param>
+        public void Mix(float[] buffer, int channels)
+        {
+            FollowTheRequest();
+
+            // Silent and faded out: every sample would be 0 and leave the state as it is.
+            if (_hole == Silent && _gain <= QuietEnough)
+            {
+                _gain = 0f;
+                return;
+            }
+
+            for (int index = 0; index < buffer.Length; index += channels)
+            {
+                float sample = NextSample();
+
+                for (int channel = 0; channel < channels; channel++)
+                {
+                    buffer[index + channel] += sample;
                 }
             }
         }
