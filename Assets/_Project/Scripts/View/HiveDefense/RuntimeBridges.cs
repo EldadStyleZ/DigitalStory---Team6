@@ -17,6 +17,7 @@ namespace DigitalStory.View
         private const float HalfWidth = 1.6f;
         private const float RisePerMetre = 0.12f;
         private const float MaxRise = 1.6f;
+        private const float ShareDistance = 30f;  // crossings closer than this share one bridge
 
         private static readonly Color Wood = new Color(0.55f, 0.36f, 0.2f);
         private static readonly Color DarkWood = new Color(0.32f, 0.2f, 0.11f);
@@ -48,11 +49,21 @@ namespace DigitalStory.View
 
             float waterLevel = water.transform.position.y;
             int built = 0;
+            var middles = new List<Vector3>();
             for (int index = 0; index < spawns.Count; index++)
             {
                 Vector3 hive = hives[index % hives.Count];
                 foreach ((Vector3 from, Vector3 to) in Crossings(terrain, spawns[index], hive, waterLevel))
                 {
+                    // Beekeepers from the same side share one bridge: a crossing near one already built is skipped, and the
+                    // route sends them over the bridge that stands.
+                    Vector3 middle = (from + to) * 0.5f;
+                    if (middles.Exists(other => Vector3.Distance(other, middle) < ShareDistance))
+                    {
+                        continue;
+                    }
+
+                    middles.Add(middle);
                     MakeBridge(root.transform, terrain, from, to, waterLevel, s_materials, built++);
                 }
             }

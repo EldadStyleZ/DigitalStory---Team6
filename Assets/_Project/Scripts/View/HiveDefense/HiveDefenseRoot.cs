@@ -1123,6 +1123,14 @@ namespace DigitalStory.View
         {
             int seed = MatchSeed.Next();
             // Nothing stands in or beside a river: the map keeps a few metres off the water.
+            // Trees painted on the terrain never move; the random scenery is the only wood inside the map, the edge forest frames it.
+            Terrain ground = Terrain.activeTerrain;
+            if (ground != null && ground.terrainData != null && ground.terrainData.treeInstanceCount > 0)
+            {
+                Debug.Log($"[F010] Hiding {ground.terrainData.treeInstanceCount} trees painted on the terrain, so the trees change every match.");
+                ground.treeDistance = 0f;
+            }
+
             LayoutGenerator.IsBlocked = (point, radius) => RiverBridge.Nearness(point, radius + RiverMargin) > 0f;
             ArenaLayout layout = LayoutGenerator.Generate(seed, _coreMotor.Position, _layout, _nests, _scenery.Footprints);
             string fallback = layout.IsFallback ? " No map kept the rules, so the fallback map stands." : string.Empty;

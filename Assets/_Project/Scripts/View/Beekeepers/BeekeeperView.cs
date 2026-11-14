@@ -166,6 +166,13 @@ namespace DigitalStory.View
             _startScale = transform.localScale;
             _renderers = GetComponentsInChildren<Renderer>(true);
             _block = new MaterialPropertyBlock();
+            _spine = FindBone(transform, "Spine");
+            _upperArm = FindBone(transform, "RightUpperArm");
+            _lowerArm = FindBone(transform, "RightLowerArm");
+            for (int index = 0; index < 3; index++)
+            {
+                _poseSet[index] = new Quaternion(0f, 0f, 0f, 0f);
+            }
         }
 
         /// <summary>Starts showing the brain, from its spawn point. Call after the brain spawned.</summary>
@@ -219,7 +226,7 @@ namespace DigitalStory.View
             _isDying = true;
             _deathElapsed = 0f;
             _swingLeft = 0f;
-            SetLean(0f);
+            Pose(0f, 0f);
             SetSpeed(0f);
         }
 
@@ -305,29 +312,109 @@ namespace DigitalStory.View
             }
         }
 
+        // A real blow instead of a fall: the wind-up raises the stick arm over the head and leans the body back, the strike
+        // whips the arm down and the chest forward into the hive, then the beekeeper straightens up again.
         private void ShowLean(float deltaTime)
         {
             float progress = _brain.WindUpProgress;
             if (progress > 0f)
             {
                 _swingLeft = 0f;
-                SetLean(_maxLeanDegrees * progress);
+                float raise = Mathf.SmoothStep(0f, 1f, progress);
+                Pose(raise, 0f);
             }
             else if (_lastProgress > 0f)
             {
-                _swingLeft = _swingSeconds;
+                _swingLeft = StrikeSeconds;
             }
 
             _lastProgress = progress;
-            if (progress > 0f || _swingLeft <= 0f)
+            if (progress > 0f)
             {
                 return;
             }
 
-            // Snap forward past the lean, then settle upright.
+            if (_swingLeft <= 0f)
+            {
+                Pose(0f, 0f);
+                return;
+            }
+
             _swingLeft = Mathf.Max(0f, _swingLeft - deltaTime);
-            float settle = _swingLeft / _swingSeconds;
-            SetLean(_swingDegrees * settle * settle);
+            float t = 1f - (_swingLeft / StrikeSeconds);
+            float down = Mathf.Clamp01(t / StrikeDownShare);
+            float back = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(StrikeHoldUntil, 1f, t));
+            Pose(1f - (down * down), down * (1f - back));
+        }
+
+        private const float StrikeSeconds = 0.5f;
+        private const float StrikeDownShare = 0.22f;    // share of the strike the arm takes to come down
+        private const float StrikeHoldUntil = 0.5f;     // the blow holds on the hive until here, then recovers
+        private const float RaiseArmDegrees = 165f;
+        private const float RaiseElbowDegrees = 55f;
+        private const float RaiseLeanBackDegrees = 14f;
+        private const float StrikeArmDegrees = 55f;
+        private const float StrikeChestDegrees = 24f;
+        private const float StrikeBodyDegrees = 8f;
+
+        private Transform _spine;
+        private Transform _upperArm;
+        private Transform _lowerArm;
+        private readonly Quaternion[] _poseBase = new Quaternion[3];
+        private readonly Quaternion[] _poseSet = new Quaternion[3];
+
+        // raise: 0 rest, 1 arm over the head. strike: 0 rest, 1 arm forward and down on the hive, chest bent in.
+        private void Pose(float raise, float strike)
+        {
+            SetLean((StrikeBodyDegrees * strike) - (3f * raise));
+            Vector3 axis = transform.right;
+            Bend(0, _spine, (StrikeChestDegrees * strike) - (RaiseLeanBackDegrees * raise), axis);
+            Bend(1, _upperArm, -(RaiseArmDegrees * raise) - (StrikeArmDegrees * strike), axis);
+            Bend(2, _lowerArm, -RaiseElbowDegrees * raise, axis);
+        }
+
+        // Turns a bone about the beekeeper's right axis on top of what the Animator posed this frame. When the Animator
+        // left the bone alone, the turn of the last frame is taken off first, so the turns never pile up.
+        private void Bend(int slot, Transform bone, float degrees, Vector3 axis)
+        {
+            if (bone == null)
+            {
+                return;
+            }
+
+            Quaternion local = bone.localRotation;
+            Quaternion baseLocal = Quaternion.Angle(local, _poseSet[slot]) < 0.01f ? _poseBase[slot] : local;
+            _poseBase[slot] = baseLocal;
+            if (Mathf.Abs(degrees) < 0.01f)
+            {
+                bone.localRotation = baseLocal;
+            }
+            else
+            {
+                Quaternion parent = bone.parent != null ? bone.parent.rotation : Quaternion.identity;
+                bone.rotation = Quaternion.AngleAxis(degrees, axis) * (parent * baseLocal);
+            }
+
+            _poseSet[slot] = bone.localRotation;
+        }
+
+        private static Transform FindBone(Transform root, string name)
+        {
+            if (root.name == name)
+            {
+                return root;
+            }
+
+            for (int index = 0; index < root.childCount; index++)
+            {
+                Transform found = FindBone(root.GetChild(index), name);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
         }
 
         // Walks on the hills and climbs over the bridges, instead of the flat height the brain plans on.
