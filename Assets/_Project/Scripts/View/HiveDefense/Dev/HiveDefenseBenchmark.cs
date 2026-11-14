@@ -92,6 +92,8 @@ namespace DigitalStory.View
         private const string GiantForming = "giant_form";
         private const string Ending = "end";
         private const string Horizon = "horizon";
+        private const string HiveStation = "hive";
+        private const string WaveAtHive = "wave28_hive";
         private const int ShotQuietFrames = 3;
 
         // The giant's keys while it stands (plan section I). Holes count from 0 as H J K L.
@@ -111,7 +113,7 @@ namespace DigitalStory.View
             "nodamagenumbers", "nocursorlock", "nograss", "nowater", "nowaterreflections", "noforest", "noterrain", "nomist",
             "nominimap", "nosmoke", "noambience", "halfres", "waterslices6", "waterres256", "waternoshadowsim", "waternofoamsim",
             "waternounderwater", "waterreflecthalf", "nohdr", "nomsaa", "grassthin", "shadowlite", "scale75", "dynres75",
-            "waternodepthcopy", "waternocolorcopy",
+            "waternodepthcopy", "waternocolorcopy", "noexplosionfx", "noexplosionlight",
         };
 
         // The giant's moves, each measured in a window of its own in the chase camera, over two giants: one cannot stand long
@@ -850,7 +852,11 @@ namespace DigitalStory.View
         {
             BenchmarkSwitch[] songSwitches = _options.SwitchNames != null ? ParseSwitches(_options.SwitchNames) : SongStationSwitches;
             BenchmarkSwitch[] waveSwitches = _options.SwitchNames != null ? songSwitches : WaveStationSwitches;
-            for (int index = 0; index < songSwitches.Length; index++)
+
+            // The station "hive" alone skips the song part and measures the last wave beside the first hive, where the
+            // beekeepers attack, their smoke stands and their grenades go off (the attacks into the wave of 39).
+            bool isAtHiveOnly = _options.Stations.Length == 1 && _options.Stations[0] == HiveStation;
+            for (int index = 0; index < songSwitches.Length && !isAtHiveOnly; index++)
             {
                 yield return EnsureFarm(StationLoopSeconds, _session.RoundCount - 1);
                 BenchmarkSwitch change = songSwitches[index];
@@ -869,6 +875,12 @@ namespace DigitalStory.View
             }
 
             yield return LastWave();
+            if (isAtHiveOnly)
+            {
+                _motor.PlaceAt(_session.Hives[0].Position + (Vector3.back * BesideHiveMetres), true);
+                yield return Hold(WaveAtHive, Phase.Setup, WaveSettleSeconds);
+            }
+
             for (int index = 0; index < waveSwitches.Length; index++)
             {
                 if (!TryApply(waveSwitches[index]))
@@ -877,7 +889,7 @@ namespace DigitalStory.View
                 }
 
                 yield return Settle(waveSwitches[index]);
-                yield return Measure(WaveLast, StationSeconds);
+                yield return Measure(isAtHiveOnly ? WaveAtHive : WaveLast, StationSeconds);
                 yield return Unswitch();
             }
         }

@@ -128,5 +128,11 @@ namespace DigitalStory.View
 
         /// <summary>The water stops copying the camera's colour for its own use (the opaque texture written before transparents).</summary>
         WaterNoColorCopy = 41,
+
+        /// <summary>A grenade going off makes no particle effect (ExplosionFlash's prefab), only its light.</summary>
+        NoExplosionFx = 42,
+
+        /// <summary>A grenade going off makes no light (ExplosionFlash's 11 m pixel light), only its particles.</summary>
+        NoExplosionLight = 43,
     }
 }

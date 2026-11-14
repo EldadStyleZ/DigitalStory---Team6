@@ -302,6 +302,11 @@ namespace DigitalStory.View
                 case BenchmarkSwitch.WaterNoColorCopy:
                     Assign(Water(), "_WriteToColorTexture", false);
                     break;
+                case BenchmarkSwitch.NoExplosionFx:
+                    // The prefab is loaded once into a static; with it "looked for" and empty, no effect is made.
+                    Assign(null, typeof(ExplosionFlash), "s_looked", true);
+                    Assign(null, typeof(ExplosionFlash), "s_effect", null);
+                    break;
                 case BenchmarkSwitch.WaterReflectHalf:
                     // Crest only skips frames for a reflection that serves one camera.
                     Assign(_waterReflections, "_RenderOnlySingleCamera", true);
@@ -493,6 +498,17 @@ namespace DigitalStory.View
                 for (int index = 0; index < _swarmLights.Length; index++)
                 {
                     _swarmLights[index].enabled = false;
+                }
+            }
+            else if (Current == BenchmarkSwitch.NoExplosionLight)
+            {
+                // Each grenade makes its own light; switch off every one that stands this frame.
+                foreach (ExplosionFlash flash in UnityEngine.Object.FindObjectsByType<ExplosionFlash>())
+                {
+                    foreach (Light light in flash.GetComponentsInChildren<Light>())
+                    {
+                        light.enabled = false;
+                    }
                 }
             }
             else if (Current == BenchmarkSwitch.NoSmoke)
