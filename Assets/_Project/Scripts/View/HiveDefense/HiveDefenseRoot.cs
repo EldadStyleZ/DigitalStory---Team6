@@ -369,6 +369,9 @@ namespace DigitalStory.View
             // scene; loading it by name from a Resources folder is the one way to keep every committed file the same with or
             // without the pack. Without it (a teammate without the pack) this is null and the game's own effects run alone.
             _hitFeedback.UseImpactFx(Resources.Load<ImpactFxLibrary>(ImpactFxLibrary.ResourceName));
+
+            // Plan section AC: the optional recorded sounds, from paid packs, found by name for the same reason; null without them.
+            _hitFeedback.UseRecordedSound(Resources.Load<GameSoundLibrary>(GameSoundLibrary.ResourceName));
             _rumble.Initialize(Session, _input, _gamepad);
             SetSceneShadows();
 

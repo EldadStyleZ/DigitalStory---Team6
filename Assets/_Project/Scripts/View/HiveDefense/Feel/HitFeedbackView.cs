@@ -127,6 +127,8 @@ namespace DigitalStory.View
         private ImpactFxSpawner _impactFx;
         private Transform _impactHolder;
         private float _hitLeastDamage;
+        private GameSoundPlayer _recordedSound;
+        private Transform _soundHolder;
 
         /// <summary>Raised for each kill, with where the kill chain stands; the HUD's sound climbs and stamps from it.</summary>
         public event Action<KillChainStep> KillChained;
@@ -145,6 +147,9 @@ namespace DigitalStory.View
 
         /// <summary>The optional impact effects (plan section AB), or null before <see cref="UseImpactFx"/>. For tests and the benchmark.</summary>
         public ImpactFxSpawner ImpactFx => _impactFx;
+
+        /// <summary>The optional recorded sounds (plan section AC), or null without a library. The HUD's sound reads it to stay quiet where a recorded sound plays.</summary>
+        public GameSoundPlayer RecordedSound => _recordedSound;
 
         /// <summary>Starts listening to the match. Call once, after the swarm view and the camera exist; calling again starts over.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
@@ -181,6 +186,7 @@ namespace DigitalStory.View
             _session.ColossusFistLanded += OnColossusFistLanded;
             _session.Hives.HiveDestroyed += OnHiveDestroyed;
             _session.Nests.NestCollected += OnNestCollected;
+            _session.Nests.ComboNote += OnComboNote;
             _hiveHitAt = new float[_session.Hives.Count];
             for (int index = 0; index < _session.Hives.Count; index++)
             {
@@ -222,11 +228,46 @@ namespace DigitalStory.View
             Debug.Log($"[F010] Impact effects from the local library {library.name}: {_impactFx.InstanceCount} pooled instances made.", this);
         }
 
+        /// <summary>
+        /// Gives the feel director the optional recorded sounds of plan section AC, or none (null), and makes all their sources
+        /// now, at load. Without a library the game's own sounds are all there is. Call after <see cref="Initialize"/>.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Initialize has not run.</exception>
+        public void UseRecordedSound(GameSoundLibrary library)
+        {
+            if (_session == null)
+            {
+                throw new InvalidOperationException("Call HitFeedbackView.Initialize before UseRecordedSound.");
+            }
+
+            _recordedSound?.Dispose();
+            _recordedSound = null;
+            if (library == null)
+            {
+                return;
+            }
+
+            if (_soundHolder == null)
+            {
+                _soundHolder = new GameObject("Recorded Sounds").transform;
+                _soundHolder.SetParent(transform, false);
+            }
+
+            _recordedSound = new GameSoundPlayer(library, _soundHolder);
+            Debug.Log($"[F010] Recorded sounds from the local library {library.name}: {_recordedSound.ClipCount} clips, {_recordedSound.SourceCount} sources.", this);
+        }
+
         private void LateUpdate()
         {
             if (!_isReady)
             {
                 return;
+            }
+
+            if (_recordedSound != null)
+            {
+                SwarmBody swarm = _session.Swarm;
+                _recordedSound.Tick(swarm.Count / (float)Mathf.Max(1, swarm.Max), Time.unscaledDeltaTime);
             }
 
             StepMoments();
@@ -268,6 +309,7 @@ namespace DigitalStory.View
                 _session.ColossusFistLanded -= OnColossusFistLanded;
                 _session.Hives.HiveDestroyed -= OnHiveDestroyed;
                 _session.Nests.NestCollected -= OnNestCollected;
+                _session.Nests.ComboNote -= OnComboNote;
                 for (int index = 0; index < _session.Hives.Count; index++)
                 {
                     _session.Hives[index].Damaged -= OnHiveDamaged;
@@ -332,6 +374,7 @@ namespace DigitalStory.View
                 }
 
                 KillChained?.Invoke(_lastChainStep);
+                PlayRecorded(GameSoundEvent.BeekeeperDeath, Mathf.Pow(2f, _lastChainStep.Semitones / 12f));
             }
 
             AddTrauma(hit.IsBlocked ? trauma * _blockedShakeShare : trauma);
@@ -375,6 +418,7 @@ namespace DigitalStory.View
             if (ImpactFxChoice.ForFormLanded(form, out ImpactFxKind impact))
             {
                 PlayImpact(impact, point, _session.SizeScale);
+                PlayRecorded(GameSoundEvent.HeavyImpact, 1f);
             }
 
             if (form != SwarmForm.Tornado || !AreFlashesOn)
@@ -439,6 +483,7 @@ namespace DigitalStory.View
             if (ImpactFxChoice.ForColossusAttack(attack, out ImpactFxKind impact))
             {
                 PlayImpact(impact, _session.ColossusPosition, _session.ColossusSizeScale);
+                PlayRecorded(GameSoundEvent.HeavyImpact, 1f);
             }
         }
 
@@ -463,6 +508,7 @@ namespace DigitalStory.View
                 {
                     _hiveHitAt[index] = Time.time;
                     AddTrauma(_feel.HiveHitTrauma);
+                    PlayRecorded(GameSoundEvent.HiveHit, 1f);
                 }
 
                 return;
@@ -477,6 +523,21 @@ namespace DigitalStory.View
         private void OnNestCollected(int nest)
         {
             PlayImpact(ImpactFxKind.NestBurst, _session.Nests[nest].Position, 1f);
+            PlayRecorded(GameSoundEvent.NestCollected, 1f);
+        }
+
+        private void OnComboNote(int nest, NestComboStep step)
+        {
+            if (step == NestComboStep.Broken)
+            {
+                PlayRecorded(GameSoundEvent.ComboWrongNote, 1f);
+            }
+        }
+
+        // An optional recorded sound (plan section AC), on real time so the slow-downs do not stretch its least gap.
+        private void PlayRecorded(GameSoundEvent kind, float pitch)
+        {
+            _recordedSound?.Play(kind, Time.unscaledTime, pitch);
         }
 
         // Songs-v2 R: a small push as the fist leaves; its hit is heavy, felt through SongLanded like the giant's other blows.
@@ -491,6 +552,7 @@ namespace DigitalStory.View
         {
             var slotSong = _session.Caster[song] as SlotSongEffect;
             float share = slotSong != null ? CastWeight.PunchShare(slotSong.Form, _feel.LightCastShare) : 1f;
+            PlayRecorded(GameSoundEvent.SongCast, 1f);
             _camera.Kick(_castKick * share);
             _camera.Punch(_feel.CastFovPunch * share, _feel.CastRollDegrees * share * _castRollSign);
             _castRollSign = -_castRollSign;

@@ -62,6 +62,19 @@ namespace DigitalStory.Data
         [field: SerializeField, Min(0.0001f), Tooltip("Seconds for the flute to fade out.")]
         public float FadeSeconds { get; private set; } = .05f;
 
+        [field: Header("Swarm note voice")]
+        [field: SerializeField, Tooltip("The voice the Wasp Piper's notes sound in. The flute stays available.")]
+        public NoteVoiceKind SwarmVoice { get; private set; } = NoteVoiceKind.Pluck;
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("The pluck's volume at its peak.")]
+        public float PluckVolume { get; private set; } = .16f;
+
+        [field: SerializeField, Min(0.01f), Tooltip("Seconds for the pluck's ring to fall to about a third.")]
+        public float PluckDecaySeconds { get; private set; } = .45f;
+
+        [field: SerializeField, Min(0.001f), Tooltip("Seconds for a released pluck to be damped to about a third.")]
+        public float PluckDampSeconds { get; private set; } = .25f;
+
         public int HoleCount => _fluteSemitones.Length;
 
         public IReadOnlyList<SoundCue> Squeaks => _squeaks;

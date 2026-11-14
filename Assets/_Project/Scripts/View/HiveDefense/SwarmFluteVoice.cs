@@ -15,7 +15,7 @@ namespace DigitalStory.View
         private CoreMoveConfig _move;
         private HiveDefenseInput _input;
         private AudioSource _source;
-        private FluteSynth _synth;
+        private INoteSynth _synth;
         private int _buffersFilled;
         private float _secondsSounding;
 
@@ -104,7 +104,7 @@ namespace DigitalStory.View
         // Unity calls this on the audio thread, so the synth has to arrive complete: see StartTheFlute.
         private void OnAudioFilterRead(float[] data, int channels)
         {
-            FluteSynth synth = Volatile.Read(ref _synth);
+            INoteSynth synth = Volatile.Read(ref _synth);
 
             if (synth != null)
             {
@@ -123,7 +123,9 @@ namespace DigitalStory.View
                 return;
             }
 
-            FluteSynth synth = new FluteSynth(_sound, sampleRate, _sound.HoleCount);
+            INoteSynth synth = _sound.SwarmVoice == NoteVoiceKind.Pluck
+                ? new PluckSynth(_sound, sampleRate, _sound.HoleCount)
+                : new FluteSynth(_sound, sampleRate, _sound.HoleCount);
             synth.Lift(Lift);
             synth.Play(HolePlaying);
             Volatile.Write(ref _synth, synth);

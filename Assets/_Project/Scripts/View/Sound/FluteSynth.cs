@@ -10,7 +10,7 @@ namespace DigitalStory.View
     /// The recipe is the prototype's: a triangle wave with a soft octave above it, vibrato,
     /// a filter that takes the edge off and a little breath noise.
     /// </remarks>
-    public sealed class FluteSynth
+    public sealed class FluteSynth : INoteSynth
     {
         public const int Silent = Flute.NoHole;
 

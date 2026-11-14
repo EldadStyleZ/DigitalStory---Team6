@@ -1,4 +1,5 @@
 using System;
+using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
 
@@ -140,6 +141,11 @@ namespace DigitalStory.View
         private void OnKillChained(KillChainStep step)
         {
             LastKillPitch = Mathf.Pow(2f, step.Semitones / 12f);
+            if (IsRecorded(GameSoundEvent.BeekeeperDeath))
+            {
+                return;
+            }
+
             Play(KindKill, _killVolume, LastKillPitch);
         }
 
@@ -164,7 +170,16 @@ namespace DigitalStory.View
 
         private void OnSongCastNow(int song)
         {
-            Play(KindCast, _castVolume);
+            if (!IsRecorded(GameSoundEvent.SongCast))
+            {
+                Play(KindCast, _castVolume);
+            }
+        }
+
+        // A recorded sound (plan section AC) replaces the made one for its moment, so the two never double up.
+        private bool IsRecorded(GameSoundEvent kind)
+        {
+            return _chain != null && _chain.RecordedSound != null && _chain.RecordedSound.Has(kind);
         }
 
         private void Play(int kind, float volume)
