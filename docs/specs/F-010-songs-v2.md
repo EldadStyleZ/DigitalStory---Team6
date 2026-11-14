@@ -334,7 +334,7 @@ Wasps are the one currency. They are the player's health, the price of an attack
 
 | Use | Cost | Notes |
 |---|---|---|
-| Sting | 5 for each sting | One sting for every 400 living wasps (section O), so a cast at the starting 800 costs 10. Cheap on purpose, so the player always has a move |
+| Sting | 5 for each sting | One sting for every 400 living wasps (section O), so a cast at the starting 800 costs 10. Cheap on purpose, so the player always has a move. Since section V the stings share one cast's damage, the weakest of the attacks |
 | Gust | 20 | |
 | Dome | 40 | |
 | Tornado | 60 | |
@@ -342,9 +342,9 @@ Wasps are the one currency. They are the player's health, the price of an attack
 | Hydra | 60 | |
 | Scythe | 30 | |
 | Lance | 70 | |
-| Colossus | 0 | Fury is its price: 1 point per 8.5 damage of the songs, 100 to fill. The giant's own blows, its fists included, fill none |
+| Colossus | 0 | Fury is its price: 1 point per 11.5 damage of the songs (8.5 until section V), 100 to fill. The giant's own blows, its fists included, fill none |
 | Hive Call | 0 | |
-| Healing a hive | 3.5 wasps for each point of health | Hold E within 3 m of a damaged hive: 60 wasps a second flow in. A hive has 450 health |
+| Healing a hive | 4 wasps for each point of health (3.5 until section V) | Hold E within 3 m of a damaged hive: 60 wasps a second flow in. A hive has 450 health |
 | Towers | Honeycomb 150, Nest 300 | The wasps stay there, so a tower costs its price in a farm phase too. One Post slot: a new tower replaces the old one |
 
 - Costs apply only in a survive phase, except a tower's.
@@ -388,11 +388,13 @@ Changed from the starting numbers: waves 3 + 0, 4 + 1, 4 + 3, 6 + 4, 8 + 5 becam
 |---|---|---|---|---|
 | Idle | 0 | Lost in round 1 | none | none |
 | Sting only | 0 | Lost in round 2, now and then 3 | none | none |
-| Attack only (never heals, shields, places towers or fetches nests) | 0 | Lost in round 4, now and then 3 or 5 | none, by design | none, by design |
+| Attack only (never heals, shields, places towers or fetches nests) | 0 | Lost in round 4, now and then 5 | none, by design | none, by design |
 | Heal only (never attacks) | 0 | Lost in round 1: the sticks walk past it to the hives | none | none |
 | Towers only (towers and healing, no Strike song) | 0 | Lost in round 1 | none: no wins | none: no wins |
-| Mixed (no nests) | 0 | Lost in round 5 | none: no wins | none: no wins |
-| Mixed with nests | 5 | Won at level 9; 74% hive health left | 16 to 23% | 20 to 25% |
+| Mixed (no nests) | 0 | Lost in round 4 or 5 | none: no wins | none: no wins |
+| Mixed with nests | 5 | Won at level 9; 56% hive health left | 16 to 25% | 13 to 19% |
+
+Measured again after section V (2026-11-14), with the wider map and the even split (T), the nest combo (U) and the Sting as the weakest attack (V), on five seeds and on thirty. Won matches last 7.2 to 7.9 minutes (7.0 to 7.9 over thirty). Over thirty seeds Mixed wins none and Mixed with nests all 30; the other plans win none. The damage in the wins (five seeds): the giant 40% (its fists 14%), the Meteor 18%, the Sting 15%, the Hydra 11%, the Lance, the Nest and the Tornado 4% each, the Honeycomb 3%. Over thirty: the giant 40% (fists 15%), the Meteor 17%, the Sting 16%, the Hydra 11%, the Nest 5%, the Lance and the Tornado 4%. Over thirty, healing is the thin share: 15 of the 30 wins heal with less than 15% (seed 20 with nothing), and seed 28 spends 8% on the towers; the 15% and 8% targets are checked on the five seeds, which all hold them. Section V has the levers and what was tried. The table above is this measurement; the paragraphs below are the earlier ones.
 
 Measured on 2026-11-13, overnight, with the giant's hands and a map for each seed, on five seeds and on thirty. Won matches last 6.8 to 7.0 minutes (6.8 to 7.4 over thirty seeds). Over thirty seeds Mixed wins 1 (seed 13) and Mixed with nests all 30, keeping 50 to 85% of the hives' health; the other plans win none. The damage in the wins (five seeds, all with nests): the giant 40% (its fists 19.5% of all the damage, about 46 hits a match), the Sting 36%, the Meteor 17%, the Lance 4%, the Nest 3%, every other song under 1%. Over thirty seeds, across every win: the giant 40% (fists 21%), the Sting 37%, the Meteor 18%, the Lance 3%, the Nest 2%. Over thirty seeds four wins with nests heal with nothing (seeds 6, 9, 21 and 29: wave 4 left both hives above 60%, the line where the plans heal, and the last wave's harm is never healed), and one spends 7.8% on the towers (seed 28); the 15% and 8% targets are checked on the five seeds, which all hold them.
 
@@ -572,3 +574,17 @@ Added 2026-11-14. The owner: "for each hive we collect in the forest, instead of
 - **Hooks for effects.** `NestField.ComboShown`, `ComboHidden` and `ComboNote(nest, step)` (`NestComboStep`: Advanced, Broken, Restarted, Completed) are the attach points; the HUD and the flute listen to them and nothing calls the effects directly, so a later stage can add camera or particle juice by listening too.
 - **Lesson.** Step 3 now reads "Fly to the glowing nest and play the notes shown."
 - **Playtest bot.** It reads a combo for 0.6 s once it shows, then plays a note every 0.3 s (`PlaytestBot.NestComboReadSeconds`, `NestComboNoteSeconds`), so a nest takes 1.8 to 2.1 s, about the old 2 s. The economy is not retuned; band tests that moved are listed in `Logs/f010/known-red.txt` for the Balance stage. The benchmark plays the combo the same way.
+
+### V. The Sting is the weakest attack
+
+Added 2026-11-14. The owner: "I want the Sting to be less effective than the other attacks." It had become the top song: 35% of the damage in the wins, because a cast at 4,000 wasps sent ten stings of 73 damage each.
+
+- **The rule** (`StingRule`). The stings now share one cast's damage: `StingSong.DamagePerSecond` is the whole cast's, split evenly between its stings. The owner's "every 400 wasps, one sting" stays, so a bigger swarm wraps more beekeepers, but it no longer hits harder; like every other song, the Sting grows only with the level. The price stays 5 wasps a sting.
+- **The numbers.** `DamagePerSecond` 12 for the whole cast (was 20 for each sting), so a cast deals 43.8 at the first level at any swarm (was 146 at 800 wasps and 730 at 4,000). Against three beekeepers in reach, the other attacks deal: the Tornado 90, the Hydra 120, the Scythe 135, the Meteor 180 and the Lance 180. For each wasp sent (its squad, 30% of the swarm against 35 to 37%), the Sting deals about 60% of the Tornado's. Its cooldown (1.5 s) and its three notes stay the quickest. For each wasp paid it is still the thriftiest at 800 wasps (4.4 damage a wasp; the Scythe 4.5), and the dearest at 4,000 (0.9), where a cast costs 50. `StingSongTests` checks the order per cast and per wasp sent at 400, 800, 1,200 and 4,000 wasps, by a measured cast against three beekeepers.
+- **Two more levers, because of the Sting.** Fury takes 11.5 damage a point (was 8.5): the beekeepers the Sting no longer kills were left to the giant, which rose to 46% of the damage. Healing costs 4 wasps a point (was 3.5): the big songs that do the Sting's work cost more, so healing became a smaller share of the spending, and a five-seed win healed with 12%.
+- **The bot.** It still plays the Sting when nothing bigger fits, which is what a player does with a quick jab. It now counts a Sting at its cast's damage, not a sting's damage times the stings, so it chooses a big song that fits whenever one is ready (`StrikeChoice`). Spending the Meteor on a lone beekeeper sooner (`RichInCasts` 6, 4, 3 or 2) changed nothing measurable, so it stays at 6.
+- **The early waves.** Without nests, a bot that knows only the Sting, the Dome, the Gust and Hive Call (and the giant once Fury fills), the songs the lesson and the backwards law give first, clears waves 1 and 2 on all thirty maps and wave 3 on 29. With the Tornado and the Meteor as well, the next two the discovery order gives, it clears waves 1 to 3 on all thirty. The Sting alone still clears wave 1 on every map. A mixing player gets through the early waves because every song's first cast is free and the Tornado, the Meteor and the Dome cover what the Sting no longer kills. These were measured with healing at 4.5 wasps a point; it barely matters before wave 4.
+- **Targets tightened** (`EconomyPlaytestTests`). In the wins no song but the giant deals more than 40% of the damage (was 50%), the Sting at most 25% and less than the top song, and the giant under 45%.
+- **What was tried** (one Unity run each, many sets at a time, on thirty seeds). Capping the stings at 2, 3 or 4 with the old rule worked as well, but threw away the owner's growing count. With the shared rule: the Sting at 20, 18, 16, 14 or 13 a second stayed the top song (17 to 22%, the Meteor 16 to 18%), since the bot fills every gap with it; at 12 it falls under the Meteor once Fury is 11.5 or more, and at 10 always. Fury at 8.5 left the giant at 45 to 47%, at 10 to 10.5 at 42 to 44%, at 11.5 at 40%, at 12 at 38% (the Sting then often the top song again). Healing at 3.5 held the five seeds by a hair (one win at 15%); at 4.5 a win on seed 7 lost a hive, and at 5 a five-seed win healed with 15%.
+- **The maps.** Mixed with nests wins all thirty. The hardest is seed 8 (31% of the hives' health kept, the weaker at 28%), then seed 7 (32%, the weaker at 6%) and seed 20 (33%); the easiest is seed 19 (69%), then seed 23 (68%) and seed 10 (65%). Mixed without nests wins none, reaching round 4 or 5 on every map. No map is unwinnable or trivial, so `LayoutGenerator` and `LayoutConfig` are unchanged.
+- **Open for the owner.** Healing is thin across thirty seeds: 15 of 30 wins heal with less than 15% (seed 20 with nothing), against 6 before; the five checked seeds hold 16 to 25%. The Sting is now 16% of the damage, the Meteor 17%: the margin is small, and the sweep checks it. Whether a 44-damage Sting still feels good to press is for a person to judge.
