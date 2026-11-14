@@ -1,3 +1,4 @@
+using DigitalStory.Logic;
 using UnityEngine;
 
 namespace DigitalStory.View
@@ -6,6 +7,11 @@ namespace DigitalStory.View
     /// The light of a grenade going off: a hot orange flash that lights the grass, the trees and the swarm round it, then
     /// flickers down to nothing, and the explosion effect with it is cleared away.
     /// </summary>
+    /// <remarks>
+    /// Plan section AD: each flash is a pixel light reaching 11 m, which draws every grass cell, beekeeper and prop in its
+    /// reach again; at a hive under a wave of 39, several shone at once and cost about 3.4 ms a frame. At most
+    /// <see cref="MostLightsAtOnce"/> shine together now; a grenade past that still bursts, without its light.
+    /// </remarks>
     [DisallowMultipleComponent]
     public sealed class ExplosionFlash : MonoBehaviour
     {
@@ -14,11 +20,14 @@ namespace DigitalStory.View
         private const float EffectSeconds = 6f;
         private const float PeakIntensity = 7f;
         private const float Range = 11f;
+        private const int MostLightsAtOnce = 2;
 
         private static GameObject s_effect;
         private static bool s_looked;
+        private static LightBudget s_lights = new LightBudget(MostLightsAtOnce);
 
         private Light _light;
+        private bool _holdsLight;
         private float _elapsed;
 
         /// <summary>Sets off the explosion, with its light, at a point on the ground.</summary>
@@ -44,6 +53,12 @@ namespace DigitalStory.View
                 }
             }
 
+            if (!s_lights.TryClaim())
+            {
+                Destroy(root, EffectSeconds);
+                return;
+            }
+
             var lightObject = new GameObject("Flash");
             lightObject.transform.SetParent(root.transform, false);
             lightObject.transform.localPosition = Vector3.up * 1.5f;
@@ -57,6 +72,7 @@ namespace DigitalStory.View
 
             var flash = root.AddComponent<ExplosionFlash>();
             flash._light = light;
+            flash._holdsLight = true;
             Destroy(root, EffectSeconds);
         }
 
@@ -76,9 +92,42 @@ namespace DigitalStory.View
             _light.intensity = PeakIntensity * rise * fall * flicker;
             if (t >= 1f)
             {
-                Destroy(_light.gameObject);
-                _light = null;
+                ReleaseLight();
             }
+        }
+
+        // A scene unloaded mid-flash takes its light with it.
+        private void OnDestroy()
+        {
+            ReleaseLight();
+        }
+
+        // The budget outlives a scene (it is static); nothing of a play session may carry into the next.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            s_lights = new LightBudget(MostLightsAtOnce);
+            s_effect = null;
+            s_looked = false;
+        }
+
+        // The claim is kept apart from the light object, which a scene unload may have destroyed first, so the budget never
+        // leaks into the next match.
+        private void ReleaseLight()
+        {
+            if (!_holdsLight)
+            {
+                return;
+            }
+
+            _holdsLight = false;
+            s_lights.Release();
+            if (_light != null)
+            {
+                Destroy(_light.gameObject);
+            }
+
+            _light = null;
         }
     }
 }
