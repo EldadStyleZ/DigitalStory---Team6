@@ -86,7 +86,7 @@ namespace DigitalStory.Logic
         }
 
         // The name after a rig's prefix: "mixamorig:LeftHand" is "LeftHand".
-        private static string BoneWord(string name)
+        internal static string BoneWord(string name)
         {
             if (name == null)
             {
