@@ -51,6 +51,7 @@ namespace DigitalStory.View
         private const float BesideNestMetres = 1.5f;
         private const float BesideHiveMetres = 3f;
         private const float FullFuryDamage = 1000f;
+        private const int MostFuryAdds = 100;
         private const float HiveCallRoomShare = 0.1f;
         private const float KillDamage = 1000000f;
         private const float SpawnStepSeconds = 0.5f;
@@ -105,7 +106,7 @@ namespace DigitalStory.View
         {
             "none", "noglow", "noswarmlights", "nohivenestlights", "noshadows", "nowaspdraw", "nocompute", "noground",
             "noscenery", "noanimators", "halfwasps", "nohud", "noattacklight", "nocastflash", "nocastsound", "nocamerakick",
-            "nodamagenumbers",
+            "nodamagenumbers", "nocursorlock",
         };
 
         // The giant's moves, each measured in a window of its own in the chase camera, over two giants: one cannot stand long
@@ -969,7 +970,12 @@ namespace DigitalStory.View
             SwarmSongEffect effect = _session.Caster[song];
             if (effect is ColossusSong)
             {
-                _session.Fury.AddDamage(FullFuryDamage);
+                // Since songs-v2 V a point of Fury costs more damage, and 1,000 no longer filled it: the giant was refused
+                // and its windows went unmeasured. Damage is added until the meter is full, whatever its price.
+                for (int add = 0; add < MostFuryAdds && !_session.Fury.IsFull; add++)
+                {
+                    _session.Fury.AddDamage(FullFuryDamage);
+                }
             }
             else if (effect is HiveCallSong)
             {
