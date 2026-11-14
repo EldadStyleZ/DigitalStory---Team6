@@ -786,6 +786,20 @@
     color: rgb(110, 175, 255);
 }
 
+/* Plan section Y: a kill chain's milestone (x3, x6, x10) stamps high in the middle, lands from a larger scale and fades. */
+.chain-stamp {
+    position: absolute;
+    left: 50%;
+    top: 20%;
+    translate: -50% -50%;
+    font-size: 46px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: rgb(255, 205, 70);
+    text-shadow: 2px 2px 3px rgba(0, 0, 0, 0.9);
+    white-space: nowrap;
+}
+
 /* The giant's hint: one line of its moves, one of its two hand launches and, the first times, a smaller line of its phrases.
    Near the top, in the night sky above the chase camera's giant, so it never covers its head. It fades out on its own after a
    few seconds. */

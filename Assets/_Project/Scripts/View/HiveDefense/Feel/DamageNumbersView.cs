@@ -1,4 +1,5 @@
 using System;
+using DigitalStory.Data;
 using DigitalStory.Logic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -46,6 +47,21 @@ namespace DigitalStory.View
         private int[] _kinds;
         private int _next;
         private bool _isReady;
+
+        // Plan section Y: each number pops in (0.6, up past 1, settles at 1), and a kill chain's milestones stamp x3 / x6 / x10.
+        private const float PopStartScale = 0.6f;
+        private const float KillPopExtra = 1.33f;
+        private const string StampClass = "chain-stamp";
+        private float _popSeconds = 0.15f;
+        private float _popScale = 1.2f;
+        private HitFeedbackView _chain;
+        private Label _stamp;
+        private string[] _stampTexts;
+        private int[] _stampCounts;
+        private float _stampAge = -1f;
+
+        /// <summary>The stamp's text while it shows, or null. For tests.</summary>
+        public string StampText => _stampAge >= 0f ? _stamp.text : null;
 
         /// <summary>How many numbers are showing now. For tests.</summary>
         public int ActiveCount
@@ -102,8 +118,109 @@ namespace DigitalStory.View
             }
 
             _next = 0;
+            _stampAge = -1f;
+            if (_stamp != null)
+            {
+                _stamp.style.display = DisplayStyle.None;
+            }
+
             _session.SongLanded += OnSongLanded;
             _isReady = true;
+        }
+
+        /// <summary>
+        /// Stamps the kill chain's milestones from now on (x3, x6, x10) and pops the numbers by the feel director's FeelConfig.
+        /// Call after Initialize.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">The feedback view is missing.</exception>
+        public void ListenToKillChain(HitFeedbackView feedback)
+        {
+            if (feedback == null)
+            {
+                throw new ArgumentNullException(nameof(feedback));
+            }
+
+            if (_chain != null)
+            {
+                _chain.KillChained -= OnKillChained;
+            }
+
+            _chain = feedback;
+            _popSeconds = feedback.Feel.NumberPopSeconds;
+            _popScale = feedback.Feel.NumberPopScale;
+            int[] milestones = feedback.Feel.ChainMilestones;
+            _stampCounts = milestones;
+            _stampTexts = new string[milestones.Length];
+            for (int index = 0; index < milestones.Length; index++)
+            {
+                _stampTexts[index] = "x" + milestones[index].ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            if (_stamp == null)
+            {
+                _stamp = new Label { name = "chain-stamp", pickingMode = PickingMode.Ignore };
+                _stamp.AddToClassList(StampClass);
+                _stamp.style.display = DisplayStyle.None;
+                _layer.Add(_stamp);
+            }
+
+            _chain.KillChained += OnKillChained;
+        }
+
+        private void OnKillChained(KillChainStep step)
+        {
+            if (step.Milestone <= 0 || _stamp == null)
+            {
+                return;
+            }
+
+            for (int index = 0; index < _stampCounts.Length; index++)
+            {
+                if (_stampCounts[index] == step.Milestone)
+                {
+                    _stamp.text = _stampTexts[index];
+                    _stampAge = 0f;
+                    _stamp.style.display = DisplayStyle.Flex;
+                    StepStamp(0f);
+                    return;
+                }
+            }
+        }
+
+        // The stamp lands from its start scale to 1, holds, and fades over the second half of its time.
+        private void StepStamp(float deltaTime)
+        {
+            if (_stampAge < 0f)
+            {
+                return;
+            }
+
+            FeelConfig feel = _chain.Feel;
+            _stampAge += deltaTime;
+            if (_stampAge >= feel.StampSeconds)
+            {
+                _stampAge = -1f;
+                _stamp.style.display = DisplayStyle.None;
+                return;
+            }
+
+            float land = Mathf.Clamp01(_stampAge / feel.StampLandSeconds);
+            float scale = Mathf.Lerp(feel.StampStartScale, 1f, 1f - ((1f - land) * (1f - land)));
+            _stamp.style.scale = new Scale(new Vector3(scale, scale, 1f));
+            _stamp.style.opacity = Mathf.Clamp01(2f - (2f * _stampAge / feel.StampSeconds));
+        }
+
+        // 0.6 up to the peak over the first half of the pop, then down to 1 over the second.
+        private float PopScale(float age, bool isKill)
+        {
+            if (age >= _popSeconds)
+            {
+                return 1f;
+            }
+
+            float peak = isKill ? 1f + ((_popScale - 1f) * KillPopExtra) : _popScale;
+            float t = age / _popSeconds;
+            return t < 0.5f ? Mathf.Lerp(PopStartScale, peak, t * 2f) : Mathf.Lerp(peak, 1f, (t - 0.5f) * 2f);
         }
 
         private void LateUpdate()
@@ -114,6 +231,7 @@ namespace DigitalStory.View
             }
 
             float deltaTime = Time.deltaTime;
+            StepStamp(deltaTime);
             Rect area = _layer.layout;
             bool hasArea = area.width > 0f && area.height > 0f;
             for (int index = 0; index < _labels.Length; index++)
@@ -146,6 +264,11 @@ namespace DigitalStory.View
                 label.style.left = (view.x * area.width) + (_drift[index] * rise);
                 label.style.top = ((1f - view.y) * area.height) - (_risePixels * rise);
                 label.style.opacity = t < 0.6f ? 1f : 1f - ((t - 0.6f) / 0.4f);
+                if (_ages[index] - deltaTime < _popSeconds)
+                {
+                    float pop = PopScale(_ages[index], _kinds[index] == 1);
+                    label.style.scale = new Scale(new Vector3(pop, pop, 1f));
+                }
             }
         }
 
@@ -160,6 +283,12 @@ namespace DigitalStory.View
             if (_session != null)
             {
                 _session.SongLanded -= OnSongLanded;
+            }
+
+            if (_chain != null)
+            {
+                _chain.KillChained -= OnKillChained;
+                _chain = null;
             }
         }
 
@@ -181,6 +310,8 @@ namespace DigitalStory.View
             _ages[slot] = 0f;
             _drift[slot] = (((slot * 7) % 5) - 2) * (_spreadPixels / 2f);
             label.style.opacity = 1f;
+            float start = PopScale(0f, kind == 1);
+            label.style.scale = new Scale(new Vector3(start, start, 1f));
             label.style.display = DisplayStyle.Flex;
         }
 

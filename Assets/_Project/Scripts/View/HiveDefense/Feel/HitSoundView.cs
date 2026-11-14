@@ -46,6 +46,10 @@ namespace DigitalStory.View
         private AudioClip[] _clips;
         private float[] _lastPlayed;
         private bool _isReady;
+        private HitFeedbackView _chain;
+
+        /// <summary>The pitch the last kill pop played at, before its small random variation. For tests.</summary>
+        public float LastKillPitch { get; private set; } = 1f;
 
         /// <summary>How many sounds were played since Initialize. For tests.</summary>
         public int PlayedCount { get; private set; }
@@ -104,6 +108,39 @@ namespace DigitalStory.View
                 _session.SongLanded -= OnSongLanded;
                 _session.SongCastNow -= OnSongCastNow;
             }
+
+            if (_chain != null)
+            {
+                _chain.KillChained -= OnKillChained;
+                _chain = null;
+            }
+        }
+
+        /// <summary>
+        /// Plays each kill's pop from the feel director's kill chain from now on (plan section Y): each kill of a chain one
+        /// semitone higher, up to the top, so a run of kills climbs. Call after Initialize.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">The feedback view is missing.</exception>
+        public void ListenToKillChain(HitFeedbackView feedback)
+        {
+            if (feedback == null)
+            {
+                throw new ArgumentNullException(nameof(feedback));
+            }
+
+            if (_chain != null)
+            {
+                _chain.KillChained -= OnKillChained;
+            }
+
+            _chain = feedback;
+            _chain.KillChained += OnKillChained;
+        }
+
+        private void OnKillChained(KillChainStep step)
+        {
+            LastKillPitch = Mathf.Pow(2f, step.Semitones / 12f);
+            Play(KindKill, _killVolume, LastKillPitch);
         }
 
         private void OnSongLanded(SongHit hit)
@@ -114,7 +151,10 @@ namespace DigitalStory.View
             }
             else if (hit.IsKill)
             {
-                Play(KindKill, _killVolume);
+                if (_chain == null)
+                {
+                    Play(KindKill, _killVolume);
+                }
             }
             else
             {
@@ -129,6 +169,11 @@ namespace DigitalStory.View
 
         private void Play(int kind, float volume)
         {
+            Play(kind, volume, 1f);
+        }
+
+        private void Play(int kind, float volume, float pitch)
+        {
             if (!_isReady)
             {
                 return;
@@ -141,7 +186,7 @@ namespace DigitalStory.View
             }
 
             _lastPlayed[kind] = now;
-            _source.pitch = 1f + UnityEngine.Random.Range(-_pitchVariation, _pitchVariation);
+            _source.pitch = pitch * (1f + UnityEngine.Random.Range(-_pitchVariation, _pitchVariation));
             _source.PlayOneShot(_clips[kind], volume);
             PlayedCount++;
         }

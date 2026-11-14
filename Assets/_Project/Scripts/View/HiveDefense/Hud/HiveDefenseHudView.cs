@@ -323,6 +323,13 @@ namespace DigitalStory.View
             }
         }
 
+        /// <summary>Lets the hit numbers stamp and the kill pop climb from the feel director's kill chain. Call after Initialize.</summary>
+        public void ListenToKillChain(HitFeedbackView feedback)
+        {
+            _damageNumbers.ListenToKillChain(feedback);
+            _hitSound.ListenToKillChain(feedback);
+        }
+
         private static T Require<T>(VisualElement root, string name) where T : VisualElement
         {
             return root.Q<T>(name) ?? throw new InvalidOperationException("The HUD UXML has no element named " + name + ".");

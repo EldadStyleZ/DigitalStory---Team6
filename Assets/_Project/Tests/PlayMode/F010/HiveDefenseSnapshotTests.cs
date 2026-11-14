@@ -177,6 +177,7 @@ namespace DigitalStory.Tests.PlayMode
         private const float ThrowCloseDistance = 15f;
         private const float ThrowClosePitch = 15f;
         private const float HitNumberShotSeconds = 0.05f;
+        private const float JuiceGiantShotSeconds = 0.1f;
 
         // Snapshot 17, the giant version 2 in the chase view (plan section I). Holes count from 0 as H J K L. Each move's
         // picture is taken this many seconds after the move starts: about when it lands.
@@ -1060,6 +1061,44 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(numbers, Is.Not.Null, "the HUD made no DamageNumbersView");
             Assert.That(numbers.ActiveCount, Is.GreaterThan(0), "the Tornado's hit showed no number");
             yield return CaptureHud("snap-16-hit-number");
+        }
+
+        // Plan section Y: the frame after the Tornado lands, with the cast's zoom punch, the trauma shake, the ring and the
+        // popping hit numbers on the HUD.
+        [UnityTest]
+        public IEnumerator Snapshot25_JuiceTornado()
+        {
+            yield return Stage(ThrowCore, ThrowCore + HitNumberBeekeeper);
+            yield return Play(KeysOf<TornadoSong>());
+            TornadoSong tornado = (TornadoSong)_root.Session.Caster[SongIndex<TornadoSong>()];
+            yield return WaitForSlot(SongSlot.Strike, tornado.HitSeconds + HitNumberShotSeconds);
+            FollowCamera follow = UnityEngine.Object.FindAnyObjectByType<FollowCamera>();
+            Assert.That(follow.ShakeStrength, Is.GreaterThan(0f), "the Tornado's landing added no trauma");
+            yield return CaptureHud("snap-25-juice-tornado");
+        }
+
+        // Plan section Y: a tenth of a second after the swarm becomes the giant, with the zoom punch and the trauma shake on
+        // top of the swoop to the chase view.
+        [UnityTest]
+        public IEnumerator Snapshot25_JuiceGiantForms()
+        {
+            yield return Stage(GiantCore, GiantBeekeepers);
+            HiveDefenseSession session = _root.Session;
+            FollowCamera follow = UnityEngine.Object.FindAnyObjectByType<FollowCamera>();
+            session.Fury.AddDamage(FuryDamage);
+            yield return Play(KeysOf<ColossusSong>());
+            float waited = 0f;
+            while (!session.IsColossusActive && waited < MaxColossusWaitSeconds)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.That(session.IsColossusActive, Is.True, "The Colossus keys at full Fury did not form the Colossus.");
+            yield return Wait(JuiceGiantShotSeconds);
+            Assert.That(follow.PunchShare, Is.GreaterThan(0f), "the giant's forming did not punch the zoom");
+            Assert.That(follow.ShakeStrength, Is.GreaterThan(0f), "the giant's forming added no trauma");
+            yield return Capture("snap-25-juice-giant-forms");
         }
 
         // The swarm has collapsed: nothing of it shows, and the HUD says it is returning and counts the seconds.

@@ -265,6 +265,94 @@ namespace DigitalStory.Tests.PlayMode
             Assert.That(Vector3.Distance(_camera.transform.position, resting), Is.GreaterThan(0.01f), "The shake did not move the camera.");
         }
 
+        // Plan section Y: the trauma shake turns the view, falls to rest within a second, and leaves the view exactly where it was.
+        [UnityTest]
+        public IEnumerator Shake_TraumaFallsToRest_AndTheViewEndsWhereItStarted()
+        {
+            yield return Wait(1.5f);
+            Vector3 position = _camera.transform.position;
+            Quaternion rotation = _camera.transform.rotation;
+
+            _camera.Shake(1f);
+            yield return Wait(0.1f);
+            Assert.That(_camera.ShakeStrength, Is.GreaterThan(0.5f));
+            Assert.That(Quaternion.Angle(_camera.transform.rotation, rotation), Is.GreaterThan(0.05f), "The shake did not turn the view.");
+
+            yield return Wait(1.2f);
+            Assert.That(_camera.ShakeStrength, Is.EqualTo(0f));
+            Assert.That(Vector3.Distance(_camera.transform.position, position), Is.LessThan(Tolerance));
+            Assert.That(Quaternion.Angle(_camera.transform.rotation, rotation), Is.LessThan(0.01f));
+        }
+
+        // Plan section Y: the master scale at 0 leaves the camera still whatever shakes, kicks, punches or nudges it.
+        [UnityTest]
+        public IEnumerator ShakeScale_Zero_LeavesTheCameraStill()
+        {
+            _camera.ShakeScale = 0f;
+            yield return Wait(1.5f);
+            Camera view = _cameraHost.GetComponent<Camera>();
+            Vector3 position = _camera.transform.position;
+            Quaternion rotation = _camera.transform.rotation;
+            float fieldOfView = view.fieldOfView;
+
+            for (int i = 0; i < 30; i++)
+            {
+                _camera.Shake(1f);
+                _camera.Kick(1f);
+                _camera.Punch(0.1f, 2f);
+                _camera.Nudge(Vector3.right, 1f);
+                yield return null;
+            }
+
+            Assert.That(Vector3.Distance(_camera.transform.position, position), Is.LessThan(Tolerance));
+            Assert.That(Quaternion.Angle(_camera.transform.rotation, rotation), Is.LessThan(Tolerance));
+            Assert.That(view.fieldOfView, Is.EqualTo(fieldOfView).Within(Tolerance));
+        }
+
+        // Plan section Y: a camera moment (the punch and the sprung kick) is only an offset on the follow. While the player
+        // steers through it, the camera is the plain follow plus the kick, every frame, and afterwards it is the plain follow.
+        [UnityTest]
+        public IEnumerator Moment_YieldsToSteeringAtOnce_AndEndsWhereThePlainFollowIs()
+        {
+            var plainHost = new GameObject("Plain Camera", typeof(Camera));
+            try
+            {
+                FollowCamera plain = plainHost.AddComponent<FollowCamera>();
+                plain.SetTarget(_target);
+                yield return Wait(1.5f);
+                Camera view = _cameraHost.GetComponent<Camera>();
+                Camera plainView = plainHost.GetComponent<Camera>();
+
+                _camera.Punch(0.08f, 1f);
+                _camera.Nudge(Vector3.right, 0.4f);
+                bool sawKick = false;
+                for (int frame = 0; frame < 30; frame++)
+                {
+                    _target.position += new Vector3(0f, 0f, 6f * FrameSeconds);
+                    yield return null;
+                    Vector3 kick = _camera.transform.position - plain.transform.position;
+                    Assert.That(Vector3.Distance(kick, _camera.NudgeOffset), Is.LessThan(Tolerance), "The moment held the follow back.");
+                    sawKick |= _camera.NudgeOffset.magnitude > 0.1f;
+                }
+
+                Assert.That(sawKick, Is.True, "The nudge did not kick the camera.");
+                yield return Wait(1.5f);
+                Assert.That(Vector3.Distance(_camera.transform.position, plain.transform.position), Is.LessThan(Tolerance));
+                Assert.That(Quaternion.Angle(_camera.transform.rotation, plain.transform.rotation), Is.LessThan(Tolerance));
+                Assert.That(view.fieldOfView, Is.EqualTo(plainView.fieldOfView).Within(Tolerance));
+            }
+            finally
+            {
+                Object.DestroyImmediate(plainHost);
+            }
+        }
+
+        [Test]
+        public void Configure_WithNull_FailsLoudly()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => _camera.Configure(null));
+        }
+
         [Test]
         public void EnterChase_WithoutATarget_FailsLoudly()
         {

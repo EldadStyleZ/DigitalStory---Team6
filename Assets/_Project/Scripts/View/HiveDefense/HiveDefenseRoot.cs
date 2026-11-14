@@ -392,6 +392,7 @@ namespace DigitalStory.View
 
             // The HUD reads the UIDocument's tree, which exists only once every object has been enabled.
             _hud.Initialize(Session);
+            _hud.ListenToKillChain(_hitFeedback);
             _hud.ShowControls(_input.LastDevice);
             _input.LastDeviceChanged += HandleLastDeviceChanged;
         }

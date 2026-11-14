@@ -57,6 +57,7 @@ namespace DigitalStory.Tests.PlayMode
 
         private const float MaxHitSeconds = 1.5f;
         private const int FramesAfterHit = 3;
+        private const float HitStopTestSeconds = 0.5f;
 
         // A beekeeper on its last breath half a metre inside the Sting's reach, and its neighbour half a metre beyond it.
         private const float NeighbourMetres = 1f;
@@ -303,6 +304,42 @@ namespace DigitalStory.Tests.PlayMode
             finally
             {
                 session.SongLanded -= onLanded;
+            }
+        }
+
+        // Plan section Y: a heavy hit holds the swarm still for a moment (the hit-stop), and a note played during it still counts:
+        // the hit-stop freezes only the swarm's motion, never the song input or time.
+        [UnityTest]
+        public IEnumerator HitStop_ANotePressedDuringIt_IsNotDropped()
+        {
+            HiveDefenseSession session = _root.Session;
+            var swarm = Object.FindAnyObjectByType<SwarmGpuView>();
+            var feedback = Object.FindAnyObjectByType<HitFeedbackView>();
+            Assert.That(swarm, Is.Not.Null);
+            Assert.That(feedback, Is.Not.Null);
+            Assert.That(feedback.Feel, Is.Not.Null, "the scene builder gave the feel director no FeelConfig");
+            yield return Wait(SettleSeconds);
+
+            int played = 0;
+            System.Action<int> onNote = hole => played++;
+            session.Caster.NotePlayed += onNote;
+            try
+            {
+                swarm.Freeze(HitStopTestSeconds);
+                float timeScale = Time.timeScale;
+                _root.PressHole(0);
+                for (int frame = 0; frame < FramesAfterHit; frame++)
+                {
+                    yield return null;
+                }
+
+                Assert.That(swarm.IsFrozen, Is.True, "the hit-stop ended before the note was read");
+                Assert.That(Time.timeScale, Is.EqualTo(timeScale), "the hit-stop changed the time scale");
+                Assert.That(played, Is.EqualTo(1), "the note played during the hit-stop was dropped");
+            }
+            finally
+            {
+                session.Caster.NotePlayed -= onNote;
             }
         }
 

@@ -12,6 +12,10 @@ namespace DigitalStory.View
     /// Tornado's hit also flashes a red ring on the ground at its reach, so where it throws is impossible to miss. A heavy song's
     /// impact, and the giant's heavy blows (its slam, its leap's landing and its third punch), push the camera in for a moment.
     /// Several hits in one frame merge into one shake and one freeze.
+    /// It is also the feel director of plan section Y: every moment of play adds trauma by its weight (a hit least, a kill a
+    /// little, a milestone of a kill chain, a heavy song, the giant's blows, a hive hit or lost, a wave cleared more), a cast
+    /// punches the view's zoom and roll, the giant's blows kick the view along its facing, and kills feed a kill chain whose
+    /// steps the HUD's sound and stamp read. Its numbers live in the FeelConfig.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("DigitalStory/Hit Feedback View")]
@@ -23,11 +27,8 @@ namespace DigitalStory.View
         private const int RingSegments = 96;
 
         [Header("Camera")]
-        [SerializeField, Min(1f), Tooltip("The damage that shakes the camera at full strength.")]
-        private float _fullShakeDamage = 80f;
-
-        [SerializeField, Range(0f, 1f), Tooltip("The least a hit shakes the camera, 0 to 1, so even a small hit is felt.")]
-        private float _leastShake = 0.06f;
+        [SerializeField, Tooltip("The feel numbers: trauma per moment, punches, the kill chain and the master scale.")]
+        private FeelConfig _feel;
 
         [SerializeField, Range(0f, 1f), Tooltip("How hard the camera kicks the frame a song is cast, 0 to 1.")]
         private float _castKick = 0.35f;
@@ -111,6 +112,21 @@ namespace DigitalStory.View
         private float _pendingShake;
         private bool _hasPendingFreeze;
         private bool _isReady;
+        private KillChain _killChain;
+        private KillChainStep _lastChainStep;
+        private float[] _hiveHitAt;
+        private bool _wasColossus;
+        private bool _wasWaveRunning;
+        private float _castRollSign = 1f;
+
+        /// <summary>Raised for each kill, with where the kill chain stands; the HUD's sound climbs and stamps from it.</summary>
+        public event Action<KillChainStep> KillChained;
+
+        /// <summary>The kill chain's step for the last kill. For tests.</summary>
+        public KillChainStep LastChainStep => _lastChainStep;
+
+        /// <summary>The feel numbers, for the views that read the kill chain.</summary>
+        public FeelConfig Feel => _feel;
 
         /// <summary>The shake strength the hits of this frame asked for, 0 to 1, until the end of the frame. For tests.</summary>
         public float PendingShake => _pendingShake;
@@ -120,7 +136,7 @@ namespace DigitalStory.View
 
         /// <summary>Starts listening to the match. Call once, after the swarm view and the camera exist; calling again starts over.</summary>
         /// <exception cref="ArgumentNullException">An argument is missing.</exception>
-        /// <exception cref="InvalidOperationException">The shield flash material is not set.</exception>
+        /// <exception cref="InvalidOperationException">The shield flash material or the feel config is not set.</exception>
         public void Initialize(HiveDefenseSession session, FollowCamera camera, SwarmGpuView swarm)
         {
             Release();
@@ -132,14 +148,33 @@ namespace DigitalStory.View
                 throw new InvalidOperationException("HitFeedbackView needs the shield flash material. Set it on the HitFeedbackView.");
             }
 
+            if (_feel == null)
+            {
+                throw new InvalidOperationException("HitFeedbackView needs a FeelConfig. The scene builder sets it.");
+            }
+
+            _camera.Configure(_feel);
             _pendingShake = 0f;
             _hasPendingFreeze = false;
+            _killChain = new KillChain(_feel.ChainWindowSeconds, _feel.ChainTopSemitones, _feel.ChainMilestones);
+            _lastChainStep = default;
+            _wasColossus = _session.IsColossusActive;
+            _wasWaveRunning = IsWaveRunning();
             BuildFlashes();
             _session.SongLanded += OnSongLanded;
             _session.SongCastNow += OnSongCastNow;
             _session.Forms.Landed += OnFormLanded;
             _session.ColossusAttackLanded += OnColossusLanded;
             _session.ColossusFistLaunched += OnColossusFistLaunched;
+            _session.ColossusFistLanded += OnColossusFistLanded;
+            _session.Hives.HiveDestroyed += OnHiveDestroyed;
+            _hiveHitAt = new float[_session.Hives.Count];
+            for (int index = 0; index < _session.Hives.Count; index++)
+            {
+                _hiveHitAt[index] = float.NegativeInfinity;
+                _session.Hives[index].Damaged += OnHiveDamaged;
+            }
+
             _isReady = true;
         }
 
@@ -150,6 +185,7 @@ namespace DigitalStory.View
                 return;
             }
 
+            StepMoments();
             if (_pendingShake > 0f)
             {
                 _camera.Shake(_pendingShake);
@@ -185,18 +221,74 @@ namespace DigitalStory.View
                 _session.Forms.Landed -= OnFormLanded;
                 _session.ColossusAttackLanded -= OnColossusLanded;
                 _session.ColossusFistLaunched -= OnColossusFistLaunched;
+                _session.ColossusFistLanded -= OnColossusFistLanded;
+                _session.Hives.HiveDestroyed -= OnHiveDestroyed;
+                for (int index = 0; index < _session.Hives.Count; index++)
+                {
+                    _session.Hives[index].Damaged -= OnHiveDamaged;
+                }
             }
+        }
+
+        // Adds trauma for this frame. The moments of one frame merge to the strongest, never their sum, so a Tornado that hits
+        // twenty beekeepers shakes like one hit.
+        private void AddTrauma(float amount)
+        {
+            _pendingShake = Mathf.Max(_pendingShake, amount);
+        }
+
+        private bool IsWaveRunning()
+        {
+            return _session.State == HiveDefenseState.Playing && _session.Phase == MatchPhase.Survive;
+        }
+
+        private bool AreFlashesOn => _camera.ShakeScale > 0f;
+
+        // The moments read from the session's state: the swarm becoming the giant, and a wave cleared (its last kill).
+        private void StepMoments()
+        {
+            bool isColossus = _session.IsColossusActive && _session.State == HiveDefenseState.Playing;
+            if (isColossus && !_wasColossus)
+            {
+                AddTrauma(_feel.GiantFormedTrauma);
+                _camera.Punch(_feel.GiantFovPunch, 0f);
+            }
+
+            _wasColossus = isColossus;
+            bool isWaveRunning = IsWaveRunning();
+            if (_wasWaveRunning && !isWaveRunning && _session.State != HiveDefenseState.Lost)
+            {
+                AddTrauma(_feel.WaveClearedTrauma);
+            }
+
+            _wasWaveRunning = isWaveRunning;
         }
 
         private void OnSongLanded(SongHit hit)
         {
-            float damage01 = Mathf.Clamp01(hit.Damage / _fullShakeDamage);
-            float shake = Mathf.Max(_leastShake, damage01);
-            _pendingShake = Mathf.Max(_pendingShake, hit.IsBlocked ? shake * _blockedShakeShare : shake);
+            float damage01 = Mathf.Clamp01(hit.Damage / _feel.FullHitDamage);
+            float trauma = _feel.HitTrauma * damage01;
+            if (hit.IsKill && !hit.IsBlocked)
+            {
+                trauma = Mathf.Max(trauma, _feel.KillTrauma);
+                _lastChainStep = _killChain.Kill(Time.time);
+                if (_lastChainStep.Milestone > 0)
+                {
+                    trauma = Mathf.Max(trauma, _feel.MultiKillTrauma);
+                }
+
+                KillChained?.Invoke(_lastChainStep);
+            }
+
+            AddTrauma(hit.IsBlocked ? trauma * _blockedShakeShare : trauma);
 
             if (hit.IsBlocked)
             {
-                ShowShieldFlash(hit.Position);
+                if (AreFlashesOn)
+                {
+                    ShowShieldFlash(hit.Position);
+                }
+
                 return;
             }
 
@@ -219,9 +311,10 @@ namespace DigitalStory.View
             if (IsHeavyImpact(form))
             {
                 _camera.PushIn(_heavyPushIn);
+                AddTrauma(ImpactTrauma(form));
             }
 
-            if (form != SwarmForm.Tornado)
+            if (form != SwarmForm.Tornado || !AreFlashesOn)
             {
                 return;
             }
@@ -239,6 +332,21 @@ namespace DigitalStory.View
             PaintRing();
         }
 
+        private float ImpactTrauma(SwarmForm form)
+        {
+            switch (form)
+            {
+                case SwarmForm.Meteor:
+                    return _feel.MeteorTrauma;
+                case SwarmForm.Lance:
+                    return _feel.LanceTrauma;
+                case SwarmForm.Tornado:
+                    return _feel.TornadoTrauma;
+                default:
+                    return _feel.HydraTrauma;
+            }
+        }
+
         private static bool IsHeavyImpact(SwarmForm form)
         {
             return form == SwarmForm.Meteor || form == SwarmForm.Lance || form == SwarmForm.Hydra || form == SwarmForm.Nest
@@ -252,7 +360,49 @@ namespace DigitalStory.View
             if (attack == ColossusAttack.Slam || attack == ColossusAttack.LeapSlam || attack == ColossusAttack.HeavyPunch)
             {
                 _camera.PushIn(_giantPushIn);
+                AddTrauma(_feel.GiantHeavyTrauma);
             }
+            else if (attack == ColossusAttack.Punch || attack == ColossusAttack.Kick || attack == ColossusAttack.SpinKick)
+            {
+                AddTrauma(_feel.GiantBlowTrauma);
+            }
+
+            if (attack == ColossusAttack.Punch || attack == ColossusAttack.HeavyPunch || attack == ColossusAttack.Kick)
+            {
+                _camera.Nudge(_session.ColossusFacing, _feel.GiantKickMetres);
+            }
+        }
+
+        // A thrown fist that lands kicks the view along the giant's facing, as a punch does.
+        private void OnColossusFistLanded(ColossusHand hand)
+        {
+            AddTrauma(_feel.GiantBlowTrauma);
+            _camera.Nudge(_session.ColossusFacing, _feel.GiantKickMetres);
+        }
+
+        // A hive hit shakes a little, at most once per gap for each hive, so a hive under a crowd never rattles the screen.
+        private void OnHiveDamaged(Hive hive)
+        {
+            for (int index = 0; index < _hiveHitAt.Length; index++)
+            {
+                if (!ReferenceEquals(_session.Hives[index], hive))
+                {
+                    continue;
+                }
+
+                if (Time.time - _hiveHitAt[index] >= _feel.HiveHitGapSeconds)
+                {
+                    _hiveHitAt[index] = Time.time;
+                    AddTrauma(_feel.HiveHitTrauma);
+                }
+
+                return;
+            }
+        }
+
+        private void OnHiveDestroyed(int hive)
+        {
+            AddTrauma(_feel.HiveLostTrauma);
         }
 
         // Songs-v2 R: a small push as the fist leaves; its hit is heavy, felt through SongLanded like the giant's other blows.
@@ -261,10 +411,13 @@ namespace DigitalStory.View
             _camera.PushIn(_fistPushIn);
         }
 
+        // The cast's punch rolls the view to alternate sides, so a run of casts rocks the view instead of leaning it.
         private void OnSongCastNow(int song)
         {
             _camera.Kick(_castKick);
-            if (_session.Caster[song] is SlotSongEffect slotSong)
+            _camera.Punch(_feel.CastFovPunch, _feel.CastRollDegrees * _castRollSign);
+            _castRollSign = -_castRollSign;
+            if (AreFlashesOn && _session.Caster[song] is SlotSongEffect slotSong)
             {
                 _swarm.FlashSlot((int)slotSong.Slot);
             }

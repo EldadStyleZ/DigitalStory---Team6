@@ -141,7 +141,7 @@ namespace DigitalStory.Editor
             "SwarmConfig", "SquadConfig", "AimConfig", "CoreMoveConfig", "FuryConfig", "ColossusConfig", "HiveConfig", "NestConfig",
             "LayoutConfig", "SwarmLevelConfig", "SmokeConfig", "WaveConfig", "F010SongConfig", "StickBeekeeper", "SmokerBeekeeper",
             "StingSong", "TornadoSong", "MeteorSong", "HydraSong", "ScytheSong", "LanceSong", "NestSong", "DomeSong", "GustSong",
-            "HoneycombSong", "HiveCallSong", "ColossusSong", "GamepadConfig",
+            "HoneycombSong", "HiveCallSong", "ColossusSong", "GamepadConfig", "FeelConfig",
         };
 
         // Assets an older build made under names that no longer fit: each moves to its new path, keeping its GUID and any
@@ -1603,7 +1603,14 @@ namespace DigitalStory.Editor
             var hitFeedback = new GameObject("Hit Feedback", typeof(HitFeedbackView));
             var hitFeedbackSerialized = new SerializedObject(hitFeedback.GetComponent<HitFeedbackView>());
             SetObject(hitFeedbackSerialized, "_shieldFlashMaterial", LoadOrCreateShieldFlashMaterial());
+
+            // Plan section Y: one FeelConfig for the feel director and the camera's shake and punches.
+            var feel = LoadOrCreate<FeelConfig>("FeelConfig");
+            SetObject(hitFeedbackSerialized, "_feel", feel);
             hitFeedbackSerialized.ApplyModifiedPropertiesWithoutUndo();
+            var cameraSerialized = new SerializedObject(camera.GetComponent<FollowCamera>());
+            SetObject(cameraSerialized, "_feel", feel);
+            cameraSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             // The felt hit on a controller: its motors, set from the GamepadConfig's pulses.
             var rumble = new GameObject("Gamepad Rumble", typeof(GamepadRumbleView));
