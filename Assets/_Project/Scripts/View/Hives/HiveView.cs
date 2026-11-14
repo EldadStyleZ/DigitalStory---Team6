@@ -164,6 +164,16 @@ namespace DigitalStory.View
             _isGiving = isGiving;
         }
 
+        /// <summary>
+        /// Measures the hive model's box in the world, without its bars and rings, for the swarm to flow round (plan section
+        /// X). False when the hive has no model.
+        /// </summary>
+        public bool TryMeasureModel(out Bounds bounds)
+        {
+            bounds = default;
+            return _model != null && MeshBounds.TryMeasure(_model, out bounds);
+        }
+
         /// <summary>Supplies the hive to show, the camera the bars face and the hive config (collect radius). Call once, before this object starts.</summary>
         public void Initialize(Hive hive, Camera camera, HiveConfig config)
         {

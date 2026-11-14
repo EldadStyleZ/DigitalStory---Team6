@@ -126,6 +126,27 @@ namespace DigitalStory.Data
         [field: SerializeField, Range(0.001f, 0.0167f), Tooltip("Longest step the wasps' springs take. Each frame is cut into equal steps no longer than this, so the swarm moves the same at 60 and 120 frames a second. 1/240 divides both into whole steps.")]
         public float SpringStepSeconds { get; private set; } = 1f / 240f;
 
+        // Plan section X. The free swarm (the river, the eight and wasps between forms) parts round each tall prop, nest tree
+        // and hive below its top, hugs it and closes again behind it, instead of flying through it.
+        [field: Header("Flow around obstacles")]
+        [field: SerializeField, Range(0f, 1.5f), Tooltip("An obstacle's radius as a share of the mean of its box's half-width and half-depth. A tree's box holds its whole crown, so a little under 1 keeps the stream close to the trunk.")]
+        public float ObstacleRadiusShare { get; private set; } = 0.8f;
+
+        [field: SerializeField, Min(0f), Tooltip("Metres outside an obstacle's radius the wasps' goals keep as they go round it. It also covers how far the springs cut the corner.")]
+        public float ObstacleMargin { get; private set; } = 0.45f;
+
+        [field: SerializeField, Min(0f), Tooltip("Metres before an obstacle's edge, along the way a wasp flies, where the stream starts to part.")]
+        public float ObstacleLeadMeters { get; private set; } = 2.5f;
+
+        [field: SerializeField, Min(0f), Tooltip("Metres past an obstacle's edge, along the way a wasp flies, by which the stream has closed again.")]
+        public float ObstacleCloseMeters { get; private set; } = 2f;
+
+        [field: SerializeField, Range(0f, 1f), Tooltip("How much of the bend round obstacles the wasps fly. 1 keeps every goal out of the obstacle; 0 flies straight through.")]
+        public float ObstacleStrength { get; private set; } = 1f;
+
+        [field: SerializeField, Range(0f, 0.5f), Tooltip("How much faster a wasp flies on its way round an obstacle, as a share of its speed, easing in before and out after it.")]
+        public float ObstacleSpeedUp { get; private set; } = 0.25f;
+
         [field: Header("Wasps")]
         [field: SerializeField, Min(0f), Tooltip("Size of the small shake on each wasp, in metres.")]
         public float BuzzAmplitude { get; private set; } = 0.04f;

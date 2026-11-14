@@ -175,6 +175,13 @@ namespace DigitalStory.View
         private static readonly int BuzzFrequencyId = Shader.PropertyToID("_BuzzFrequency");
         private static readonly int GlowSizeId = Shader.PropertyToID("_GlowSize");
         private static readonly int GlowStrengthId = Shader.PropertyToID("_GlowStrength");
+        private static readonly int ObstaclesId = Shader.PropertyToID("_Obstacles");
+        private static readonly int ObstacleCountId = Shader.PropertyToID("_ObstacleCount");
+        private static readonly int ObstacleMarginId = Shader.PropertyToID("_ObstacleMargin");
+        private static readonly int ObstacleLeadId = Shader.PropertyToID("_ObstacleLead");
+        private static readonly int ObstacleCloseId = Shader.PropertyToID("_ObstacleClose");
+        private static readonly int ObstacleStrengthId = Shader.PropertyToID("_ObstacleStrength");
+        private static readonly int ObstacleSpeedUpId = Shader.PropertyToID("_ObstacleSpeedUp");
 
         [SerializeField, Tooltip("WaspSwarm.compute, which moves the wasps.")]
         private ComputeShader _swarmCompute;
@@ -300,6 +307,11 @@ namespace DigitalStory.View
         private float _gustStartTime;
         private bool _isGustFresh;
 
+        // Plan section X: the tall props, nest trees and hives the free swarm flows round, as SwarmObstacles makes them. Sent
+        // to the compute shader when they change, once a match, never per frame.
+        private readonly Vector4[] _obstacleVectors = new Vector4[SwarmObstacles.MostObstacles];
+        private int _obstacleCount;
+
         /// <summary>True while the buffers exist and the swarm is moved and drawn each frame, for tests and debugging.</summary>
         public bool IsRunning => _staticBuffer != null;
 
@@ -321,6 +333,23 @@ namespace DigitalStory.View
         /// that read the swarm back. The game never reads it on the CPU: a read stalls the GPU.
         /// </summary>
         public GraphicsBuffer WaspStates => _dynamicBuffer;
+
+        /// <summary>How many obstacles the free swarm flows round (<see cref="SetObstacles"/>), for tests and debugging.</summary>
+        public int ObstacleCount => _obstacleCount;
+
+        /// <summary>
+        /// One obstacle the free swarm flows round: x and z of its middle on the ground, its radius and the height of its top,
+        /// for tests and debugging.
+        /// </summary>
+        public Vector4 Obstacle(int index)
+        {
+            if (index < 0 || index >= _obstacleCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index), index, $"There are {_obstacleCount} obstacles.");
+            }
+
+            return _obstacleVectors[index];
+        }
 
         /// <summary>True while <see cref="Freeze"/> holds the swarm still, for tests and debugging.</summary>
         public bool IsFrozen => _freezeSeconds > 0f;
@@ -476,10 +505,40 @@ namespace DigitalStory.View
             ClearSongs();
             _config = config;
 
+            // The shader keeps its obstacles between scenes, so a match that sends none never flows round the last one's.
+            _obstacleCount = 0;
+            PushObstacles();
+
             if (isActiveAndEnabled)
             {
                 CreateBuffers();
             }
+        }
+
+        /// <summary>
+        /// The tall props, nest trees and hives the free swarm flows round (plan section X), each as x and z of its middle on
+        /// the ground, its radius and the height of its top (DigitalStory.Logic.SwarmObstacles). Call once a match, after the
+        /// map stands and after <see cref="Initialize"/>; the shader keeps them until the next call.
+        /// </summary>
+        /// <exception cref="ArgumentNullException">The obstacles are missing.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The count is below 0, above the most obstacles, or more than the array holds.</exception>
+        public void SetObstacles(Vector4[] obstacles, int count)
+        {
+            if (obstacles == null)
+            {
+                throw new ArgumentNullException(nameof(obstacles));
+            }
+
+            if (count < 0 || count > SwarmObstacles.MostObstacles || count > obstacles.Length)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(count), count, $"The swarm flows round 0 to {SwarmObstacles.MostObstacles} obstacles, and the array must hold that many.");
+            }
+
+            Array.Clear(_obstacleVectors, 0, _obstacleVectors.Length);
+            Array.Copy(obstacles, _obstacleVectors, count);
+            _obstacleCount = count;
+            PushObstacles();
         }
 
         /// <summary>How many wasps are alive. Wasps above it die where they are, and dead ones below it come back at a hive.</summary>
@@ -1381,6 +1440,18 @@ namespace DigitalStory.View
             _swarmCompute.SetBuffer(_resetKernel, DynamicId, _dynamicBuffer);
         }
 
+        // Once a match, not per frame: the compute shader keeps the values it was given.
+        private void PushObstacles()
+        {
+            if (_swarmCompute == null)
+            {
+                return;
+            }
+
+            _swarmCompute.SetVectorArray(ObstaclesId, _obstacleVectors);
+            _swarmCompute.SetInt(ObstacleCountId, _obstacleCount);
+        }
+
         private void PushFrame(float deltaTime, int trailCount)
         {
             ComputeShader compute = _swarmCompute;
@@ -1446,6 +1517,11 @@ namespace DigitalStory.View
             compute.SetFloat(FormBlendSecondsId, _config.FormBlendSeconds);
             compute.SetFloat(SpringStepId, _config.SpringStepSeconds);
             compute.SetFloat(DyingSecondsId, _config.DyingSeconds);
+            compute.SetFloat(ObstacleMarginId, _config.ObstacleMargin);
+            compute.SetFloat(ObstacleLeadId, _config.ObstacleLeadMeters);
+            compute.SetFloat(ObstacleCloseId, _config.ObstacleCloseMeters);
+            compute.SetFloat(ObstacleStrengthId, _config.ObstacleStrength);
+            compute.SetFloat(ObstacleSpeedUpId, _config.ObstacleSpeedUp);
 
             _material.SetFloat(WaspLengthId, _config.WaspLength);
             _material.SetFloat(DyingSecondsId, _config.DyingSeconds);

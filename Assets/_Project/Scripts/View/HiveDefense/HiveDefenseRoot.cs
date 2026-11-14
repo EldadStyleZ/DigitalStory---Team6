@@ -232,6 +232,7 @@ namespace DigitalStory.View
         private float _timeScaleBeforeSlow;
         private float _slowTimeScale;
         private bool _isRestarting;
+        private List<Bounds> _mapBoxes = new List<Bounds>();
         private bool _isReady;
         private bool _isWaveCalled;
         private bool _isGiveHeld;
@@ -351,6 +352,8 @@ namespace DigitalStory.View
             {
                 _hives[index].Initialize(Session.Hives[index], _camera, _hive);
             }
+
+            SendObstacles();
 
             for (int index = 0; index < _nestViews.Length; index++)
             {
@@ -1032,7 +1035,32 @@ namespace DigitalStory.View
             }
 
             _followCamera.SetChaseBlockers(blockers.ToArray());
+            _mapBoxes = blockers;
             return layout;
+        }
+
+        // Plan section X: the free swarm flows round each tall prop and nest tree, from the boxes DrawMap measured for the
+        // chase camera before the nests' rings existed, and round each hive's model, once its view stands where the session
+        // put it. Sent once a match; a restart loads the scene again and sends the new map's.
+        private void SendObstacles()
+        {
+            var boxes = new List<Bounds>(_mapBoxes);
+            for (int index = 0; index < _hives.Length; index++)
+            {
+                if (_hives[index].TryMeasureModel(out Bounds box))
+                {
+                    boxes.Add(box);
+                }
+            }
+
+            var obstacles = new Vector4[SwarmObstacles.MostObstacles];
+            int count = SwarmObstacles.Fill(boxes, _swarm.ObstacleRadiusShare, obstacles);
+            if (count == SwarmObstacles.MostObstacles && boxes.Count > count)
+            {
+                Debug.LogWarning($"[F010] The swarm flows round {count} of {boxes.Count} obstacles; raise SwarmObstacles.MostObstacles to take them all.", this);
+            }
+
+            _swarmView.SetObstacles(obstacles, count);
         }
 
         private void CheckReferences()
